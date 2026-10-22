@@ -127,6 +127,8 @@ export interface Task {
   elapsedMs: number;
   /** 战斗任务：开打前已经回仓库补过食物（或者不用补） */
   stocked?: boolean;
+  /** 战斗任务：连续阵亡次数，打死一只清零 */
+  deathStreak?: number;
 }
 
 export interface CombatState {

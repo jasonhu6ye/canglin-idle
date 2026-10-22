@@ -175,7 +175,7 @@ export function BagPanel({ s }: { s: GameState }) {
           </button>
         ))}
       </div>
-      <p className="muted">战斗只吃背包里的食物、只用背包里的弹药（背包没有时才从仓库补）。采集、制作和打怪的产出先放进背包；背包满了，角色会自动走回仓库存好（食物和弹药留在身上），再走回去接着干。制作时材料先用背包里的，不够再用仓库的。手动把东西在背包和仓库之间搬，要先走到城镇的仓库旁边。</p>
+      <p className="muted">开战前背包里的食物不够设定数量，会先回仓库拿；战斗只吃背包里的食物。阵亡后回城复活，自动走回去接着打，连死 3 次才停。采集、制作和打怪的产出先放进背包；背包满了，角色会自动走回仓库存好（食物和弹药留在身上），再走回去接着干。制作时材料先用背包里的，不够再用仓库的。手动把东西在背包和仓库之间搬，要先走到城镇的仓库旁边。</p>
     </div>
   );
 }
@@ -312,7 +312,7 @@ export function OfflineModal({ sum }: { sum: Summary }) {
           <p className="gold">升级：{finalLevels(sum).map(([k, l]) => `${SKILLS[k].name} → ${l} 级`).join('、')}</p>
         )}
         {kills > 0 && <p>击败 {kills} 只怪物{sum.foodEaten > 0 && `，吃掉 ${sum.foodEaten} 份食物`}{sum.ammoUsed > 0 && `，用掉 ${sum.ammoUsed} 发弹药`}</p>}
-        {sum.deaths > 0 && <p className="warn">阵亡 {sum.deaths} 次，战斗已停止</p>}
+        {sum.deaths > 0 && <p className="warn">阵亡 {sum.deaths} 次{sum.taskEnds.some((t) => t.reason === 'death') ? '，连续阵亡太多次，战斗已停止' : '，每次都回城复活后走回去接着打'}</p>}
         <div className="loot">
           {items.map(([id, q]) => (
             <span key={id} className={q < 0 ? 'neg' : ''}><Icon item={id} size={18} /> {ITEMS[id].name} {q > 0 ? '+' : ''}{fmtNum(q)}</span>

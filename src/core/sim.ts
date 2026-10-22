@@ -49,6 +49,9 @@ export function newGame(now: number, seed = Math.floor(Math.random() * 2 ** 31))
 }
 
 /** 旧存档升级到当前版本；认不出的物品和任务直接丢掉，避免读档崩溃 */
+/** 连续阵亡这么多次（中间没打死一只）就停止战斗 */
+export const MAX_DEATH_STREAK = 3;
+
 /** 地图扩大后换算旧存档的位置：城镇里的跟着镇中心平移（建筑大小不变），野外的按比例放大 */
 function rescaleLoc(loc: { x: number; y: number }, old: number) {
   if (old === MAP_W) return loc;
@@ -428,11 +431,13 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   const stepCombat = (task: Task, a: CombatAction, budget: number): number => {
     const m = MONSTERS[a.monster];
     if (!s.combat) {
+      // 交过手就记下来：之后追踪能找到准确位置（图鉴仍要击败才解锁）
+      if (s.bestiary?.[m.id] === undefined) s.bestiary = { ...s.bestiary, [m.id]: 0 };
       s.combat = { monsterHp: m.hp, playerTimerMs: playerAttackMs(s), monsterTimerMs: m.attackMs, respawnMs: 0 };
     }
     const c = s.combat;
     const has = (t: string) => m.traits.includes(t);
-    /** 玩家掉血，死了就结束任务。返回是否死亡 */
+    /** 玩家掉血，死了回城复活。返回是否死亡 */
     const hurt = (dmg: number) => {
       if (dmg <= 0) return false;
       s.hp -= dmg;
@@ -441,7 +446,16 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       s.hp = maxHp(s);
       s.stats.deaths++;
       sum.deaths++;
-      endTask('death');
+      // 阵亡：回城复活，补给后自动走回去接着打；连死 3 次没打死一只才放弃（用户 10-22 要求）
+      task.deathStreak = (task.deathStreak ?? 0) + 1;
+      if (task.deathStreak >= MAX_DEATH_STREAK) {
+        endTask('death');
+        return true;
+      }
+      s.combat = null;
+      s.loc = { ...SPAWN_TILE };
+      s.travel = null;
+      task.stocked = false;
       return true;
     };
     if (c.respawnMs > 0) {
@@ -476,6 +490,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         for (const d of m.drops) if (d.chance === undefined || rand() < d.chance) addLoot(d.item, d.qty);
         sum.kills[m.id] = (sum.kills[m.id] ?? 0) + 1;
         s.stats.kills++;
+        task.deathStreak = 0;
         s.bestiary = { ...s.bestiary, [m.id]: (s.bestiary?.[m.id] ?? 0) + 1 };
         task.done++;
         s.combat = { monsterHp: m.hp, playerTimerMs: playerAttackMs(s), monsterTimerMs: m.attackMs, respawnMs: m.respawnMs ?? RESPAWN_MS };

@@ -288,3 +288,4 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .sheet p.pad { padding: 10px 12px; }
 .sheet-body { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
 .sheet-body .item-detail { position: static; margin: 8px 6px; }
+.wm-mons { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; } .wm-mons small { width: 100%; } .wm-mons .pill { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; padding: 2px 6px; }

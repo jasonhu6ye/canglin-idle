@@ -6,6 +6,8 @@ import { playerPos } from '../game/MapScene';
 import { GROUND_COLOR } from '../game/tiles';
 import { overviewGround } from '../game/world';
 import { emitToGame } from './GameCanvas';
+import { MonsterIcon } from './Bestiary';
+import { store } from '../store';
 
 /** 缩略图每像素代表几格 */
 const STEP = 3;
@@ -114,7 +116,16 @@ function NodeCard({ nodeId, cl, onOpen, onWalk }: { nodeId: string; cl: number; 
       </div>
       <small className="muted">{REGIONS[n.region].name}{!n.town && ` · Lv${n.lv[0]}${n.lv[1] !== n.lv[0] ? `-${n.lv[1]}` : ''}`}</small>
       {skills.length > 0 && <span>可练：{skills.join('、')}</span>}
-      {monsters.length > 0 && <span>怪物：{monsters.map((m) => `${m!.name}(${m!.level}${m!.boss ? ' Boss' : ''})`).join('、')}</span>}
+      {monsters.length > 0 && (
+        <span className="wm-mons">
+          <small className="muted">点怪物去追踪：Boss 和交过手的能找到准确位置，其他只到大概的刷新区域</small>
+          {monsters.map((m) => (
+            <button key={m!.id} className="pill" onClick={() => store.track(m!.id)}>
+              <MonsterIcon m={m!} size={18} /> {m!.name} {m!.level}{m!.rank === 'boss' ? ' Boss' : m!.rank === 'elite' ? ' 精英' : ''}
+            </button>
+          ))}
+        </span>
+      )}
       <div className="go">
         <button className="primary" onClick={onWalk}>寻路前往 · 约 {Math.ceil(travelMs(playerPos, standOf(n)) / 1000)} 秒</button>
         {n.id !== 'smithy' && (n.town || skills.length > 0) && <button onClick={onOpen}>查看任务</button>}

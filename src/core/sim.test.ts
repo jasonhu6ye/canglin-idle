@@ -1,4 +1,4 @@
-import { actionDuration, advance, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour } from './sim';
+import { actionDuration, advance, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour } from './sim';
 import { levelForXp, XP_TABLE } from './xp';
 import type { GameState, SkillAction, TaskMode } from './types';
 import { ACTIONS, nodeOfAction, standOf, travelMs } from './data';
@@ -80,12 +80,16 @@ describe('战斗', () => {
     expect(state.queue).toHaveLength(0);
   });
 
-  it('越级打怪且没有食物会死亡并停止', () => {
+  it('阵亡后回城复活再走回去打，连死 3 次才停止', () => {
     let s = newGame(T0, 3);
     s.bank = {};
     s = startHere(s, 'fight_crystal_dragon', { type: 'infinite' });
-    const { state, summary } = advance(s, T0 + HOUR);
-    expect(summary.deaths).toBe(1);
+    const first = advance(s, T0 + 60_000).state;
+    expect(first.stats.deaths).toBe(1);
+    expect(first.queue).toHaveLength(1);
+    expect(first.travel?.to).toBe(nodeOfAction('fight_crystal_dragon')!.id);
+    const { state, summary } = advance(s, T0 + 24 * HOUR);
+    expect(summary.deaths).toBe(MAX_DEATH_STREAK);
     expect(summary.taskEnds[0].reason).toBe('death');
     expect(state.queue).toHaveLength(0);
   });
@@ -178,6 +182,7 @@ describe('装备', () => {
 describe('背包与战斗方式', () => {
   it('开战前食物不够会先回仓库按设置拿，只吃背包里的', () => {
     let s = newGame(T0, 9);
+    s.xp.melee = s.xp.defence = s.xp.hitpoints = XP_TABLE[40];
     s.bank.minnow = 300;
     s.settings.carryFood = 50;
     s = startNow(s, 'fight_grey_wolf', { type: 'time', ms: 10 * 60_000 });

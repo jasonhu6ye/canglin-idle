@@ -27,6 +27,35 @@ const FONT = '"PingFang SC","Microsoft YaHei",sans-serif';
 const CHIMNEY: Record<string, boolean> = { hall: true, smithy: true, inn: true, house: true, house3: true };
 
 export const NODE_CLICK = 'node-click';
+
+/** 点位周围第 i 种怪的刷新点；地图扩大后怪物也散开些，不挤在点位旁边 */
+function spawnSpot(n: MapNode, i: number, total: number) {
+  const ring = 8 + (i % 4) * 4;
+  const ang = (i / Math.max(1, total)) * Math.PI * 2 + 0.6;
+  return { x: Math.round(n.x + Math.cos(ang) * ring), y: Math.round(n.y + 2 + Math.sin(ang) * ring * 0.6) };
+}
+
+const exactTrack = (id: string) => MONSTERS[id].rank === 'boss' || store.state.bestiary?.[id] !== undefined;
+
+/** 追踪：Boss 给准确的刷新点，其他怪只给附近一个大概位置 */
+function trackSpot(monsterId: string, exact = exactTrack(monsterId)): { x: number; y: number } | null {
+  const n = nodeOfAction(`fight_${monsterId}`);
+  if (!n) return null;
+  const ids = n.actions.map((id) => ACTIONS[id]).filter((a) => a.kind === 'combat').map((a) => (a as { monster: string }).monster);
+  const at = spawnSpot(n, ids.indexOf(monsterId), ids.length);
+  // Boss 和交过手的怪给准确位置
+  if (!exact) {
+    at.x += Math.round((Math.random() * 2 - 1) * 7);
+    at.y += Math.round((Math.random() * 2 - 1) * 7);
+  }
+  // 找最近的能站的格子
+  for (let r = 0; r <= 6; r++) {
+    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) === r && isWalkable(at.x + dx, at.y + dy)) return { x: at.x + dx, y: at.y + dy };
+    }
+  }
+  return null;
+}
 export const REGION_CHANGE = 'region-change';
 
 /** 角色当前所在格子，世界地图要用 */
@@ -46,6 +75,7 @@ export class MapScene extends Phaser.Scene {
   private facing: HeroDir = 'down';
   private foe?: Phaser.GameObjects.Sprite;
   /** 精英和 Boss 头顶的血条（用户 10-22 要求） */
+  private monSprites: Phaser.GameObjects.Sprite[] = [];
   private bars: { spr: Phaser.GameObjects.Sprite; m: MonsterDef; bg: Phaser.GameObjects.Rectangle; fill: Phaser.GameObjects.Rectangle; w: number; live: boolean }[] = [];
   /** 上一帧的战斗状态，用来判断怪物刚出手、刚挨打、刚死 */
   private foeSeen?: { hp: number; timer: number; respawn: number };
@@ -120,7 +150,11 @@ export class MapScene extends Phaser.Scene {
       const id = store.pendingWalk;
       if (!id) return;
       store.pendingWalk = null;
-      onWalkTo(id);
+      const spot = store.tracking ? trackSpot(store.tracking) : null;
+      // 只有能准确定位的才一直标箭头
+      if (store.tracking && !exactTrack(store.tracking)) store.tracking = null;
+      if (spot) this.moveTo(spot.x, spot.y);
+      else onWalkTo(id);
     };
     this.unsub.push(() => this.game.events.off('walkto', onWalkTo));
     // 切到别的标签时整个游戏被销毁，只会触发 destroy，不会触发 shutdown
@@ -317,6 +351,7 @@ export class MapScene extends Phaser.Scene {
     this.stepWalker(delta);
     this.syncFoe();
     this.updateBars();
+    this.updateTracking(time);
     this.updateChunks();
     for (const g of this.glows) g.img.setAlpha(g.base + Math.sin(time / 380 + g.phase) * 0.12 + (hash(Math.floor(time / 90), g.phase * 100) - 0.5) * 0.08);
     this.updateParticles();
@@ -484,6 +519,8 @@ export class MapScene extends Phaser.Scene {
     const spr = this.add.sprite(x, y, key, 'idle-0').setOrigin(0.5, (S - 3) / S);
     // 点怪物弹出它的信息页
     spr.setInteractive({ useHandCursor: true }).setData('monster', `fight_${m.id}`);
+    this.monSprites = this.monSprites.filter((x) => x.active);
+    this.monSprites.push(spr);
     if (m.rank !== 'normal') this.addBar(spr, m);
     spr.play({ key: `${key}-idle`, startFrame: Math.floor(Math.random() * 6) });
     return spr;
@@ -521,11 +558,7 @@ export class MapScene extends Phaser.Scene {
   private spawnNode(n: MapNode) {
     const mons = n.actions.map((id) => ACTIONS[id]).filter((a) => a.kind === 'combat').map((a) => MONSTERS[(a as { monster: string }).monster]);
     mons.forEach((m, i) => {
-      // 地图扩大后怪物也散开些，不挤在点位旁边
-      const ring = 8 + (i % 4) * 4;
-      const ang = (i / Math.max(1, mons.length)) * Math.PI * 2 + 0.6;
-      const ox = Math.round(n.x + Math.cos(ang) * ring);
-      const oy = Math.round(n.y + 2 + Math.sin(ang) * ring * 0.6);
+      const { x: ox, y: oy } = spawnSpot(n, i, mons.length);
       const count = m.rank === 'normal' ? 2 : 1;
       for (let k = 0; k < count; k++) this.addMonWanderer(m, ox + k * 3, oy + (k ? 2 : 0), m.rank === 'boss' ? 2 : 4);
     });
@@ -635,6 +668,7 @@ export class MapScene extends Phaser.Scene {
         this.game.events.emit(NODE_CLICK, node);
         return;
       }
+      store.tracking = null;
       const wp = cam.getWorldPoint(p.x, p.y);
       this.moveTo(Math.floor(wp.x / T), Math.floor(wp.y / T));
     });
@@ -727,7 +761,30 @@ export class MapScene extends Phaser.Scene {
 
   private wasPaused = !!store.state.paused;
 
+  private seenDeaths = store.state.stats.deaths;
+
   private syncTask() {
+    // 阵亡：瞬间回到城里复活，之后照常寻路回去
+    if (store.state.stats.deaths !== this.seenDeaths) {
+      const died = store.state.stats.deaths > this.seenDeaths;
+      this.seenDeaths = store.state.stats.deaths;
+      if (died) {
+        this.stopWorking();
+        this.walker = undefined;
+        this.clearRoute();
+        this.player.setPosition(SPAWN.x * T + T / 2, SPAWN.y * T + T / 2);
+        this.float('阵亡，回城复活', '#ff7a6a', true);
+        if (!this.following) this.recenterCameraOnly();
+        this.travelTo = undefined;
+        if (store.state.queue[0]?.action === this.currentAction) {
+          const to = store.state.travel?.to;
+          this.travelTo = to;
+          if (to === 'bank') this.goToTask(NODES.find((n) => n.id === 'bank'));
+          else if (to) this.goToTask();
+          return;
+        }
+      }
+    }
     const action = store.state.queue[0]?.action;
     const to = store.state.travel?.to;
     const paused = !!store.state.paused;
@@ -773,12 +830,15 @@ export class MapScene extends Phaser.Scene {
     const toBank = !!target;
     this.manual = false;
     this.stopWorking();
-    const dest = standTile(node);
+    // 打怪直接走到那只怪的刷新点（交过手的都能准确找到）
+    const a = toBank ? undefined : ACTIONS[this.currentAction ?? ''];
+    const dest = (a?.kind === 'combat' && trackSpot(a.monster, true)) || standTile(node);
     const path = findPath(this.playerTile(), dest) ?? [];
     const st = store.state;
-    const atDest = st.loc.x === dest.x && st.loc.y === dest.y;
+    const stand = standTile(node);
+    const atDest = st.loc.x === stand.x && st.loc.y === stand.y;
     // 存档里还在路上：按剩余时间匀速走完这条路
-    const ms = st.travel?.to === node.id ? st.travel.ms : atDest ? 0 : travelMs(st.loc, dest);
+    const ms = st.travel?.to === node.id ? st.travel.ms : atDest ? 0 : travelMs(st.loc, stand);
     let speed: number | undefined;
     if (ms > 500 && path.length) {
       let len = 0;
@@ -790,10 +850,12 @@ export class MapScene extends Phaser.Scene {
       speed = len / (ms / 1000);
     }
     this.drawRoute(path);
-    if (toBank) this.float('背包满了，回仓库', '#e8b84a');
+    const t0 = st.queue[0];
+    const supply = toBank && t0 && ACTIONS[t0.action]?.kind === 'combat' && !t0.stocked;
+    if (toBank) this.float(supply ? '回仓库拿食物' : '背包满了，回仓库', '#e8b84a');
     this.walkPath(path, () => {
       this.clearRoute();
-      if (toBank) this.float('已存入仓库', '#9ad8ff', true);
+      if (toBank) this.float(supply ? '补给完毕' : '已存入仓库', '#9ad8ff', true);
       else this.startWorking();
     }, speed);
   }
@@ -907,6 +969,27 @@ export class MapScene extends Phaser.Scene {
   }
 
   /** 血条跟着怪走；正在打的那只按战斗里的血量显示 */
+  private trackArrow?: Phaser.GameObjects.Text;
+  /** 追踪中的怪：离角色最近的那只头顶加个跳动的箭头 */
+  private updateTracking(time: number) {
+    const id = store.tracking;
+    // 普通怪不标；Boss 开打后也不用再标
+    if (id && (!exactTrack(id) || this.currentAction === `fight_${id}`)) store.tracking = null;
+    let target: Phaser.GameObjects.Sprite | undefined;
+    if (id) {
+      let best = Infinity;
+      for (const b of this.monSprites) {
+        if (!b.active || b.getData('monster') !== `fight_${id}`) continue;
+        const d = Phaser.Math.Distance.Between(b.x, b.y, this.player.x, this.player.y);
+        if (d < best) { best = d; target = b; }
+      }
+    }
+    if (!target) { this.trackArrow?.setVisible(false); return; }
+    this.trackArrow ??= this.add.text(0, 0, '▼', { fontFamily: FONT, fontSize: '10px', color: '#ffd84a', stroke: '#000', strokeThickness: 2, resolution: 4 }).setOrigin(0.5, 1);
+    const S = monsterFrameSize(MONSTERS[id!]);
+    this.trackArrow.setVisible(true).setPosition(target.x, target.y - (S - 3) + 2 + Math.sin(time / 180) * 2).setDepth(9000);
+  }
+
   private updateBars() {
     const c = store.state.combat;
     this.bars = this.bars.filter((b) => {

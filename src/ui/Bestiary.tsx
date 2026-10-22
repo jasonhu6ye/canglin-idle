@@ -6,6 +6,7 @@ import { MONSTER_DAMAGE_SCALE } from '../core/sim';
 import { monsterIconUrl } from '../game/monsterArt';
 import { Icon } from './icons';
 import { fmtNum } from './format';
+import { store } from '../store';
 
 export const RANK_NAME = { normal: '普通', elite: '精英', boss: '首领' };
 
@@ -77,6 +78,7 @@ export function MonsterDetail({ m, kills, reveal = false }: { m: MonsterDef; kil
         <span className="muted">{tierName(m.tier)} · {m.level} 级 · {RANK_NAME[m.rank]}</span>
       </div>
       <span className="muted">{m.kind === 'creature' ? '生物' : '怪物'} · {FAMILY_NAME[m.family as Family]} · 出没：{where}</span>
+      {!reveal && node && <button className="primary" onClick={() => store.track(m.id)}>在地图上追踪</button>}
       {!kills && !reveal ? (
         <span className="muted">尚未击败。打败一次后可查看属性、特性和掉落。</span>
       ) : (

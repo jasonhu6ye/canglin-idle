@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { nodeOfAction } from './core/data';
 import { advance, migrate, newGame } from './core/sim';
 import type { GameState, Summary } from './core/types';
 
@@ -63,9 +64,17 @@ class Store {
 
   /** 界面要求角色寻路去某个地点（地图场景来取） */
   pendingWalk: string | null = null;
-  requestWalk(nodeId: string) {
+  /** 正在追踪的怪物 id：地图上给它头顶加个箭头 */
+  tracking: string | null = null;
+  requestWalk(nodeId: string, track: string | null = null) {
     this.pendingWalk = nodeId;
+    this.tracking = track;
     this.emit();
+  }
+  /** 寻路去找某只怪 */
+  track(monsterId: string) {
+    const n = nodeOfAction(`fight_${monsterId}`);
+    if (n) this.requestWalk(n.id, monsterId);
   }
 
   dismissOffline() {
