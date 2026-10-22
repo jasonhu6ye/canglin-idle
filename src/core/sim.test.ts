@@ -1,4 +1,4 @@
-import { advance, enqueue, equip, newGame, startNow, xpPerHour } from './sim';
+import { advance, enqueue, equip, migrate, newGame, startNow, toBag, xpPerHour } from './sim';
 import { levelForXp, XP_TABLE } from './xp';
 import type { GameState } from './types';
 
@@ -60,7 +60,7 @@ describe('战斗', () => {
   it('打野兔能升级，低血量会吃东西', () => {
     const s = startNow(newGame(T0, 7), 'fight_rabbit', { type: 'time', ms: HOUR });
     const { state, summary } = advance(s, T0 + HOUR);
-    expect(summary.kills.rabbit).toBeGreaterThan(100);
+    expect(summary.kills.rabbit).toBeGreaterThan(60);
     expect(levelForXp(state.xp.melee)).toBeGreaterThan(10);
     expect(state.queue).toHaveLength(0);
   });
@@ -68,7 +68,7 @@ describe('战斗', () => {
   it('越级打怪且没有食物会死亡并停止', () => {
     let s = newGame(T0, 3);
     s.bank = {};
-    s = startNow(s, 'fight_ash', { type: 'infinite' });
+    s = startNow(s, 'fight_crystal_dragon', { type: 'infinite' });
     const { state, summary } = advance(s, T0 + HOUR);
     expect(summary.deaths).toBe(1);
     expect(summary.taskEnds[0].reason).toBe('death');
@@ -96,7 +96,7 @@ describe('离线结算', () => {
     let s = newGame(T0, 42);
     s.bank.raw_minnow = 500;
     s = startNow(s, 'cook_minnow', { type: 'count', count: 300 });
-    s = enqueue(s, 'fight_crab', { type: 'time', ms: 2 * HOUR });
+    s = enqueue(s, 'fight_reef_crab', { type: 'time', ms: 2 * HOUR });
     s = enqueue(s, 'chop_pine', { type: 'infinite' });
     const total = 8 * HOUR;
     const once = advance(s, T0 + total).state;
@@ -126,5 +126,60 @@ describe('装备', () => {
     const e = equip(s, 'iron_sword');
     expect(e.equipment.weapon).toBe('iron_sword');
     expect(e.bank.bronze_sword).toBe(1);
+  });
+});
+
+describe('背包与战斗方式', () => {
+  it('开战时按设置把仓库的食物带进背包，只吃背包里的', () => {
+    let s = newGame(T0, 9);
+    s.bank.minnow = 300;
+    s.settings.carryFood = 50;
+    s = startNow(s, 'fight_grey_wolf', { type: 'time', ms: 60_000 });
+    const { state, summary } = advance(s, T0 + 60_000);
+    expect(state.bank.minnow).toBe(250);
+    expect((state.bag.minnow ?? 0) + summary.foodEaten).toBe(50);
+  });
+
+  it('背包 20 格、每格 100 个', () => {
+    let s = newGame(T0, 1);
+    s.bank.minnow = 5000;
+    s = toBag(s, 'minnow', 5000);
+    expect(s.bag.minnow).toBe(2000);
+    expect(toBag(s, 'copper_ore', 1)).toBe(s);
+  });
+
+  it('远程没有箭就停止，有箭会消耗并练远程', () => {
+    let s = newGame(T0, 2);
+    s.equipment.weapon = 'pine_bow';
+    const none = advance(startNow(s, 'fight_dummy', { type: 'infinite' }), T0 + 10_000);
+    expect(none.summary.taskEnds[0].reason).toBe('noAmmo');
+    s.bank.bronze_arrow = 20;
+    const { state, summary } = advance(startNow(s, 'fight_dummy', { type: 'infinite' }), T0 + HOUR);
+    expect(summary.ammoUsed).toBe(20);
+    expect(state.bank.bronze_arrow).toBeUndefined();
+    expect(summary.xp.ranged).toBeGreaterThan(0);
+    expect(summary.xp.melee).toBeUndefined();
+    expect(summary.taskEnds[0].reason).toBe('noAmmo');
+  });
+
+  it('工具加快采集', () => {
+    const s = newGame(T0, 1);
+    s.equipment.pickaxe = 'bronze_pickaxe';
+    const { state } = advance(startNow(s, 'mine_copper', { type: 'infinite' }), T0 + HOUR);
+    expect(state.bank.copper_ore).toBe(Math.floor(HOUR / Math.round(3000 / 1.05)));
+  });
+});
+
+describe('存档迁移', () => {
+  it('v1 存档补齐新技能和背包，丢掉不认识的物品', () => {
+    const v1 = { ...newGame(T0, 1), version: 1, bank: { coins: 9, copper_ore: 3, ash_core: 2 }, xp: { mining: 500 } } as unknown;
+    delete (v1 as { bag?: unknown }).bag;
+    const s = migrate(v1)!;
+    expect(s.version).toBe(2);
+    expect(s.bank).toEqual({ coins: 9, copper_ore: 3 });
+    expect(s.bag).toEqual({});
+    expect(s.xp.mining).toBe(500);
+    expect(s.xp.magic).toBe(0);
+    expect(s.settings.carryFood).toBeGreaterThan(0);
   });
 });

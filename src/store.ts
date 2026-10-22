@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { advance, newGame } from './core/sim';
+import { advance, migrate, newGame } from './core/sim';
 import type { GameState, Summary } from './core/types';
 
 const SAVE_KEY = 'canglin-idle-save-v1';
@@ -14,10 +14,8 @@ type GainListener = (summary: Summary) => void;
 function load(): GameState {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
-    if (raw) {
-      const s = JSON.parse(raw) as GameState;
-      if (s.version === 1) return s;
-    }
+    const s = raw && migrate(JSON.parse(raw));
+    if (s) return s;
   } catch {
     // 存档损坏或无法访问 localStorage 时开新档
   }

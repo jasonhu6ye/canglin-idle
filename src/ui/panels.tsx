@@ -1,85 +1,207 @@
 import { useState } from 'react';
-import { ACTIONS, ITEMS, NODES, SKILLS } from '../core/data';
-import { equip, level, playerBonuses, sell } from '../core/sim';
-import type { EquipSlot, GameState, SkillId, Summary } from '../core/types';
+import { ACTIONS, ITEMS, NODES, REGIONS, SKILL_GROUPS, SKILLS, type MapNode } from '../core/data';
+import {
+  BAG_SLOTS, BAG_STACK, bagSlotsUsed, combatLevel, equip, level, playerBonuses, sell, setSettings, toBag, toBank, toolSpeed, unequip,
+  weaponStyle,
+} from '../core/sim';
+import type { EquipSlot, GameState, ItemCategory, SkillId, Summary } from '../core/types';
 import { XP_TABLE, levelProgress, MAX_LEVEL } from '../core/xp';
 import { store } from '../store';
 import { fmtDuration, fmtNum } from './format';
+import { Icon, SkillIcon } from './icons';
 
-const SLOT_NAMES: Record<EquipSlot, string> = { weapon: '武器', head: '头部', body: '身体' };
+const GEAR_SLOTS: [EquipSlot, string][] = [
+  ['head', '头部'], ['neck', '项链'], ['weapon', '武器'], ['body', '身体'], ['shield', '副手'], ['legs', '腿部'], ['ring', '戒指'],
+];
+const TOOL_SLOTS: [EquipSlot, string, SkillId][] = [
+  ['pickaxe', '镐', 'mining'], ['axe', '斧', 'woodcutting'], ['rod', '鱼竿', 'fishing'], ['hoe', '锄', 'farming'], ['gloves', '手套', 'thieving'],
+];
+const STYLE_NAME = { melee: '近战', ranged: '远程', magic: '魔法' };
 
-export function BagPanel({ s }: { s: GameState }) {
-  const [sel, setSel] = useState<string | null>(null);
-  const items = Object.entries(s.bank).filter(([id]) => id !== 'coins');
-  const b = playerBonuses(s);
-  const item = sel ? ITEMS[sel] : null;
-  const qty = sel ? s.bank[sel] ?? 0 : 0;
+const CATEGORIES: [ItemCategory | 'all', string][] = [
+  ['all', '全部'], ['resource', '资源'], ['material', '材料'], ['food', '食物'], ['potion', '药水'], ['ammo', '弹药'],
+  ['gear', '装备'], ['tool', '工具'], ['misc', '其他'],
+];
+const BAG_CATS = ['food', 'potion', 'ammo'];
 
+/** 选中物品后的详情和操作 */
+function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 'bag' }) {
+  const item = ITEMS[id];
+  const qty = (from === 'bank' ? s.bank[id] : s.bag[id]) ?? 0;
+  if (!item || qty <= 0) return null;
+  const e = item.equip;
+  const canEquip = e && level(s, e.skill) >= e.level;
   return (
-    <div className="page">
-      <h2>装备</h2>
-      <div className="equip">
-        {(Object.keys(SLOT_NAMES) as EquipSlot[]).map((slot) => (
-          <div key={slot} className="slot">
-            <small>{SLOT_NAMES[slot]}</small>
-            {s.equipment[slot] ? ITEMS[s.equipment[slot]!].name : '—'}
-          </div>
-        ))}
+    <div className="item-detail frame">
+      <div className="row1">
+        <span className="with-icon"><Icon item={id} size={28} /> <b>{item.name}</b></span>
+        <span className="muted">×{fmtNum(qty)} · 单价 {item.value}</span>
       </div>
-      <p className="muted">攻击 +{b.attack} · 力量 +{b.strength} · 防御 +{b.defence}</p>
-
-      <h2>仓库 <small className="muted">（{items.length} 种）</small></h2>
-      <div className="grid">
-        {items.map(([id, n]) => (
-          <button key={id} className={`cell ${sel === id ? 'sel' : ''}`} onClick={() => setSel(id)}>
-            <span>{ITEMS[id].name}</span>
-            <b>{fmtNum(n)}</b>
-          </button>
-        ))}
-        {!items.length && <p className="muted">还没有东西，去挖矿或钓鱼吧。</p>}
-      </div>
-
-      {item && qty > 0 && (
-        <div className="item-detail">
-          <b>{item.name}</b> ×{fmtNum(qty)} · 单价 {item.value} 金币
-          {item.heals && <span> · 回复 {item.heals} 生命</span>}
-          {item.equip && (
-            <span> · 需要近战 {item.equip.level} · 攻 +{item.equip.attack} 力 +{item.equip.strength} 防 +{item.equip.defence}</span>
-          )}
-          <div className="go">
-            {item.equip && (
-              <button className="primary" disabled={level(s, 'melee') < item.equip.level}
-                onClick={() => store.dispatch((g) => equip(g, item.id))}>装备</button>
-            )}
-            <button onClick={() => store.dispatch((g) => sell(g, item.id, 1))}>卖 1 个</button>
-            <button onClick={() => store.dispatch((g) => sell(g, item.id, qty))}>全部卖出</button>
-          </div>
-        </div>
+      {item.heals && <span>回复 {item.heals} 生命</span>}
+      {item.ammo && <span>{item.ammo.style === 'ranged' ? '箭矢' : '符文'} · 威力 +{item.ammo.power}</span>}
+      {e && (
+        <span className={canEquip ? '' : 'warn'}>
+          需要{SKILLS[e.skill].name} {e.level} 级
+          {e.speed ? ` · ${SKILLS[e.skill].name}速度 +${Math.round(e.speed * 100)}%` : ` · 攻 +${e.attack} 力 +${e.strength} 防 +${e.defence}`}
+          {e.style && e.slot !== 'weapon' && `（攻、力只对${STYLE_NAME[e.style]}生效）`}
+        </span>
       )}
+      <div className="go">
+        {from === 'bank' && e && <button className="primary" disabled={!canEquip} onClick={() => store.dispatch((g) => equip(g, id))}>装备</button>}
+        {from === 'bank' && BAG_CATS.includes(item.category) && (
+          <button className="primary" onClick={() => store.dispatch((g) => toBag(g, id, qty))}>放入背包</button>
+        )}
+        {from === 'bank' && id !== 'coins' && (
+          <>
+            <button onClick={() => store.dispatch((g) => sell(g, id, 1))}>卖 1 个</button>
+            <button onClick={() => store.dispatch((g) => sell(g, id, qty))}>全部卖出</button>
+          </>
+        )}
+        {from === 'bag' && <button className="primary" onClick={() => store.dispatch((g) => toBank(g, id, qty))}>放回仓库</button>}
+      </div>
     </div>
   );
 }
 
-export function SkillsPanel({ s }: { s: GameState }) {
+function ItemGrid({ items, sel, onSel }: { items: [string, number][]; sel: string | null; onSel: (id: string) => void }) {
+  return (
+    <div className="grid">
+      {items.map(([id, n]) => (
+        <button key={id} className={`cell ${sel === id ? 'sel' : ''}`} onClick={() => onSel(id)} title={ITEMS[id].name}>
+          <Icon item={id} />
+          <span className="qty">{fmtNum(n)}</span>
+          <span className="nm">{ITEMS[id].name}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function BankPanel({ s }: { s: GameState }) {
+  const [cat, setCat] = useState<ItemCategory | 'all'>('all');
+  const [sel, setSel] = useState<string | null>(null);
+  const all = Object.entries(s.bank).filter(([id]) => id !== 'coins' && ITEMS[id]);
+  const items = all.filter(([id]) => cat === 'all' || ITEMS[id].category === cat);
+  const value = all.reduce((n, [id, q]) => n + ITEMS[id].value * q, 0);
   return (
     <div className="page">
-      <h2>技能</h2>
-      {(Object.keys(SKILLS) as SkillId[]).map((k) => {
-        const lvl = level(s, k);
-        const xp = s.xp[k];
-        return (
-          <div key={k} className="skill">
-            <div className="row1">
-              <b style={{ color: SKILLS[k].color }}>{SKILLS[k].name}</b>
-              <span>{lvl} / {MAX_LEVEL}</span>
-            </div>
-            <span className="bar wide"><i style={{ width: `${levelProgress(xp) * 100}%`, background: SKILLS[k].color }} /></span>
-            <small className="muted">
-              {fmtNum(xp)} 经验{lvl < MAX_LEVEL && ` · 距下一级 ${fmtNum(XP_TABLE[lvl + 1] - xp)}`}
-            </small>
+      <h2>仓库 <small className="muted">{all.length} 种 · 估值 {fmtNum(value)} 金币</small></h2>
+      <div className="chips-row">
+        {CATEGORIES.map(([c, name]) => {
+          const n = c === 'all' ? all.length : all.filter(([id]) => ITEMS[id].category === c).length;
+          if (c !== 'all' && !n) return null;
+          return <button key={c} className={`pill ${cat === c ? 'on' : ''}`} onClick={() => setCat(c)}>{name} {n}</button>;
+        })}
+      </div>
+      <ItemGrid items={items} sel={sel} onSel={setSel} />
+      {!all.length && <p className="muted">仓库是空的。采集、制作和打怪得到的东西都会放进这里，容量不限。</p>}
+      {sel && <ItemDetail s={s} id={sel} from="bank" />}
+    </div>
+  );
+}
+
+export function BagPanel({ s }: { s: GameState }) {
+  const [sel, setSel] = useState<string | null>(null);
+  const style = weaponStyle(s);
+  const b = playerBonuses(s, style);
+  const items = Object.entries(s.bag).filter(([id]) => ITEMS[id]);
+  const used = bagSlotsUsed(s.bag);
+  const slot = (slotId: EquipSlot, name: string) => {
+    const id = s.equipment[slotId];
+    return (
+      <button key={slotId} className={`slot ${id ? 'full' : ''}`} onClick={() => id && store.dispatch((g) => unequip(g, slotId))} title={id ? '点击卸下' : ''}>
+        {id ? <Icon item={id} size={28} /> : <span className="empty" />}
+        <small>{id ? ITEMS[id].name : name}</small>
+      </button>
+    );
+  };
+  return (
+    <div className="page">
+      <h2>装备 <small className="muted">战斗等级 {combatLevel(s)} · {STYLE_NAME[style]}</small></h2>
+      <div className="equip">{GEAR_SLOTS.map(([id, name]) => slot(id, name))}</div>
+      <p className="muted">攻击 +{b.attack} · 力量 +{b.strength} · 防御 +{b.defence} · 点击装备可卸下回仓库</p>
+
+      <h2>工具</h2>
+      <div className="equip tools">{TOOL_SLOTS.map(([id, name]) => slot(id, name))}</div>
+      <p className="muted">
+        {TOOL_SLOTS.map(([, name, skill]) => `${name} +${Math.round(toolSpeed(s, skill) * 100)}%`).join(' · ')}
+      </p>
+
+      <h2>背包 <small className="muted">{used}/{BAG_SLOTS} 格 · 每格 {BAG_STACK} 个</small></h2>
+      <div className="opts">
+        <span className="lbl">开战自动带食物</span>
+        {[20, 50, 100, -1].map((n) => (
+          <button key={n} className={s.settings.carryFood === n ? 'on' : ''} onClick={() => store.dispatch((g) => setSettings(g, { carryFood: n }))}>
+            {n < 0 ? '全部' : n}
+          </button>
+        ))}
+      </div>
+      <ItemGrid items={items} sel={sel} onSel={setSel} />
+      {!items.length && <p className="muted">背包只放食物、药水、箭和符文。开始战斗时会自动从仓库带食物进来，战斗中只吃背包里的。</p>}
+      {sel && <ItemDetail s={s} id={sel} from="bag" />}
+    </div>
+  );
+}
+
+/** 每个技能能在哪些地点练 */
+function whereToTrain(skill: SkillId): { node: MapNode; min: number; max: number }[] {
+  const out: { node: MapNode; min: number; max: number }[] = [];
+  for (const n of NODES) {
+    const lv = n.actions.map((id) => ACTIONS[id]).filter((a) => a.kind === 'skill' && a.skill === skill).map((a) => a.level);
+    if (lv.length) out.push({ node: n, min: Math.min(...lv), max: Math.max(...lv) });
+  }
+  return out.sort((a, b) => a.min - b.min);
+}
+
+export function SkillsPanel({ s, onPick }: { s: GameState; onPick: (nodeId: string) => void }) {
+  const [open, setOpen] = useState<SkillId | null>(null);
+  const total = (Object.keys(SKILLS) as SkillId[]).reduce((n, k) => n + level(s, k), 0);
+  return (
+    <div className="page">
+      <h2>技能 <small className="muted">总等级 {total} · 战斗等级 {combatLevel(s)}</small></h2>
+      {SKILL_GROUPS.map((g) => (
+        <section key={g.id}>
+          <h3>{g.name}</h3>
+          <div className="skill-grid">
+            {(Object.keys(SKILLS) as SkillId[]).filter((k) => SKILLS[k].group === g.id).map((k) => {
+              const lvl = level(s, k);
+              const xp = s.xp[k];
+              return (
+                <button key={k} className={`skill-card ${open === k ? 'sel' : ''}`} onClick={() => setOpen(open === k ? null : k)}>
+                  <SkillIcon skill={k} size={30} />
+                  <span className="sk-body">
+                    <span className="row1"><b style={{ color: SKILLS[k].color }}>{SKILLS[k].name}</b><span>{lvl}<small className="muted">/{MAX_LEVEL}</small></span></span>
+                    <span className="bar wide"><i style={{ width: `${levelProgress(xp) * 100}%`, background: SKILLS[k].color }} /></span>
+                    <small className="muted">{fmtNum(xp)} 经验{lvl < MAX_LEVEL && ` · 还差 ${fmtNum(XP_TABLE[lvl + 1] - xp)}`}</small>
+                  </span>
+                </button>
+              );
+            })}
           </div>
-        );
-      })}
+          {open && SKILLS[open].group === g.id && <SkillDetail skill={open} onPick={onPick} />}
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function SkillDetail({ skill, onPick }: { skill: SkillId; onPick: (nodeId: string) => void }) {
+  const places = whereToTrain(skill);
+  const info = SKILLS[skill];
+  return (
+    <div className="skill-detail frame">
+      <p>{info.desc}</p>
+      {info.group === 'combat' && (
+        <p className="muted">
+          {skill === 'defence' || skill === 'hitpoints' ? '每次造成伤害都会获得 1/3 的经验。' : `装备${info.name}武器后在任意战斗点获得经验。`}
+        </p>
+      )}
+      {places.map(({ node, min, max }) => (
+        <button key={node.id} className="place" onClick={() => onPick(node.id)}>
+          <span>{node.name} <small className="muted">{REGIONS[node.region].name}</small></span>
+          <small>{min === max ? `${min} 级` : `${min}-${max} 级`} ›</small>
+        </button>
+      ))}
     </div>
   );
 }
@@ -89,8 +211,8 @@ export function MorePanel() {
   return (
     <div className="page">
       <h2>关于</h2>
-      <p>苍岭放置（暂定名）M1 单机原型。角色会一直执行队列里的任务，关掉网页也会在下次打开时结算离线收益，最多 24 小时。</p>
-      <p className="muted">美术是程序生成的占位像素图，后续会替换成正式素材。存档保存在本浏览器里。</p>
+      <p>苍岭放置（暂定名）v2 单机版。角色会一直执行队列里的任务，关掉网页也会在下次打开时结算离线收益，最多 24 小时。</p>
+      <p className="muted">世界 1080×1080 格，9 个区域。装备、怪物和资源是占位数值，美术是程序生成的像素图，后续会替换。存档保存在本浏览器里。</p>
       <h2>存档</h2>
       {confirming ? (
         <div className="go">
@@ -113,25 +235,25 @@ function finalLevels(sum: Summary): [SkillId, number][] {
 
 export function OfflineModal({ sum }: { sum: Summary }) {
   const xp = Object.entries(sum.xp) as [SkillId, number][];
-  const items = Object.entries(sum.items).filter(([, q]) => q !== 0);
+  const items = Object.entries(sum.items).filter(([id, q]) => q !== 0 && ITEMS[id]);
   const kills = Object.values(sum.kills).reduce((a, b) => a + b, 0);
   return (
     <div className="modal-bg">
-      <div className="modal">
+      <div className="modal frame">
         <h2>离开期间的收获</h2>
         <p className="muted">你离开了 {fmtDuration(sum.elapsedMs)}</p>
         {!xp.length && !items.length && <p>角色一直在发呆……下次离开前记得安排任务。</p>}
         {xp.map(([k, v]) => (
-          <div key={k} className="row1"><span style={{ color: SKILLS[k].color }}>{SKILLS[k].name}</span><b>+{fmtNum(v)} 经验</b></div>
+          <div key={k} className="row1"><span className="with-icon"><SkillIcon skill={k} size={18} /> <span style={{ color: SKILLS[k].color }}>{SKILLS[k].name}</span></span><b>+{fmtNum(v)} 经验</b></div>
         ))}
         {sum.levelUps.length > 0 && (
           <p className="gold">升级：{finalLevels(sum).map(([k, l]) => `${SKILLS[k].name} → ${l} 级`).join('、')}</p>
         )}
-        {kills > 0 && <p>击败 {kills} 只怪物{sum.foodEaten > 0 && `，吃掉 ${sum.foodEaten} 份食物`}</p>}
+        {kills > 0 && <p>击败 {kills} 只怪物{sum.foodEaten > 0 && `，吃掉 ${sum.foodEaten} 份食物`}{sum.ammoUsed > 0 && `，用掉 ${sum.ammoUsed} 发弹药`}</p>}
         {sum.deaths > 0 && <p className="warn">阵亡 {sum.deaths} 次，战斗已停止</p>}
         <div className="loot">
           {items.map(([id, q]) => (
-            <span key={id} className={q < 0 ? 'neg' : ''}>{ITEMS[id].name} {q > 0 ? '+' : ''}{fmtNum(q)}</span>
+            <span key={id} className={q < 0 ? 'neg' : ''}><Icon item={id} size={18} /> {ITEMS[id].name} {q > 0 ? '+' : ''}{fmtNum(q)}</span>
           ))}
         </div>
         <button className="primary" onClick={() => store.dismissOffline()}>收下</button>
@@ -140,28 +262,38 @@ export function OfflineModal({ sum }: { sum: Summary }) {
   );
 }
 
-/** 宽屏右侧的地点列表：电脑上不用在地图里找点 */
+/** 宽屏右侧的地点列表，按区域分组 */
 export function NodeList({ onPick }: { onPick: (id: string) => void }) {
+  const regions = Object.keys(REGIONS) as (keyof typeof REGIONS)[];
   return (
     <div className="page">
       <h2>地点</h2>
-      <p className="muted">点地图上的地点或下面的列表选择任务；点空地可以让角色走过去。</p>
-      <ul className="node-list">
-        {NODES.map((n) => {
-          const kinds = [...new Set(n.actions.map((id) => {
-            const a = ACTIONS[id];
-            return a.kind === 'skill' ? SKILLS[a.skill].name : '战斗';
-          }))];
-          return (
-            <li key={n.id}>
-              <button onClick={() => onPick(n.id)}>
-                <b>{n.name}</b>
-                <small className="muted">{kinds.join(' · ')} · {n.actions.length} 项</small>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+      <p className="muted">点地图上的地点或下面的列表选择任务；点空地让角色走过去；右下角 ▦ 打开世界地图传送。</p>
+      {regions.map((r) => {
+        const nodes = NODES.filter((n) => n.region === r);
+        if (!nodes.length) return null;
+        return (
+          <section key={r}>
+            <h3>{REGIONS[r].name}</h3>
+            <ul className="node-list">
+              {nodes.map((n) => {
+                const kinds = [...new Set(n.actions.map((id) => {
+                  const a = ACTIONS[id];
+                  return a.kind === 'skill' ? SKILLS[a.skill].name : '战斗';
+                }))];
+                return (
+                  <li key={n.id}>
+                    <button onClick={() => onPick(n.id)}>
+                      <span className="row1"><b>{n.name}</b>{!n.town && <small className="muted">Lv{n.lv[0]}{n.lv[1] !== n.lv[0] && `-${n.lv[1]}`}</small>}</span>
+                      <small className="muted">{n.opens === 'bank' ? '打开仓库' : `${kinds.join(' · ')} · ${n.actions.length} 项`}</small>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        );
+      })}
     </div>
   );
 }

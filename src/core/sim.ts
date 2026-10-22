@@ -1,8 +1,8 @@
-import { ACTIONS, ITEMS, MONSTERS } from './data';
+import { ACTIONS, ITEMS, MONSTERS, SKILLS } from './data';
 import { nextRandom } from './rng';
 import { levelForXp, XP_TABLE } from './xp';
 import type {
-  CombatAction, GameState, MonsterDef, SkillAction, SkillId, Summary, Task, TaskEndReason, TaskMode,
+  CombatAction, CombatStyle, EquipSlot, GameState, MonsterDef, SkillAction, SkillId, Summary, Task, TaskEndReason, TaskMode,
 } from './types';
 
 /** 离线收益上限 24 小时 */
@@ -16,41 +16,138 @@ const MONSTER_DAMAGE_SCALE = 3;
 /** 存档是纯 JSON；不用 structuredClone，iOS 15.4 以下没有 */
 const clone = (s: GameState): GameState => JSON.parse(JSON.stringify(s));
 
+export const BAG_SLOTS = 20;
+/** 背包每格最多叠多少个 */
+export const BAG_STACK = 100;
+export const DEFAULT_CARRY_FOOD = 100;
+
+const ALL_SKILLS = Object.keys(SKILLS) as SkillId[];
+
 export function newGame(now: number, seed = Math.floor(Math.random() * 2 ** 31)): GameState {
+  const xp = Object.fromEntries(ALL_SKILLS.map((k) => [k, 0])) as Record<SkillId, number>;
+  xp.hitpoints = XP_TABLE[10];
   return {
-    version: 1,
+    version: 2,
     lastTick: now,
     rng: seed,
-    xp: { mining: 0, woodcutting: 0, fishing: 0, smithing: 0, cooking: 0, melee: 0, hitpoints: XP_TABLE[10] },
+    xp,
     hp: 100,
     bank: { coins: 50, minnow: 10 },
+    bag: {},
     equipment: { weapon: 'bronze_sword' },
     queue: [],
     progressMs: 0,
     combat: null,
-    settings: { eatThreshold: 0.5 },
+    settings: { eatThreshold: 0.5, carryFood: DEFAULT_CARRY_FOOD },
     regenMs: 0,
     stats: { kills: 0, deaths: 0 },
   };
 }
 
+/** 旧存档升级到当前版本；认不出的物品和任务直接丢掉，避免读档崩溃 */
+export function migrate(raw: unknown): GameState | null {
+  const s = raw as Omit<Partial<GameState>, "version"> & { version?: number };
+  if (!s || typeof s !== 'object' || (s.version !== 1 && s.version !== 2)) return null;
+  const fresh = newGame(s.lastTick ?? Date.now(), s.rng);
+  const keep = (rec: Record<string, number> | undefined) =>
+    Object.fromEntries(Object.entries(rec ?? {}).filter(([id, q]) => ITEMS[id] && q > 0));
+  const equipment: GameState['equipment'] = {};
+  for (const [slot, id] of Object.entries(s.equipment ?? {})) {
+    if (id && ITEMS[id]?.equip?.slot === slot) equipment[slot as EquipSlot] = id;
+  }
+  const queue = (s.queue ?? []).filter((t) => ACTIONS[t.action]);
+  return {
+    ...fresh,
+    lastTick: s.lastTick ?? fresh.lastTick,
+    xp: { ...fresh.xp, ...s.xp },
+    hp: s.hp ?? fresh.hp,
+    bank: keep(s.bank),
+    bag: keep(s.bag),
+    equipment,
+    queue,
+    progressMs: queue[0] === s.queue?.[0] ? s.progressMs ?? 0 : 0,
+    combat: queue[0] === s.queue?.[0] ? s.combat ?? null : null,
+    settings: { ...fresh.settings, ...s.settings },
+    regenMs: s.regenMs ?? 0,
+    stats: { ...fresh.stats, ...s.stats },
+  };
+}
+
 export function emptySummary(): Summary {
-  return { elapsedMs: 0, xp: {}, items: {}, levelUps: [], kills: {}, deaths: 0, foodEaten: 0, taskEnds: [] };
+  return { elapsedMs: 0, xp: {}, items: {}, levelUps: [], kills: {}, deaths: 0, foodEaten: 0, ammoUsed: 0, taskEnds: [] };
 }
 
 export const level = (s: GameState, skill: SkillId) => levelForXp(s.xp[skill]);
 export const maxHp = (s: GameState) => level(s, 'hitpoints') * 10;
 
-export function playerBonuses(s: GameState) {
+export function combatLevel(s: GameState) {
+  const atk = Math.max(level(s, 'melee'), level(s, 'ranged'), level(s, 'magic'));
+  return Math.max(1, Math.floor((atk * 1.3 + level(s, 'defence') + level(s, 'hitpoints')) / 3.3));
+}
+
+export const weaponStyle = (s: GameState): CombatStyle => ITEMS[s.equipment.weapon ?? '']?.equip?.style ?? 'melee';
+
+export function playerBonuses(s: GameState, style = weaponStyle(s)) {
   const b = { attack: 0, strength: 0, defence: 0 };
   for (const id of Object.values(s.equipment)) {
     const e = id && ITEMS[id]?.equip;
     if (!e) continue;
+    b.defence += e.defence;
+    // 皮甲只加远程，法袍只加魔法
+    if (e.style && e.style !== style) continue;
     b.attack += e.attack;
     b.strength += e.strength;
-    b.defence += e.defence;
   }
   return b;
+}
+
+export const TOOL_FOR: Partial<Record<SkillId, EquipSlot>> = {
+  mining: 'pickaxe', woodcutting: 'axe', fishing: 'rod', farming: 'hoe', thieving: 'gloves',
+};
+
+export function toolSpeed(s: GameState, skill: SkillId) {
+  const slot = TOOL_FOR[skill];
+  return (slot && ITEMS[s.equipment[slot] ?? '']?.equip?.speed) || 0;
+}
+
+/** 工具加速后的单次耗时 */
+export const actionDuration = (s: GameState, a: SkillAction) => Math.round(a.durationMs / (1 + toolSpeed(s, a.skill)));
+
+const healOf = (id: string) => ITEMS[id]?.heals ?? 0;
+const isBagItem = (id: string) => ['food', 'potion', 'ammo'].includes(ITEMS[id]?.category);
+
+export function bagSlotsUsed(bag: Record<string, number>) {
+  return Object.values(bag).reduce((n, q) => n + Math.ceil(q / BAG_STACK), 0);
+}
+
+/** 背包里还能放下多少个这种物品 */
+export function bagRoomFor(bag: Record<string, number>, item: string) {
+  const have = bag[item] ?? 0;
+  const partial = have % BAG_STACK ? BAG_STACK - (have % BAG_STACK) : 0;
+  return partial + (BAG_SLOTS - bagSlotsUsed(bag)) * BAG_STACK;
+}
+
+/** 背包里回复最多的食物或药水 */
+export function bestFood(s: GameState, from: Record<string, number> = s.bag): string | undefined {
+  let best: string | undefined;
+  for (const [id, qty] of Object.entries(from)) {
+    if (qty > 0 && healOf(id) && (!best || healOf(id) > healOf(best))) best = id;
+  }
+  return best;
+}
+
+/** 当前武器能用的最好的弹药：先找背包，再找仓库 */
+export function bestAmmo(s: GameState, style = weaponStyle(s)): { id: string; inBag: boolean } | undefined {
+  if (style === 'melee') return undefined;
+  let best: { id: string; inBag: boolean } | undefined;
+  for (const [store, inBag] of [[s.bag, true], [s.bank, false]] as const) {
+    for (const [id, qty] of Object.entries(store)) {
+      const a = ITEMS[id]?.ammo;
+      if (!a || a.style !== style || qty <= 0) continue;
+      if (!best || a.power > ITEMS[best.id].ammo!.power) best = { id, inBag };
+    }
+  }
+  return best;
 }
 
 /** RuneScape 式命中率：攻击值与防御值对抗 */
@@ -61,12 +158,17 @@ function hitChance(attackRoll: number, defenceRoll: number): number {
 }
 
 export function combatStats(s: GameState, m: MonsterDef) {
-  const lvl = level(s, 'melee');
-  const b = playerBonuses(s);
+  const style = weaponStyle(s);
+  const lvl = level(s, style);
+  const b = playerBonuses(s, style);
+  const ammo = bestAmmo(s, style);
+  const strength = b.strength + (ammo ? ITEMS[ammo.id].ammo!.power : 0);
   return {
+    style,
+    ammo: ammo?.id,
     playerHit: hitChance((lvl + 8) * (b.attack + 64), (m.defence + 8) * 64),
-    playerMaxHit: Math.floor(0.5 + ((lvl + 8) * (b.strength + 64)) / 640) * 10,
-    monsterHit: hitChance((m.attack + 8) * 64, (lvl + 8) * (b.defence + 64)),
+    playerMaxHit: Math.floor(0.5 + ((lvl + 8) * (strength + 64)) / 640) * 10,
+    monsterHit: m.maxHit > 0 ? hitChance((m.attack + 8) * 64, (level(s, 'defence') + 8) * (b.defence + 64)) : 0,
     monsterMaxHit: m.maxHit * MONSTER_DAMAGE_SCALE,
   };
 }
@@ -112,14 +214,35 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
 
   const timeLeft = (task: Task) => (task.mode.type === 'time' ? task.mode.ms - task.elapsedMs : Infinity);
 
+  const addBag = (item: string, qty: number) => {
+    s.bag[item] = (s.bag[item] ?? 0) + qty;
+    if (s.bag[item] <= 0) delete s.bag[item];
+  };
+
+  /** 只吃背包里的东西 */
   const eatIfNeeded = () => {
     const limit = maxHp(s) * s.settings.eatThreshold;
     while (s.hp < limit) {
       const food = bestFood(s);
       if (!food) return;
-      addItem(food, -1);
+      addBag(food, -1);
       sum.foodEaten++;
-      s.hp = Math.min(maxHp(s), s.hp + ITEMS[food].heals!);
+      s.hp = Math.min(maxHp(s), s.hp + healOf(food));
+    }
+  };
+
+  /** 开战时按设置从仓库把食物补进背包，好的先拿 */
+  const carryFood = () => {
+    const target = s.settings.carryFood < 0 ? Infinity : s.settings.carryFood;
+    let have = Object.entries(s.bag).reduce((n, [id, q]) => n + (healOf(id) ? q : 0), 0);
+    const foods = Object.keys(s.bank).filter((id) => healOf(id)).sort((a, b) => healOf(b) - healOf(a));
+    for (const id of foods) {
+      const n = Math.min(s.bank[id], target - have, bagRoomFor(s.bag, id));
+      if (n <= 0) continue;
+      s.bank[id] -= n;
+      if (s.bank[id] <= 0) delete s.bank[id];
+      addBag(id, n);
+      have += n;
     }
   };
 
@@ -128,16 +251,19 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       if (level(s, a.skill) < a.level) return endTask('level'), 0;
       if (a.inputs && !a.inputs.every((i) => (s.bank[i.item] ?? 0) >= i.qty)) return endTask('noInput'), 0;
     }
-    const step = Math.min(budget, a.durationMs - s.progressMs);
+    // 进度为负表示偷窃失败后的晕眩，先走完晕眩停在 0，再做下一次的条件检查
+    const duration = actionDuration(s, a);
+    const step = Math.min(budget, s.progressMs < 0 ? -s.progressMs : Math.max(0, duration - s.progressMs));
     s.progressMs += step;
-    if (s.progressMs >= a.durationMs) {
+    if (s.progressMs >= duration) {
       s.progressMs = 0;
       a.inputs?.forEach((i) => addItem(i.item, -i.qty));
       const failChance = a.fail
         ? Math.max(0, a.fail.chance * (a.fail.noFailLevel - level(s, a.skill)) / (a.fail.noFailLevel - a.level))
         : 0;
       if (a.fail && rand() < failChance) {
-        addItem(a.fail.item, 1);
+        if (a.fail.item) addItem(a.fail.item, 1);
+        if (a.fail.stunMs) s.progressMs = -a.fail.stunMs;
       } else {
         for (const o of a.outputs) if (o.chance === undefined || rand() < o.chance) addItem(o.item, o.qty);
         addXp(a.skill, a.xp);
@@ -149,7 +275,10 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
 
   const stepCombat = (task: Task, a: CombatAction, budget: number): number => {
     const m = MONSTERS[a.monster];
-    if (!s.combat) s.combat = { monsterHp: m.hp, playerTimerMs: PLAYER_ATTACK_MS, monsterTimerMs: m.attackMs, respawnMs: 0 };
+    if (!s.combat) {
+      carryFood();
+      s.combat = { monsterHp: m.hp, playerTimerMs: PLAYER_ATTACK_MS, monsterTimerMs: m.attackMs, respawnMs: 0 };
+    }
     const c = s.combat;
     if (c.respawnMs > 0) {
       const step = Math.min(budget, c.respawnMs);
@@ -162,11 +291,19 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     const st = combatStats(s, m);
 
     if (c.playerTimerMs <= 0) {
+      if (st.style !== 'melee') {
+        const ammo = bestAmmo(s, st.style);
+        if (!ammo) return endTask('noAmmo'), step;
+        if (ammo.inBag) addBag(ammo.id, -1);
+        else addItem(ammo.id, -1);
+        sum.ammoUsed++;
+      }
       c.playerTimerMs += PLAYER_ATTACK_MS;
       if (rand() < st.playerHit) {
         const dmg = Math.min(c.monsterHp, 1 + Math.floor(rand() * st.playerMaxHit));
         c.monsterHp -= dmg;
-        addXp('melee', dmg);
+        addXp(st.style, dmg);
+        addXp('defence', dmg / 3);
         addXp('hitpoints', dmg / 3);
       }
       if (c.monsterHp <= 0) {
@@ -180,7 +317,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     }
     if (c.monsterTimerMs <= 0) {
       c.monsterTimerMs += m.attackMs;
-      if (rand() < st.monsterHit) {
+      if (st.monsterMaxHit > 0 && rand() < st.monsterHit) {
         s.hp -= 1 + Math.floor(rand() * st.monsterMaxHit);
         eatIfNeeded();
         if (s.hp <= 0) {
@@ -220,15 +357,6 @@ function regen(s: GameState, ms: number) {
   s.hp = Math.min(maxHp(s), s.hp + ticks);
 }
 
-export function bestFood(s: GameState): string | undefined {
-  let best: string | undefined;
-  for (const [id, qty] of Object.entries(s.bank)) {
-    const heals = ITEMS[id]?.heals;
-    if (qty > 0 && heals && (!best || heals > ITEMS[best].heals!)) best = id;
-  }
-  return best;
-}
-
 // ---- 玩家操作（都返回新存档，不修改旧存档） ----
 
 /** 立即开始：替换当前任务 */
@@ -259,13 +387,43 @@ export function removeTask(prev: GameState, index: number): GameState {
 
 export function equip(prev: GameState, item: string): GameState {
   const e = ITEMS[item]?.equip;
-  if (!e || !prev.bank[item] || level(prev, 'melee') < e.level) return prev;
+  if (!e || !prev.bank[item] || level(prev, e.skill) < e.level) return prev;
   const s = clone(prev);
   const old = s.equipment[e.slot];
   if (old) s.bank[old] = (s.bank[old] ?? 0) + 1;
   s.bank[item] -= 1;
   if (s.bank[item] <= 0) delete s.bank[item];
   s.equipment[e.slot] = item;
+  return s;
+}
+
+export function unequip(prev: GameState, slot: EquipSlot): GameState {
+  const id = prev.equipment[slot];
+  if (!id) return prev;
+  const s = clone(prev);
+  delete s.equipment[slot];
+  s.bank[id] = (s.bank[id] ?? 0) + 1;
+  return s;
+}
+
+/** 仓库 → 背包，只能放食物、药水、弹药，放不下的留在仓库 */
+export function toBag(prev: GameState, item: string, qty: number): GameState {
+  const n = Math.min(prev.bank[item] ?? 0, qty, bagRoomFor(prev.bag, item));
+  if (!isBagItem(item) || n <= 0) return prev;
+  const s = clone(prev);
+  s.bank[item] -= n;
+  if (s.bank[item] <= 0) delete s.bank[item];
+  s.bag[item] = (s.bag[item] ?? 0) + n;
+  return s;
+}
+
+export function toBank(prev: GameState, item: string, qty: number): GameState {
+  const n = Math.min(prev.bag[item] ?? 0, qty);
+  if (n <= 0) return prev;
+  const s = clone(prev);
+  s.bag[item] -= n;
+  if (s.bag[item] <= 0) delete s.bag[item];
+  s.bank[item] = (s.bank[item] ?? 0) + n;
   return s;
 }
 
@@ -280,10 +438,14 @@ export function sell(prev: GameState, item: string, qty: number): GameState {
   return s;
 }
 
-/** 某个动作每小时的经验（战斗为估算期望值），用于列表上的「经验/小时」 */
+export function setSettings(prev: GameState, patch: Partial<GameState['settings']>): GameState {
+  return { ...prev, settings: { ...prev.settings, ...patch } };
+}
+
+/** 某个动作每小时的经验（战斗为武器对应技能的估算期望值），用于列表上的「经验/小时」 */
 export function xpPerHour(s: GameState, actionId: string): number {
   const a = ACTIONS[actionId];
-  if (a.kind === 'skill') return Math.round((a.xp * 3600000) / a.durationMs);
+  if (a.kind === 'skill') return Math.round((a.xp * 3600000) / actionDuration(s, a));
   const m = MONSTERS[a.monster];
   const st = combatStats(s, m);
   const avgDmg = st.playerHit * (1 + st.playerMaxHit) / 2;

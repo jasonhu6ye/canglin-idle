@@ -1,13 +1,26 @@
 import Phaser from 'phaser';
 import { useEffect, useRef } from 'react';
 import { DPR } from '../game/dpr';
-import { MapScene, NODE_CLICK } from '../game/MapScene';
+import { MapScene, NODE_CLICK, REGION_CHANGE } from '../game/MapScene';
 
 let game: Phaser.Game | null = null;
 
 export function emitToGame(event: string, ...args: unknown[]) {
   game?.events.emit(event, ...args);
 }
+
+/** 订阅场景发出的事件（游戏可能晚于组件创建，所以挂在一个全局表上转发） */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Listener = (...args: any[]) => void;
+const relays = new Map<string, Set<Listener>>();
+export function onGameEvent(event: string, fn: Listener) {
+  if (!relays.has(event)) relays.set(event, new Set());
+  relays.get(event)!.add(fn);
+  return () => {
+    relays.get(event)!.delete(fn);
+  };
+}
+const relay = (event: string): Listener => (...args) => relays.get(event)?.forEach((f) => f(...args));
 
 export function GameCanvas({ onNodeClick }: { onNodeClick: (nodeId: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -28,6 +41,7 @@ export function GameCanvas({ onNodeClick }: { onNodeClick: (nodeId: string) => v
       input: { touch: { capture: true } },
     });
     const g = game;
+    g.events.on(REGION_CHANGE, relay(REGION_CHANGE));
     const ro = new ResizeObserver(() => {
       const s = size();
       g.scale.resize(s.w, s.h);

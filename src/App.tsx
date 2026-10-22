@@ -1,19 +1,23 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { SKILLS } from './core/data';
-import type { Summary, TaskEndReason } from './core/types';
+import { NODES, REGIONS, SKILLS } from './core/data';
+import type { RegionId, Summary, TaskEndReason } from './core/types';
+import { REGION_CHANGE } from './game/MapScene';
 import { store, useGame, useOffline } from './store';
 import { ActionSheet } from './ui/ActionSheet';
-import { GameCanvas } from './ui/GameCanvas';
+import { GameCanvas, onGameEvent } from './ui/GameCanvas';
 import { actionName } from './ui/format';
 import { MapButtons, QueuePanel, StatusChips, TopBar } from './ui/hud';
-import { BagPanel, MorePanel, NodeList, OfflineModal, SkillsPanel } from './ui/panels';
+import { TplIcon } from './ui/icons';
+import { BagPanel, BankPanel, MorePanel, NodeList, OfflineModal, SkillsPanel } from './ui/panels';
+import { WorldMap } from './ui/WorldMap';
 
-type Tab = 'game' | 'bag' | 'skills' | 'more';
-const TABS: { id: Tab; icon: string; label: string }[] = [
-  { id: 'game', icon: '▶', label: '游戏' },
-  { id: 'bag', icon: '▣', label: '背包' },
-  { id: 'skills', icon: '★', label: '技能' },
-  { id: 'more', icon: '…', label: '更多' },
+type Tab = 'game' | 'bag' | 'bank' | 'skills' | 'more';
+const TABS: { id: Tab; icon: [string, string]; label: string }[] = [
+  { id: 'game', icon: ['sword', '#c5cad2'], label: '游戏' },
+  { id: 'bag', icon: ['bag', '#a07a50'], label: '背包' },
+  { id: 'bank', icon: ['coins', '#f0c850'], label: '仓库' },
+  { id: 'skills', icon: ['gem', '#e8b84a'], label: '技能' },
+  { id: 'more', icon: ['rune', '#9a9aa8'], label: '更多' },
 ];
 
 const END_TEXT: Record<TaskEndReason, string> = {
@@ -21,6 +25,7 @@ const END_TEXT: Record<TaskEndReason, string> = {
   noInput: '材料不足，已停止',
   death: '你阵亡了，战斗停止',
   level: '等级不够，已跳过',
+  noAmmo: '弹药用完了，战斗停止',
 };
 
 type Toast = { id: number; text: string; gold: boolean };
@@ -38,6 +43,23 @@ function useToasts() {
     });
   }, []);
   return toasts;
+}
+
+/** 走进新区域时在屏幕上方打出区域名 */
+function useRegion() {
+  const [region, setRegion] = useState<RegionId>('town');
+  const [banner, setBanner] = useState<{ key: number; region: RegionId } | null>(null);
+  useEffect(() => {
+    let key = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    return onGameEvent(REGION_CHANGE, (r: RegionId) => {
+      setRegion(r);
+      setBanner({ key: ++key, region: r });
+      clearTimeout(timer);
+      timer = setTimeout(() => setBanner(null), 2600);
+    });
+  }, []);
+  return { region, banner };
 }
 
 const WIDE_QUERY = '(min-width: 900px)';
@@ -60,17 +82,27 @@ export function App() {
   const wide = useWide();
   const [tab, setTab] = useState<Tab>('game');
   const [node, setNode] = useState<string | null>(null);
+  const [worldMap, setWorldMap] = useState(false);
   const toasts = useToasts();
+  const { region, banner } = useRegion();
   const openNode = useCallback((id: string) => {
+    setWorldMap(false);
+    if (NODES.find((n) => n.id === id)?.opens === 'bank') {
+      setNode(null);
+      setTab('bank');
+      return;
+    }
     setTab('game');
     setNode(id);
   }, []);
 
   let side: ReactNode = null;
-  if (tab === 'game' && node) side = <ActionSheet s={s} nodeId={node} onClose={() => setNode(null)} />;
+  if (worldMap) side = <WorldMap s={s} onClose={() => setWorldMap(false)} onOpenNode={openNode} />;
+  else if (tab === 'game' && node) side = <ActionSheet s={s} nodeId={node} onClose={() => setNode(null)} />;
   else if (tab === 'game' && wide) side = <NodeList onPick={openNode} />;
   else if (tab === 'bag') side = <BagPanel s={s} />;
-  else if (tab === 'skills') side = <SkillsPanel s={s} />;
+  else if (tab === 'bank') side = <BankPanel s={s} />;
+  else if (tab === 'skills') side = <SkillsPanel s={s} onPick={openNode} />;
   else if (tab === 'more') side = <MorePanel />;
 
   return (
@@ -78,20 +110,22 @@ export function App() {
       <TopBar s={s} />
       <main>
         <GameCanvas onNodeClick={openNode} />
+        <div className={`region-tint ${region}`} />
         <div className="hud">
           <QueuePanel s={s} />
           <StatusChips s={s} />
-          <MapButtons />
+          <MapButtons onWorldMap={() => setWorldMap(true)} />
         </div>
+        {banner && <div key={banner.key} className="region-banner">{REGIONS[banner.region].name}</div>}
         <div className="toasts">
           {toasts.map((t) => <div key={t.id} className={`toast ${t.gold ? 'gold' : ''}`}>{t.text}</div>)}
         </div>
       </main>
-      {side && <aside className="side">{side}</aside>}
+      {side && <aside className={`side ${worldMap ? 'wide-map' : ''}`}>{side}</aside>}
       <nav className="tabbar">
         {TABS.map((t) => (
-          <button key={t.id} className={tab === t.id ? 'on' : ''} onClick={() => { setTab(t.id); setNode(null); }}>
-            <span>{t.icon}</span>
+          <button key={t.id} className={tab === t.id && !worldMap ? 'on' : ''} onClick={() => { setTab(t.id); setNode(null); setWorldMap(false); }}>
+            <TplIcon tpl={t.icon[0]} tint={t.icon[1]} size={22} />
             {t.label}
           </button>
         ))}

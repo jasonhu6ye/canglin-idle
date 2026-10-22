@@ -1,157 +1,535 @@
-import type { ActionDef, ItemDef, MonsterDef, SkillId } from './types';
+import type {
+  ActionDef, CombatStyle, Drop, EquipSlot, ItemCategory, ItemDef, ItemStack, MonsterDef, RegionId, SkillGroup, SkillId,
+} from './types';
 
-export const SKILLS: Record<SkillId, { name: string; color: string }> = {
-  mining: { name: '挖矿', color: '#b08d57' },
-  woodcutting: { name: '伐木', color: '#6a9a4a' },
-  fishing: { name: '钓鱼', color: '#4f86b8' },
-  smithing: { name: '锻造', color: '#c26a3a' },
-  cooking: { name: '烹饪', color: '#d4a03c' },
-  melee: { name: '近战', color: '#b84a4a' },
-  hitpoints: { name: '生命', color: '#d0566b' },
+/*
+ * 占位数值：装备、工具、资源、怪物都按公式批量生成，等正式设计再逐个替换。
+ * 闭环：采集 → 仓库 → 生产 → 装备/消耗品 → 战斗 → 掉落 → 生产或卖钱。
+ */
+
+export const MAP_W = 1080;
+export const MAP_H = 1080;
+
+export interface SkillInfo { name: string; color: string; group: SkillGroup; desc: string }
+
+export const SKILLS: Record<SkillId, SkillInfo> = {
+  mining: { name: '挖矿', color: '#b08d57', group: 'gather', desc: '采集矿石、符文石和宝石' },
+  woodcutting: { name: '伐木', color: '#6a9a4a', group: 'gather', desc: '砍伐各地的树木' },
+  fishing: { name: '钓鱼', color: '#4f86b8', group: 'gather', desc: '在湖泊、海岸和熔池钓鱼' },
+  farming: { name: '种植', color: '#8fbf4a', group: 'gather', desc: '在家园农田种作物，在野外采草药' },
+  thieving: { name: '偷窃', color: '#8a7ab8', group: 'gather', desc: '从镇民和商队身上摸金币，失败会被晕眩' },
+  cooking: { name: '烹饪', color: '#d4a03c', group: 'produce', desc: '把鱼和作物做成回血的食物' },
+  smithing: { name: '锻造', color: '#c26a3a', group: 'produce', desc: '冶炼金属锭，打造近战武器、重甲、工具和箭头' },
+  fletching: { name: '制弓', color: '#a8944a', group: 'produce', desc: '制作弓、箭和鱼竿' },
+  herblore: { name: '药剂', color: '#4ab89a', group: 'produce', desc: '用草药调配治疗药水' },
+  crafting: { name: '工艺', color: '#b87a9a', group: 'produce', desc: '制作符文、法杖、皮甲、法袍和首饰' },
+  enhancing: { name: '强化', color: '#e8d04a', group: 'produce', desc: '制作强化石（装备强化系统待开放）' },
+  melee: { name: '近战', color: '#c84a4a', group: 'combat', desc: '装备剑类武器时获得经验' },
+  ranged: { name: '远程', color: '#6ab84a', group: 'combat', desc: '装备弓时获得经验，消耗箭' },
+  magic: { name: '魔法', color: '#5a7ae8', group: 'combat', desc: '装备法杖时获得经验，消耗符文' },
+  defence: { name: '防御', color: '#7a8ab8', group: 'combat', desc: '任何战斗都会获得，决定能穿的护甲' },
+  hitpoints: { name: '生命', color: '#d0566b', group: 'combat', desc: '任何战斗都会获得，每级 10 点生命上限' },
 };
 
-const items: ItemDef[] = [
-  { id: 'coins', name: '金币', value: 1 },
-  // 矿石与锭
-  { id: 'copper_ore', name: '铜矿石', value: 3 },
-  { id: 'tin_ore', name: '锡矿石', value: 3 },
-  { id: 'iron_ore', name: '铁矿石', value: 10 },
-  { id: 'coal', name: '煤', value: 15 },
-  { id: 'gem', name: '原石宝石', value: 120 },
-  { id: 'bronze_bar', name: '青铜锭', value: 10 },
-  { id: 'iron_bar', name: '铁锭', value: 30 },
-  { id: 'steel_bar', name: '钢锭', value: 70 },
-  // 木材
-  { id: 'pine_log', name: '松木', value: 2 },
-  { id: 'oak_log', name: '橡木', value: 8 },
-  { id: 'willow_log', name: '柳木', value: 18 },
-  // 鱼
-  { id: 'raw_minnow', name: '生银鱼', value: 2 },
-  { id: 'raw_trout', name: '生鳟鱼', value: 9 },
-  { id: 'raw_salmon', name: '生鲑鱼', value: 20 },
-  { id: 'minnow', name: '烤银鱼', value: 4, heals: 30 },
-  { id: 'trout', name: '烤鳟鱼', value: 14, heals: 70 },
-  { id: 'salmon', name: '烤鲑鱼', value: 30, heals: 120 },
-  { id: 'burnt_fish', name: '烧焦的鱼', value: 0 },
-  // 装备
-  { id: 'bronze_sword', name: '青铜剑', value: 40, equip: { slot: 'weapon', level: 1, attack: 6, strength: 5, defence: 0 } },
-  { id: 'bronze_helm', name: '青铜头盔', value: 30, equip: { slot: 'head', level: 1, attack: 0, strength: 0, defence: 4 } },
-  { id: 'bronze_body', name: '青铜胸甲', value: 60, equip: { slot: 'body', level: 1, attack: 0, strength: 0, defence: 9 } },
-  { id: 'iron_sword', name: '铁剑', value: 120, equip: { slot: 'weapon', level: 15, attack: 14, strength: 12, defence: 0 } },
-  { id: 'iron_helm', name: '铁头盔', value: 90, equip: { slot: 'head', level: 15, attack: 0, strength: 0, defence: 9 } },
-  { id: 'iron_body', name: '铁胸甲', value: 180, equip: { slot: 'body', level: 15, attack: 0, strength: 0, defence: 20 } },
-  { id: 'steel_sword', name: '钢剑', value: 300, equip: { slot: 'weapon', level: 30, attack: 25, strength: 22, defence: 0 } },
-  { id: 'steel_body', name: '钢胸甲', value: 450, equip: { slot: 'body', level: 30, attack: 0, strength: 0, defence: 34 } },
-  // 怪物掉落
-  { id: 'bones', name: '骨头', value: 2 },
-  { id: 'rabbit_pelt', name: '兔皮', value: 6 },
-  { id: 'slime_gel', name: '史莱姆凝胶', value: 12 },
-  { id: 'wolf_fang', name: '狼牙', value: 25 },
-  { id: 'ash_core', name: '余烬核心', value: 80 },
+export const SKILL_GROUPS: { id: SkillGroup; name: string }[] = [
+  { id: 'gather', name: '采集' },
+  { id: 'produce', name: '生产' },
+  { id: 'combat', name: '战斗' },
 ];
 
-export const ITEMS: Record<string, ItemDef> = Object.fromEntries(items.map((i) => [i.id, i]));
+export const REGIONS: Record<RegionId, { name: string; color: string }> = {
+  town: { name: '城镇·安全区', color: '#7a9a52' },
+  snow: { name: '冰封雪原', color: '#dfe8f0' },
+  highland: { name: '灰岩高地', color: '#8a8a88' },
+  coast: { name: '金沙海岸', color: '#e0c27a' },
+  lava: { name: '熔岩荒地', color: '#6a3a2e' },
+  abyss: { name: '深渊裂谷', color: '#3e3352' },
+  swamp: { name: '亡者沼泽', color: '#4a5a3a' },
+  woodland: { name: '幽深林地', color: '#3f6e34' },
+  giantwood: { name: '巨木森林', color: '#2f5a32' },
+};
 
-const monsters: MonsterDef[] = [
-  { id: 'rabbit', name: '野兔', level: 2, hp: 40, attack: 1, defence: 1, maxHit: 2, attackMs: 3000,
-    drops: [{ item: 'coins', qty: 5 }, { item: 'rabbit_pelt', qty: 1, chance: 0.5 }, { item: 'bones', qty: 1 }] },
-  { id: 'crab', name: '岩蟹', level: 6, hp: 80, attack: 6, defence: 12, maxHit: 6, attackMs: 3000,
-    drops: [{ item: 'coins', qty: 12 }, { item: 'copper_ore', qty: 3, chance: 0.4 }, { item: 'bones', qty: 1 }] },
-  { id: 'slime', name: '沼泽史莱姆', level: 12, hp: 150, attack: 14, defence: 10, maxHit: 11, attackMs: 2800,
-    drops: [{ item: 'coins', qty: 25 }, { item: 'slime_gel', qty: 1, chance: 0.6 }, { item: 'raw_trout', qty: 2, chance: 0.2 }] },
-  { id: 'wolf', name: '灰狼', level: 22, hp: 260, attack: 22, defence: 24, maxHit: 11, attackMs: 2600,
-    drops: [{ item: 'coins', qty: 50 }, { item: 'wolf_fang', qty: 1, chance: 0.5 }, { item: 'iron_ore', qty: 4, chance: 0.3 }] },
-  { id: 'ash_wraith', name: '余烬怨灵', level: 35, hp: 450, attack: 34, defence: 40, maxHit: 16, attackMs: 2600,
-    drops: [{ item: 'coins', qty: 110 }, { item: 'ash_core', qty: 1, chance: 0.35 }, { item: 'gem', qty: 1, chance: 0.05 }] },
+// ---- 物品 ----
+
+const itemList: ItemDef[] = [];
+const item = (id: string, name: string, category: ItemCategory, value: number, extra: Partial<ItemDef> = {}) => {
+  itemList.push({ id, name, category, value, ...extra });
+  return id;
+};
+
+item('coins', '金币', 'misc', 1);
+item('bones', '骨头', 'misc', 3);
+
+/** 6 个装备档位，金属、木材、符文石一一对应 */
+export const TIERS = [
+  { id: 'bronze', metal: '青铜', wood: 'pine', woodName: '松木', rune: '萤光', level: 1 },
+  { id: 'iron', metal: '铁', wood: 'birch', woodName: '桦木', rune: '砂岩', level: 15 },
+  { id: 'steel', metal: '钢', wood: 'maple', woodName: '枫木', rune: '黑曜', level: 30 },
+  { id: 'mithril', metal: '秘银', wood: 'redwood', woodName: '赤杉', rune: '霜晶', level: 45 },
+  { id: 'adamant', metal: '精金', wood: 'ancient', woodName: '古木', rune: '棱晶', level: 60 },
+  { id: 'dragon', metal: '龙晶', wood: 'divine', woodName: '神木', rune: '龙晶', level: 75 },
 ];
+const POWER = [6, 14, 25, 38, 52, 68];
+const TOOL_SPEED = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3];
+const BAR_VALUE = [10, 30, 70, 150, 320, 700];
 
-export const MONSTERS: Record<string, MonsterDef> = Object.fromEntries(monsters.map((m) => [m.id, m]));
+// 矿石与符文石
+const ORES: [string, string, number][] = [
+  ['copper_ore', '铜矿石', 3], ['tin_ore', '锡矿石', 3], ['iron_ore', '铁矿石', 10], ['coal', '煤', 15],
+  ['gold_ore', '金矿石', 60], ['mithril_ore', '秘银矿石', 50], ['adamant_ore', '精金矿石', 110], ['dragon_ore', '龙晶矿石', 240],
+  ['glowstone', '萤石', 5], ['sandstone', '砂岩', 8], ['obsidian', '黑曜石', 25], ['frost_crystal', '霜晶', 45],
+  ['prism_shard', '棱晶碎片', 90], ['sapphire', '蓝宝石', 150], ['ruby', '红宝石', 300], ['diamond', '钻石', 600],
+];
+for (const [id, name, v] of ORES) item(id, name, 'resource', v);
+const RUNE_STONES = ['glowstone', 'sandstone', 'obsidian', 'frost_crystal', 'prism_shard', 'dragon_ore'];
 
-const smith = (id: string, name: string, level: number, bar: string, bars: number, xpPerBar: number): ActionDef => ({
-  id: `smith_${id}`, kind: 'skill', name, skill: 'smithing', level, durationMs: 3000 + bars * 500,
-  xp: xpPerBar * bars, inputs: [{ item: bar, qty: bars }], outputs: [{ item: id, qty: 1 }],
+// 木材
+TIERS.forEach((t, i) => item(`${t.wood}_log`, t.woodName, 'resource', [2, 8, 18, 40, 90, 200][i]));
+
+// 鱼与食物：[id, 名字, 钓鱼等级, 回复]
+const FISH: [string, string, number, number][] = [
+  ['minnow', '银鱼', 1, 30], ['shrimp', '虾', 1, 30], ['carp', '绿洲鲤', 5, 45], ['trout', '鳟鱼', 10, 60],
+  ['bass', '海鲈', 15, 80], ['cod', '冰鳕', 20, 100], ['salmon', '鲑鱼', 25, 130], ['eel', '沉潭鳗', 30, 160],
+  ['lava_eel', '熔岩鳗', 35, 190], ['ghostfish', '幽灵鱼', 40, 220], ['abyssfish', '深渊鱼', 58, 300],
+];
+for (const [id, name, lvl, heals] of FISH) {
+  item(`raw_${id}`, `生${name}`, 'resource', Math.round(2 + lvl * 0.9));
+  item(id, `烤${name}`, 'food', Math.round(4 + lvl * 1.4), { heals });
+}
+item('burnt_food', '烧焦的食物', 'misc', 0);
+
+// 作物与草药
+item('potato', '土豆', 'resource', 2);
+item('wheat', '小麦', 'resource', 3);
+item('flax', '亚麻', 'resource', 4);
+item('baked_potato', '烤土豆', 'food', 4, { heals: 25 });
+item('bread', '面包', 'food', 10, { heals: 50 });
+const HERBS: [string, string, number, number][] = [
+  // [id, 名字, 采集等级, 药水回复]
+  ['green_herb', '绿叶草', 1, 80], ['fire_bloom', '火绒花', 2, 110], ['moon_herb', '月露草', 18, 170],
+  ['silver_leaf', '银叶草', 21, 210], ['flame_heart', '炎心花', 25, 260], ['frost_lotus', '冰莲', 26, 330],
+];
+HERBS.forEach(([id, name, lvl, heals]) => {
+  item(id, name, 'resource', Math.round(3 + lvl * 1.5));
+  item(`${id}_potion`, `${name}药水`, 'potion', Math.round(15 + lvl * 4), { heals });
 });
 
-const actions: ActionDef[] = [
-  // 挖矿
-  { id: 'mine_copper', kind: 'skill', name: '铜矿', skill: 'mining', level: 1, durationMs: 3000, xp: 10,
-    outputs: [{ item: 'copper_ore', qty: 1 }, { item: 'gem', qty: 1, chance: 0.002 }] },
-  { id: 'mine_tin', kind: 'skill', name: '锡矿', skill: 'mining', level: 1, durationMs: 3000, xp: 10,
-    outputs: [{ item: 'tin_ore', qty: 1 }, { item: 'gem', qty: 1, chance: 0.002 }] },
-  { id: 'mine_iron', kind: 'skill', name: '铁矿', skill: 'mining', level: 15, durationMs: 3500, xp: 26,
-    outputs: [{ item: 'iron_ore', qty: 1 }, { item: 'gem', qty: 1, chance: 0.004 }] },
-  { id: 'mine_coal', kind: 'skill', name: '煤矿', skill: 'mining', level: 30, durationMs: 4000, xp: 40,
-    outputs: [{ item: 'coal', qty: 1 }, { item: 'gem', qty: 1, chance: 0.006 }] },
-  // 伐木
-  { id: 'chop_pine', kind: 'skill', name: '松树', skill: 'woodcutting', level: 1, durationMs: 3000, xp: 10,
-    outputs: [{ item: 'pine_log', qty: 1 }] },
-  { id: 'chop_oak', kind: 'skill', name: '橡树', skill: 'woodcutting', level: 15, durationMs: 3500, xp: 25,
-    outputs: [{ item: 'oak_log', qty: 1 }] },
-  { id: 'chop_willow', kind: 'skill', name: '柳树', skill: 'woodcutting', level: 30, durationMs: 4000, xp: 45,
-    outputs: [{ item: 'willow_log', qty: 1 }] },
-  // 钓鱼
-  { id: 'fish_minnow', kind: 'skill', name: '浅滩银鱼', skill: 'fishing', level: 1, durationMs: 3000, xp: 10,
-    outputs: [{ item: 'raw_minnow', qty: 1 }] },
-  { id: 'fish_trout', kind: 'skill', name: '溪流鳟鱼', skill: 'fishing', level: 20, durationMs: 4000, xp: 30,
-    outputs: [{ item: 'raw_trout', qty: 1 }] },
-  { id: 'fish_salmon', kind: 'skill', name: '深潭鲑鱼', skill: 'fishing', level: 35, durationMs: 4500, xp: 50,
-    outputs: [{ item: 'raw_salmon', qty: 1 }] },
-  // 冶炼与锻造
-  { id: 'smelt_bronze', kind: 'skill', name: '冶炼青铜锭', skill: 'smithing', level: 1, durationMs: 3000, xp: 8,
-    inputs: [{ item: 'copper_ore', qty: 1 }, { item: 'tin_ore', qty: 1 }], outputs: [{ item: 'bronze_bar', qty: 1 }] },
-  { id: 'smelt_iron', kind: 'skill', name: '冶炼铁锭', skill: 'smithing', level: 15, durationMs: 3500, xp: 18,
-    inputs: [{ item: 'iron_ore', qty: 1 }], outputs: [{ item: 'iron_bar', qty: 1 }] },
-  { id: 'smelt_steel', kind: 'skill', name: '冶炼钢锭', skill: 'smithing', level: 30, durationMs: 4000, xp: 32,
-    inputs: [{ item: 'iron_ore', qty: 1 }, { item: 'coal', qty: 2 }], outputs: [{ item: 'steel_bar', qty: 1 }] },
-  smith('bronze_sword', '锻造青铜剑', 1, 'bronze_bar', 1, 12),
-  smith('bronze_helm', '锻造青铜头盔', 3, 'bronze_bar', 1, 12),
-  smith('bronze_body', '锻造青铜胸甲', 8, 'bronze_bar', 3, 12),
-  smith('iron_sword', '锻造铁剑', 16, 'iron_bar', 1, 25),
-  smith('iron_helm', '锻造铁头盔', 18, 'iron_bar', 1, 25),
-  smith('iron_body', '锻造铁胸甲', 22, 'iron_bar', 3, 25),
-  smith('steel_sword', '锻造钢剑', 31, 'steel_bar', 1, 40),
-  smith('steel_body', '锻造钢胸甲', 35, 'steel_bar', 3, 40),
-  // 烹饪
-  { id: 'cook_minnow', kind: 'skill', name: '烤银鱼', skill: 'cooking', level: 1, durationMs: 2500, xp: 10,
-    inputs: [{ item: 'raw_minnow', qty: 1 }], outputs: [{ item: 'minnow', qty: 1 }],
-    fail: { chance: 0.4, noFailLevel: 20, item: 'burnt_fish' } },
-  { id: 'cook_trout', kind: 'skill', name: '烤鳟鱼', skill: 'cooking', level: 15, durationMs: 3000, xp: 28,
-    inputs: [{ item: 'raw_trout', qty: 1 }], outputs: [{ item: 'trout', qty: 1 }],
-    fail: { chance: 0.4, noFailLevel: 40, item: 'burnt_fish' } },
-  { id: 'cook_salmon', kind: 'skill', name: '烤鲑鱼', skill: 'cooking', level: 30, durationMs: 3500, xp: 45,
-    inputs: [{ item: 'raw_salmon', qty: 1 }], outputs: [{ item: 'salmon', qty: 1 }],
-    fail: { chance: 0.4, noFailLevel: 55, item: 'burnt_fish' } },
-  // 战斗区域
-  { id: 'fight_rabbit', kind: 'combat', name: '野兔草坡', difficulty: 'EASY', level: 1, monster: 'rabbit' },
-  { id: 'fight_crab', kind: 'combat', name: '碎石滩', difficulty: 'EASY', level: 5, monster: 'crab' },
-  { id: 'fight_slime', kind: 'combat', name: '雾沼', difficulty: 'MEDIUM', level: 12, monster: 'slime' },
-  { id: 'fight_wolf', kind: 'combat', name: '狼嚎林', difficulty: 'MEDIUM', level: 22, monster: 'wolf' },
-  { id: 'fight_ash', kind: 'combat', name: '余烬荒原', difficulty: 'HARD', level: 35, monster: 'ash_wraith' },
+// 兽皮与布
+item('rough_hide', '粗兽皮', 'resource', 6);
+item('hard_hide', '硬兽皮', 'resource', 40);
+item('dragon_scale', '龙鳞', 'resource', 250);
+item('linen', '亚麻布', 'material', 12);
+
+// 金属锭、箭杆、箭头、箭、符文
+TIERS.forEach((t, i) => {
+  item(`${t.id}_bar`, `${t.metal}锭`, 'material', BAR_VALUE[i]);
+  item(`${t.id}_arrowhead`, `${t.metal}箭头`, 'material', Math.ceil(BAR_VALUE[i] / 12));
+  item(`${t.id}_arrow`, `${t.metal}箭`, 'ammo', Math.ceil(BAR_VALUE[i] / 8), { ammo: { style: 'ranged', power: Math.round(POWER[i] / 2) } });
+  item(`${t.id}_rune`, `${t.rune}符文`, 'ammo', Math.ceil(BAR_VALUE[i] / 8), { ammo: { style: 'magic', power: Math.round(POWER[i] / 2) } });
+});
+item('gold_bar', '金锭', 'material', 150);
+item('shaft', '箭杆', 'material', 1);
+
+// 强化石（占位）
+const STONES: [string, string, number][] = [
+  ['stone_basic', '初级强化石', 1], ['stone_mid', '中级强化石', 30], ['stone_high', '高级强化石', 55], ['stone_legend', '传说强化石', 75],
 ];
+for (const [id, name, lvl] of STONES) item(id, name, 'material', 20 + lvl * 12);
 
-export const ACTIONS: Record<string, ActionDef> = Object.fromEntries(actions.map((a) => [a.id, a]));
+// 装备
+const gear = (
+  id: string, name: string, slot: EquipSlot, skill: SkillId, level: number, value: number,
+  stats: { attack?: number; strength?: number; defence?: number; style?: CombatStyle; speed?: number },
+) => item(id, name, slot === 'pickaxe' || slot === 'axe' || slot === 'rod' || slot === 'hoe' || slot === 'gloves' ? 'tool' : 'gear', value, {
+  equip: { slot, skill, level, attack: stats.attack ?? 0, strength: stats.strength ?? 0, defence: stats.defence ?? 0, style: stats.style, speed: stats.speed },
+});
 
-/** 地图上可点击的资源点，坐标单位为格子 */
+TIERS.forEach((t, i) => {
+  const p = POWER[i];
+  const v = BAR_VALUE[i];
+  gear(`${t.id}_sword`, `${t.metal}剑`, 'weapon', 'melee', t.level, v * 2, { attack: p, strength: Math.round(p * 0.85), style: 'melee' });
+  gear(`${t.id}_helm`, `${t.metal}头盔`, 'head', 'defence', t.level, v * 2, { defence: Math.round(p * 0.6) });
+  gear(`${t.id}_shield`, `${t.metal}盾`, 'shield', 'defence', t.level, v * 3, { defence: Math.round(p * 0.9) });
+  gear(`${t.id}_legs`, `${t.metal}腿甲`, 'legs', 'defence', t.level, v * 3, { defence: Math.round(p * 1.0) });
+  gear(`${t.id}_body`, `${t.metal}胸甲`, 'body', 'defence', t.level, v * 4, { defence: Math.round(p * 1.4) });
+  gear(`${t.id}_pickaxe`, `${t.metal}镐`, 'pickaxe', 'mining', t.level, v * 2, { speed: TOOL_SPEED[i] });
+  gear(`${t.id}_axe`, `${t.metal}斧`, 'axe', 'woodcutting', t.level, v * 2, { speed: TOOL_SPEED[i] });
+  gear(`${t.id}_hoe`, `${t.metal}锄`, 'hoe', 'farming', t.level, v * 2, { speed: TOOL_SPEED[i] });
+  gear(`${t.wood}_bow`, `${t.woodName}弓`, 'weapon', 'ranged', t.level, v * 2, { attack: p, strength: Math.round(p * 0.5), style: 'ranged' });
+  gear(`${t.wood}_staff`, `${t.woodName}法杖`, 'weapon', 'magic', t.level, v * 2, { attack: p, strength: Math.round(p * 0.4), style: 'magic' });
+  gear(`${t.wood}_rod`, `${t.woodName}鱼竿`, 'rod', 'fishing', t.level, v * 2, { speed: TOOL_SPEED[i] });
+});
+
+/** 皮甲（远程）和法袍（魔法）各 3 档，对应第 0、2、4 档 */
+const LIGHT = [
+  { tier: 0, hide: 'rough_hide', leather: '皮', robeName: '亚麻', robeExtra: null as string | null },
+  { tier: 2, hide: 'hard_hide', leather: '硬皮', robeName: '黑曜', robeExtra: 'obsidian' },
+  { tier: 4, hide: 'dragon_scale', leather: '龙鳞', robeName: '棱晶', robeExtra: 'prism_shard' },
+];
+const LIGHT_PIECES: { key: string; slot: EquipSlot; leather: string; robe: string; qty: number; def: number; lvl: number }[] = [
+  { key: 'head', slot: 'head', leather: '帽', robe: '兜帽', qty: 1, def: 0.4, lvl: 0 },
+  { key: 'legs', slot: 'legs', leather: '裤', robe: '长裙', qty: 2, def: 0.6, lvl: 3 },
+  { key: 'body', slot: 'body', leather: '甲', robe: '法袍', qty: 3, def: 0.9, lvl: 6 },
+];
+for (const l of LIGHT) {
+  const t = TIERS[l.tier];
+  const p = POWER[l.tier];
+  for (const piece of LIGHT_PIECES) {
+    gear(`${l.hide}_${piece.key}`, `${l.leather}${piece.leather}`, piece.slot, 'defence', t.level, BAR_VALUE[l.tier] * 2,
+      { defence: Math.round(p * piece.def), attack: Math.round(p * 0.2), style: 'ranged' });
+    gear(`robe${l.tier}_${piece.key}`, `${l.robeName}${piece.robe}`, piece.slot, 'defence', t.level, BAR_VALUE[l.tier] * 2,
+      { defence: Math.round(p * piece.def * 0.7), strength: Math.round(p * 0.2), style: 'magic' });
+  }
+  gear(`${l.hide}_gloves`, `${l.leather}手套`, 'gloves', 'thieving', t.level, BAR_VALUE[l.tier] * 2, { speed: TOOL_SPEED[l.tier] });
+}
+
+/** 首饰：金锭 + 宝石 */
+const JEWELS: { gem: string | null; name: string; level: number; power: number }[] = [
+  { gem: null, name: '金', level: 40, power: 4 },
+  { gem: 'sapphire', name: '蓝宝石', level: 45, power: 8 },
+  { gem: 'ruby', name: '红宝石', level: 55, power: 13 },
+  { gem: 'diamond', name: '钻石', level: 70, power: 20 },
+];
+for (const j of JEWELS) {
+  const key = j.gem ?? 'gold';
+  gear(`${key}_ring`, `${j.name}戒指`, 'ring', 'hitpoints', j.level, 200 + j.power * 40, { attack: j.power });
+  gear(`${key}_amulet`, `${j.name}项链`, 'neck', 'hitpoints', j.level, 220 + j.power * 40, { strength: j.power });
+}
+
+export const ITEMS: Record<string, ItemDef> = Object.fromEntries(itemList.map((i) => [i.id, i]));
+
+// ---- 怪物 ----
+
+const monsterList: MonsterDef[] = [];
+function monster(
+  id: string, name: string, level: number, sprite: string,
+  opts: { boss?: boolean; beast?: boolean; tint?: number; drops?: Drop[] } = {},
+) {
+  const mult = opts.boss ? 3 : 1;
+  const drops: Drop[] = [{ item: 'coins', qty: Math.round(level * 3 * (opts.boss ? 5 : 1)) }, { item: 'bones', qty: 1 }];
+  if (opts.beast) drops.push({ item: level < 30 ? 'rough_hide' : level < 60 ? 'hard_hide' : 'dragon_scale', qty: 1, chance: 0.5 });
+  monsterList.push({
+    id, name, level, sprite, tint: opts.tint, boss: opts.boss,
+    hp: Math.round((20 + level * 14) * mult),
+    attack: level, defence: level,
+    maxHit: Math.round(2 + level * 0.4),
+    attackMs: opts.boss ? 3200 : 2800,
+    drops: [...drops, ...(opts.drops ?? [])],
+  });
+  return id;
+}
+
+monsterList.push({ id: 'dummy', name: '稻草人', level: 1, hp: 30, attack: 0, defence: 0, maxHit: 0, attackMs: 3000, drops: [], sprite: 'scarecrow' });
+monster('rabbit', '野兔', 2, 'rabbit', { beast: true });
+monster('moss_slime', '苔藓史莱姆', 3, 'slime', { drops: [{ item: 'green_herb', qty: 1, chance: 0.25 }] });
+monster('cave_bat', '洞穴蝙蝠', 5, 'bat', { drops: [{ item: 'glowstone', qty: 2, chance: 0.3 }] });
+monster('reef_crab', '礁石蟹', 6, 'crab', { drops: [{ item: 'raw_shrimp', qty: 2, chance: 0.4 }] });
+monster('snow_fox', '雪狐', 8, 'wolf', { beast: true, tint: 0xf4f0ff });
+monster('boar', '野猪', 10, 'boar', { beast: true });
+monster('pine_wolf', '松谷狼', 12, 'wolf', { beast: true });
+monster('fire_lizard', '火蜥蜴', 12, 'lizard', { beast: true, drops: [{ item: 'fire_bloom', qty: 1, chance: 0.25 }] });
+monster('bog_skeleton', '沉潭骷髅', 15, 'skeleton', { drops: [{ item: 'raw_eel', qty: 1, chance: 0.2 }] });
+monster('goblin', '矿洞地精', 18, 'goblin', { drops: [{ item: 'iron_ore', qty: 3, chance: 0.4 }, { item: 'coal', qty: 2, chance: 0.3 }] });
+monster('scorpion', '沙蝎', 20, 'lizard', { beast: true, tint: 0xe8c070, drops: [{ item: 'sandstone', qty: 3, chance: 0.3 }] });
+monster('grey_wolf', '灰狼', 22, 'wolf', { beast: true, tint: 0xb0b0b0 });
+monster('canopy_spider', '冠林巨蛛', 26, 'spider', { beast: true, drops: [{ item: 'redwood_log', qty: 1, chance: 0.2 }] });
+monster('frost_wolf', '霜狼', 30, 'wolf', { beast: true, tint: 0xa8d8ff, drops: [{ item: 'frost_crystal', qty: 1, chance: 0.15 }] });
+monster('treant', '树精', 32, 'treant', { drops: [{ item: 'ancient_log', qty: 1, chance: 0.2 }] });
+monster('magma', '熔岩元素', 34, 'golem', { tint: 0xff8a50, drops: [{ item: 'obsidian', qty: 2, chance: 0.4 }] });
+monster('harpy', '峭壁鹰妖', 36, 'bat', { tint: 0xd8b080, drops: [{ item: 'mithril_ore', qty: 1, chance: 0.3 }] });
+monster('bog_wraith', '沉潭怨灵', 40, 'wraith', { drops: [{ item: 'raw_ghostfish', qty: 1, chance: 0.25 }] });
+monster('gargoyle', '石像鬼', 50, 'golem', { tint: 0x9a9aa8, drops: [{ item: 'mithril_ore', qty: 3, chance: 0.4 }, { item: 'ruby', qty: 1, chance: 0.03 }] });
+monster('tide_guardian', '潮眼守卫', 58, 'wraith', { boss: true, tint: 0x60d0ff, drops: [{ item: 'raw_abyssfish', qty: 5 }, { item: 'diamond', qty: 1, chance: 0.1 }] });
+monster('drakeling', '龙裔', 66, 'dragon', { beast: true, tint: 0xc0a0ff, drops: [{ item: 'dragon_ore', qty: 1, chance: 0.2 }] });
+monster('frost_giant', '冰霜巨人', 70, 'golem', { boss: true, tint: 0xd0f0ff, drops: [{ item: 'frost_crystal', qty: 10 }, { item: 'diamond', qty: 1, chance: 0.1 }] });
+monster('treant_king', '远古树王', 70, 'treant', { boss: true, tint: 0xffe080, drops: [{ item: 'divine_log', qty: 5 }, { item: 'diamond', qty: 1, chance: 0.1 }] });
+monster('prism_golem', '棱晶魔像', 72, 'golem', { tint: 0xe0a0ff, drops: [{ item: 'prism_shard', qty: 3, chance: 0.5 }] });
+// 1080 大地图新增点位的怪物
+monster('hen', '走地鸡', 1, 'chicken', { drops: [{ item: 'raw_minnow', qty: 1, chance: 0.1 }] });
+monster('rat', '矿坑老鼠', 3, 'rabbit', { tint: 0x9a9088, drops: [{ item: 'copper_ore', qty: 2, chance: 0.3 }] });
+monster('sand_crab', '沙蟹', 4, 'crab', { tint: 0xf0d090, drops: [{ item: 'raw_shrimp', qty: 1, chance: 0.3 }] });
+monster('deer', '林鹿', 7, 'wolf', { beast: true, tint: 0xd0a070 });
+monster('bog_toad', '沼泽蟾蜍', 9, 'slime', { tint: 0x8a9a4a, drops: [{ item: 'green_herb', qty: 1, chance: 0.3 }] });
+monster('rock_lizard', '岩蜥', 11, 'lizard', { beast: true, tint: 0xa0a0a0, drops: [{ item: 'iron_ore', qty: 1, chance: 0.3 }] });
+monster('ash_imp', '灰烬小鬼', 14, 'goblin', { tint: 0xff7050, drops: [{ item: 'coal', qty: 2, chance: 0.4 }] });
+monster('mushroom_man', '蘑菇人', 16, 'treant', { tint: 0xe08a80, drops: [{ item: 'moon_herb', qty: 1, chance: 0.25 }] });
+monster('pirate', '海盗', 24, 'villager2', { tint: 0xc0a090, drops: [{ item: 'gold_ore', qty: 1, chance: 0.2 }, { item: 'linen', qty: 2, chance: 0.3 }] });
+monster('snow_bear', '雪熊', 26, 'boar', { beast: true, tint: 0xf0f4ff });
+monster('bandit', '林地强盗', 28, 'villager3', { tint: 0x998877, drops: [{ item: 'iron_bar', qty: 1, chance: 0.2 }, { item: 'sapphire', qty: 1, chance: 0.02 }] });
+monster('crocodile', '沼泽巨鳄', 44, 'lizard', { beast: true, tint: 0x6a8a4a, drops: [{ item: 'raw_ghostfish', qty: 1, chance: 0.3 }] });
+monster('lava_scorpion', '熔岩巨蝎', 47, 'lizard', { beast: true, tint: 0xff6030, drops: [{ item: 'obsidian', qty: 3, chance: 0.4 }] });
+monster('lurker', '深渊潜伏者', 53, 'spider', { tint: 0x8060c0, drops: [{ item: 'prism_shard', qty: 1, chance: 0.15 }] });
+monster('lich', '墓园巫妖', 55, 'skeleton', { tint: 0xb0a0ff, drops: [{ item: 'ruby', qty: 1, chance: 0.04 }, { item: 'frost_crystal', qty: 2, chance: 0.3 }] });
+monster('mammoth', '雪原猛犸', 55, 'boar', { beast: true, tint: 0xc0a080, drops: [{ item: 'frost_crystal', qty: 2, chance: 0.4 }] });
+monster('griffin', '狮鹫', 58, 'bat', { beast: true, tint: 0xe0c080, drops: [{ item: 'gold_ore', qty: 3, chance: 0.4 }] });
+monster('tree_guard', '古树守卫', 62, 'treant', { tint: 0x80c080, drops: [{ item: 'ancient_log', qty: 2, chance: 0.4 }] });
+monster('abyss_eye', '深渊魔眼', 64, 'slime', { tint: 0xa060ff, drops: [{ item: 'prism_shard', qty: 2, chance: 0.3 }] });
+monster('lava_lord', '熔岩领主', 76, 'golem', { boss: true, tint: 0xff4020, drops: [{ item: 'obsidian', qty: 10 }, { item: 'dragon_ore', qty: 2 }, { item: 'diamond', qty: 1, chance: 0.15 }] });
+monster('abyss_lord', '深渊之主', 85, 'wraith', { boss: true, tint: 0x6040a0, drops: [{ item: 'dragon_scale', qty: 3 }, { item: 'diamond', qty: 1, chance: 0.3 }] });
+monster('crystal_dragon', '晶龙', 80, 'dragon', { boss: true, beast: true, drops: [{ item: 'dragon_ore', qty: 5 }, { item: 'dragon_scale', qty: 3 }, { item: 'diamond', qty: 1, chance: 0.2 }] });
+
+export const MONSTERS: Record<string, MonsterDef> = Object.fromEntries(monsterList.map((m) => [m.id, m]));
+
+// ---- 动作 ----
+
+const actionList: ActionDef[] = [];
+const xpFor = (level: number) => Math.round(8.4 + level * 1.6);
+
+/** 采集：durationMs 随等级变长，经验随等级变多 */
+function gather(id: string, name: string, skill: SkillId, level: number, outputs: Drop[], extra: { ms?: number; xp?: number; fail?: { chance: number; noFailLevel: number; stunMs?: number } } = {}) {
+  actionList.push({
+    id, kind: 'skill', name, skill, level, durationMs: extra.ms ?? 3000 + (level - 1) * 20, xp: extra.xp ?? xpFor(level), outputs, fail: extra.fail,
+  });
+  return id;
+}
+
+function make(id: string, name: string, skill: SkillId, level: number, inputs: ItemStack[], outputs: Drop[], xpMult = 1) {
+  const n = inputs.reduce((a, i) => a + i.qty, 0);
+  actionList.push({
+    id, kind: 'skill', name, skill, level, durationMs: 2400 + Math.min(n, 6) * 300, xp: Math.round(xpFor(level) * xpMult), inputs, outputs,
+  });
+  return id;
+}
+
+const one = (item: string, qty = 1): ItemStack => ({ item, qty });
+const fight = (monsterId: string, name?: string) => {
+  const m = MONSTERS[monsterId];
+  const id = `fight_${monsterId}`;
+  actionList.push({ id, kind: 'combat', name: name ?? m.name, difficulty: m.boss ? 'HARD' : m.level >= 30 ? 'MEDIUM' : 'EASY', level: m.level, monster: monsterId });
+  return id;
+};
+
+// 采集动作
+// 同一种资源出现在多个地点时，用 suffix 区分动作 id
+const mine = (ore: string, name: string, level: number, gem = 'sapphire', gemChance = 0.004, suffix = '') =>
+  gather(`mine_${ore.replace('_ore', '')}${suffix}`, name, 'mining', level, [one(ore), { item: gem, qty: 1, chance: gemChance }]);
+const chop = (t: number, name: string, level: number, suffix = '') =>
+  gather(`chop_${TIERS[t].wood}${suffix}`, name, 'woodcutting', level, [one(`${TIERS[t].wood}_log`)]);
+const fishAt = (fish: string, suffix = '') => {
+  const f = FISH.find((x) => x[0] === fish)!;
+  return gather(`fish_${fish}${suffix}`, f[1], 'fishing', f[2], [one(`raw_${fish}`)]);
+};
+const herb = (id: string, suffix = '') => {
+  const h = HERBS.find((x) => x[0] === id)!;
+  return gather(`farm_${id}${suffix}`, `采集${h[1]}`, 'farming', h[2], [one(id), { item: id, qty: 1, chance: 0.2 }]);
+};
+const steal = (id: string, name: string, level: number, coins: number, extra: Drop[] = []) =>
+  gather(`steal_${id}`, name, 'thieving', level, [one('coins', coins), ...extra], {
+    ms: 2500 + level * 15, fail: { chance: 0.5, noFailLevel: level + 30, stunMs: 4000 },
+  });
+
+// 生产动作
+TIERS.forEach((t, i) => {
+  const lvl = t.level;
+  const smelt: ItemStack[][] = [
+    [one('copper_ore'), one('tin_ore')], [one('iron_ore')], [one('iron_ore'), one('coal', 2)],
+    [one('mithril_ore'), one('coal', 2)], [one('adamant_ore'), one('coal', 3)], [one('dragon_ore'), one('coal', 4)],
+  ];
+  make(`smelt_${t.id}`, `冶炼${t.metal}锭`, 'smithing', lvl, smelt[i], [one(`${t.id}_bar`)], 0.8);
+  const bar = `${t.id}_bar`;
+  const smith = (key: string, name: string, bars: number, plus: number, qty = 1) =>
+    make(`smith_${t.id}_${key}`, name, 'smithing', lvl + plus, [one(bar, bars)], [one(`${t.id}_${key}`, qty)], bars);
+  smith('sword', `${t.metal}剑`, 1, 0);
+  smith('arrowhead', `${t.metal}箭头 ×15`, 1, 0, 15);
+  smith('pickaxe', `${t.metal}镐`, 1, 1);
+  smith('axe', `${t.metal}斧`, 1, 1);
+  smith('helm', `${t.metal}头盔`, 1, 2);
+  smith('hoe', `${t.metal}锄`, 1, 3);
+  smith('shield', `${t.metal}盾`, 2, 4);
+  smith('legs', `${t.metal}腿甲`, 2, 6);
+  smith('body', `${t.metal}胸甲`, 3, 8);
+
+  const log = `${t.wood}_log`;
+  make(`fletch_${t.wood}_bow`, `${t.woodName}弓`, 'fletching', lvl, [one(log, 2)], [one(`${t.wood}_bow`)], 2);
+  make(`fletch_${t.wood}_rod`, `${t.woodName}鱼竿`, 'fletching', lvl + 3, [one(log)], [one(`${t.wood}_rod`)]);
+  make(`fletch_${t.id}_arrow`, `${t.metal}箭 ×10`, 'fletching', lvl, [one('shaft', 10), one(`${t.id}_arrowhead`, 10)], [one(`${t.id}_arrow`, 10)], 1.5);
+
+  make(`craft_${t.id}_rune`, `${t.rune}符文 ×5`, 'crafting', lvl, [one(RUNE_STONES[i])], [one(`${t.id}_rune`, 5)]);
+  make(`craft_${t.wood}_staff`, `${t.woodName}法杖`, 'crafting', lvl + 2, [one(log), one(RUNE_STONES[i], 2)], [one(`${t.wood}_staff`)], 2);
+});
+make('smelt_gold', '冶炼金锭', 'smithing', 40, [one('gold_ore')], [one('gold_bar')]);
+make('fletch_shaft', '箭杆 ×15', 'fletching', 1, [one('pine_log')], [one('shaft', 15)]);
+make('fletch_shaft_birch', '箭杆 ×25', 'fletching', 10, [one('birch_log')], [one('shaft', 25)]);
+
+make('craft_linen', '亚麻布', 'crafting', 1, [one('flax', 2)], [one('linen')]);
+for (const l of LIGHT) {
+  const lvl = TIERS[l.tier].level;
+  for (const piece of LIGHT_PIECES) {
+    make(`craft_${l.hide}_${piece.key}`, ITEMS[`${l.hide}_${piece.key}`].name, 'crafting', lvl + piece.lvl, [one(l.hide, piece.qty)], [one(`${l.hide}_${piece.key}`)], piece.qty);
+    const robeIn = [one('linen', piece.qty)];
+    if (l.robeExtra) robeIn.push(one(l.robeExtra, piece.qty));
+    make(`craft_robe${l.tier}_${piece.key}`, ITEMS[`robe${l.tier}_${piece.key}`].name, 'crafting', lvl + piece.lvl, robeIn, [one(`robe${l.tier}_${piece.key}`)], piece.qty);
+  }
+  make(`craft_${l.hide}_gloves`, ITEMS[`${l.hide}_gloves`].name, 'crafting', lvl + 1, [one(l.hide)], [one(`${l.hide}_gloves`)]);
+}
+for (const j of JEWELS) {
+  const key = j.gem ?? 'gold';
+  const inputs = [one('gold_bar'), ...(j.gem ? [one(j.gem)] : [])];
+  make(`craft_${key}_ring`, ITEMS[`${key}_ring`].name, 'crafting', j.level, inputs, [one(`${key}_ring`)], 2);
+  make(`craft_${key}_amulet`, ITEMS[`${key}_amulet`].name, 'crafting', j.level + 2, inputs, [one(`${key}_amulet`)], 2);
+}
+
+for (const [fish, name, lvl] of FISH) {
+  actionList.push({
+    id: `cook_${fish}`, kind: 'skill', name: `烤${name}`, skill: 'cooking', level: lvl, durationMs: 2500 + lvl * 15, xp: xpFor(lvl),
+    inputs: [one(`raw_${fish}`)], outputs: [one(fish)], fail: { chance: 0.4, noFailLevel: lvl + 20 },
+  });
+}
+make('cook_potato', '烤土豆', 'cooking', 1, [one('potato')], [one('baked_potato')]);
+make('cook_bread', '烤面包', 'cooking', 8, [one('wheat', 2)], [one('bread')]);
+// 烹饪失败统一得到烧焦的食物
+for (const a of actionList) if (a.kind === 'skill' && a.fail && a.skill === 'cooking') a.fail.item = 'burnt_food';
+
+HERBS.forEach(([id, name, lvl], i) => {
+  const potionLvl = [1, 8, 20, 28, 36, 45][i];
+  make(`brew_${id}`, `${name}药水`, 'herblore', potionLvl, [one(id, 2)], [one(`${id}_potion`)], 1.5);
+});
+
+make('enhance_stone_basic', '初级强化石', 'enhancing', 1, [one('bronze_bar', 2), one('glowstone')], [one('stone_basic')]);
+make('enhance_stone_mid', '中级强化石', 'enhancing', 30, [one('steel_bar', 2), one('sapphire')], [one('stone_mid')], 2);
+make('enhance_stone_high', '高级强化石', 'enhancing', 55, [one('mithril_bar', 2), one('ruby')], [one('stone_high')], 3);
+make('enhance_stone_legend', '传说强化石', 'enhancing', 75, [one('dragon_bar', 2), one('diamond')], [one('stone_legend')], 4);
+
+const filterIds = (prefix: string) => actionList.filter((a) => a.id.startsWith(prefix)).map((a) => a.id);
+
+// ---- 地图点位 ----
+
+export type NodeSprite =
+  | 'ore' | 'tree' | 'fish' | 'herb' | 'camp' | 'boss' | 'anvil' | 'stove' | 'bench' | 'bowyer' | 'potion' | 'enhance'
+  | 'market' | 'farm' | 'bank' | 'dummy';
+
 export interface MapNode {
   id: string;
   name: string;
   x: number;
   y: number;
-  sprite: 'rock' | 'tree' | 'water' | 'anvil' | 'campfire' | 'monster';
+  region: RegionId;
+  /** 地图上标注的等级范围 */
+  lv: [number, number];
+  sprite: NodeSprite;
   actions: string[];
+  /** 镇内的建筑点位，不在世界地图上标危险度 */
+  town?: boolean;
+  /** 钓鱼点在北边挖一片水 */
+  pond?: boolean;
+  /** 打开仓库而不是任务列表 */
+  opens?: 'bank';
 }
 
+const at = (u: number, v: number) => ({ x: Math.round(u * (MAP_W - 1)), y: Math.round(v * (MAP_H - 1)) });
+
+const wild = (id: string, name: string, u: number, v: number, region: RegionId, lv: [number, number], sprite: NodeSprite, actions: string[], pond = false): MapNode =>
+  ({ id, name, ...at(u, v), region, lv, sprite, actions, pond });
+
+export const TOWN_CENTER = { x: 518, y: 529 };
+/** 城镇布局按「镇中心 = (167, 170)」画的，这里平移到真正的镇中心 */
+export const townXY = (x: number, y: number) => ({ x: x - 167 + TOWN_CENTER.x, y: y - 170 + TOWN_CENTER.y });
+
+const town = (id: string, name: string, x: number, y: number, sprite: NodeSprite, actions: string[], extra: Partial<MapNode> = {}): MapNode =>
+  ({ id, name, ...townXY(x, y), region: 'town', lv: [1, 1], sprite, actions, town: true, ...extra });
+
 export const NODES: MapNode[] = [
-  { id: 'mine', name: '矿洞口', x: 7, y: 6, sprite: 'rock', actions: ['mine_copper', 'mine_tin', 'mine_iron', 'mine_coal'] },
-  { id: 'forest', name: '林场', x: 31, y: 6, sprite: 'tree', actions: ['chop_pine', 'chop_oak', 'chop_willow'] },
-  { id: 'lake', name: '镜湖码头', x: 30, y: 16, sprite: 'water', actions: ['fish_minnow', 'fish_trout', 'fish_salmon'] },
-  { id: 'forge', name: '铁匠铺', x: 17, y: 13, sprite: 'anvil',
-    actions: ['smelt_bronze', 'smelt_iron', 'smelt_steel', 'smith_bronze_sword', 'smith_bronze_helm', 'smith_bronze_body',
-      'smith_iron_sword', 'smith_iron_helm', 'smith_iron_body', 'smith_steel_sword', 'smith_steel_body'] },
-  { id: 'kitchen', name: '篝火', x: 22, y: 15, sprite: 'campfire', actions: ['cook_minnow', 'cook_trout', 'cook_salmon'] },
-  { id: 'wilds', name: '城外战场', x: 9, y: 22, sprite: 'monster',
-    actions: ['fight_rabbit', 'fight_crab', 'fight_slime', 'fight_wolf', 'fight_ash'] },
+  // 城镇：坐标与 world.ts 里的建筑对齐（建筑门口下方一格）
+  town('bank', '仓库', 151, 158, 'bank', [], { opens: 'bank' }),
+  town('smithy', '铁匠铺', 174, 158, 'anvil', filterIds('smelt_').concat(filterIds('smith_'))),
+  town('kitchen', '灶台', 184, 158, 'stove', filterIds('cook_')),
+  town('workshop', '工坊', 151, 170, 'bench', filterIds('craft_')),
+  town('bowyer', '制弓台', 159, 170, 'bowyer', filterIds('fletch_')),
+  town('apothecary', '药剂铺', 177, 170, 'potion', filterIds('brew_')),
+  town('enhancer', '强化台', 185, 170, 'enhance', filterIds('enhance_')),
+  town('market', '集市', 155, 182, 'market', [
+    steal('farmer', '偷农夫', 1, 3, [{ item: 'potato', qty: 2, chance: 0.3 }]),
+    steal('vendor', '偷小贩', 10, 9, [{ item: 'flax', qty: 2, chance: 0.2 }]),
+    steal('guard', '偷守卫', 25, 22, [{ item: 'iron_bar', qty: 1, chance: 0.1 }]),
+    steal('merchant', '偷富商', 40, 45, [{ item: 'sapphire', qty: 1, chance: 0.02 }]),
+    steal('noble', '偷贵族', 55, 80, [{ item: 'gold_bar', qty: 1, chance: 0.05 }]),
+  ]),
+  town('dummy', '训练场', 181, 182, 'dummy', [fight('dummy', '打稻草人')]),
+  town('farm', '家园农田', 148, 198, 'farm', [
+    gather('farm_potato', '种土豆', 'farming', 1, [one('potato', 2)]),
+    herb('green_herb'),
+    gather('farm_wheat', '种小麦', 'farming', 5, [one('wheat', 2)]),
+    gather('farm_flax', '种亚麻', 'farming', 10, [one('flax', 2)]),
+  ]),
+  { ...wild('town_lake', '镜湖码头', 0.37, 0.65, 'town', [1, 10], 'fish', [fishAt('minnow'), fishAt('trout', '_lake')], true), town: true },
+
+  // 巨木森林
+  wild('redwood_canopy', '赤杉冠林', 0.07, 0.12, 'giantwood', [21, 45], 'tree', [chop(3, '赤杉', 35), fight('canopy_spider')]),
+  wild('ancient_court', '远古树庭', 0.25, 0.10, 'giantwood', [18, 70], 'boss', [chop(4, '古木', 55), chop(5, '神木', 70), fight('treant'), fight('treant_king')]),
+  wild('moon_garden', '月露药圃', 0.09, 0.28, 'giantwood', [18, 21], 'herb', [herb('moon_herb'), herb('silver_leaf')]),
+  // 幽深林地
+  wild('pine_valley', '西风松谷', 0.09, 0.36, 'woodland', [1, 15], 'tree', [chop(0, '松树', 1), fight('pine_wolf')]),
+  wild('birch_brook', '桦影溪谷', 0.08, 0.58, 'woodland', [1, 10], 'fish', [chop(1, '桦树', 10), fishAt('trout')], true),
+  wild('maple_slope', '枫叶长坡', 0.23, 0.64, 'woodland', [1, 25], 'camp', [chop(2, '枫树', 20), fight('rabbit'), fight('boar'), fight('grey_wolf')]),
+  wild('moss_pool', '幽苔水洼', 0.08, 0.68, 'woodland', [1, 5], 'fish', [fishAt('minnow', '_moss'), fight('moss_slime')], true),
+  // 亡者沼泽
+  wild('whisper_pool', '亡语沉潭', 0.09, 0.89, 'swamp', [12, 41], 'fish', [fishAt('eel'), fishAt('ghostfish'), fight('bog_skeleton'), fight('bog_wraith')], true),
+  // 冰封雪原
+  wild('lotus_bay', '北境冰莲湾', 0.42, 0.13, 'snow', [12, 26], 'fish', [fishAt('cod'), fishAt('salmon'), herb('frost_lotus')], true),
+  wild('snow_plateau', '雪绒台地', 0.53, 0.22, 'snow', [5, 70], 'boss', [mine('frost_crystal', '霜晶', 45), fight('snow_fox'), fight('frost_wolf'), fight('frost_giant')]),
+  wild('glow_cave', '蓝萤洞坡', 0.49, 0.33, 'snow', [3, 9], 'ore', [mine('glowstone', '萤石', 3), fight('cave_bat')]),
+  // 灰岩高地
+  wild('dawn_hill', '晨曦铜锡丘', 0.67, 0.36, 'highland', [1, 1], 'ore', [mine('copper_ore', '铜矿', 1), mine('tin_ore', '锡矿', 1)]),
+  wild('dragon_rift', '龙晶裂隙', 0.69, 0.19, 'highland', [65, 80], 'boss', [mine('dragon_ore', '龙晶矿', 75, 'diamond', 0.006), fight('drakeling'), fight('crystal_dragon')]),
+  wild('prism_fault', '棱晶断层', 0.79, 0.09, 'highland', [65, 75], 'ore', [mine('adamant_ore', '精金矿', 65, 'ruby', 0.005), mine('prism_shard', '棱晶', 68, 'diamond', 0.003), fight('prism_golem')]),
+  wild('gold_ridge', '金砂山脊', 0.85, 0.21, 'highland', [5, 40], 'ore', [mine('sandstone', '砂岩', 5), mine('gold_ore', '金矿', 40, 'ruby', 0.004), fight('scorpion')]),
+  wild('iron_seam', '黑铁煤层', 0.80, 0.39, 'highland', [15, 30], 'ore', [mine('iron_ore', '铁矿', 15), mine('coal', '煤矿', 20), fight('goblin')]),
+  // 金沙海岸
+  wild('mithril_cliff', '秘银峭壁', 0.88, 0.50, 'coast', [30, 55], 'ore', [mine('mithril_ore', '秘银矿', 45, 'ruby', 0.004), fight('harpy'), fight('gargoyle')]),
+  wild('oasis', '金沙绿洲', 0.73, 0.50, 'coast', [1, 20], 'fish', [fishAt('carp'), steal('caravan', '偷商队', 20, 30, [{ item: 'flax', qty: 3, chance: 0.2 }])], true),
+  wild('coral_shoal', '珊瑚浅滩', 0.88, 0.65, 'coast', [1, 20], 'fish', [fishAt('shrimp'), fishAt('bass'), fight('reef_crab')], true),
+  // 熔岩荒地
+  wild('flame_slope', '烈焰花坡', 0.65, 0.66, 'lava', [2, 25], 'herb', [herb('fire_bloom'), herb('flame_heart'), fight('fire_lizard')]),
+  wild('obsidian_pool', '黑曜熔池', 0.86, 0.84, 'lava', [12, 35], 'fish', [mine('obsidian', '黑曜石', 25), fishAt('lava_eel'), fight('magma')], true),
+  // 深渊裂谷
+  wild('abyss_eye', '深渊潮眼', 0.43, 0.92, 'abyss', [58, 58], 'boss', [fishAt('abyssfish'), fight('tide_guardian')], true),
+
+  // ---- 1080 大地图新增点位 ----
+  // 城郊
+  wild('orchard', '城郊果园', 0.56, 0.55, 'town', [1, 5], 'camp', [chop(0, '松树', 1, '_orchard'), herb('green_herb', '_orchard'), fight('hen')]),
+  wild('old_pit', '老矿坑', 0.45, 0.40, 'town', [1, 10], 'ore', [mine('copper_ore', '铜矿', 1, 'sapphire', 0.004, '_pit'), mine('tin_ore', '锡矿', 1, 'sapphire', 0.004, '_pit'), fight('rat')]),
+  // 巨木森林
+  wild('mushroom_grove', '苔光蘑菇林', 0.20, 0.30, 'giantwood', [10, 30], 'herb', [herb('moon_herb', '_grove'), fight('mushroom_man')]),
+  wild('root_cave', '古根洞穴', 0.05, 0.05, 'giantwood', [40, 62], 'ore', [mine('mithril_ore', '秘银矿', 45, 'ruby', 0.004, '_root'), fight('tree_guard')]),
+  // 幽深林地
+  wild('hunter_camp', '猎人营地', 0.28, 0.47, 'woodland', [5, 20], 'camp', [chop(1, '桦树', 10, '_camp'), fight('deer')]),
+  wild('forest_ruins', '林间废墟', 0.17, 0.50, 'woodland', [20, 35], 'camp', [steal('ruins', '翻找废墟', 30, 35, [{ item: 'sapphire', qty: 1, chance: 0.02 }]), fight('bandit')]),
+  // 亡者沼泽
+  wild('rot_ferry', '腐沼渡口', 0.25, 0.80, 'swamp', [8, 25], 'fish', [fishAt('trout', '_ferry'), herb('green_herb', '_ferry'), fight('bog_toad')], true),
+  wild('croc_flats', '鳄鱼泥滩', 0.18, 0.96, 'swamp', [40, 50], 'fish', [fishAt('ghostfish', '_flats'), fight('crocodile')], true),
+  wild('bone_yard', '枯骨墓园', 0.31, 0.91, 'swamp', [45, 55], 'boss', [steal('grave', '盗墓', 45, 60, [{ item: 'ruby', qty: 1, chance: 0.02 }]), fight('lich')]),
+  // 深渊裂谷
+  wild('dark_vein', '幽晶矿脉', 0.53, 0.84, 'abyss', [45, 60], 'ore', [mine('mithril_ore', '秘银矿', 45, 'ruby', 0.004, '_vein'), mine('prism_shard', '棱晶', 68, 'diamond', 0.003, '_vein'), fight('lurker')]),
+  wild('abyss_altar', '深渊祭坛', 0.37, 0.82, 'abyss', [64, 85], 'boss', [fight('abyss_eye'), fight('abyss_lord')]),
+  // 熔岩荒地
+  wild('ash_outpost', '焦土前哨', 0.58, 0.76, 'lava', [10, 25], 'ore', [mine('coal', '煤矿', 20, 'sapphire', 0.004, '_ash'), fight('ash_imp')]),
+  wild('scorpion_nest', '熔岩巨蝎巢', 0.71, 0.92, 'lava', [45, 50], 'camp', [mine('obsidian', '黑曜石', 25, 'sapphire', 0.004, '_nest'), fight('lava_scorpion')]),
+  wild('lava_crater', '炎王火山口', 0.80, 0.73, 'lava', [65, 80], 'boss', [mine('adamant_ore', '精金矿', 65, 'ruby', 0.005, '_crater'), fight('lava_lord')]),
+  // 金沙海岸
+  wild('wreck_bay', '沉船湾', 0.90, 0.58, 'coast', [10, 35], 'fish', [fishAt('bass', '_wreck'), steal('smuggler', '偷走私贩', 35, 40, [{ item: 'linen', qty: 2, chance: 0.3 }]), fight('pirate')], true),
+  wild('turtle_beach', '海龟沙滩', 0.78, 0.62, 'coast', [1, 10], 'fish', [fishAt('shrimp', '_turtle'), fight('sand_crab')], true),
+  // 灰岩高地
+  wild('stone_forest', '风蚀石林', 0.75, 0.32, 'highland', [10, 20], 'ore', [mine('iron_ore', '铁矿', 15, 'sapphire', 0.004, '_stone'), fight('rock_lizard')]),
+  wild('griffin_peak', '鹰巢峰', 0.93, 0.15, 'highland', [40, 60], 'boss', [mine('gold_ore', '金矿', 40, 'ruby', 0.004, '_peak'), fight('griffin')]),
+  // 冰封雪原
+  wild('tundra_pines', '冻原松林', 0.31, 0.05, 'snow', [20, 30], 'tree', [chop(2, '枫树', 20, '_tundra'), fight('snow_bear')]),
+  wild('ice_cavern', '冰晶洞窟', 0.60, 0.05, 'snow', [45, 55], 'ore', [mine('frost_crystal', '霜晶', 45, 'sapphire', 0.004, '_cavern'), fight('mammoth')]),
 ];
 
-export const MAP_W = 40;
-export const MAP_H = 30;
+export const ACTIONS: Record<string, ActionDef> = Object.fromEntries(actionList.map((a) => [a.id, a]));
+
+/** 世界地图危险度：按地点最强怪物和玩家战斗等级的差距 */
+export const DANGER = [
+  { name: '安全', color: '#7cc46a' },
+  { name: '低', color: '#9ad0e0' },
+  { name: '中等', color: '#e8c84a' },
+  { name: '高', color: '#e8883a' },
+  { name: '致命', color: '#e04848' },
+];
+
+export function dangerLevel(node: MapNode, combatLevel: number): number {
+  const levels = node.actions.map((id) => ACTIONS[id]).filter((a) => a.kind === 'combat' && a.monster !== 'dummy').map((a) => a.level);
+  if (!levels.length) return 0;
+  const d = Math.max(...levels) - combatLevel;
+  return d <= -10 ? 1 : d <= 5 ? 2 : d <= 20 ? 3 : 4;
+}

@@ -1,17 +1,22 @@
-import { findPath, isWalkable, SPAWN } from './world';
-import { NODES } from '../core/data';
+import { findPath, isWalkable, regionAt, SPAWN, standTile } from './world';
+import { NODES, townXY } from '../core/data';
 
-describe('寻路', () => {
-  it('从广场能走到每个资源点', () => {
+describe('世界', { timeout: 30_000 }, () => {
+  it('每个资源点都在区域图上规定的区域里', () => {
+    for (const n of NODES) expect(regionAt(n.x, n.y), n.name).toBe(n.region);
+  });
+
+  it('从城镇能走到每个资源点', () => {
     for (const n of NODES) {
-      const path = findPath(SPAWN, { x: n.x, y: n.y + 1 });
+      const s = standTile(n);
+      const path = findPath(SPAWN, s);
       expect(path, n.name).not.toBeNull();
       expect(path!.every((p) => isWalkable(p.x, p.y))).toBe(true);
     }
   });
 
-  it('湖里和房子里走不进去', () => {
-    expect(findPath(SPAWN, { x: 32, y: 22 })).toBeNull();
-    expect(findPath(SPAWN, { x: 15, y: 7 })).toBeNull();
+  it('海里和房子里走不进去', () => {
+    expect(isWalkable(1077, 530)).toBe(false);
+    expect(findPath(SPAWN, townXY(162, 152))).toBeNull();
   });
 });

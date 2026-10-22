@@ -1,21 +1,40 @@
 import { ACTIONS, MONSTERS, SKILLS } from '../core/data';
-import { level, maxHp, removeTask } from '../core/sim';
+import { actionDuration, combatLevel, level, maxHp, removeTask, weaponStyle } from '../core/sim';
 import type { GameState, SkillId } from '../core/types';
+import { PALETTE, SPRITES } from '../game/sprites';
 import { store } from '../store';
 import { emitToGame } from './GameCanvas';
 import { actionName, fmtNum, modeLabel } from './format';
+import { SkillIcon, TplIcon } from './icons';
+
+/** 顶栏头像：用角色精灵图 */
+const PORTRAIT = (() => {
+  const rows = SPRITES.player;
+  const c = document.createElement('canvas');
+  c.width = c.height = 16;
+  const ctx = c.getContext('2d')!;
+  rows.forEach((row, y) => {
+    for (let x = 0; x < 16; x++) {
+      const col = PALETTE[row[x]];
+      if (!col) continue;
+      ctx.fillStyle = col;
+      ctx.fillRect(x, y, 1, 1);
+    }
+  });
+  return c.toDataURL();
+})();
 
 export function TopBar({ s }: { s: GameState }) {
   const total = (Object.keys(SKILLS) as SkillId[]).reduce((n, k) => n + level(s, k), 0);
   const hpPct = (s.hp / maxHp(s)) * 100;
   return (
     <header className="topbar">
-      <span className="avatar">⛏</span>
-      <span title="总等级">⚔ {total}</span>
+      <span className="avatar"><img src={PORTRAIT} alt="" /></span>
+      <span className="stat" title="战斗等级 / 总等级"><SkillIcon skill="melee" size={16} /> {combatLevel(s)} <small className="muted">/ {total}</small></span>
       <span className="hp" title="生命">
-        ♥ <span className="bar"><i style={{ width: `${hpPct}%` }} /></span> {s.hp}
+        <SkillIcon skill="hitpoints" size={16} /> <span className="bar"><i style={{ width: `${hpPct}%` }} /></span> {s.hp}
       </span>
-      <span className="coins" title="金币">● {fmtNum(s.bank.coins ?? 0)}</span>
+      <span className="coins" title="金币"><TplIcon tpl="coins" tint="#f0c850" size={16} /> {fmtNum(s.bank.coins ?? 0)}</span>
     </header>
   );
 }
@@ -45,19 +64,21 @@ export function StatusChips({ s }: { s: GameState }) {
   const a = task && ACTIONS[task.action];
   let body = null;
   if (a?.kind === 'skill') {
-    const pct = (s.progressMs / a.durationMs) * 100;
+    const pct = (Math.max(0, s.progressMs) / actionDuration(s, a)) * 100;
     body = (
       <>
-        <b style={{ color: SKILLS[a.skill].color }}>{SKILLS[a.skill].name}</b> · {a.name}
+        <SkillIcon skill={a.skill} size={14} /> <b style={{ color: SKILLS[a.skill].color }}>{SKILLS[a.skill].name}</b> · {a.name}
+        {s.progressMs < 0 && <em> 晕眩中</em>}
         <span className="bar wide"><i style={{ width: `${pct}%` }} /></span>
       </>
     );
   } else if (a?.kind === 'combat') {
     const m = MONSTERS[a.monster];
     const hp = s.combat?.monsterHp ?? m.hp;
+    const style = weaponStyle(s);
     body = (
       <>
-        <b style={{ color: SKILLS.melee.color }}>战斗</b> · {m.name}
+        <SkillIcon skill={style} size={14} /> <b style={{ color: SKILLS[style].color }}>{SKILLS[style].name}</b> · {m.name}
         <span className="bar wide foe"><i style={{ width: `${(hp / m.hp) * 100}%` }} /></span>
         {s.combat?.respawnMs ? <em>刷新中</em> : <em>{hp}/{m.hp}</em>}
       </>
@@ -71,9 +92,10 @@ export function StatusChips({ s }: { s: GameState }) {
   );
 }
 
-export function MapButtons() {
+export function MapButtons({ onWorldMap }: { onWorldMap: () => void }) {
   return (
     <div className="map-buttons">
+      <button onClick={onWorldMap} title="世界地图">▦</button>
       <button onClick={() => emitToGame('zoom', 0.5)}>＋</button>
       <button onClick={() => emitToGame('zoom', -0.5)}>－</button>
       <button onClick={() => emitToGame('recenter')} title="回到角色">◎</button>
