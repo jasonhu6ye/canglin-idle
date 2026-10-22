@@ -1,4 +1,4 @@
-import { actionDuration, advance, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour } from './sim';
+import { actionDuration, advance, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour } from './sim';
 import { levelForXp, XP_TABLE } from './xp';
 import type { GameState, SkillAction, TaskMode } from './types';
 import { ACTIONS, nodeOfAction, standOf, travelMs } from './data';
@@ -368,5 +368,31 @@ describe('新手任务', () => {
     expect(state.quest!.i).toBeGreaterThanOrEqual(1);
     expect(summary.quests).toContain(0);
     expect(state.bank.coins).toBeGreaterThanOrEqual(coins + 30);
+  });
+});
+
+describe('料理与栏位', () => {
+  it('吃料理回血并挂上增益，增益随时间消失', () => {
+    let s = newGame(T0, 1);
+    s.bag.dish_loach = 1;
+    s.hp = 10;
+    s = eat(s, 'dish_loach');
+    expect(s.hp).toBeGreaterThan(10);
+    expect(s.buffs?.def?.pct).toBeGreaterThan(0);
+    const later = advance(s, T0 + 60 * 60_000).state;
+    expect(later.buffs?.def).toBeUndefined();
+  });
+
+  it('食物栏不占背包格子，战斗先吃食物栏', () => {
+    let s = newGame(T0, 9);
+    s.bag = { minnow: 50 };
+    s = toBelt(s, 'minnow');
+    expect(s.belt?.food).toEqual({ id: 'minnow', qty: 50 });
+    expect(bagSlotsUsed(s.bag)).toBe(0);
+    s.bank = {};
+    s = startHere(s, 'fight_grey_wolf', { type: 'time', ms: 10 * 60_000 });
+    const { state, summary } = advance(s, T0 + 10 * 60_000);
+    expect(summary.foodEaten).toBeGreaterThan(0);
+    expect(state.belt?.food?.qty ?? 0).toBe(50 - summary.foodEaten);
   });
 });

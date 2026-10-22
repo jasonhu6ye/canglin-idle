@@ -14,6 +14,11 @@ export type GearSlot = 'weapon' | 'head' | 'body' | 'feet' | 'hands' | 'neck' | 
 export type ToolSlot = 'axe' | 'pickaxe' | 'sickle' | 'knife' | 'rod' | 'hoe' | 'hammer' | 'needle';
 export type EquipSlot = GearSlot | ToolSlot;
 
+/** 料理增益：攻击（命中）、力量（最高伤害）、防御、干活速度、经验 */
+export type BeltSlot = 'food' | 'potion';
+export type BuffKind = 'atk' | 'str' | 'def' | 'speed' | 'xp';
+export interface Buff { kind: BuffKind; pct: number; ms: number }
+
 export type ItemCategory = 'resource' | 'material' | 'food' | 'potion' | 'ammo' | 'gear' | 'tool' | 'seed' | 'misc';
 
 export interface ItemDef {
@@ -26,6 +31,10 @@ export interface ItemDef {
   tier?: number;
   /** 食物和药水回复的生命值 */
   heals?: number;
+  /** 料理吃下后的限时增益 */
+  buff?: Buff;
+  /** 图鉴里的说明 */
+  desc?: string;
   /** 弹药：ranged 用箭，magic 用符文；power 加到力量加成上 */
   ammo?: { style: 'ranged' | 'magic'; power: number };
   equip?: {
@@ -167,6 +176,10 @@ export interface GameState {
   regenMs: number;
   stats: { kills: number; deaths: number };
   /** 每种怪物击杀数（怪物图鉴用），旧存档没有 */
+  /** 装备栏里的食物栏和药水栏：各放一种，不占背包格子 */
+  belt?: Partial<Record<BeltSlot, { id: string; qty: number }>>;
+  /** 料理增益：每种只保留一个，剩余毫秒 */
+  buffs?: Partial<Record<BuffKind, { pct: number; ms: number }>>;
   /** 新手任务：第几个、当前进度 */
   quest?: { i: number; n: number };
   bestiary?: Record<string, number>;

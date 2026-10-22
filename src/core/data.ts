@@ -1,5 +1,5 @@
 import type {
-  ActionDef, CombatStyle, Drop, EquipSlot, ItemCategory, ItemDef, ItemStack, MonsterDef, RegionId, SkillGroup, SkillId, ToolSlot,
+  ActionDef, Buff, BuffKind, CombatStyle, Drop, EquipSlot, ItemCategory, ItemDef, ItemStack, MonsterDef, RegionId, SkillGroup, SkillId, ToolSlot,
 } from './types';
 import { FORM_FAMILY, isAnimal, SPECIES, type Family, type Species } from './bestiary';
 
@@ -55,6 +55,7 @@ export const REGIONS: Record<RegionId, { name: string; color: string }> = {
 // ---- 物品 ----
 
 const itemList: ItemDef[] = [];
+const ITEMS_NAME = (id: string) => itemList.find((x) => x.id === id)?.name ?? id;
 const item = (id: string, name: string, category: ItemCategory, value: number, extra: Partial<ItemDef> = {}) => {
   itemList.push({ id, name, category, value, ...extra });
   return id;
@@ -111,9 +112,23 @@ const FISH: [string, string, number, number][] = [
   ['bass', '海鲈', 15, 80], ['cod', '冰鳕', 20, 100], ['salmon', '鲑鱼', 25, 130], ['eel', '沉潭鳗', 30, 160],
   ['lava_eel', '熔岩鳗', 35, 190], ['ghostfish', '幽灵鱼', 40, 220], ['abyssfish', '深渊鱼', 58, 300],
 ];
+/** 新增鱼获（用户 10-22 要求）：每阶 4 种，[id, 名字, 钓鱼等级, 回复, 产地说明] */
+const NEW_FISH: [string, string, number, number, string][] = [
+  ['loach', '泥鳅', 2, 32, '镜湖浅滩的泥底'], ['crucian', '鲫鱼', 4, 36, '镜湖码头'], ['grass_carp', '草鱼', 6, 42, '幽苔水洼'], ['perch', '河鲈', 8, 48, '幽苔水洼'],
+  ['bighead', '花鲢', 11, 62, '桦影溪谷'], ['catfish', '黄颡鱼', 13, 68, '桦影溪谷'], ['bream', '银鳊', 16, 76, '腐沼渡口'], ['pike', '狗鱼', 18, 84, '腐沼渡口'],
+  ['snow_trout', '雪鳟', 21, 104, '北境冰莲湾'], ['herring', '冰原鲱', 23, 112, '北境冰莲湾'], ['flounder', '寒带比目鱼', 26, 124, '冰湖峡湾'], ['sturgeon', '鲟鱼', 28, 134, '冰湖峡湾'],
+  ['swamp_catfish', '沼泽鲶', 31, 164, '亡语沉潭'], ['bonefin', '骨鳍鱼', 34, 176, '亡语沉潭'], ['stingray', '毒刺鳐', 36, 184, '鳄鱼泥滩'], ['squid', '墨乌贼', 38, 192, '沉船湾'],
+  ['grouper', '珊瑚石斑', 42, 226, '珊瑚浅滩'], ['lanternfish', '灯笼鱼', 45, 238, '珊瑚浅滩'], ['swordfish', '剑鱼', 48, 250, '沉船湾'], ['tuna', '金枪鱼', 52, 266, '沉船湾'],
+  ['magma_shrimp', '熔岩虾', 56, 290, '黑曜熔池'], ['fire_carp', '火鳞鲤', 60, 306, '黑曜熔池'], ['flame_shark', '炽鳍鲨', 64, 322, '硫磺泉'], ['sulfur_catfish', '硫磺鲶', 68, 338, '硫磺泉'],
+  ['star_ray', '星斑魟', 72, 356, '星光湖'], ['crystal_fish', '晶鳞鱼', 78, 380, '星光湖'], ['phantom_eel', '幻光鳗', 84, 404, '幻潮海崖'], ['thunder_shark', '雷纹鲨', 90, 428, '幻潮海崖'],
+  ['abyss_bass', '深渊巨鲈', 96, 452, '深渊潮眼'], ['void_angler', '虚空鮟鱇', 102, 476, '深渊潮眼'], ['dragonfish', '古龙鱼', 110, 508, '龙渊'], ['starwhale', '星海鲸鲨', 120, 548, '龙渊'],
+];
+for (const [id, name, lvl, heals] of NEW_FISH) FISH.push([id, name, lvl, heals]);
+export const fishTier = (lvl: number) => Math.max(0, [1, 10, 20, 30, 40, 55, 70, 95].filter((l) => lvl >= l).length - 1);
 for (const [id, name, lvl, heals] of FISH) {
-  item(`raw_${id}`, `生${name}`, 'resource', Math.round(2 + lvl * 0.9));
-  item(id, `烤${name}`, 'food', Math.round(4 + lvl * 1.4), { heals });
+  const where = NEW_FISH.find((f) => f[0] === id)?.[4];
+  item(`raw_${id}`, `生${name}`, 'resource', Math.round(2 + lvl * 0.9), { tier: fishTier(lvl), desc: `钓鱼 ${lvl} 级可钓${where ? `，产自${where}` : ''}。直接烤熟能回血，也能做成料理。` });
+  item(id, `烤${name}`, 'food', Math.round(4 + lvl * 1.4), { tier: fishTier(lvl), heals, desc: `最简单的做法，只回复生命，没有增益。` });
 }
 item('burnt_food', '烧焦的食物', 'misc', 0);
 
@@ -448,6 +463,92 @@ TIERS.forEach((t, i) => {
   make(`enhance_core_${n}`, `魔核淬炼 ${tierName(i)}`, 'enhancing', t.level, [one(`core_${n}`, 3), one('bones', 5)], [one(enh)], 1 + i * 0.3);
 });
 
+// ---- 料理（用户 10-22 要求）：鱼 + 配菜，回血更多，吃下后有限时增益 ----
+// 增益随阶级变强、持续更久；同类增益只保留一个（新吃的覆盖旧的）
+const BUFF_NAME: Record<BuffKind, string> = { atk: '命中', str: '最高伤害', def: '防御', speed: '干活速度', xp: '获得经验' };
+const BUFF_BASE: Record<BuffKind, number> = { atk: 0.04, str: 0.04, def: 0.05, speed: 0.03, xp: 0.04 };
+export const buffText = (b: Buff) => `${BUFF_NAME[b.kind]} +${Math.round(b.pct * 100)}%，持续 ${Math.round(b.ms / 60000)} 分钟`;
+type Side = { item: string; qty: number; name: (fish: string) => string; kind: BuffKind; note: string };
+const SIDES: Side[][] = [
+  [
+    { item: 'potato', qty: 1, name: (f) => `${f}土豆饼`, kind: 'def', note: '煎得外脆里软，吃了扛揍' },
+    { item: 'wheat', qty: 1, name: (f) => `${f}麦饼`, kind: 'speed', note: '揣在怀里边干活边吃' },
+    { item: 'green_herb', qty: 1, name: (f) => `绿叶${f}汤`, kind: 'xp', note: '清汤提神，学东西更快' },
+    { item: 'meat_1', qty: 1, name: (f) => `${f}兽肉串`, kind: 'str', note: '鱼肉兽肉一起烤，越吃越有劲' },
+  ],
+  [
+    { item: 'wheat', qty: 2, name: (f) => `香煎${f}`, kind: 'atk', note: '裹上麦粉煎，吃完手稳' },
+    { item: 'fire_bloom', qty: 1, name: (f) => `火绒${f}汤`, kind: 'str', note: '辣得冒汗，力气大增' },
+    { item: 'potato', qty: 2, name: (f) => `${f}炖土豆`, kind: 'def', note: '一锅炖到软烂，扛饿又扛打' },
+    { item: 'meat_2', qty: 1, name: (f) => `${f}兽肉卷`, kind: 'speed', note: '一卷到底，路上就能吃完' },
+  ],
+  [
+    { item: 'moon_herb', qty: 1, name: (f) => `月露${f}羹`, kind: 'xp', note: '月露草的清香让人头脑清明' },
+    { item: 'wheat', qty: 2, name: (f) => `${f}馅饼`, kind: 'speed', note: '冰原旅人的干粮' },
+    { item: 'meat_3', qty: 1, name: (f) => `${f}肉排`, kind: 'str', note: '厚切煎排，饱腹又长力气' },
+    { item: 'potato', qty: 2, name: (f) => `奶油${f}浓汤`, kind: 'def', note: '一碗下肚浑身暖和' },
+  ],
+  [
+    { item: 'silver_leaf', qty: 1, name: (f) => `银叶清蒸${f}`, kind: 'atk', note: '银叶草去腥，吃完眼明手快' },
+    { item: 'meat_4', qty: 1, name: (f) => `${f}兽肉锅`, kind: 'str', note: '沼泽猎人的大锅菜' },
+    { item: 'wheat', qty: 3, name: (f) => `${f}面包盒`, kind: 'speed', note: '携带方便，一口一个' },
+    { item: 'moon_herb', qty: 1, name: (f) => `${f}药膳`, kind: 'xp', note: '药材与鱼同炖，滋补提神' },
+  ],
+  [
+    { item: 'flame_heart', qty: 1, name: (f) => `炎心烤${f}`, kind: 'str', note: '炎心花的火气全进了肉里' },
+    { item: 'frost_lotus', qty: 1, name: (f) => `冰莲${f}刺身`, kind: 'atk', note: '冰镇切片，入口清冽' },
+    { item: 'meat_5', qty: 1, name: (f) => `${f}海陆拼盘`, kind: 'def', note: '一盘吃两样，耐打耐磨' },
+    { item: 'wheat', qty: 3, name: (f) => `${f}三明治`, kind: 'speed', note: '海边渔夫最爱的午饭' },
+  ],
+  [
+    { item: 'frost_lotus', qty: 1, name: (f) => `冰火${f}`, kind: 'def', note: '熔岩鱼配冰莲，冷热交替' },
+    { item: 'meat_6', qty: 1, name: (f) => `熔岩${f}烧肉`, kind: 'str', note: '在热石上烤出来的' },
+    { item: 'flame_heart', qty: 1, name: (f) => `炎心${f}汤`, kind: 'atk', note: '喝完全身发热，出手更准' },
+    { item: 'silver_leaf', qty: 2, name: (f) => `银叶${f}卷`, kind: 'xp', note: '清爽解腻，越吃越精神' },
+  ],
+  [
+    { item: 'meat_7', qty: 1, name: (f) => `${f}王者烤`, kind: 'str', note: '只有高手钓得到、烤得好' },
+    { item: 'frost_lotus', qty: 2, name: (f) => `冰莲${f}冻`, kind: 'def', note: '晶莹剔透，入口即化' },
+    { item: 'moon_herb', qty: 2, name: (f) => `星露${f}`, kind: 'xp', note: '在星光下慢慢收汁' },
+    { item: 'flame_heart', qty: 2, name: (f) => `雷火${f}`, kind: 'atk', note: '吃完手指都在发麻' },
+  ],
+  [
+    { item: 'meat_8', qty: 1, name: (f) => `${f}深渊宴`, kind: 'str', note: '深渊之物做的盛宴' },
+    { item: 'frost_lotus', qty: 2, name: (f) => `${f}冰莲御膳`, kind: 'def', note: '王都御厨的手艺' },
+    { item: 'flame_heart', qty: 2, name: (f) => `炎心${f}`, kind: 'atk', note: '烈火灼烧出的极致鲜味' },
+    { item: 'silver_leaf', qty: 2, name: (f) => `${f}长生汤`, kind: 'xp', note: '传说喝了能长生，至少能学得快' },
+  ],
+];
+NEW_FISH.forEach(([fish, fname, lvl, heals], k) => {
+  const t = Math.floor(k / 4);
+  const side = SIDES[t][k % 4];
+  const id = `dish_${fish}`;
+  const name = side.name(fname);
+  const buff: Buff = { kind: side.kind, pct: Math.round((BUFF_BASE[side.kind] + t * 0.012) * 100) / 100, ms: (10 + t * 3) * 60000 };
+  const level = lvl + 3;
+  item(id, name, 'food', Math.round((4 + lvl * 1.4) * 2.6), {
+    tier: t, heals: Math.round(heals * 1.35), buff,
+    desc: `${side.note}。烹饪 ${level} 级，用生${fname}和${ITEMS_NAME(side.item)}×${side.qty}做成。回复 ${Math.round(heals * 1.35)} 生命；吃下后${buffText(buff)}。`,
+  });
+  make(`cook_${id}`, name, 'cooking', level, [one(`raw_${fish}`), one(side.item, side.qty)], [one(id)], 1.4);
+});
+// 每阶一道宴席：两种鱼 + 兽肉 + 配菜，同时给两种增益里更强的那种（攻防兼顾的放在力量和防御轮换）
+const FEASTS: [string, BuffKind][] = [['渔家小宴', 'def'], ['溪谷全鱼宴', 'atk'], ['冰原围炉宴', 'xp'], ['沼泽猎人宴', 'str'], ['金沙海鲜宴', 'speed'], ['熔岩烧烤宴', 'str'], ['星光盛宴', 'atk'], ['龙渊御宴', 'xp']];
+FEASTS.forEach(([name, kind], t) => {
+  const [a, b] = [NEW_FISH[t * 4], NEW_FISH[t * 4 + 2]];
+  const lvl = Math.max(a[2], b[2]) + 4;
+  const heals = Math.round((a[3] + b[3]) * 0.9);
+  const buff: Buff = { kind, pct: Math.round((BUFF_BASE[kind] * 1.6 + t * 0.016) * 100) / 100, ms: (20 + t * 4) * 60000 };
+  const id = `feast_${t + 1}`;
+  item(id, name, 'food', Math.round((a[2] + b[2]) * 4), {
+    tier: t, heals, buff,
+    desc: `用${a[1]}、${b[1]}和兽肉摆的一桌。烹饪 ${lvl} 级。回复 ${heals} 生命；吃下后${buffText(buff)}，比单道料理更强更久。`,
+  });
+  make(`cook_${id}`, name, 'cooking', lvl, [one(`raw_${a[0]}`, 2), one(`raw_${b[0]}`, 2), one(`meat_${t + 1}`, 2)], [one(id)], 2.2);
+});
+// 料理物品定义在 ITEMS 建好之后，补登记进去
+for (const it of itemList) ITEMS[it.id] ??= it;
+
 const filterIds = (prefix: string) => actionList.filter((a) => a.id.startsWith(prefix)).map((a) => a.id);
 
 // ---- 地图点位 ----
@@ -513,7 +614,7 @@ export const NODES: MapNode[] = [
     gather('farm_wheat', '种小麦', 'farming', 5, [one('wheat', 2)]),
     cotton(0),
   ]),
-  { ...wild('town_lake', '镜湖码头', 0.37, 0.65, 'town', 'fish', [fishAt('minnow'), fishAt('trout', '_lake')], true), town: true },
+  { ...wild('town_lake', '镜湖码头', 0.37, 0.65, 'town', 'fish', [fishAt('minnow'), fishAt('loach'), fishAt('crucian'), fishAt('trout', '_lake')], true), town: true },
 
   // 巨木森林
   wild('redwood_canopy', '雪松冠林', 0.07, 0.12, 'giantwood', 'tree', [chop(4)]),
@@ -521,13 +622,13 @@ export const NODES: MapNode[] = [
   wild('moon_garden', '月露药圃', 0.09, 0.28, 'giantwood', 'herb', [herb('moon_herb'), herb('silver_leaf'), cotton(2)]),
   // 幽深林地
   wild('pine_valley', '西风松谷', 0.09, 0.36, 'woodland', 'tree', [chop(2), hunt(1)]),
-  wild('birch_brook', '桦影溪谷', 0.08, 0.58, 'woodland', 'fish', [chop(1), fishAt('trout')], true),
+  wild('birch_brook', '桦影溪谷', 0.08, 0.58, 'woodland', 'fish', [chop(1), fishAt('trout'), fishAt('bighead'), fishAt('catfish')], true),
   wild('maple_slope', '落叶长坡', 0.23, 0.64, 'woodland', 'camp', [chop(0), cotton(1), hunt(0)]),
-  wild('moss_pool', '幽苔水洼', 0.08, 0.68, 'woodland', 'fish', [fishAt('minnow', '_moss'), hunt(0, '_moss')], true),
+  wild('moss_pool', '幽苔水洼', 0.08, 0.68, 'woodland', 'fish', [fishAt('minnow', '_moss'), fishAt('grass_carp'), fishAt('perch'), hunt(0, '_moss')], true),
   // 亡者沼泽
-  wild('whisper_pool', '亡语沉潭', 0.09, 0.89, 'swamp', 'fish', [fishAt('eel'), fishAt('ghostfish')], true),
+  wild('whisper_pool', '亡语沉潭', 0.09, 0.89, 'swamp', 'fish', [fishAt('eel'), fishAt('ghostfish'), fishAt('swamp_catfish'), fishAt('bonefin')], true),
   // 冰封雪原
-  wild('lotus_bay', '北境冰莲湾', 0.42, 0.13, 'snow', 'fish', [fishAt('cod'), fishAt('salmon'), herb('frost_lotus'), chop(4, '_bay'), cotton(4)], true),
+  wild('lotus_bay', '北境冰莲湾', 0.42, 0.13, 'snow', 'fish', [fishAt('cod'), fishAt('salmon'), fishAt('snow_trout'), fishAt('herring'), herb('frost_lotus'), chop(4, '_bay'), cotton(4)], true),
   wild('snow_plateau', '雪绒台地', 0.53, 0.22, 'snow', 'boss', [mine(6, '_plateau'), cotton(6), hunt(6, '_plateau')]),
   wild('glow_cave', '蓝萤洞坡', 0.49, 0.33, 'snow', 'ore', [mine(2, '_cave')]),
   // 灰岩高地
@@ -539,12 +640,12 @@ export const NODES: MapNode[] = [
   // 金沙海岸
   wild('mithril_cliff', '钛岩峭壁', 0.88, 0.50, 'coast', 'ore', [mine(4)]),
   wild('oasis', '金沙绿洲', 0.73, 0.50, 'coast', 'fish', [fishAt('carp'), cotton(1, '_oasis'), steal('caravan', '偷商队', 20, 30, [{ item: 'cotton_2', qty: 3, chance: 0.2 }])], true),
-  wild('coral_shoal', '珊瑚浅滩', 0.88, 0.65, 'coast', 'fish', [fishAt('shrimp'), fishAt('bass'), cotton(3, '_shoal')], true),
+  wild('coral_shoal', '珊瑚浅滩', 0.88, 0.65, 'coast', 'fish', [fishAt('shrimp'), fishAt('bass'), fishAt('grouper'), fishAt('lanternfish'), cotton(3, '_shoal')], true),
   // 熔岩荒地
   wild('flame_slope', '烈焰花坡', 0.65, 0.66, 'lava', 'herb', [herb('fire_bloom'), herb('flame_heart'), cotton(3)]),
-  wild('obsidian_pool', '黑曜熔池', 0.86, 0.84, 'lava', 'fish', [mine(3, '_pool'), fishAt('lava_eel')], true),
+  wild('obsidian_pool', '黑曜熔池', 0.86, 0.84, 'lava', 'fish', [mine(3, '_pool'), fishAt('lava_eel'), fishAt('magma_shrimp'), fishAt('fire_carp')], true),
   // 深渊裂谷
-  wild('abyss_eye', '深渊潮眼', 0.43, 0.92, 'abyss', 'boss', [fishAt('abyssfish'), cotton(7)], true),
+  wild('abyss_eye', '深渊潮眼', 0.43, 0.92, 'abyss', 'boss', [fishAt('abyssfish'), fishAt('abyss_bass'), fishAt('void_angler'), cotton(7)], true),
 
   // ---- 1080 大地图新增点位 ----
   // 城郊
@@ -557,8 +658,8 @@ export const NODES: MapNode[] = [
   wild('hunter_camp', '猎人营地', 0.28, 0.47, 'woodland', 'camp', [chop(1, '_camp'), hunt(1, '_camp')]),
   wild('forest_ruins', '林间废墟', 0.17, 0.50, 'woodland', 'camp', [chop(3), hunt(2), steal('ruins', '翻找废墟', 30, 35, [{ item: 'sapphire', qty: 1, chance: 0.02 }])]),
   // 亡者沼泽
-  wild('rot_ferry', '腐沼渡口', 0.25, 0.80, 'swamp', 'fish', [fishAt('trout', '_ferry'), herb('green_herb', '_ferry'), cotton(2, '_ferry')], true),
-  wild('croc_flats', '鳄鱼泥滩', 0.18, 0.96, 'swamp', 'fish', [fishAt('ghostfish', '_flats'), hunt(4)], true),
+  wild('rot_ferry', '腐沼渡口', 0.25, 0.80, 'swamp', 'fish', [fishAt('trout', '_ferry'), fishAt('bream'), fishAt('pike'), herb('green_herb', '_ferry'), cotton(2, '_ferry')], true),
+  wild('croc_flats', '鳄鱼泥滩', 0.18, 0.96, 'swamp', 'fish', [fishAt('ghostfish', '_flats'), fishAt('stingray'), hunt(4)], true),
   wild('bone_yard', '血橡墓园', 0.31, 0.91, 'swamp', 'boss', [chop(5), cotton(5, '_yard'), steal('grave', '盗墓', 45, 60, [{ item: 'ruby', qty: 1, chance: 0.02 }])]),
   // 深渊裂谷
   wild('dark_vein', '符文矿脉', 0.53, 0.84, 'abyss', 'ore', [mine(5)]),
@@ -568,8 +669,14 @@ export const NODES: MapNode[] = [
   wild('scorpion_nest', '熔岩巨蝎巢', 0.71, 0.92, 'lava', 'camp', [mine(4, '_nest'), hunt(4, '_nest')]),
   wild('lava_crater', '炎王火山口', 0.80, 0.73, 'lava', 'boss', [mine(7, '_crater'), chop(6), hunt(7)]),
   // 金沙海岸
-  wild('wreck_bay', '沉船湾', 0.90, 0.58, 'coast', 'fish', [fishAt('bass', '_wreck'), cotton(5), steal('smuggler', '偷走私贩', 35, 40, [{ item: 'cotton_3', qty: 2, chance: 0.3 }])], true),
+  wild('wreck_bay', '沉船湾', 0.90, 0.58, 'coast', 'fish', [fishAt('bass', '_wreck'), fishAt('squid'), fishAt('swordfish'), fishAt('tuna'), cotton(5), steal('smuggler', '偷走私贩', 35, 40, [{ item: 'cotton_3', qty: 2, chance: 0.3 }])], true),
   wild('turtle_beach', '海龟沙滩', 0.78, 0.62, 'coast', 'fish', [fishAt('shrimp', '_turtle'), hunt(2, '_turtle')], true),
+  // 新鱼获的钓点（用户 10-22 要求加鱼）
+  wild('frost_fjord', '冰湖峡湾', 0.33, 0.06, 'snow', 'fish', [fishAt('flounder'), fishAt('sturgeon')], true),
+  wild('sulfur_springs', '硫磺泉', 0.93, 0.93, 'lava', 'fish', [fishAt('flame_shark'), fishAt('sulfur_catfish')], true),
+  wild('starlight_lake', '星光湖', 0.94, 0.30, 'highland', 'fish', [fishAt('star_ray'), fishAt('crystal_fish')], true),
+  wild('phantom_tide', '幻潮海崖', 0.94, 0.45, 'coast', 'fish', [fishAt('phantom_eel'), fishAt('thunder_shark')], true),
+  wild('dragon_abyss', '龙渊', 0.55, 0.95, 'abyss', 'fish', [fishAt('dragonfish'), fishAt('starwhale')], true),
   // 灰岩高地
   wild('stone_forest', '风蚀石林', 0.75, 0.32, 'highland', 'ore', [mine(2)]),
   wild('griffin_peak', '鹰巢峰', 0.93, 0.15, 'highland', 'boss', [mine(4, '_peak'), cotton(5, '_peak'), hunt(5)]),

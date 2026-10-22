@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { ACTIONS, ITEMS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, type MapNode } from '../core/data';
+import { ACTIONS, buffText, ITEMS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, type MapNode } from '../core/data';
 import {
-  atBank, atMarket, BAG_SLOTS, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip,
+  atBank, atMarket, BAG_SLOTS, BELT_CAP, beltSlotOf, eat, fromBelt, POTION_AT, toBelt, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip,
   weaponStyle,
 } from '../core/sim';
 import type { EquipSlot, GameState, ItemCategory, SkillId, Summary } from '../core/types';
@@ -52,7 +52,8 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
         <span className="with-icon"><Icon item={id} size={28} /> <b>{item.tier !== undefined && `${tierName(item.tier)} `}{item.name}</b></span>
         <span className="muted">×{fmtNum(qty)} · 单价 {item.value}</span>
       </div>
-      {item.heals && <span>回复 {item.heals} 生命</span>}
+      {item.heals && <span>回复 {item.heals} 生命{item.buff && <b className="gold"> · {buffText(item.buff)}</b>}</span>}
+      {item.desc && <span className="muted">{item.desc}</span>}
       {item.ammo && <span>{item.ammo.style === 'ranged' ? '箭矢' : '符文'} · 威力 +{item.ammo.power}</span>}
       {e && (
         <span className={canEquip ? '' : 'warn'}>
@@ -63,6 +64,10 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
       )}
       <div className="go">
         {e && <button className="primary" disabled={!canEquip} onClick={() => store.dispatch((g) => equip(g, id))}>装备</button>}
+        {from === 'bag' && item.heals && <button className="primary" onClick={() => store.dispatch((g) => eat(g, id))}>吃一个</button>}
+        {beltSlotOf(id) && (from === 'bag' || near) && (
+          <button onClick={() => store.dispatch((g) => toBelt(g, id))}>放进{beltSlotOf(id) === 'food' ? '食物栏' : '药水栏'}</button>
+        )}
         {from === 'bank' && id !== 'coins' && (
           <button disabled={!near || bagRoomFor(s.bag, id) <= 0} onClick={() => store.dispatch((g) => toBag(g, id, qty))}>
             {bagRoomFor(s.bag, id) > 0 ? '放入背包' : '背包已满'}
@@ -155,6 +160,19 @@ export function CharacterPanel({ s }: { s: GameState }) {
       <p className="muted">
         攻击 +{b.attack} · 力量 +{b.strength} · 防御 +{b.defence} · 攻速 {((weapon?.attackMs ?? 2400) / 1000).toFixed(1)} 秒
       </p>
+      <h2>补给栏 <small className="muted">各放一种，最多 {BELT_CAP} 个，不占背包</small></h2>
+      <div className="equip tools">
+        {(['food', 'potion'] as const).map((k) => {
+          const b = s.belt?.[k];
+          return (
+            <button key={k} className={`slot ${b ? 'full' : ''}`} onClick={() => b && store.dispatch((g) => fromBelt(g, k))} title={b ? '点击取下放回背包' : ''}>
+              {b ? <Icon item={b.id} size={28} /> : <span className="empty" />}
+              <small>{b ? `${ITEMS[b.id].name} ×${b.qty}` : k === 'food' ? '食物栏' : '药水栏'}</small>
+            </button>
+          );
+        })}
+      </div>
+      <p className="muted">战斗时先吃食物栏，血量低于 {Math.round(POTION_AT * 100)}% 先喝药水栏。回仓库补给时会把这两栏补满。在背包里点食物或药水，可以放进栏位。</p>
       <h2>工具</h2>
       <div className="equip tools">{TOOL_SLOTS.map(([id, name]) => slot(id, name))}</div>
       <p className="muted">{TOOL_SLOTS.map(([slot, name]) => `${name} +${Math.round(slotSpeed(s, slot) * 100)}%`).join(' · ')}</p>

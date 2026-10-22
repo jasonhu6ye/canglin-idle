@@ -3,7 +3,7 @@ import { nextRandom } from './rng';
 import { stepQuests } from './quests';
 import { BONUS_PER_LEVEL, levelForXp, SPEED_PER_LEVEL, XP_TABLE } from './xp';
 import type {
-  CombatAction, CombatStyle, EquipSlot, GameState, MonsterDef, SkillAction, SkillId, Summary, Task, TaskEndReason, TaskMode,
+  BeltSlot, BuffKind, CombatAction, CombatStyle, EquipSlot, GameState, MonsterDef, SkillAction, SkillId, Summary, Task, TaskEndReason, TaskMode,
 } from './types';
 
 /** 离线收益上限 24 小时 */
@@ -96,6 +96,8 @@ export function migrate(raw: unknown): GameState | null {
     walk: (s.mapSize ?? 1080) === MAP_W ? s.walk ?? null : null,
     bestiary: s.bestiary ?? {},
     quest: s.quest ?? { i: 0, n: 0 },
+    buffs: s.buffs ?? {},
+    belt: s.belt ?? {},
     // 旧存档：现在拥有的东西都算获得过
     seen: s.seen ?? Object.fromEntries(
       [...Object.keys(keep(s.bank)), ...Object.keys(keep(s.bag)), ...Object.values(equipment)].filter((id) => id && ITEMS[id]).map((id) => [id, 1 as const]),
@@ -149,8 +151,75 @@ export const levelSpeed = (s: GameState, skill: SkillId) => level(s, skill) * SP
 /** 等级高出动作要求的部分：采集类是双倍产出几率，生产类是不消耗材料几率 */
 export const levelBonus = (s: GameState, a: SkillAction) => Math.max(0, level(s, a.skill) - a.level) * BONUS_PER_LEVEL;
 
+/** 当前生效的料理增益比例 */
+export const buffPct = (s: GameState, k: BuffKind) => s.buffs?.[k]?.pct ?? 0;
+
+/** 吃下一份食物：回血，有增益就挂上（同类只留一个，新的覆盖旧的） */
+export function applyFood(s: GameState, id: string) {
+  const it = ITEMS[id];
+  s.hp = Math.min(maxHp(s), s.hp + (it?.heals ?? 0));
+  if (it?.buff) s.buffs = { ...s.buffs, [it.buff.kind]: { pct: it.buff.pct, ms: it.buff.ms } };
+}
+
+/** 食物栏、药水栏每栏最多放多少 */
+export const BELT_CAP = 100;
+/** 血量低于这个比例时先喝药水栏的药水 */
+export const POTION_AT = 0.3;
+export const beltSlotOf = (id: string): BeltSlot | null =>
+  ITEMS[id]?.category === 'potion' ? 'potion' : ITEMS[id]?.category === 'food' && ITEMS[id]?.heals ? 'food' : null;
+
+/** 放进食物栏/药水栏：先拿背包里的，在仓库旁也能拿仓库的；原来放的别的东西退回背包 */
+export function toBelt(prev: GameState, id: string): GameState {
+  const slot = beltSlotOf(id);
+  if (!slot) return prev;
+  const s = clone(prev);
+  s.belt ??= {};
+  const cur = s.belt[slot];
+  if (cur && cur.id !== id) {
+    const back = Math.min(cur.qty, bagRoomFor(s.bag, cur.id));
+    if (back < cur.qty && !atBank(s)) return prev;
+    s.bag[cur.id] = (s.bag[cur.id] ?? 0) + back;
+    if (cur.qty > back) s.bank[cur.id] = (s.bank[cur.id] ?? 0) + cur.qty - back;
+    delete s.belt[slot];
+  }
+  let have = s.belt[slot]?.qty ?? 0;
+  for (const src of atBank(s) ? [s.bag, s.bank] : [s.bag]) {
+    const n = Math.min(src[id] ?? 0, BELT_CAP - have);
+    if (n <= 0) continue;
+    src[id] -= n;
+    if (src[id] <= 0) delete src[id];
+    have += n;
+  }
+  if (have > 0) s.belt[slot] = { id, qty: have };
+  return s;
+}
+
+/** 从栏位取下来放回背包（背包放不下、人又在仓库旁就放仓库） */
+export function fromBelt(prev: GameState, slot: BeltSlot): GameState {
+  const cur = prev.belt?.[slot];
+  if (!cur) return prev;
+  const room = bagRoomFor(prev.bag, cur.id);
+  if (room < cur.qty && !atBank(prev)) return prev;
+  const s = clone(prev);
+  const n = Math.min(room, cur.qty);
+  if (n > 0) s.bag[cur.id] = (s.bag[cur.id] ?? 0) + n;
+  if (cur.qty > n) s.bank[cur.id] = (s.bank[cur.id] ?? 0) + cur.qty - n;
+  delete s.belt![slot];
+  return s;
+}
+
+/** 手动吃背包里的一份食物 */
+export function eat(prev: GameState, id: string): GameState {
+  if (!(prev.bag[id] > 0) || !ITEMS[id]?.heals) return prev;
+  const s = clone(prev);
+  s.bag[id] -= 1;
+  if (s.bag[id] <= 0) delete s.bag[id];
+  applyFood(s, id);
+  return s;
+}
+
 export const actionDuration = (s: GameState, a: SkillAction) =>
-  Math.round(a.durationMs / (1 + toolSpeed(s, a.skill, a.tool) + levelSpeed(s, a.skill)));
+  Math.round(a.durationMs / (1 + toolSpeed(s, a.skill, a.tool) + levelSpeed(s, a.skill) + buffPct(s, 'speed')));
 
 /** 玩家攻击间隔：看武器，匕首快、长枪和弩慢 */
 export const playerAttackMs = (s: GameState) => ITEMS[s.equipment.weapon ?? '']?.equip?.attackMs ?? PLAYER_ATTACK_MS;
@@ -224,9 +293,9 @@ export function combatStats(s: GameState, m: MonsterDef) {
   return {
     style,
     ammo: ammo?.id,
-    playerHit: hitChance((lvl + 8) * (b.attack + 64), (m.defence + 8) * 64) * (has('evasive') ? 0.8 : 1),
-    playerMaxHit: Math.max(1, Math.round(Math.floor(0.5 + ((lvl + 8) * (strength + 64)) / 640) * 10 * dmgMult)),
-    monsterHit: m.maxHit > 0 ? hitChance((m.attack + 8) * 64, (level(s, 'defence') + 8) * (b.defence + 64)) : 0,
+    playerHit: hitChance((lvl + 8) * (b.attack + 64) * (1 + buffPct(s, 'atk')), (m.defence + 8) * 64) * (has('evasive') ? 0.8 : 1),
+    playerMaxHit: Math.max(1, Math.round(Math.floor(0.5 + ((lvl + 8) * (strength + 64)) / 640) * 10 * dmgMult * (1 + buffPct(s, 'str')))),
+    monsterHit: m.maxHit > 0 ? hitChance((m.attack + 8) * 64, (level(s, 'defence') + 8) * (b.defence + 64) * (1 + buffPct(s, 'def'))) : 0,
     monsterMaxHit: m.maxHit * MONSTER_DAMAGE_SCALE,
   };
 }
@@ -308,6 +377,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         if (!pass && BAG_SLOTS - bagSlotsUsed(s.bag) >= 5) break;
       }
       if (supply) {
+        refillBelt();
         carryFood();
         carryAmmo();
         s.queue[0].stocked = true;
@@ -325,6 +395,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   };
 
   const addXp = (skill: SkillId, amount: number) => {
+    amount = Math.round(amount * (1 + buffPct(s, 'xp')));
     const before = level(s, skill);
     s.xp[skill] += amount;
     sum.xp[skill] = (sum.xp[skill] ?? 0) + amount;
@@ -371,22 +442,47 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   };
 
   /** 只吃背包里的东西 */
+  /** 从食物栏/药水栏吃一份，吃空了清掉栏位 */
+  const useBelt = (slot: BeltSlot) => {
+    const b = s.belt?.[slot];
+    if (!b) return false;
+    b.qty--;
+    if (b.qty <= 0) delete s.belt![slot];
+    sum.foodEaten++;
+    applyFood(s, b.id);
+    return true;
+  };
   const eatIfNeeded = () => {
+    // 血很低先喝药水栏的药水
+    while (s.hp < maxHp(s) * POTION_AT && useBelt('potion'));
     const limit = maxHp(s) * s.settings.eatThreshold;
     while (s.hp < limit) {
+      if (useBelt('food')) continue;
       const food = bestFood(s);
       if (!food) return;
       addBag(food, -1);
       sum.foodEaten++;
-      s.hp = Math.min(maxHp(s), s.hp + healOf(food));
+      applyFood(s, food);
     }
   };
 
+  /** 在仓库旁把食物栏、药水栏补满（同一种） */
+  const refillBelt = () => {
+    for (const b of Object.values(s.belt ?? {})) {
+      const n = Math.min(s.bank[b.id] ?? 0, BELT_CAP - b.qty);
+      if (n <= 0) continue;
+      s.bank[b.id] -= n;
+      if (s.bank[b.id] <= 0) delete s.bank[b.id];
+      b.qty += n;
+    }
+  };
+  const beltNeeds = () => Object.values(s.belt ?? {}).some((b) => b.qty < BELT_CAP && (s.bank[b.id] ?? 0) > 0);
+
   const foodTarget = () => (s.settings.carryFood < 0 ? Infinity : s.settings.carryFood);
-  const bagFood = () => Object.entries(s.bag).reduce((n, [id, q]) => n + (healOf(id) ? q : 0), 0);
+  const bagFood = () => Object.entries(s.bag).reduce((n, [id, q]) => n + (healOf(id) ? q : 0), 0) + (s.belt?.food?.qty ?? 0);
   /** 背包里的食物不够设定数量，仓库里又有：要先回仓库拿 */
   const needSupply = () =>
-    (bagFood() < foodTarget() && Object.keys(s.bank).some((id) => healOf(id) > 0 && bagRoomFor(s.bag, id) > 0))
+    beltNeeds() || (bagFood() < foodTarget() && Object.keys(s.bank).some((id) => healOf(id) > 0 && bagRoomFor(s.bag, id) > 0))
     || (!bestAmmo(s) && !!bestAmmo(s, weaponStyle(s), true));
 
   /** 在仓库旁把当前武器能用的弹药全部带上，好的先拿 */
@@ -605,6 +701,14 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
 }
 
 function regen(s: GameState, ms: number) {
+  // 料理增益跟着经过的时间流逝（所有耗时都会走到这里）
+  if (s.buffs) {
+    for (const k of Object.keys(s.buffs) as BuffKind[]) {
+      const b = s.buffs[k]!;
+      b.ms -= ms;
+      if (b.ms <= 0) delete s.buffs[k];
+    }
+  }
   s.regenMs += ms;
   const ticks = Math.floor(s.regenMs / REGEN_MS);
   s.regenMs -= ticks * REGEN_MS;
