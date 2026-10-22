@@ -45,6 +45,8 @@ export class MapScene extends Phaser.Scene {
   private playerBody!: Phaser.GameObjects.Sprite;
   private facing: HeroDir = 'down';
   private foe?: Phaser.GameObjects.Sprite;
+  /** 精英和 Boss 头顶的血条（用户 10-22 要求） */
+  private bars: { spr: Phaser.GameObjects.Sprite; m: MonsterDef; bg: Phaser.GameObjects.Rectangle; fill: Phaser.GameObjects.Rectangle; w: number; live: boolean }[] = [];
   /** 上一帧的战斗状态，用来判断怪物刚出手、刚挨打、刚死 */
   private foeSeen?: { hp: number; timer: number; respawn: number };
   private workTween?: Phaser.Tweens.Tween;
@@ -314,6 +316,7 @@ export class MapScene extends Phaser.Scene {
   update(time: number, delta: number) {
     this.stepWalker(delta);
     this.syncFoe();
+    this.updateBars();
     this.updateChunks();
     for (const g of this.glows) g.img.setAlpha(g.base + Math.sin(time / 380 + g.phase) * 0.12 + (hash(Math.floor(time / 90), g.phase * 100) - 0.5) * 0.08);
     this.updateParticles();
@@ -432,7 +435,10 @@ export class MapScene extends Phaser.Scene {
       .setOrigin(0.5, 1)
       .setDepth(8500);
     this.nodeLabels.push({ node: n, text });
-    this.add.zone(cx, cy, T * 2.5, T * 2.5).setInteractive({ useHandCursor: true }).setData('node', n.id);
+    // 纯打怪的点位不弹页面：点它附近的怪物才弹（用户 10-22 要求）
+    if (n.town || n.actions.some((id) => ACTIONS[id].kind !== 'combat')) {
+      this.add.zone(cx, cy, T * 2.5, T * 2.5).setInteractive({ useHandCursor: true }).setData('node', n.id);
+    }
     this.tweens.add({ targets: text, y: text.y - 2, yoyo: true, repeat: -1, duration: 900, ease: 'Sine.inOut' });
   }
 
@@ -476,6 +482,9 @@ export class MapScene extends Phaser.Scene {
     const S = monsterFrameSize(m);
     // 原点放在脚底那一行
     const spr = this.add.sprite(x, y, key, 'idle-0').setOrigin(0.5, (S - 3) / S);
+    // 点怪物弹出它的信息页
+    spr.setInteractive({ useHandCursor: true }).setData('monster', `fight_${m.id}`);
+    if (m.rank !== 'normal') this.addBar(spr, m);
     spr.play({ key: `${key}-idle`, startFrame: Math.floor(Math.random() * 6) });
     return spr;
   }
@@ -620,7 +629,7 @@ export class MapScene extends Phaser.Scene {
         pinchStart = 0;
       }
       if (!tapped) return;
-      const node = over.map((o) => o.getData('node') as string | undefined).find(Boolean);
+      const node = over.map((o) => (o.getData('monster') ?? o.getData('node')) as string | undefined).find(Boolean);
       if (node) {
         this.game.events.emit(NODE_CLICK, node);
         return;
@@ -889,6 +898,32 @@ export class MapScene extends Phaser.Scene {
     }
   }
 
+  private addBar(spr: Phaser.GameObjects.Sprite, m: MonsterDef) {
+    const w = m.rank === 'boss' ? 26 : 18;
+    const bg = this.add.rectangle(0, 0, w + 2, 4, 0x1b120c).setStrokeStyle(1, m.rank === 'boss' ? 0xe8b84a : 0x6b5132).setOrigin(0.5, 1);
+    const fill = this.add.rectangle(0, 0, w, 2, m.rank === 'boss' ? 0xd8402c : 0xe08a2c).setOrigin(0, 1);
+    this.bars.push({ spr, m, bg, fill, w, live: false });
+  }
+
+  /** 血条跟着怪走；正在打的那只按战斗里的血量显示 */
+  private updateBars() {
+    const c = store.state.combat;
+    this.bars = this.bars.filter((b) => {
+      if (!b.spr.active) {
+        b.bg.destroy();
+        b.fill.destroy();
+        return false;
+      }
+      const S = monsterFrameSize(b.m);
+      const top = b.spr.y - (S - 3) + 6;
+      const depth = b.spr.depth + 1;
+      b.bg.setPosition(b.spr.x, top).setDepth(depth).setAlpha(b.spr.alpha);
+      const ratio = b.live && c ? (c.respawnMs > 0 ? 0 : Math.max(0, c.monsterHp / b.m.hp)) : 1;
+      b.fill.setPosition(b.spr.x - b.w / 2, top - 1).setDepth(depth).setAlpha(b.spr.alpha).setScale(ratio, 1);
+      return true;
+    });
+  }
+
   /** 战斗中让对面的怪跟着战斗状态动：出手、挨打、倒下、重新刷出来 */
   private syncFoe() {
     const foe = this.foe;
@@ -951,6 +986,8 @@ export class MapScene extends Phaser.Scene {
       this.foe = this.monSprite(m, this.player.x + gap, this.player.y + 7).setFlipX(true);
       this.foe.setDepth(this.foe.y + 1000);
       this.foeSeen = undefined;
+      const bar = this.bars.find((b) => b.spr === this.foe);
+      if (bar) bar.live = true;
     }
     // 干活时侧身朝右（怪物也站在右边）
     this.facing = 'side';

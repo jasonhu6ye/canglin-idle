@@ -66,17 +66,18 @@ export function Bestiary({ s }: { s: GameState }) {
   );
 }
 
-function MonsterDetail({ m, kills }: { m: MonsterDef; kills: number }) {
+/** reveal：地图上点怪物时直接给全部信息（图鉴里要先打败一次） */
+export function MonsterDetail({ m, kills, reveal = false }: { m: MonsterDef; kills: number; reveal?: boolean }) {
   const node = nodeOfAction(`fight_${m.id}`);
   const where = node ? `${node.name}（${REGIONS[node.region].name}）` : REGIONS[m.region].name;
   return (
     <div className="item-detail frame mon-detail">
       <div className="row1">
-        <span className="with-icon"><MonsterIcon m={m} size={64} unknown={!kills} /> <b>{m.name}</b></span>
+        <span className="with-icon"><MonsterIcon m={m} size={64} unknown={!kills && !reveal} /> <b>{m.name}</b></span>
         <span className="muted">{tierName(m.tier)} · {m.level} 级 · {RANK_NAME[m.rank]}</span>
       </div>
       <span className="muted">{m.kind === 'creature' ? '生物' : '怪物'} · {FAMILY_NAME[m.family as Family]} · 出没：{where}</span>
-      {!kills ? (
+      {!kills && !reveal ? (
         <span className="muted">尚未击败。打败一次后可查看属性、特性和掉落。</span>
       ) : (
         <>

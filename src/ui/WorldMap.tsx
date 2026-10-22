@@ -117,7 +117,7 @@ function NodeCard({ nodeId, cl, onOpen, onWalk }: { nodeId: string; cl: number; 
       {monsters.length > 0 && <span>怪物：{monsters.map((m) => `${m!.name}(${m!.level}${m!.boss ? ' Boss' : ''})`).join('、')}</span>}
       <div className="go">
         <button className="primary" onClick={onWalk}>寻路前往 · 约 {Math.ceil(travelMs(playerPos, standOf(n)) / 1000)} 秒</button>
-        {n.id !== 'smithy' && <button onClick={onOpen}>查看任务</button>}
+        {n.id !== 'smithy' && (n.town || skills.length > 0) && <button onClick={onOpen}>查看任务</button>}
       </div>
     </div>
   );

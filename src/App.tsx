@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { NODES, REGIONS, SKILLS } from './core/data';
+import { ACTIONS, NODES, REGIONS, SKILLS } from './core/data';
 import type { RegionId, Summary, TaskEndReason } from './core/types';
 import { REGION_CHANGE } from './game/MapScene';
 import { store, useGame, useOffline } from './store';
-import { ActionSheet } from './ui/ActionSheet';
+import { ActionSheet, MonsterSheet } from './ui/ActionSheet';
 import { GameCanvas, onGameEvent } from './ui/GameCanvas';
 import { actionName } from './ui/format';
 import { MapButtons, QueuePanel, StatusChips, TopBar } from './ui/hud';
@@ -84,10 +84,19 @@ export function App() {
   const [tab, setTab] = useState<Tab>('game');
   const [node, setNode] = useState<string | null>(null);
   const [worldMap, setWorldMap] = useState(false);
+  const [monster, setMonster] = useState<string | null>(null);
   const toasts = useToasts();
   const { region, banner } = useRegion();
   const openNode = useCallback((id: string) => {
     setWorldMap(false);
+    setMonster(null);
+    // 地图上点的是怪物
+    if (ACTIONS[id]?.kind === 'combat') {
+      setNode(null);
+      setTab('game');
+      setMonster(id);
+      return;
+    }
     if (NODES.find((n) => n.id === id)?.opens === 'bank') {
       setNode(null);
       setTab('bank');
@@ -99,11 +108,12 @@ export function App() {
 
   // 面板里点了「寻路去仓库」之类：回到游戏画面
   useEffect(() => store.subscribe(() => {
-    if (store.pendingWalk) { setTab('game'); setNode(null); setWorldMap(false); }
+    if (store.pendingWalk) { setTab('game'); setNode(null); setMonster(null); setWorldMap(false); }
   }), []);
 
   let side: ReactNode = null;
   if (worldMap) side = <WorldMap s={s} onClose={() => setWorldMap(false)} onOpenNode={openNode} />;
+  else if (tab === 'game' && monster) side = <MonsterSheet s={s} actionId={monster} onClose={() => setMonster(null)} />;
   else if (tab === 'game' && node) side = <ActionSheet s={s} nodeId={node} onClose={() => setNode(null)} />;
   else if (tab === 'game' && wide) side = <NodeList onPick={openNode} />;
   else if (tab === 'char') side = <CharacterPanel s={s} />;
@@ -131,7 +141,7 @@ export function App() {
       {side && <aside className={`side ${worldMap ? 'wide-map' : ''}`}>{side}</aside>}
       <nav className="tabbar">
         {TABS.map((t) => (
-          <button key={t.id} className={tab === t.id && !worldMap ? 'on' : ''} onClick={() => { setTab(t.id); setNode(null); setWorldMap(false); }}>
+          <button key={t.id} className={tab === t.id && !worldMap ? 'on' : ''} onClick={() => { setTab(t.id); setNode(null); setMonster(null); setWorldMap(false); }}>
             <TplIcon tpl={t.icon[0]} tint={t.icon[1]} size={22} />
             {t.label}
           </button>

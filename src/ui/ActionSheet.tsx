@@ -1,5 +1,4 @@
-import { MonsterIcon, TraitChips } from './Bestiary';
-import { TRAITS, type TraitId } from '../core/bestiary';
+import { MonsterDetail, MonsterIcon, TraitChips } from './Bestiary';
 import { useState } from 'react';
 import { ACTIONS, ITEMS, MONSTERS, NODES, REGIONS, SKILLS, tierName } from '../core/data';
 import {
@@ -21,22 +20,9 @@ const isLocked = (s: GameState, a: ActionDef) => a.kind === 'skill' && level(s, 
 export function ActionSheet({ s, nodeId, onClose }: { s: GameState; nodeId: string; onClose: () => void }) {
   const node = NODES.find((n) => n.id === nodeId)!;
   const [selected, setSelected] = useState<string | null>(null);
-  const [modeType, setModeType] = useState<TaskMode['type']>('infinite');
-  const [count, setCount] = useState(50);
-  const [minutes, setMinutes] = useState(60);
   const [showAll, setShowAll] = useState(false);
-
-  const mode = (): TaskMode =>
-    modeType === 'count' ? { type: 'count', count } : modeType === 'time' ? { type: 'time', ms: minutes * 60000 } : { type: 'infinite' };
-
-  const go = (now: boolean) => {
-    if (!selected) return;
-    store.dispatch((g) => (now ? startNow(g, selected, mode()) : enqueue(g, selected, mode())));
-    onClose();
-  };
-
-  const queueFull = s.queue.length >= MAX_QUEUE;
-  const all = node.actions;
+  // 野外的怪物不在点位页面里列出，直接点地图上的怪物（用户 10-22 要求）；城镇的训练假人保留
+  const all = node.town ? node.actions : node.actions.filter((id) => ACTIONS[id].kind !== 'combat');
   const unlocked = all.filter((id) => !isLocked(s, ACTIONS[id]));
   const locked = all.filter((id) => isLocked(s, ACTIONS[id]));
   // 已解锁的按等级从高到低（最好的在上面），未解锁的按等级从低到高
@@ -86,50 +72,88 @@ export function ActionSheet({ s, nodeId, onClose }: { s: GameState; nodeId: stri
         {hidden > 0 && <li className="more" onClick={() => setShowAll(true)}>还有 {hidden} 项更高等级的，点击展开</li>}
       </ul>
 
-      <div className="config">
-        <div className="tabs3">
-          {(['count', 'time', 'infinite'] as const).map((t) => (
-            <button key={t} className={modeType === t ? 'on' : ''} onClick={() => setModeType(t)}>
-              {{ count: '× 数量', time: '◷ 时间', infinite: '∞ 无限' }[t]}
-            </button>
-          ))}
-        </div>
-        {modeType === 'count' && (
-          <div className="opts">
-            {COUNTS.map((c) => <button key={c} className={count === c ? 'on' : ''} onClick={() => setCount(c)}>{c}</button>)}
-          </div>
-        )}
-        {modeType === 'time' && (
-          <div className="opts">
-            {TIMES.map((m) => <button key={m} className={minutes === m ? 'on' : ''} onClick={() => setMinutes(m)}>{m >= 60 ? `${m / 60}小时` : `${m}分`}</button>)}
-          </div>
-        )}
-        {selected && ACTIONS[selected].kind === 'combat' && (
-          <>
-            <div className="opts">
-              <span className="lbl">进食阈值</span>
-              {THRESHOLDS.map((t) => (
-                <button key={t} className={s.settings.eatThreshold === t ? 'on' : ''} onClick={() => store.dispatch((g) => setSettings(g, { eatThreshold: t }))}>
-                  {t * 100}%
-                </button>
-              ))}
-            </div>
-            <div className="opts">
-              <span className="lbl">带食物</span>
-              {[20, 50, 100, -1].map((n) => (
-                <button key={n} className={s.settings.carryFood === n ? 'on' : ''} onClick={() => store.dispatch((g) => setSettings(g, { carryFood: n }))}>
-                  {n < 0 ? '全部' : n}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-        <div className="go">
-          <button className="primary" disabled={!selected} onClick={() => go(true)}>立即开始</button>
-          <button disabled={!selected || queueFull} onClick={() => go(false)}>
-            {queueFull ? `队列已满 ${MAX_QUEUE}/${MAX_QUEUE}` : `加入队列 ${s.queue.length}/${MAX_QUEUE}`}
+      {!all.length && <p className="muted pad">这里是怪物出没的地方。点地图上的怪物或生物，就能查看它的信息并开打。</p>}
+      {all.length > 0 && <TaskConfig s={s} action={selected} onDone={onClose} />}
+    </div>
+  );
+}
+
+/** 地图上点怪物弹出的页面：信息、胜算和开打 */
+export function MonsterSheet({ s, actionId, onClose }: { s: GameState; actionId: string; onClose: () => void }) {
+  const a = ACTIONS[actionId];
+  if (!a || a.kind !== 'combat') return null;
+  const m = MONSTERS[a.monster];
+  return (
+    <div className="sheet">
+      <div className="sheet-head">
+        <button className="back" onClick={onClose}>‹ 返回</button>
+        <h2>{m.name}</h2>
+        <small className="muted">{fmtNum(xpPerHour(s, actionId))} 经验/时</small>
+      </div>
+      <MonsterDetail m={m} kills={s.bestiary?.[m.id] ?? 0} reveal />
+      <div className="item-detail frame"><CombatInfo s={s} monster={m.id} /></div>
+      <TaskConfig s={s} action={actionId} onDone={onClose} />
+    </div>
+  );
+}
+
+/** 次数/时间/无限 + 战斗设置 + 开始按钮 */
+function TaskConfig({ s, action: selected, onDone }: { s: GameState; action: string | null; onDone: () => void }) {
+  const [modeType, setModeType] = useState<TaskMode['type']>('infinite');
+  const [count, setCount] = useState(50);
+  const [minutes, setMinutes] = useState(60);
+  const mode = (): TaskMode =>
+    modeType === 'count' ? { type: 'count', count } : modeType === 'time' ? { type: 'time', ms: minutes * 60000 } : { type: 'infinite' };
+  const go = (now: boolean) => {
+    if (!selected) return;
+    store.dispatch((g) => (now ? startNow(g, selected, mode()) : enqueue(g, selected, mode())));
+    onDone();
+  };
+  const queueFull = s.queue.length >= MAX_QUEUE;
+  return (
+    <div className="config">
+      <div className="tabs3">
+        {(['count', 'time', 'infinite'] as const).map((t) => (
+          <button key={t} className={modeType === t ? 'on' : ''} onClick={() => setModeType(t)}>
+            {{ count: '× 数量', time: '◷ 时间', infinite: '∞ 无限' }[t]}
           </button>
+        ))}
+      </div>
+      {modeType === 'count' && (
+        <div className="opts">
+          {COUNTS.map((c) => <button key={c} className={count === c ? 'on' : ''} onClick={() => setCount(c)}>{c}</button>)}
         </div>
+      )}
+      {modeType === 'time' && (
+        <div className="opts">
+          {TIMES.map((m) => <button key={m} className={minutes === m ? 'on' : ''} onClick={() => setMinutes(m)}>{m >= 60 ? `${m / 60}小时` : `${m}分`}</button>)}
+        </div>
+      )}
+      {selected && ACTIONS[selected].kind === 'combat' && (
+        <>
+          <div className="opts">
+            <span className="lbl">进食阈值</span>
+            {THRESHOLDS.map((t) => (
+              <button key={t} className={s.settings.eatThreshold === t ? 'on' : ''} onClick={() => store.dispatch((g) => setSettings(g, { eatThreshold: t }))}>
+                {t * 100}%
+              </button>
+            ))}
+          </div>
+          <div className="opts">
+            <span className="lbl">带食物</span>
+            {[20, 50, 100, -1].map((n) => (
+              <button key={n} className={s.settings.carryFood === n ? 'on' : ''} onClick={() => store.dispatch((g) => setSettings(g, { carryFood: n }))}>
+                {n < 0 ? '全部' : n}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      <div className="go">
+        <button className="primary" disabled={!selected} onClick={() => go(true)}>立即开始</button>
+        <button disabled={!selected || queueFull} onClick={() => go(false)}>
+          {queueFull ? `队列已满 ${MAX_QUEUE}/${MAX_QUEUE}` : `加入队列 ${s.queue.length}/${MAX_QUEUE}`}
+        </button>
       </div>
     </div>
   );
@@ -148,8 +172,6 @@ function CombatInfo({ s, monster }: { s: GameState; monster: string }) {
       {st.style !== 'melee' && (
         <span className={ammo ? '' : 'warn'}>{ammo ? `弹药：${ITEMS[ammo.id].name}` : `没有${st.style === 'ranged' ? '箭' : '符文'}！会立刻停止`}</span>
       )}
-      {m.traits.map((t) => <span key={t} className="muted">{TRAITS[t as TraitId].name}：{TRAITS[t as TraitId].desc}</span>)}
-      <span>掉落：{m.drops.map((d) => `${ITEMS[d.item].name}×${d.qty}${d.chance ? ` ${Math.round(d.chance * 1000) / 10}%` : ''}`).join('、') || '无'}</span>
       <span className={food ? '' : 'warn'}>{food ? `食物：最好的是${ITEMS[food].name}，共 ${fmtNum(foodCount)} 份` : '没有食物！挂机可能阵亡'}</span>
     </span>
   );
