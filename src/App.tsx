@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { SKILLS } from './core/data';
 import type { Summary, TaskEndReason } from './core/types';
 import { store, useGame, useOffline } from './store';
@@ -6,7 +6,7 @@ import { ActionSheet } from './ui/ActionSheet';
 import { GameCanvas } from './ui/GameCanvas';
 import { actionName } from './ui/format';
 import { MapButtons, QueuePanel, StatusChips, TopBar } from './ui/hud';
-import { BagPanel, MorePanel, OfflineModal, SkillsPanel } from './ui/panels';
+import { BagPanel, MorePanel, NodeList, OfflineModal, SkillsPanel } from './ui/panels';
 
 type Tab = 'game' | 'bag' | 'skills' | 'more';
 const TABS: { id: Tab; icon: string; label: string }[] = [
@@ -40,9 +40,24 @@ function useToasts() {
   return toasts;
 }
 
+const WIDE_QUERY = '(min-width: 900px)';
+
+/** 宽屏（电脑、平板横屏）时右侧常驻面板，手机上面板盖在地图上 */
+function useWide() {
+  const [wide, setWide] = useState(() => window.matchMedia(WIDE_QUERY).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(WIDE_QUERY);
+    const on = () => setWide(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  return wide;
+}
+
 export function App() {
   const s = useGame();
   const offline = useOffline();
+  const wide = useWide();
   const [tab, setTab] = useState<Tab>('game');
   const [node, setNode] = useState<string | null>(null);
   const toasts = useToasts();
@@ -50,6 +65,13 @@ export function App() {
     setTab('game');
     setNode(id);
   }, []);
+
+  let side: ReactNode = null;
+  if (tab === 'game' && node) side = <ActionSheet s={s} nodeId={node} onClose={() => setNode(null)} />;
+  else if (tab === 'game' && wide) side = <NodeList onPick={openNode} />;
+  else if (tab === 'bag') side = <BagPanel s={s} />;
+  else if (tab === 'skills') side = <SkillsPanel s={s} />;
+  else if (tab === 'more') side = <MorePanel />;
 
   return (
     <div className="app">
@@ -64,11 +86,8 @@ export function App() {
         <div className="toasts">
           {toasts.map((t) => <div key={t.id} className={`toast ${t.gold ? 'gold' : ''}`}>{t.text}</div>)}
         </div>
-        {tab === 'game' && node && <ActionSheet s={s} nodeId={node} onClose={() => setNode(null)} />}
-        {tab === 'bag' && <BagPanel s={s} />}
-        {tab === 'skills' && <SkillsPanel s={s} />}
-        {tab === 'more' && <MorePanel />}
       </main>
+      {side && <aside className="side">{side}</aside>}
       <nav className="tabbar">
         {TABS.map((t) => (
           <button key={t.id} className={tab === t.id ? 'on' : ''} onClick={() => { setTab(t.id); setNode(null); }}>

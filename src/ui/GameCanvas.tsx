@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { useEffect, useRef } from 'react';
+import { DPR } from '../game/dpr';
 import { MapScene, NODE_CLICK } from '../game/MapScene';
 
 let game: Phaser.Game | null = null;
@@ -12,18 +13,30 @@ export function GameCanvas({ onNodeClick }: { onNodeClick: (nodeId: string) => v
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const el = ref.current!;
+    // 画布内部按 CSS 尺寸 × DPR 渲染，再用 zoom 缩回 CSS 尺寸
+    const size = () => ({ w: Math.max(1, el.clientWidth) * DPR, h: Math.max(1, el.clientHeight) * DPR });
+    const { w, h } = size();
     game = new Phaser.Game({
       type: Phaser.AUTO,
-      parent: ref.current!,
+      parent: el,
       pixelArt: true,
       roundPixels: true,
-      scale: { mode: Phaser.Scale.RESIZE, width: '100%', height: '100%' },
+      scale: { mode: Phaser.Scale.NONE, width: w, height: h, zoom: 1 / DPR },
       scene: [MapScene],
       banner: false,
+      input: { touch: { capture: true } },
     });
+    const g = game;
+    const ro = new ResizeObserver(() => {
+      const s = size();
+      g.scale.resize(s.w, s.h);
+    });
+    ro.observe(el);
     return () => {
-      game?.destroy(true);
-      game = null;
+      ro.disconnect();
+      g.destroy(true);
+      if (game === g) game = null;
     };
   }, []);
 

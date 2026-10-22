@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ITEMS, SKILLS } from '../core/data';
+import { ACTIONS, ITEMS, NODES, SKILLS } from '../core/data';
 import { equip, level, playerBonuses, sell } from '../core/sim';
 import type { EquipSlot, GameState, SkillId, Summary } from '../core/types';
 import { XP_TABLE, levelProgress, MAX_LEVEL } from '../core/xp';
@@ -136,6 +136,32 @@ export function OfflineModal({ sum }: { sum: Summary }) {
         </div>
         <button className="primary" onClick={() => store.dismissOffline()}>收下</button>
       </div>
+    </div>
+  );
+}
+
+/** 宽屏右侧的地点列表：电脑上不用在地图里找点 */
+export function NodeList({ onPick }: { onPick: (id: string) => void }) {
+  return (
+    <div className="page">
+      <h2>地点</h2>
+      <p className="muted">点地图上的地点或下面的列表选择任务；点空地可以让角色走过去。</p>
+      <ul className="node-list">
+        {NODES.map((n) => {
+          const kinds = [...new Set(n.actions.map((id) => {
+            const a = ACTIONS[id];
+            return a.kind === 'skill' ? SKILLS[a.skill].name : '战斗';
+          }))];
+          return (
+            <li key={n.id}>
+              <button onClick={() => onPick(n.id)}>
+                <b>{n.name}</b>
+                <small className="muted">{kinds.join(' · ')} · {n.actions.length} 项</small>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

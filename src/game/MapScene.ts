@@ -3,10 +3,12 @@ import { ACTIONS, ITEMS, MAP_H, MAP_W, NODES, SKILLS, type MapNode } from '../co
 import type { Summary } from '../core/types';
 import { store } from '../store';
 import { MONSTER_SPRITE, paintSprite, SPRITES } from './sprites';
-import { decorations, hash, HOUSES, MONSTER_ZONES, SPAWN, TILE_COLORS, tileAt, type Tile } from './world';
+import { DPR } from './dpr';
+import { decorations, findPath, hash, HOUSES, MONSTER_ZONES, SPAWN, TILE_COLORS, tileAt, type Tile } from './world';
 
 const T = 16;
 const WALK_TILES_PER_SEC = 5;
+const DRAG_THRESHOLD = 8;
 const FONT = '"PingFang SC","Microsoft YaHei",sans-serif';
 
 export const NODE_CLICK = 'node-click';
@@ -21,8 +23,10 @@ export class MapScene extends Phaser.Scene {
   private foe?: Phaser.GameObjects.Image;
   private walkTween?: Phaser.Tweens.Tween;
   private workTween?: Phaser.Tweens.Tween;
-  private target: { x: number; y: number } = { ...SPAWN };
+  private marker?: Phaser.GameObjects.Graphics;
   private currentAction?: string;
+  /** 玩家手动点地面走开了（任务仍在后台进行） */
+  private manual = false;
   private following = true;
   private unsub: (() => void)[] = [];
 
@@ -137,10 +141,7 @@ export class MapScene extends Phaser.Scene {
       .text(cx, cy - 13, n.name, { fontFamily: FONT, fontSize: '7px', color: '#fff3c4', backgroundColor: '#2a1e17cc', padding: { x: 2, y: 1 }, resolution: 4 })
       .setOrigin(0.5)
       .setDepth(5000);
-    const hit = this.add.zone(cx, cy, T * 2.5, T * 2.5).setInteractive({ useHandCursor: true });
-    hit.on('pointerup', (p: Phaser.Input.Pointer) => {
-      if (p.getDistance() < 8) this.game.events.emit(NODE_CLICK, n.id);
-    });
+    this.add.zone(cx, cy, T * 2.5, T * 2.5).setInteractive({ useHandCursor: true }).setData('node', n.id);
     this.tweens.add({ targets: label, y: cy - 15, yoyo: true, repeat: -1, duration: 900, ease: 'Sine.inOut' });
   }
 
@@ -166,13 +167,36 @@ export class MapScene extends Phaser.Scene {
     const cam = this.cameras.main;
     cam.setBounds(0, 0, MAP_W * T, MAP_H * T);
     cam.setBackgroundColor('#1b140f');
-    const fit = () => cam.setZoom(Phaser.Math.Clamp(this.scale.width / (15 * T), 1.5, 4));
+    // 画布按设备像素比渲染，镜头缩放要乘回 DPR，否则手机上会糊
+    const cssWidth = () => this.scale.width / DPR;
+    const minZoom = () => Math.max(1, cssWidth() / (MAP_W * T)) * DPR;
+    const fit = () => cam.setZoom(Phaser.Math.Clamp((cssWidth() / (cssWidth() > 700 ? 26 : 15)) / T, 1.5, 4) * DPR);
     fit();
     this.scale.on('resize', fit);
     cam.startFollow(this.player, true, 0.08, 0.08);
 
+    this.input.addPointer(1);
+    let pinchStart = 0;
+    let zoomStart = 1;
+    let gesture = false; // 本次触摸是否拖动或双指缩放过，若是则抬手时不算点击
+
+    this.input.on('pointerdown', () => {
+      if (!this.input.pointer1.isDown || !this.input.pointer2.isDown) return;
+      gesture = true;
+      pinchStart = Phaser.Math.Distance.BetweenPoints(this.input.pointer1.position, this.input.pointer2.position);
+      zoomStart = cam.zoom;
+    });
+
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
-      if (!p.isDown || p.getDistance() < 8) return;
+      const p1 = this.input.pointer1;
+      const p2 = this.input.pointer2;
+      if (p1.isDown && p2.isDown && pinchStart > 0) {
+        const d = Phaser.Math.Distance.BetweenPoints(p1.position, p2.position);
+        cam.setZoom(Phaser.Math.Clamp((zoomStart * d) / pinchStart, minZoom(), 5 * DPR));
+        return;
+      }
+      if (!p.isDown || p.getDistance() < DRAG_THRESHOLD * DPR) return;
+      gesture = true;
       if (this.following) {
         cam.stopFollow();
         this.following = false;
@@ -180,19 +204,75 @@ export class MapScene extends Phaser.Scene {
       cam.scrollX -= (p.x - p.prevPosition.x) / cam.zoom;
       cam.scrollY -= (p.y - p.prevPosition.y) / cam.zoom;
     });
-    this.input.on('wheel', (_p: unknown, _o: unknown, _dx: number, dy: number) => this.zoomBy(dy > 0 ? -0.5 : 0.5));
+
+    this.input.on('pointerup', (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
+      const tapped = !gesture && p.getDistance() < DRAG_THRESHOLD * DPR;
+      if (!this.input.pointer1.isDown && !this.input.pointer2.isDown) {
+        gesture = false;
+        pinchStart = 0;
+      }
+      if (!tapped) return;
+      const node = over.map((o) => o.getData('node') as string | undefined).find(Boolean);
+      if (node) {
+        this.game.events.emit(NODE_CLICK, node);
+        return;
+      }
+      const wp = cam.getWorldPoint(p.x, p.y);
+      this.moveTo(Math.floor(wp.x / T), Math.floor(wp.y / T));
+    });
+
+    this.input.on('wheel', (_p: unknown, _o: unknown, _dx: number, dy: number) => this.zoomBy(dy > 0 ? -0.25 : 0.25));
     this.game.events.on('zoom', (d: number) => this.zoomBy(d));
     this.game.events.on('recenter', () => this.recenter());
+    this.zoomLimits = { min: minZoom, max: () => 5 * DPR };
   }
+
+  private zoomLimits = { min: () => 1, max: () => 5 };
 
   private zoomBy(d: number) {
     const cam = this.cameras.main;
-    cam.setZoom(Phaser.Math.Clamp(cam.zoom + d, 1, 5));
+    cam.setZoom(Phaser.Math.Clamp(cam.zoom + d * DPR, this.zoomLimits.min(), this.zoomLimits.max()));
   }
 
+  /** 镜头回到角色；有任务时角色也走回任务地点 */
   private recenter() {
     this.following = true;
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
+    if (this.currentAction && this.manual) this.goToTask();
+  }
+
+  private playerTile() {
+    return { x: Math.floor(this.player.x / T), y: Math.floor(this.player.y / T) };
+  }
+
+  /** 点地面：角色走过去。任务照常在后台进行，只是不再播放干活动画 */
+  private moveTo(tx: number, ty: number) {
+    const path = findPath(this.playerTile(), { x: tx, y: ty });
+    this.showMarker(tx, ty, !!path);
+    if (!path) return;
+    this.manual = true;
+    this.stopWorking();
+    if (!this.following) this.recenterCameraOnly();
+    this.walkPath(path, () => {});
+  }
+
+  private recenterCameraOnly() {
+    this.following = true;
+    this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
+  }
+
+  private showMarker(tx: number, ty: number, ok: boolean) {
+    this.marker?.destroy();
+    const g = this.add.graphics().setDepth(999);
+    const cx = tx * T + T / 2;
+    const cy = ty * T + T / 2;
+    if (ok) {
+      g.lineStyle(1, 0xe8b84a, 1).strokeRect(cx - 6, cy - 6, 12, 12);
+    } else {
+      g.lineStyle(1.5, 0xd0566b, 1).lineBetween(cx - 4, cy - 4, cx + 4, cy + 4).lineBetween(cx + 4, cy - 4, cx - 4, cy + 4);
+    }
+    this.marker = g;
+    this.tweens.add({ targets: g, alpha: 0, duration: 900, delay: 300, onComplete: () => g.destroy() });
   }
 
   /** 队列首个任务变化时，角色走到对应资源点 */
@@ -200,20 +280,31 @@ export class MapScene extends Phaser.Scene {
     const action = store.state.queue[0]?.action;
     if (action === this.currentAction) return;
     this.currentAction = action;
-    const node = nodeForAction(action);
-    this.target = node ? { x: node.x, y: node.y + 1 } : { ...SPAWN };
-    this.foe?.destroy();
-    this.foe = undefined;
-    this.workTween?.stop();
-    this.playerBody.y = 0;
-    this.walkTo(this.target.x * T + T / 2, this.target.y * T + T / 2, () => this.startWorking());
-    if (action) this.recenter();
+    if (action) {
+      this.goToTask();
+      this.recenterCameraOnly();
+    } else {
+      this.stopWorking();
+    }
   }
 
-  private walkTo(px: number, py: number, done: () => void) {
+  private goToTask() {
+    const node = nodeForAction(this.currentAction);
+    if (!node) return;
+    this.manual = false;
+    this.stopWorking();
+    const path = findPath(this.playerTile(), { x: node.x, y: node.y + 1 }) ?? [];
+    this.walkPath(path, () => this.startWorking());
+  }
+
+  private walkPath(path: { x: number; y: number }[], done: () => void) {
     this.walkTween?.stop();
+    if (!path.length) return done();
+    const [step, ...rest] = path;
+    const px = step.x * T + T / 2;
+    const py = step.y * T + T / 2;
+    if (px !== this.player.x) this.playerBody.setFlipX(px < this.player.x);
     const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, px, py);
-    this.playerBody.setFlipX(px < this.player.x);
     this.walkTween = this.tweens.add({
       targets: this.player, x: px, y: py,
       duration: (dist / T / WALK_TILES_PER_SEC) * 1000,
@@ -223,14 +314,21 @@ export class MapScene extends Phaser.Scene {
       },
       onComplete: () => {
         this.playerBody.y = 0;
-        done();
+        this.walkPath(rest, done);
       },
     });
   }
 
+  private stopWorking() {
+    this.foe?.destroy();
+    this.foe = undefined;
+    this.workTween?.stop();
+    this.playerBody.setPosition(0, 0);
+  }
+
   private startWorking() {
     const a = this.currentAction ? ACTIONS[this.currentAction] : undefined;
-    if (!a) return;
+    if (!a || this.manual) return;
     if (a.kind === 'combat') {
       this.foe = this.add.image(this.player.x + 14, this.player.y, MONSTER_SPRITE[a.monster]).setFlipX(true);
       this.foe.setDepth(this.foe.y + 1000);

@@ -95,3 +95,35 @@ export const MONSTER_ZONES: { monster: string; x: number; y: number }[] = [
   { monster: 'wolf', x: 9, y: 27 },
   { monster: 'ash_wraith', x: 3, y: 27 },
 ];
+
+export const isWalkable = (x: number, y: number) => !isBlocked(x, y) && !isHouse(x, y);
+
+type Pt = { x: number; y: number };
+const DIRS: Pt[] = [
+  { x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 },
+  { x: 1, y: 1 }, { x: 1, y: -1 }, { x: -1, y: 1 }, { x: -1, y: -1 },
+];
+
+/** 8 方向 BFS 寻路，斜走时不切墙角；终点不可走时返回 null */
+export function findPath(from: Pt, to: Pt): Pt[] | null {
+  if (!isWalkable(to.x, to.y)) return null;
+  const key = (p: Pt) => p.y * MAP_W + p.x;
+  const prev = new Map<number, number>([[key(from), -1]]);
+  const queue: Pt[] = [from];
+  while (queue.length) {
+    const cur = queue.shift()!;
+    if (cur.x === to.x && cur.y === to.y) {
+      const path: Pt[] = [];
+      for (let k = key(cur); k !== -1; k = prev.get(k)!) path.unshift({ x: k % MAP_W, y: Math.floor(k / MAP_W) });
+      return path.slice(1);
+    }
+    for (const d of DIRS) {
+      const n = { x: cur.x + d.x, y: cur.y + d.y };
+      if (!isWalkable(n.x, n.y) || prev.has(key(n))) continue;
+      if (d.x && d.y && (!isWalkable(cur.x + d.x, cur.y) || !isWalkable(cur.x, cur.y + d.y))) continue;
+      prev.set(key(n), key(cur));
+      queue.push(n);
+    }
+  }
+  return null;
+}
