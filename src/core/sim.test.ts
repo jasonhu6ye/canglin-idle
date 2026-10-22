@@ -358,3 +358,15 @@ describe('集市', () => {
     expect(s.bank.copper_ore).toBeUndefined();
   });
 });
+
+describe('新手任务', () => {
+  it('砍够 10 个原木就完成第一个任务并发金币', () => {
+    let s = newGame(T0, 1);
+    const coins = s.bank.coins ?? 0;
+    s = startHere(s, 'chop_plain', { type: 'infinite' });
+    const { state, summary } = advance(s, T0 + HOUR);
+    expect(state.quest!.i).toBeGreaterThanOrEqual(1);
+    expect(summary.quests).toContain(0);
+    expect(state.bank.coins).toBeGreaterThanOrEqual(coins + 30);
+  });
+});

@@ -1,5 +1,6 @@
 import { ACTIONS, ITEMS, MAP_W, MONSTERS, nodeOfAction, NODES, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, travelMs } from './data';
 import { nextRandom } from './rng';
+import { stepQuests } from './quests';
 import { BONUS_PER_LEVEL, levelForXp, SPEED_PER_LEVEL, XP_TABLE } from './xp';
 import type {
   CombatAction, CombatStyle, EquipSlot, GameState, MonsterDef, SkillAction, SkillId, Summary, Task, TaskEndReason, TaskMode,
@@ -94,6 +95,7 @@ export function migrate(raw: unknown): GameState | null {
     travel: (s.mapSize ?? 1080) === MAP_W ? s.travel ?? null : null,
     walk: (s.mapSize ?? 1080) === MAP_W ? s.walk ?? null : null,
     bestiary: s.bestiary ?? {},
+    quest: s.quest ?? { i: 0, n: 0 },
     // 旧存档：现在拥有的东西都算获得过
     seen: s.seen ?? Object.fromEntries(
       [...Object.keys(keep(s.bank)), ...Object.keys(keep(s.bag)), ...Object.values(equipment)].filter((id) => id && ITEMS[id]).map((id) => [id, 1 as const]),
@@ -597,6 +599,8 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       if (isFinished(task)) endTask('complete');
     }
   }
+  const before = s.quest?.i ?? 0;
+  if (stepQuests(s, sum).length) sum.quests = Array.from({ length: (s.quest?.i ?? 0) - before }, (_, k) => before + k);
   return { state: s, summary: sum };
 }
 

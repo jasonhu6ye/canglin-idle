@@ -167,6 +167,8 @@ export interface GameState {
   regenMs: number;
   stats: { kills: number; deaths: number };
   /** 每种怪物击杀数（怪物图鉴用），旧存档没有 */
+  /** 新手任务：第几个、当前进度 */
+  quest?: { i: number; n: number };
   bestiary?: Record<string, number>;
   /** 角色所在的格子（寻路的起点） */
   loc: { x: number; y: number };
@@ -197,4 +199,6 @@ export interface Summary {
   bankTrips: number;
   ammoUsed: number;
   taskEnds: { action: string; reason: TaskEndReason }[];
+  /** 这段时间完成的新手任务（序号） */
+  quests?: number[];
 }

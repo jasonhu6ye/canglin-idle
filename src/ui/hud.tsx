@@ -1,4 +1,6 @@
-import { ACTIONS, MONSTERS, NODES, SKILLS } from '../core/data';
+import type { ReactNode } from 'react';
+import { ACTIONS, MONSTERS, nodeOfAction, NODES, SKILLS } from '../core/data';
+import { QUESTS, questProgress, questText } from '../core/quests';
 import { actionDuration, combatLevel, level, maxHp, removeTask, resumeWork, weaponStyle } from '../core/sim';
 import type { GameState, SkillId } from '../core/types';
 import { HERO_W, outfitOf, paintHeroSheet } from '../game/hero';
@@ -59,7 +61,7 @@ export function QueuePanel({ s }: { s: GameState }) {
   );
 }
 
-export function StatusChips({ s }: { s: GameState }) {
+export function StatusChips({ s, extra }: { s: GameState; extra?: ReactNode }) {
   const task = s.queue[0];
   const a = task && ACTIONS[task.action];
   let body = null;
@@ -104,6 +106,7 @@ export function StatusChips({ s }: { s: GameState }) {
   }
   return (
     <div className="chips">
+      {extra}
       {body && <div className="chip">{body}</div>}
       <div className="chip dim">⚔ 击杀 {fmtNum(s.stats.kills)} · 阵亡 {s.stats.deaths}</div>
     </div>
@@ -117,6 +120,21 @@ export function MapButtons({ onWorldMap }: { onWorldMap: () => void }) {
       <button onClick={() => emitToGame('zoom', 0.5)}>＋</button>
       <button onClick={() => emitToGame('zoom', -0.5)}>－</button>
       <button onClick={() => emitToGame('recenter')} title="回到角色">◎</button>
+    </div>
+  );
+}
+
+/** 新手任务卡片：当前目标、进度、去做 */
+export function QuestCard({ s, onGo }: { s: GameState; onGo: (nodeId: string) => void }) {
+  const p = questProgress(s);
+  if (!p) return null;
+  const node = nodeOfAction(p.q.hint);
+  const idx = (s.quest?.i ?? 0) + 1;
+  return (
+    <div className="chip quest">
+      <b className="gold">新手任务 {idx}/{QUESTS.length}</b> {questText(p.q)}
+      <span className="muted"> {p.have}/{p.q.goal.n} · 奖励 {p.q.reward} 金币</span>
+      {node && <button className="pill" onClick={() => onGo(node.id)}>去做</button>}
     </div>
   );
 }
