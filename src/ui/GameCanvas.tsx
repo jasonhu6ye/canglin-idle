@@ -35,7 +35,8 @@ export function GameCanvas({ onNodeClick }: { onNodeClick: (nodeId: string) => v
       type: Phaser.AUTO,
       parent: el,
       pixelArt: true,
-      roundPixels: true,
+      // 不取整：角色和镜头按屏幕像素平滑移动，否则放大后会一格一格地跳
+      roundPixels: false,
       scale: { mode: Phaser.Scale.NONE, width: w, height: h, zoom: 1 / DPR },
       scene: [MapScene],
       banner: false,

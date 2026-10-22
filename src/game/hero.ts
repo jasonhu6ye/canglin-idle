@@ -326,7 +326,7 @@ function keys(k: [number, number][], t: number) {
 export interface HeroAnim { key: string; frames: number; rate: number; pose: (t: number, i: number) => Pose }
 
 const walk = (dir: HeroDir): HeroAnim => ({
-  key: `walk-${dir}`, frames: 8, rate: 12,
+  key: `walk-${dir}`, frames: 12, rate: 18,
   pose: (t) => {
     const s = Math.sin(t * TAU);
     const bob = Math.abs(Math.cos(t * TAU)) > 0.7 ? 0 : -1;
@@ -337,8 +337,8 @@ const walk = (dir: HeroDir): HeroAnim => ({
 });
 
 const idle = (dir: HeroDir): HeroAnim => ({
-  key: `idle-${dir}`, frames: 4, rate: 4,
-  pose: (_t, i) => ({ dir, bob: i === 2 ? 1 : 0, armF: 0.1, armB: -0.1, cape: i === 1 || i === 2 ? 1 : 0 }),
+  key: `idle-${dir}`, frames: 8, rate: 6,
+  pose: (t) => ({ dir, bob: Math.sin(t * TAU) > 0.5 ? 1 : 0, armF: 0.1 + Math.sin(t * TAU) * 0.05, armB: -0.1, cape: Math.round(1 + Math.sin(t * TAU)) }),
 });
 
 /** 双手挥动的工具：从 from 抡到 to */

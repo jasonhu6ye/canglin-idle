@@ -44,7 +44,6 @@ export class MapScene extends Phaser.Scene {
   private playerBody!: Phaser.GameObjects.Sprite;
   private facing: HeroDir = 'down';
   private foe?: Phaser.GameObjects.Image;
-  private walkTween?: Phaser.Tweens.Tween;
   private workTween?: Phaser.Tweens.Tween;
   private marker?: Phaser.GameObjects.Graphics;
   private currentAction?: string;
@@ -247,13 +246,14 @@ export class MapScene extends Phaser.Scene {
 
   private updateChunks() {
     const v = this.cameras.main.worldView;
-    const pad = 2 * T;
+    // 提前加载视野外几格，走到之前就画好，避免边走边卡
+    const pad = 8 * T;
     const x0 = Math.floor((v.x - pad) / (CHUNK * T));
     const x1 = Math.floor((v.right + pad) / (CHUNK * T));
     const y0 = Math.floor((v.y - pad) / (CHUNK * T));
     // 高的树会从下一块伸上来，下边多加载一块
     const y1 = Math.floor((v.bottom + pad + 4 * T) / (CHUNK * T));
-    let budget = this.chunks.size === 0 ? Infinity : 2;
+    let budget = this.chunks.size === 0 ? Infinity : 1;
     const maxX = Math.ceil(MAP_W / CHUNK) - 1;
     const maxY = Math.ceil(MAP_H / CHUNK) - 1;
     for (let cy = Math.max(0, y0); cy <= Math.min(maxY, y1); cy++) {
@@ -266,7 +266,7 @@ export class MapScene extends Phaser.Scene {
     for (const [key, objs] of this.chunks) {
       const cx = key % 1000;
       const cy = Math.floor(key / 1000);
-      if (cx < x0 - 1 || cx > x1 + 1 || cy < y0 - 1 || cy > y1 + 1) {
+      if (cx < x0 - 2 || cx > x1 + 2 || cy < y0 - 2 || cy > y1 + 2) {
         for (const o of objs) o.destroy();
         this.chunks.delete(key);
       }
@@ -274,7 +274,8 @@ export class MapScene extends Phaser.Scene {
     this.glows = this.glows.filter((g) => g.img.active);
   }
 
-  update(time: number) {
+  update(time: number, delta: number) {
+    this.stepWalker(delta);
     this.updateChunks();
     for (const g of this.glows) g.img.setAlpha(g.base + Math.sin(time / 380 + g.phase) * 0.12 + (hash(Math.floor(time / 90), g.phase * 100) - 0.5) * 0.08);
     this.updateParticles();
@@ -467,7 +468,7 @@ export class MapScene extends Phaser.Scene {
     const fit = () => cam.setZoom(Phaser.Math.Clamp((cssWidth() / (cssWidth() > 700 ? 26 : 15)) / T, 1.5, 4) * DPR);
     fit();
     this.scale.on('resize', fit);
-    cam.startFollow(this.player, true, 0.08, 0.08);
+    cam.startFollow(this.player, false, 0.12, 0.12);
 
     this.input.addPointer(1);
     let pinchStart = 0;
@@ -542,7 +543,7 @@ export class MapScene extends Phaser.Scene {
 
   private recenterCameraOnly() {
     this.following = true;
-    this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
+    this.cameras.main.startFollow(this.player, false, 0.12, 0.12);
   }
 
   private playerTile() {
@@ -553,7 +554,7 @@ export class MapScene extends Phaser.Scene {
   private teleport(nodeId: string) {
     const n = NODES.find((x) => x.id === nodeId);
     if (!n) return;
-    this.walkTween?.stop();
+    this.walker = undefined;
     this.clearRoute();
     this.stopWorking();
     store.dispatch((g) => teleportState(g, nodeId));
@@ -666,30 +667,83 @@ export class MapScene extends Phaser.Scene {
     this.route = undefined;
   }
 
-  private walkPath(path: { x: number; y: number }[], done: () => void, speed?: number) {
-    this.walkTween?.stop();
-    if (!path.length) return done();
-    const [step, ...rest] = path;
-    const px = step.x * T + T / 2;
-    const py = step.y * T + T / 2;
-    const dx = px - this.player.x;
-    const dy = py - this.player.y;
-    if (dx || dy) {
-      this.facing = Math.abs(dx) >= Math.abs(dy) ? 'side' : dy > 0 ? 'down' : 'up';
-      if (this.facing === 'side') this.playerBody.setFlipX(dx < 0);
-      this.playerBody.anims.timeScale = (speed ?? WALK_TILES_PER_SEC * speedMultiplier) / WALK_TILES_PER_SEC;
-      this.playerBody.play(`walk-${this.facing}`, true);
+  /** 拉直路径：能直线走过去的拐点都去掉，斜着走不再走锯齿 */
+  private smoothPath(path: { x: number; y: number }[]) {
+    const clear = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+      const n = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) * 3);
+      for (let i = 1; i < n; i++) {
+        const x = a.x + ((b.x - a.x) * i) / n;
+        const y = a.y + ((b.y - a.y) * i) / n;
+        // 角色有身宽，检查四个角
+        for (const [ox, oy] of [[-0.3, -0.3], [0.3, -0.3], [-0.3, 0.3], [0.3, 0.3]]) {
+          if (!isWalkable(Math.round(x + ox), Math.round(y + oy))) return false;
+        }
+      }
+      return true;
+    };
+    const out: { x: number; y: number }[] = [];
+    let from = this.playerTile();
+    let i = 0;
+    while (i < path.length) {
+      let j = Math.min(path.length - 1, i + 16);
+      while (j > i && !clear(from, path[j])) j--;
+      out.push(path[j]);
+      from = path[j];
+      i = j + 1;
     }
-    const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, px, py);
-    this.walkTween = this.tweens.add({
-      targets: this.player, x: px, y: py,
-      duration: (dist / T / (speed ?? WALK_TILES_PER_SEC * speedMultiplier)) * 1000,
-      onUpdate: () => this.player.setDepth(this.player.y + 1000),
-      onComplete: () => {
-        if (!rest.length) this.idle();
-        this.walkPath(rest, done, speed);
-      },
-    });
+    return out;
+  }
+
+  private walker?: { pts: { x: number; y: number }[]; i: number; speed: number; done: () => void };
+
+  /** 沿路径匀速走：每帧按经过的时间移动，不再一格一个补间 */
+  private walkPath(path: { x: number; y: number }[], done: () => void, speed?: number) {
+    this.walker = undefined;
+    if (!path.length) return done();
+    const tps = speed ?? WALK_TILES_PER_SEC * speedMultiplier;
+    this.playerBody.anims.timeScale = tps / WALK_TILES_PER_SEC;
+    this.walker = {
+      pts: this.smoothPath(path).map((p) => ({ x: p.x * T + T / 2, y: p.y * T + T / 2 })),
+      i: 0, speed: tps * T, done,
+    };
+  }
+
+  private stepWalker(delta: number) {
+    const w = this.walker;
+    if (!w) return;
+    let move = (w.speed * Math.min(delta, 100)) / 1000;
+    let dx = 0;
+    let dy = 0;
+    while (move > 0 && w.i < w.pts.length) {
+      const t = w.pts[w.i];
+      dx = t.x - this.player.x;
+      dy = t.y - this.player.y;
+      const d = Math.hypot(dx, dy);
+      if (d <= move) {
+        this.player.setPosition(t.x, t.y);
+        move -= d;
+        w.i++;
+      } else {
+        this.player.setPosition(this.player.x + (dx / d) * move, this.player.y + (dy / d) * move);
+        move = 0;
+      }
+    }
+    this.player.setDepth(this.player.y + 1000);
+    if (dx || dy) {
+      // 朝向带一点迟滞，斜着走时不会在侧面和正面之间来回闪
+      const ax = Math.abs(dx);
+      const ay = Math.abs(dy);
+      const next: HeroDir = this.facing === 'side' ? (ay > ax * 1.6 ? (dy > 0 ? 'down' : 'up') : 'side')
+        : ax > ay * 1.6 ? 'side' : dy > 0 ? 'down' : 'up';
+      this.facing = next;
+      if (next === 'side' && ax > 0.01) this.playerBody.setFlipX(dx < 0);
+      this.playerBody.play(`walk-${next}`, true);
+    }
+    if (w.i >= w.pts.length) {
+      this.walker = undefined;
+      this.idle();
+      w.done();
+    }
   }
 
   private stopWorking() {
