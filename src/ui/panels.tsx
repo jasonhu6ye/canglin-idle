@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ACTIONS, ITEMS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, type MapNode } from '../core/data';
 import {
-  atBank, BAG_SLOTS, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip,
+  atBank, atMarket, BAG_SLOTS, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip,
   weaponStyle,
 } from '../core/sim';
 import type { EquipSlot, GameState, ItemCategory, SkillId, Summary } from '../core/types';
@@ -69,10 +69,18 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
         )}
         {from === 'bank' && id !== 'coins' && (
           <>
-            <button onClick={() => store.dispatch((g) => sell(g, id, 1))}>卖 1 个</button>
-            <button onClick={() => store.dispatch((g) => sell(g, id, qty))}>全部卖出</button>
+            <button disabled={!atMarket(s)} onClick={() => store.dispatch((g) => sell(g, id, 1))}>卖 1 个</button>
+            <button disabled={!atMarket(s)} onClick={() => store.dispatch((g) => sell(g, id, qty))}>全部卖出</button>
           </>
         )}
+      </div>
+      {from === 'bank' && id !== 'coins' && !atMarket(s) && (
+        <div className="go far-bank">
+          <span className="muted">卖东西要走到城镇的集市</span>
+          <button onClick={() => store.requestWalk('market')}>寻路去集市</button>
+        </div>
+      )}
+      <div className="go">
         {from === 'bag' && <button className="primary" disabled={!near} onClick={() => store.dispatch((g) => toBank(g, id, qty))}>放回仓库</button>}
       </div>
     </div>

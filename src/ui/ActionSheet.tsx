@@ -166,14 +166,14 @@ function CombatInfo({ s, monster }: { s: GameState; monster: string }) {
   const m = MONSTERS[monster];
   const st = combatStats(s, m);
   const food = bestFood(s) ?? bestFood(s, s.bank);
-  const ammo = bestAmmo(s);
+  const ammo = bestAmmo(s, weaponStyle(s), true);
   const foodCount = [s.bank, s.bag].reduce((n, rec) => n + Object.entries(rec).reduce((m, [id, q]) => m + (ITEMS[id]?.heals ? q : 0), 0), 0);
   return (
     <span className="combat-info">
       <span>你用{SKILLS[st.style].name}：命中 {Math.round(st.playerHit * 100)}% · 最高 {st.playerMaxHit}</span>
       <span>它的命中 {Math.round(st.monsterHit * 100)}% · 最高 {st.monsterMaxHit}</span>
       {st.style !== 'melee' && (
-        <span className={ammo ? '' : 'warn'}>{ammo ? `弹药：${ITEMS[ammo.id].name}` : `没有${st.style === 'ranged' ? '箭' : '符文'}！会立刻停止`}</span>
+        <span className={ammo ? '' : 'warn'}>{ammo ? `弹药：${ITEMS[ammo.id].name}${ammo.inBag ? '' : '（在仓库，开战前回去拿）'}` : `没有${st.style === 'ranged' ? '箭' : '符文'}！会立刻停止`}</span>
       )}
       <span className={food ? '' : 'warn'}>{food ? `食物：最好的是${ITEMS[food].name}，共 ${fmtNum(foodCount)} 份` : '没有食物！挂机可能阵亡'}</span>
     </span>

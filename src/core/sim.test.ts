@@ -1,4 +1,4 @@
-import { actionDuration, advance, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour } from './sim';
+import { actionDuration, advance, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour } from './sim';
 import { levelForXp, XP_TABLE } from './xp';
 import type { GameState, SkillAction, TaskMode } from './types';
 import { ACTIONS, nodeOfAction, standOf, travelMs } from './data';
@@ -345,5 +345,16 @@ describe('手动寻路', () => {
     const r = advance(s, T0 + 5001).state;
     expect(r.walk).toBeNull();
     expect(r.travel?.total).toBe(travelMs({ x: 120, y: 100 }, standOf(nodeOfAction('chop_plain')!)));
+  });
+});
+
+describe('集市', () => {
+  it('只有站在集市旁才能卖', () => {
+    let s = newGame(T0, 1);
+    s.bank.copper_ore = 10;
+    expect(sell(s, 'copper_ore', 10)).toBe(s);
+    s.loc = marketStand();
+    s = sell(s, 'copper_ore', 10);
+    expect(s.bank.copper_ore).toBeUndefined();
   });
 });

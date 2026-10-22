@@ -188,11 +188,12 @@ export function bestFood(s: GameState, from: Record<string, number> = s.bag): st
   return best;
 }
 
-/** 当前武器能用的最好的弹药：先找背包，再找仓库 */
-export function bestAmmo(s: GameState, style = weaponStyle(s)): { id: string; inBag: boolean } | undefined {
+/** 当前武器能用的最好的弹药。战斗里只用背包的；withBank 用来估算（开战前会回仓库补） */
+export function bestAmmo(s: GameState, style = weaponStyle(s), withBank = false): { id: string; inBag: boolean } | undefined {
   if (style === 'melee') return undefined;
   let best: { id: string; inBag: boolean } | undefined;
   for (const [store, inBag] of [[s.bag, true], [s.bank, false]] as const) {
+    if (!inBag && !withBank) continue;
     for (const [id, qty] of Object.entries(store)) {
       const a = ITEMS[id]?.ammo;
       if (!a || a.style !== style || qty <= 0) continue;
@@ -213,7 +214,7 @@ export function combatStats(s: GameState, m: MonsterDef) {
   const style = weaponStyle(s);
   const lvl = level(s, style);
   const b = playerBonuses(s, style);
-  const ammo = bestAmmo(s, style);
+  const ammo = bestAmmo(s, style, true);
   const strength = b.strength + (ammo ? ITEMS[ammo.id].ammo!.power : 0);
   const has = (t: string) => m.traits.includes(t);
   // 抗性和弱点只影响对应战斗方式的伤害
@@ -306,6 +307,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       }
       if (supply) {
         carryFood();
+        carryAmmo();
         s.queue[0].stocked = true;
       }
       sum.bankTrips++;
@@ -382,7 +384,21 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   const bagFood = () => Object.entries(s.bag).reduce((n, [id, q]) => n + (healOf(id) ? q : 0), 0);
   /** 背包里的食物不够设定数量，仓库里又有：要先回仓库拿 */
   const needSupply = () =>
-    bagFood() < foodTarget() && Object.keys(s.bank).some((id) => healOf(id) > 0 && bagRoomFor(s.bag, id) > 0);
+    (bagFood() < foodTarget() && Object.keys(s.bank).some((id) => healOf(id) > 0 && bagRoomFor(s.bag, id) > 0))
+    || (!bestAmmo(s) && !!bestAmmo(s, weaponStyle(s), true));
+
+  /** 在仓库旁把当前武器能用的弹药全部带上，好的先拿 */
+  const carryAmmo = () => {
+    const style = weaponStyle(s);
+    const ids = Object.keys(s.bank).filter((id) => ITEMS[id]?.ammo?.style === style).sort((a, b) => ITEMS[b].ammo!.power - ITEMS[a].ammo!.power);
+    for (const id of ids) {
+      const n = Math.min(s.bank[id], bagRoomFor(s.bag, id));
+      if (n <= 0) continue;
+      s.bank[id] -= n;
+      if (s.bank[id] <= 0) delete s.bank[id];
+      addBag(id, n);
+    }
+  };
 
   /** 在仓库旁按设置把食物和药水补进背包，好的先拿 */
   const carryFood = () => {
@@ -472,9 +488,16 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     if (c.playerTimerMs <= 0) {
       if (st.style !== 'melee') {
         const ammo = bestAmmo(s, st.style);
-        if (!ammo) return endTask('noAmmo'), step;
-        if (ammo.inBag) addBag(ammo.id, -1);
-        else addItem(ammo.id, -1);
+        if (!ammo) {
+          // 背包打空了：仓库还有就回去补，没有才停
+          if (bestAmmo(s, st.style, true)) {
+            s.combat = null;
+            task.stocked = false;
+            return step;
+          }
+          return endTask('noAmmo'), step;
+        }
+        addBag(ammo.id, -1);
         sum.ammoUsed++;
       }
       c.playerTimerMs += playerAttackMs(s);
@@ -688,7 +711,7 @@ export const BANK_REACH = 5;
 const BANK_STAND = standOf(NODES.find((n) => n.id === 'bank')!);
 export const bankStand = () => ({ ...BANK_STAND });
 export function atBank(s: GameState): boolean {
-  return !s.travel && Math.hypot(s.loc.x - BANK_STAND.x, s.loc.y - BANK_STAND.y) <= BANK_REACH;
+  return !s.travel && !s.walk && Math.hypot(s.loc.x - BANK_STAND.x, s.loc.y - BANK_STAND.y) <= BANK_REACH;
 }
 
 /** 卸下装备：放进背包；背包满了，人在仓库旁才能放回仓库 */
@@ -735,10 +758,17 @@ export function depositLoot(prev: GameState): GameState {
   return s;
 }
 
+/** 卖东西要站在城镇集市旁 */
+const MARKET_STAND = standOf(NODES.find((n) => n.id === 'market')!);
+export const marketStand = () => ({ ...MARKET_STAND });
+export function atMarket(s: GameState): boolean {
+  return !s.travel && !s.walk && Math.hypot(s.loc.x - MARKET_STAND.x, s.loc.y - MARKET_STAND.y) <= BANK_REACH;
+}
+
 export function sell(prev: GameState, item: string, qty: number): GameState {
   const have = prev.bank[item] ?? 0;
   const n = Math.min(have, qty);
-  if (item === 'coins' || n <= 0) return prev;
+  if (item === 'coins' || n <= 0 || !atMarket(prev)) return prev;
   const s = clone(prev);
   s.bank[item] = have - n;
   if (s.bank[item] <= 0) delete s.bank[item];
