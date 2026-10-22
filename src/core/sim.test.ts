@@ -11,6 +11,8 @@ function startHere(s: GameState, action: string, mode: TaskMode) {
 }
 
 const T0 = 1_700_000_000_000;
+/** 背包加仓库里一共有多少 */
+const owned = (s: GameState, id: string) => (s.bag[id] ?? 0) + (s.bank[id] ?? 0) || undefined;
 const HOUR = 3_600_000;
 
 describe('经验曲线', () => {
@@ -27,8 +29,10 @@ describe('采集', () => {
   it('挖石头 1 小时 = 1200 次', () => {
     const s = startHere(newGame(T0, 1), 'mine_stone', { type: 'infinite' });
     const { state, summary } = advance(s, T0 + HOUR);
-    expect(state.bank.stone).toBe(1200);
-    expect(summary.xp.mining).toBe(12_000);
+    // 背包装满 2000 个后要回仓库存一趟，所以略少于 1200 次
+    expect(summary.items.stone).toBe(owned(state, 'stone'));
+    expect(owned(state, 'stone')).toBeLessThanOrEqual(1200);
+    expect(owned(state, 'stone')).toBeGreaterThan(1100);
     expect(state.queue).toHaveLength(1);
   });
 
@@ -36,8 +40,8 @@ describe('采集', () => {
     let s = startHere(newGame(T0, 1), 'mine_stone', { type: 'count', count: 10 });
     s = enqueue(s, 'chop_plain', { type: 'count', count: 5 });
     const { state, summary } = advance(s, T0 + HOUR);
-    expect(state.bank.stone).toBe(10);
-    expect(state.bank.plain_log).toBe(5);
+    expect(state.bag.stone).toBe(10);
+    expect(state.bag.plain_log).toBe(5);
     expect(state.queue).toHaveLength(0);
     expect(summary.taskEnds.map((t) => t.reason)).toEqual(['complete', 'complete']);
   });
@@ -57,7 +61,7 @@ describe('制作', () => {
     s.bank.tin_ore = 5;
     s = startHere(s, 'smelt_tin', { type: 'infinite' });
     const { state, summary } = advance(s, T0 + HOUR);
-    expect(state.bank.tin_bar).toBe(2);
+    expect(state.bag.tin_bar).toBe(2);
     expect(state.bank.tin_ore).toBe(1);
     expect(summary.taskEnds[0].reason).toBe('noInput');
   });
@@ -113,8 +117,7 @@ describe('离线结算', () => {
 
   it('离线最多结算 24 小时', () => {
     const s = startHere(newGame(T0, 1), 'mine_stone', { type: 'infinite' });
-    const { state } = advance(s, T0 + 48 * HOUR);
-    expect(state.bank.stone).toBe(24 * 1200);
+    expect(advance(s, T0 + 48 * HOUR).state).toEqual({ ...advance(s, T0 + 24 * HOUR).state, lastTick: T0 + 48 * HOUR });
   });
 
   it('时间倒退不会产出', () => {
@@ -184,8 +187,8 @@ describe('背包与战斗方式', () => {
   it('工具加快采集', () => {
     const s = newGame(T0, 1);
     s.equipment.pickaxe = 'wood_pickaxe';
-    const { state } = advance(startHere(s, 'mine_stone', { type: 'infinite' }), T0 + HOUR);
-    expect(state.bank.stone).toBe(Math.floor(HOUR / Math.round(3000 / 1.04)));
+    const { state } = advance(startHere(s, 'mine_stone', { type: 'count', count: 300 }), T0 + 300 * 2885);
+    expect(state.bag.stone).toBe(300);
   });
 });
 
@@ -215,7 +218,17 @@ describe('自动寻路', () => {
     const { state } = advance(s, T0 + walk + 3000);
     expect(state.travel).toBeNull();
     expect(state.loc).toEqual(standOf(nodeOfAction('mine_stone')!));
-    expect(state.bank.stone).toBe(1);
+    expect(state.bag.stone).toBe(1);
+  });
+
+  it('背包满了自动回仓库存东西，再走回去接着干', () => {
+    const s = startHere(newGame(T0, 1), 'mine_stone', { type: 'infinite' });
+    s.bag = { sapphire: 1900 };
+    const { state, summary } = advance(s, T0 + HOUR);
+    expect(summary.bankTrips).toBeGreaterThan(0);
+    expect(state.bank.sapphire).toBe(1900);
+    expect(owned(state, 'stone')).toBe(summary.items.stone);
+    expect(Object.values(state.bag).reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(2000);
   });
 });
 

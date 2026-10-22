@@ -84,8 +84,10 @@ export class MapScene extends Phaser.Scene {
 
     this.setupCamera();
     this.currentAction = task?.action;
+    this.travelTo = store.state.travel?.to;
     if (task) {
-      if (store.state.travel) this.goToTask();
+      if (store.state.travel?.to === 'bank') this.goToTask(NODES.find((n) => n.id === 'bank'));
+      else if (store.state.travel) this.goToTask();
       else this.startWorking();
     }
     this.updateLabels();
@@ -598,9 +600,21 @@ export class MapScene extends Phaser.Scene {
   }
 
   /** 队列首个任务变化时，角色走到对应资源点 */
+  private travelTo?: string;
+
   private syncTask() {
     const action = store.state.queue[0]?.action;
-    if (action === this.currentAction) return;
+    const to = store.state.travel?.to;
+    if (action === this.currentAction) {
+      // 背包满了回仓库，或者存完东西走回资源点
+      if (to !== this.travelTo) {
+        this.travelTo = to;
+        if (to === 'bank') this.goToTask(NODES.find((n) => n.id === 'bank'));
+        else if (to && !this.manual) this.goToTask();
+      }
+      return;
+    }
+    this.travelTo = to;
     const sameNode = nodeForAction(action) === nodeForAction(this.currentAction);
     this.currentAction = action;
     if (!action) {
@@ -617,9 +631,10 @@ export class MapScene extends Phaser.Scene {
   }
 
   /** 自动寻路去任务地点：走路时间和存档里的一致，到了才开始干活 */
-  private goToTask() {
-    const node = nodeForAction(this.currentAction);
+  private goToTask(target?: MapNode) {
+    const node = target ?? nodeForAction(this.currentAction);
     if (!node) return;
+    const toBank = !!target;
     this.manual = false;
     this.stopWorking();
     const dest = standTile(node);
@@ -639,9 +654,11 @@ export class MapScene extends Phaser.Scene {
       speed = len / (ms / 1000);
     }
     this.drawRoute(path);
+    if (toBank) this.float('背包满了，回仓库', '#e8b84a');
     this.walkPath(path, () => {
       this.clearRoute();
-      this.startWorking();
+      if (toBank) this.float('已存入仓库', '#9ad8ff', true);
+      else this.startWorking();
     }, speed);
   }
 

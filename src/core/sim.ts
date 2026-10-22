@@ -84,7 +84,7 @@ export function migrate(raw: unknown): GameState | null {
 }
 
 export function emptySummary(): Summary {
-  return { elapsedMs: 0, xp: {}, items: {}, levelUps: [], kills: {}, deaths: 0, foodEaten: 0, ammoUsed: 0, taskEnds: [] };
+  return { elapsedMs: 0, xp: {}, items: {}, levelUps: [], kills: {}, deaths: 0, foodEaten: 0, ammoUsed: 0, bankTrips: 0, taskEnds: [] };
 }
 
 export const level = (s: GameState, skill: SkillId) => levelForXp(s.xp[skill]);
@@ -215,6 +215,72 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     return r;
   };
 
+  /** 采集、制作、打怪的产出进背包；万一放不下，多出来的才进仓库 */
+  const addLoot = (item: string, qty: number) => {
+    const n = Math.min(qty, bagRoomFor(s.bag, item));
+    if (n > 0) s.bag[item] = (s.bag[item] ?? 0) + n;
+    if (qty > n) s.bank[item] = (s.bank[item] ?? 0) + qty - n;
+    s.seen[item] = 1;
+    sum.items[item] = (sum.items[item] ?? 0) + qty;
+  };
+
+  /** 材料先用背包里的，不够再从仓库扣 */
+  const haveItem = (item: string) => (s.bag[item] ?? 0) + (s.bank[item] ?? 0);
+  const useItem = (item: string, qty: number) => {
+    const fromBag = Math.min(qty, s.bag[item] ?? 0);
+    if (fromBag) {
+      addBag(item, -fromBag);
+      sum.items[item] = (sum.items[item] ?? 0) - fromBag;
+    }
+    if (qty > fromBag) addItem(item, -(qty - fromBag));
+  };
+
+  /** 背包能不能把这些东西一起装下 */
+  const fits = (items: string[]) => {
+    const bag = { ...s.bag };
+    for (const id of items) {
+      if (bagRoomFor(bag, id) < 1) return false;
+      bag[id] = (bag[id] ?? 0) + 1;
+    }
+    return true;
+  };
+  const lootOf = (a: SkillAction | CombatAction) => {
+    const out: string[] = [];
+    const push = (id: string, q: number) => { for (let i = 0; i < Math.min(q, 100); i++) out.push(id); };
+    if (a.kind === 'skill') {
+      a.outputs.forEach((o) => push(o.item, o.qty));
+      if (a.fail?.item) push(a.fail.item, 1);
+    } else MONSTERS[a.monster].drops.forEach((d) => push(d.item, d.qty));
+    return out;
+  };
+
+  /** 背包满了：走回仓库，存下除食物和弹药外的东西，再走回来接着干 */
+  const stepBankTrip = (budget: number): number => {
+    const bank = NODES.find((n) => n.id === 'bank')!;
+    const dest = standOf(bank);
+    if (!s.travel || s.travel.to !== 'bank') {
+      const ms = travelMs(s.loc, dest);
+      s.travel = { to: 'bank', ms, total: ms };
+    }
+    const step = Math.min(budget, s.travel.ms);
+    s.travel.ms -= step;
+    if (s.travel.ms <= 0) {
+      s.loc = dest;
+      s.travel = null;
+      const keep = (id: string) => healOf(id) > 0 || !!ITEMS[id]?.ammo;
+      for (const pass of [false, true]) {
+        for (const [id, q] of Object.entries(s.bag)) {
+          if (!pass && keep(id)) continue;
+          s.bank[id] = (s.bank[id] ?? 0) + q;
+          delete s.bag[id];
+        }
+        if (!pass && BAG_SLOTS - bagSlotsUsed(s.bag) >= 5) break;
+      }
+      sum.bankTrips++;
+    }
+    return Math.max(step, 1);
+  };
+
   const addItem = (item: string, qty: number) => {
     s.bank[item] = (s.bank[item] ?? 0) + qty;
     if (s.bank[item] <= 0) delete s.bank[item];
@@ -298,7 +364,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   const stepSkill = (task: Task, a: SkillAction, budget: number): number => {
     if (s.progressMs === 0) {
       if (level(s, a.skill) < a.level) return endTask('level'), 0;
-      if (a.inputs && !a.inputs.every((i) => (s.bank[i.item] ?? 0) >= i.qty)) return endTask('noInput'), 0;
+      if (a.inputs && !a.inputs.every((i) => haveItem(i.item) >= i.qty)) return endTask('noInput'), 0;
     }
     // 进度为负表示偷窃失败后的晕眩，先走完晕眩停在 0，再做下一次的条件检查
     const duration = actionDuration(s, a);
@@ -306,15 +372,15 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     s.progressMs += step;
     if (s.progressMs >= duration) {
       s.progressMs = 0;
-      a.inputs?.forEach((i) => addItem(i.item, -i.qty));
+      a.inputs?.forEach((i) => useItem(i.item, i.qty));
       const failChance = a.fail
         ? Math.max(0, a.fail.chance * (a.fail.noFailLevel - level(s, a.skill)) / (a.fail.noFailLevel - a.level))
         : 0;
       if (a.fail && rand() < failChance) {
-        if (a.fail.item) addItem(a.fail.item, 1);
+        if (a.fail.item) addLoot(a.fail.item, 1);
         if (a.fail.stunMs) s.progressMs = -a.fail.stunMs;
       } else {
-        for (const o of a.outputs) if (o.chance === undefined || rand() < o.chance) addItem(o.item, o.qty);
+        for (const o of a.outputs) if (o.chance === undefined || rand() < o.chance) addLoot(o.item, o.qty);
         addXp(a.skill, a.xp);
       }
       task.done++;
@@ -356,7 +422,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         addXp('hitpoints', dmg / 3);
       }
       if (c.monsterHp <= 0) {
-        for (const d of m.drops) if (d.chance === undefined || rand() < d.chance) addItem(d.item, d.qty);
+        for (const d of m.drops) if (d.chance === undefined || rand() < d.chance) addLoot(d.item, d.qty);
         sum.kills[m.id] = (sum.kills[m.id] ?? 0) + 1;
         s.stats.kills++;
         task.done++;
@@ -386,10 +452,24 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       regen(s, dt);
       break;
     }
-    const walked = stepTravel(task, dt);
+    const a0 = ACTIONS[task.action];
+    // 新一轮开始前（采集一次 / 打下一只怪前）检查背包，装不下就先回仓库
+    const between = a0.kind === 'skill' ? s.progressMs === 0 : !s.combat || s.combat.respawnMs > 0;
+    if (s.travel?.to === 'bank' || (between && !s.travel && !fits(lootOf(a0)))) {
+      // 定时任务的时间也算上来回仓库的路
+      const used = stepBankTrip(Math.min(dt, timeLeft(task)));
+      dt -= used;
+      regen(s, used);
+      task.elapsedMs += used;
+      if (isFinished(task)) endTask('complete');
+      continue;
+    }
+    const walked = stepTravel(task, Math.min(dt, timeLeft(task)));
     if (walked) {
       dt -= walked;
       regen(s, walked);
+      task.elapsedMs += walked;
+      if (isFinished(task)) endTask('complete');
       continue;
     }
     const a = ACTIONS[task.action];
@@ -502,6 +582,17 @@ export function toBank(prev: GameState, item: string, qty: number): GameState {
   s.bag[item] -= n;
   if (s.bag[item] <= 0) delete s.bag[item];
   s.bank[item] = (s.bank[item] ?? 0) + n;
+  return s;
+}
+
+/** 背包里除了食物和弹药，全部存进仓库 */
+export function depositLoot(prev: GameState): GameState {
+  const s = clone(prev);
+  for (const [id, q] of Object.entries(s.bag)) {
+    if (healOf(id) > 0 || ITEMS[id]?.ammo) continue;
+    s.bank[id] = (s.bank[id] ?? 0) + q;
+    delete s.bag[id];
+  }
   return s;
 }
 

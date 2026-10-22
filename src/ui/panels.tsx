@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ACTIONS, ITEMS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, type MapNode } from '../core/data';
 import {
-  BAG_SLOTS, BAG_STACK, bagRoomFor, bagSlotsUsed, combatLevel, equip, level, playerBonuses, sell, setSettings, toBag, toBank, slotSpeed, unequip,
+  BAG_SLOTS, BAG_STACK, bagRoomFor, bagSlotsUsed, combatLevel, equip, level, playerBonuses, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip,
   weaponStyle,
 } from '../core/sim';
 import type { EquipSlot, GameState, ItemCategory, SkillId, Summary } from '../core/types';
@@ -144,6 +144,7 @@ export function BagPanel({ s }: { s: GameState }) {
       <div className="bag-meter"><i style={{ width: `${(used / BAG_SLOTS) * 100}%` }} /></div>
       <ItemGrid items={items} sel={sel} onSel={setSel} empty={Math.max(0, BAG_SLOTS - used)} />
       {sel && <ItemDetail s={s} id={sel} from="bag" />}
+      {items.length > 0 && <button className="primary" onClick={() => store.dispatch(depositLoot)}>全部存入仓库（保留食物和弹药）</button>}
       <div className="opts">
         <span className="lbl">开战自动从仓库带食物</span>
         {[20, 50, 100, -1].map((n) => (
@@ -152,7 +153,7 @@ export function BagPanel({ s }: { s: GameState }) {
           </button>
         ))}
       </div>
-      <p className="muted">战斗只吃背包里的食物、只用背包里的弹药（背包没有时才从仓库补）。采集和制作的产出直接存进仓库。</p>
+      <p className="muted">战斗只吃背包里的食物、只用背包里的弹药（背包没有时才从仓库补）。采集、制作和打怪的产出先放进背包；背包满了，角色会自动走回仓库存好（食物和弹药留在身上），再走回去接着干。制作时材料先用背包里的，不够再用仓库的。</p>
     </div>
   );
 }

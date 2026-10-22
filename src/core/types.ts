@@ -169,6 +169,8 @@ export interface Summary {
   kills: Record<string, number>;
   deaths: number;
   foodEaten: number;
+  /** 背包满了回仓库存东西的次数 */
+  bankTrips: number;
   ammoUsed: number;
   taskEnds: { action: string; reason: TaskEndReason }[];
 }
