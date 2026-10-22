@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ACTIONS, ITEMS, NODES, REGIONS, SKILL_GROUPS, SKILLS, type MapNode } from '../core/data';
+import { ACTIONS, ITEMS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, type MapNode } from '../core/data';
 import {
   BAG_SLOTS, BAG_STACK, bagSlotsUsed, combatLevel, equip, level, playerBonuses, sell, setSettings, toBag, toBank, toolSpeed, unequip,
   weaponStyle,
@@ -14,7 +14,7 @@ const GEAR_SLOTS: [EquipSlot, string][] = [
   ['head', '头部'], ['neck', '项链'], ['weapon', '武器'], ['body', '身体'], ['shield', '副手'], ['legs', '腿部'], ['ring', '戒指'],
 ];
 const TOOL_SLOTS: [EquipSlot, string, SkillId][] = [
-  ['pickaxe', '镐', 'mining'], ['axe', '斧', 'woodcutting'], ['rod', '鱼竿', 'fishing'], ['hoe', '锄', 'farming'], ['gloves', '手套', 'thieving'],
+  ['pickaxe', '镐', 'mining'], ['axe', '斧', 'woodcutting'], ['rod', '鱼竿', 'fishing'], ['hoe', '锄', 'farming'], ['knife', '剥皮刀', 'hunting'], ['gloves', '手套', 'thieving'],
 ];
 const STYLE_NAME = { melee: '近战', ranged: '远程', magic: '魔法' };
 
@@ -34,7 +34,7 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
   return (
     <div className="item-detail frame">
       <div className="row1">
-        <span className="with-icon"><Icon item={id} size={28} /> <b>{item.name}</b></span>
+        <span className="with-icon"><Icon item={id} size={28} /> <b>{item.tier !== undefined && `${tierName(item.tier)} `}{item.name}</b></span>
         <span className="muted">×{fmtNum(qty)} · 单价 {item.value}</span>
       </div>
       {item.heals && <span>回复 {item.heals} 生命</span>}

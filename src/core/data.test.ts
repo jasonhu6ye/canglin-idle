@@ -35,7 +35,7 @@ describe('数据闭环', () => {
     for (const it of Object.values(ITEMS)) {
       expect(made.has(it.id), `${it.name} 没有来源`).toBe(true);
       const usable = used.has(it.id) || !!it.equip || !!it.heals || !!it.ammo;
-      if (!['coins', 'bones', 'burnt_food'].includes(it.id) && !it.id.startsWith('stone_')) expect(usable, `${it.name} 没有用途`).toBe(true);
+      if (!['coins', 'bones', 'burnt_food'].includes(it.id) && !it.id.startsWith('enh_')) expect(usable, `${it.name} 没有用途`).toBe(true);
     }
   });
 });

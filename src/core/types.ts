@@ -1,6 +1,6 @@
 export type SkillId =
   // 采集
-  | 'mining' | 'woodcutting' | 'fishing' | 'farming' | 'thieving'
+  | 'mining' | 'woodcutting' | 'fishing' | 'farming' | 'hunting' | 'thieving'
   // 生产
   | 'cooking' | 'smithing' | 'fletching' | 'herblore' | 'crafting' | 'enhancing'
   // 战斗
@@ -11,7 +11,7 @@ export type SkillGroup = 'gather' | 'produce' | 'combat';
 export type CombatStyle = 'melee' | 'ranged' | 'magic';
 
 export type GearSlot = 'weapon' | 'shield' | 'head' | 'body' | 'legs' | 'neck' | 'ring';
-export type ToolSlot = 'pickaxe' | 'axe' | 'rod' | 'hoe' | 'gloves';
+export type ToolSlot = 'pickaxe' | 'axe' | 'rod' | 'hoe' | 'knife' | 'gloves';
 export type EquipSlot = GearSlot | ToolSlot;
 
 export type ItemCategory = 'resource' | 'material' | 'food' | 'potion' | 'ammo' | 'gear' | 'tool' | 'seed' | 'misc';
@@ -22,6 +22,8 @@ export interface ItemDef {
   category: ItemCategory;
   /** 卖给商店的价格（金币） */
   value: number;
+  /** 分阶资源的阶级下标，0 = T1 */
+  tier?: number;
   /** 食物和药水回复的生命值 */
   heals?: number;
   /** 弹药：ranged 用箭，magic 用符文；power 加到力量加成上 */
@@ -126,7 +128,7 @@ export interface Settings {
 }
 
 export interface GameState {
-  version: 2;
+  version: 3;
   lastTick: number;
   rng: number;
   xp: Record<SkillId, number>;

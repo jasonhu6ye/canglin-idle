@@ -16,28 +16,28 @@ describe('经验曲线', () => {
 });
 
 describe('采集', () => {
-  it('挖铜矿 1 小时 = 1200 次', () => {
-    const s = startNow(newGame(T0, 1), 'mine_copper', { type: 'infinite' });
+  it('挖石头 1 小时 = 1200 次', () => {
+    const s = startNow(newGame(T0, 1), 'mine_stone', { type: 'infinite' });
     const { state, summary } = advance(s, T0 + HOUR);
-    expect(state.bank.copper_ore).toBe(1200);
+    expect(state.bank.stone).toBe(1200);
     expect(summary.xp.mining).toBe(12_000);
     expect(state.queue).toHaveLength(1);
   });
 
   it('数量模式完成后自动进入下一个队列', () => {
-    let s = startNow(newGame(T0, 1), 'mine_copper', { type: 'count', count: 10 });
-    s = enqueue(s, 'mine_tin', { type: 'count', count: 5 });
+    let s = startNow(newGame(T0, 1), 'mine_stone', { type: 'count', count: 10 });
+    s = enqueue(s, 'chop_plain', { type: 'count', count: 5 });
     const { state, summary } = advance(s, T0 + HOUR);
-    expect(state.bank.copper_ore).toBe(10);
-    expect(state.bank.tin_ore).toBe(5);
+    expect(state.bank.stone).toBe(10);
+    expect(state.bank.plain_log).toBe(5);
     expect(state.queue).toHaveLength(0);
     expect(summary.taskEnds.map((t) => t.reason)).toEqual(['complete', 'complete']);
   });
 
   it('等级不够时任务直接结束', () => {
-    const s = startNow(newGame(T0, 1), 'mine_coal', { type: 'infinite' });
+    const s = startNow(newGame(T0, 1), 'mine_copper', { type: 'infinite' });
     const { state, summary } = advance(s, T0 + 10_000);
-    expect(state.bank.coal).toBeUndefined();
+    expect(state.bank.copper_ore).toBeUndefined();
     expect(summary.taskEnds[0].reason).toBe('level');
   });
 });
@@ -45,6 +45,7 @@ describe('采集', () => {
 describe('制作', () => {
   it('材料用完就停', () => {
     let s = newGame(T0, 1);
+    s.xp.smithing = XP_TABLE[20];
     s.bank.copper_ore = 7;
     s.bank.tin_ore = 5;
     s = startNow(s, 'smelt_bronze', { type: 'infinite' });
@@ -97,7 +98,7 @@ describe('离线结算', () => {
     s.bank.raw_minnow = 500;
     s = startNow(s, 'cook_minnow', { type: 'count', count: 300 });
     s = enqueue(s, 'fight_reef_crab', { type: 'time', ms: 2 * HOUR });
-    s = enqueue(s, 'chop_pine', { type: 'infinite' });
+    s = enqueue(s, 'chop_plain', { type: 'infinite' });
     const total = 8 * HOUR;
     const once = advance(s, T0 + total).state;
     const many = chunked(s, total, 250);
@@ -105,9 +106,9 @@ describe('离线结算', () => {
   });
 
   it('离线最多结算 24 小时', () => {
-    const s = startNow(newGame(T0, 1), 'mine_copper', { type: 'infinite' });
+    const s = startNow(newGame(T0, 1), 'mine_stone', { type: 'infinite' });
     const { state } = advance(s, T0 + 48 * HOUR);
-    expect(state.bank.copper_ore).toBe(24 * 1200);
+    expect(state.bank.stone).toBe(24 * 1200);
   });
 
   it('时间倒退不会产出', () => {
@@ -120,12 +121,12 @@ describe('离线结算', () => {
 describe('装备', () => {
   it('等级不够不能装备', () => {
     let s = newGame(T0, 1);
-    s.bank.iron_sword = 1;
-    expect(equip(s, 'iron_sword').equipment.weapon).toBe('bronze_sword');
-    s.xp.melee = XP_TABLE[15];
-    const e = equip(s, 'iron_sword');
-    expect(e.equipment.weapon).toBe('iron_sword');
-    expect(e.bank.bronze_sword).toBe(1);
+    s.bank.copper_sword = 1;
+    expect(equip(s, 'copper_sword').equipment.weapon).toBe('stone_sword');
+    s.xp.melee = XP_TABLE[10];
+    const e = equip(s, 'copper_sword');
+    expect(e.equipment.weapon).toBe('copper_sword');
+    expect(e.bank.stone_sword).toBe(1);
   });
 });
 
@@ -164,9 +165,9 @@ describe('背包与战斗方式', () => {
 
   it('工具加快采集', () => {
     const s = newGame(T0, 1);
-    s.equipment.pickaxe = 'bronze_pickaxe';
-    const { state } = advance(startNow(s, 'mine_copper', { type: 'infinite' }), T0 + HOUR);
-    expect(state.bank.copper_ore).toBe(Math.floor(HOUR / Math.round(3000 / 1.05)));
+    s.equipment.pickaxe = 'stone_pickaxe';
+    const { state } = advance(startNow(s, 'mine_stone', { type: 'infinite' }), T0 + HOUR);
+    expect(state.bank.stone).toBe(Math.floor(HOUR / Math.round(3000 / 1.04)));
   });
 });
 
@@ -175,7 +176,8 @@ describe('存档迁移', () => {
     const v1 = { ...newGame(T0, 1), version: 1, bank: { coins: 9, copper_ore: 3, ash_core: 2 }, xp: { mining: 500 } } as unknown;
     delete (v1 as { bag?: unknown }).bag;
     const s = migrate(v1)!;
-    expect(s.version).toBe(2);
+    expect(s.version).toBe(3);
+    expect(s.xp.hunting).toBe(0);
     expect(s.bank).toEqual({ coins: 9, copper_ore: 3 });
     expect(s.bag).toEqual({});
     expect(s.xp.mining).toBe(500);

@@ -27,14 +27,14 @@ export function newGame(now: number, seed = Math.floor(Math.random() * 2 ** 31))
   const xp = Object.fromEntries(ALL_SKILLS.map((k) => [k, 0])) as Record<SkillId, number>;
   xp.hitpoints = XP_TABLE[10];
   return {
-    version: 2,
+    version: 3,
     lastTick: now,
     rng: seed,
     xp,
     hp: 100,
     bank: { coins: 50, minnow: 10 },
     bag: {},
-    equipment: { weapon: 'bronze_sword' },
+    equipment: { weapon: 'stone_sword' },
     queue: [],
     progressMs: 0,
     combat: null,
@@ -47,7 +47,7 @@ export function newGame(now: number, seed = Math.floor(Math.random() * 2 ** 31))
 /** 旧存档升级到当前版本；认不出的物品和任务直接丢掉，避免读档崩溃 */
 export function migrate(raw: unknown): GameState | null {
   const s = raw as Omit<Partial<GameState>, "version"> & { version?: number };
-  if (!s || typeof s !== 'object' || (s.version !== 1 && s.version !== 2)) return null;
+  if (!s || typeof s !== 'object' || ![1, 2, 3].includes(s.version ?? 0)) return null;
   const fresh = newGame(s.lastTick ?? Date.now(), s.rng);
   const keep = (rec: Record<string, number> | undefined) =>
     Object.fromEntries(Object.entries(rec ?? {}).filter(([id, q]) => ITEMS[id] && q > 0));
@@ -102,7 +102,7 @@ export function playerBonuses(s: GameState, style = weaponStyle(s)) {
 }
 
 export const TOOL_FOR: Partial<Record<SkillId, EquipSlot>> = {
-  mining: 'pickaxe', woodcutting: 'axe', fishing: 'rod', farming: 'hoe', thieving: 'gloves',
+  mining: 'pickaxe', woodcutting: 'axe', fishing: 'rod', farming: 'hoe', hunting: 'knife', thieving: 'gloves',
 };
 
 export function toolSpeed(s: GameState, skill: SkillId) {

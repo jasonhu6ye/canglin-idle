@@ -233,3 +233,13 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
   .queue { max-width: 360px; }
   .chips { width: 360px; }
 }
+
+/* 分阶资源图标右下角的 T1-T8 角标 */
+.icon-tier { position: relative; display: inline-block; line-height: 0; flex: none; }
+.icon-tier .tier {
+  position: absolute; right: -3px; bottom: -3px; font: 700 7px/1 system-ui, sans-serif; padding: 1px 2px;
+  border-radius: 3px; border: 1px solid #1a120e; color: #1a120e; background: #c8c8c8; letter-spacing: 0;
+}
+.tier.t1 { background: #b8b8bc; } .tier.t2 { background: #e09058; } .tier.t3 { background: #e0e4ea; }
+.tier.t4 { background: #c87050; } .tier.t5 { background: #8ad8ff; } .tier.t6 { background: #c090ff; }
+.tier.t7 { background: #ffa040; } .tier.t8 { background: #5ae0a0; }

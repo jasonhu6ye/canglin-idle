@@ -1,4 +1,5 @@
-import { ITEMS, TIERS } from '../core/data';
+import { ITEMS, TIERS, tierName } from '../core/data';
+import { resIconUrl } from '../game/resArt';
 import type { SkillId } from '../core/types';
 
 /*
@@ -193,6 +194,20 @@ const TPL: Record<string, string[]> = {
     'kok..kok....',
     'kk..kok.....',
     '....kk......',
+  ],
+  knife: [
+    '............',
+    '.........kk.',
+    '........kcbk',
+    '.......kcbak',
+    '......kcbak.',
+    '.....kcbak..',
+    '....kcbak...',
+    '...kkbak....',
+    '..kOOkk.....',
+    '.kOOk.......',
+    'kOOk........',
+    '.kk.........',
   ],
   rune: [
     '............',
@@ -521,30 +536,23 @@ export function iconUrl(tpl: string, tint: string): string {
 }
 
 const METAL: Record<string, string> = {
-  bronze: '#c08040', iron: '#8a8f99', steel: '#c5cad2', mithril: '#5a7ad8', adamant: '#4aa070', dragon: '#c050e0', gold: '#f0c850',
+  stone: '#9a9a9e', copper: '#d07a3a', bronze: '#c09040', iron: '#8a8f99', titanium: '#8ad8ff', runic: '#b070ff', meteor: '#ff8a2a', adamant: '#4ad898',
 };
 const WOOD: Record<string, string> = {
-  pine: '#c09060', birch: '#e0d8c0', maple: '#d07030', redwood: '#a84030', ancient: '#8a7a50', divine: '#f0d870',
+  plain: '#a87a48', birch: '#e0d8c0', pine: '#d0a860', oak: '#8a6a40', cedar: '#d08060', bloodoak: '#c02a2a', ashbark: '#5a5450', white: '#f4ecc8',
 };
-const RUNE: Record<string, string> = {
-  bronze: '#6ad8e0', iron: '#d8b070', steel: '#7a4ab0', mithril: '#a8e0ff', adamant: '#e0a0ff', dragon: '#c050e0',
-};
+const HIDE_TINT = ['#a07a50', '#b8925a', '#7e7e84', '#6a4430', '#e8ecf2', '#8a3a22', '#2e282e', '#5a3e8a'];
+const CLOTH_TINT = ['#d8d4cc', '#f4e6c0', '#fcd4dc', '#d4e8fc', '#f0faff', '#f8d070', '#ffa868', '#e8d8ff'];
 const SPECIFIC: Record<string, [string, string]> = {
   coins: ['coins', '#f0c850'], bones: ['bones', '#ffffff'], burnt_food: ['food', '#3a2a22'], shaft: ['shaft', '#9a6a3a'],
-  copper_ore: ['ore', '#d07a3a'], tin_ore: ['ore', '#d8d8d0'], iron_ore: ['ore', '#a0604a'], coal: ['ore', '#2e2e30'],
-  gold_ore: ['ore', '#f0c850'], mithril_ore: ['ore', '#5a7ad8'], adamant_ore: ['ore', '#4aa070'], dragon_ore: ['gem', '#c050e0'],
-  glowstone: ['ore', '#6ad8e0'], sandstone: ['ore', '#e0b878'], obsidian: ['gem', '#3a2a4a'], frost_crystal: ['gem', '#a8e0ff'],
-  prism_shard: ['gem', '#e0a0ff'], sapphire: ['gem', '#3a6ae0'], ruby: ['gem', '#e03a4a'], diamond: ['gem', '#e8f8ff'],
+  sapphire: ['gem', '#3a6ae0'], ruby: ['gem', '#e03a4a'], diamond: ['gem', '#e8f8ff'],
   potato: ['food', '#b08a50'], baked_potato: ['food', '#c8803a'], bread: ['food', '#d8a060'], wheat: ['herb', '#e0c050'],
-  flax: ['herb', '#a0b0e0'], linen: ['cloth', '#e8e0c8'], rough_hide: ['hide', '#a07a50'], hard_hide: ['hide', '#7a5a3a'],
-  dragon_scale: ['hide', '#8a5ac0'], green_herb: ['herb', '#6ac04a'], fire_bloom: ['herb', '#f07a3a'], moon_herb: ['herb', '#c0d0ff'],
+  green_herb: ['herb', '#6ac04a'], fire_bloom: ['herb', '#f07a3a'], moon_herb: ['herb', '#c0d0ff'],
   silver_leaf: ['herb', '#d0d8d8'], flame_heart: ['herb', '#ff4a2a'], frost_lotus: ['herb', '#8ad8ff'],
-};
-const LIGHT_TINT: Record<string, string> = {
-  rough_hide: '#a07a50', hard_hide: '#6a4a2a', dragon_scale: '#8a5ac0', robe0: '#c8b890', robe2: '#4a3a6a', robe4: '#d0a0f0',
+  enh_basic: ['stone', '#8ad8ff'], enh_mid: ['stone', '#7ac04a'], enh_high: ['stone', '#e0a040'], enh_legend: ['stone', '#e04ae0'],
 };
 
-/** 物品 → [模板, 颜色] */
+/** 物品 → [模板, 颜色]（分阶资源另有专门的图，见 resIconUrl） */
 export function itemIcon(id: string): [string, string] {
   if (SPECIFIC[id]) return SPECIFIC[id];
   const it = ITEMS[id];
@@ -552,19 +560,17 @@ export function itemIcon(id: string): [string, string] {
   if (id.startsWith('raw_')) return ['fish', '#8aa0b8'];
   if (it?.category === 'food') return ['fish', '#d08a4a'];
   if (id.endsWith('_potion')) return ['potion', SPECIFIC[id.replace('_potion', '')]?.[1] ?? '#c04ae0'];
-  if (id.endsWith('_log')) return ['log', WOOD[prefix] ?? '#9a6a3a'];
   if (id.endsWith('_bar')) return ['bar', METAL[prefix] ?? '#aaa'];
   if (id.endsWith('_arrowhead')) return ['arrowhead', METAL[prefix]];
   if (id.endsWith('_arrow')) return ['arrow', METAL[prefix]];
-  if (id.endsWith('_rune')) return ['rune', RUNE[prefix]];
-  if (id.startsWith('stone_')) return ['stone', { stone_basic: '#8ad8ff', stone_mid: '#7ac04a', stone_high: '#e0a040', stone_legend: '#e04ae0' }[id] ?? '#fff'];
+  if (id.endsWith('_rune')) return ['rune', METAL[prefix]];
   const e = it?.equip;
   if (e) {
-    const light = LIGHT_TINT[id.replace(/_(head|legs|body|gloves)$/, '')];
-    const tint = light ?? METAL[prefix] ?? WOOD[prefix] ?? SPECIFIC[prefix]?.[1] ?? '#c8c8c8';
+    const light = /^(leather|robe)(\d)_/.exec(id);
+    const tint = light ? (light[1] === 'leather' ? HIDE_TINT : CLOTH_TINT)[+light[2] - 1] : METAL[prefix] ?? WOOD[prefix] ?? '#c8c8c8';
     if (e.slot === 'weapon') return [e.style === 'ranged' ? 'bow' : e.style === 'magic' ? 'staff' : 'sword', tint];
     if (e.slot === 'ring' || e.slot === 'neck') return [e.slot === 'ring' ? 'ring' : 'amulet', SPECIFIC[prefix]?.[1] ?? '#f0c850'];
-    const tpl = { head: 'helm', body: 'body', legs: 'legs', shield: 'shield', pickaxe: 'pickaxe', axe: 'axe', rod: 'rod', hoe: 'hoe', gloves: 'gloves' }[e.slot];
+    const tpl = { head: 'helm', body: 'body', legs: 'legs', shield: 'shield', pickaxe: 'pickaxe', axe: 'axe', rod: 'rod', hoe: 'hoe', knife: 'knife', gloves: 'gloves' }[e.slot];
     return [tpl ?? 'bag', tint];
   }
   return ['bag', '#a08060'];
@@ -572,12 +578,23 @@ export function itemIcon(id: string): [string, string] {
 
 export const SKILL_ICON: Record<SkillId, [string, string]> = {
   mining: ['pickaxe', '#c5cad2'], woodcutting: ['axe', '#c5cad2'], fishing: ['fish', '#5a9ad8'], farming: ['herb', '#7cc456'],
-  thieving: ['bag', '#8a7ab8'], cooking: ['food', '#d8a060'], smithing: ['anvil', '#8a8f99'], fletching: ['bow', '#c09060'],
-  herblore: ['potion', '#4ab89a'], crafting: ['gem', '#e07ab0'], enhancing: ['stone', '#e8d04a'], melee: ['sword', '#c5cad2'],
-  ranged: ['arrow', '#c08040'], magic: ['staff', '#5a7ae8'], defence: ['shield', '#7a8ab8'], hitpoints: ['heart', '#e04a5a'],
+  hunting: ['knife', '#c5cad2'], thieving: ['bag', '#8a7ab8'], cooking: ['food', '#d8a060'], smithing: ['anvil', '#8a8f99'],
+  fletching: ['bow', '#c09060'], herblore: ['potion', '#4ab89a'], crafting: ['gem', '#e07ab0'], enhancing: ['stone', '#e8d04a'],
+  melee: ['sword', '#c5cad2'], ranged: ['arrow', '#c08040'], magic: ['staff', '#5a7ae8'], defence: ['shield', '#7a8ab8'], hitpoints: ['heart', '#e04a5a'],
 };
 
+/** 物品图标；分阶资源右下角标 T1-T8 */
 export function Icon({ item, size = 32 }: { item: string; size?: number }) {
+  const res = resIconUrl(item);
+  if (res) {
+    const tier = ITEMS[item].tier!;
+    return (
+      <span className="icon-tier" style={{ width: size, height: size }}>
+        <img className="icon" src={res} width={size} height={size} alt="" draggable={false} />
+        {size >= 22 && <b className={`tier t${tier + 1}`}>{tierName(tier)}</b>}
+      </span>
+    );
+  }
   const [tpl, tint] = itemIcon(item);
   return <img className="icon" src={iconUrl(tpl, tint)} width={size} height={size} alt="" draggable={false} />;
 }

@@ -40,6 +40,8 @@ export function GameCanvas({ onNodeClick }: { onNodeClick: (nodeId: string) => v
       banner: false,
       input: { touch: { capture: true } },
     });
+    // 截图脚本用：?debug 时把游戏实例挂到 window 上
+    if (location.search.includes("debug")) (window as unknown as { __game: Phaser.Game }).__game = game;
     const g = game;
     g.events.on(REGION_CHANGE, relay(REGION_CHANGE));
     const ro = new ResizeObserver(() => {

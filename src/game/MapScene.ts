@@ -5,6 +5,7 @@ import type { RegionId, Summary } from '../core/types';
 import { store } from '../store';
 import { paintBuilding, paintDot, paintGlow, paintProp, paintWindmillBlades, PROP_GLOW } from './art';
 import { DPR } from './dpr';
+import { paintResNode, resGlow, resOf, type ResKind } from './resArt';
 import { NODE_MARKER, paintSprite, SPRITE_VARIANTS, SPRITES } from './sprites';
 import { animateTileset, liquidIndex, paintTileset, T, TILESET, tileIndex, VARIANTS } from './tiles';
 import {
@@ -314,7 +315,38 @@ export class MapScene extends Phaser.Scene {
 
   // ---- 资源点 ----
 
+  /** 资源点周围摆上对应阶级的矿石堆、树、棉株、晒皮架 */
+  private addResources(n: MapNode) {
+    const seen = new Set<string>();
+    const res: { kind: ResKind; tier: number }[] = [];
+    for (const id of n.actions) {
+      const a = ACTIONS[id];
+      if (a.kind !== 'skill' || !a.outputs[0]) continue;
+      const r = resOf(a.outputs[0].item);
+      if (!r || seen.has(`${r.kind}${r.tier}`)) continue;
+      seen.add(`${r.kind}${r.tier}`);
+      res.push(r);
+    }
+    if (!res.length) return;
+    // 站位格在节点正下方，钓鱼点北边是水，都要让开
+    const slots = n.pond
+      ? [[-2.6, 0.4], [2.6, 0.4], [-2.8, 2.2], [2.8, 2.2], [-1.6, 2.6], [1.6, 2.6]]
+      : [[-2.4, -0.4], [2.4, -0.4], [-2.6, 1.8], [2.6, 1.8], [-1.2, -1.8], [1.2, -1.8]];
+    const per = res.length <= 2 ? 2 : 1;
+    slots.slice(0, res.length * per).forEach(([dx, dy], i) => {
+      const r = res[Math.floor(i / per) % res.length];
+      const key = `res-${r.kind}-${r.tier}`;
+      if (!this.textures.exists(key)) this.textures.addCanvas(key, paintResNode(r.kind, r.tier));
+      const x = (n.x + dx) * T + T / 2;
+      const y = (n.y + dy) * T + T;
+      this.add.image(x, y, key).setOrigin(0.5, 1).setScale(1.25).setDepth(y + 1000).setFlipX(i % 2 === 1 && r.kind !== 'hide');
+      const glow = resGlow(r.kind, r.tier);
+      if (glow) this.addGlow(x, y - 8, glow[0], glow[1]);
+    });
+  }
+
   private addNode(n: MapNode) {
+    this.addResources(n);
     const cx = n.x * T + T / 2;
     const cy = n.y * T + T / 2;
     const boss = n.sprite === 'boss';

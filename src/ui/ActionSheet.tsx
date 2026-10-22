@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ACTIONS, ITEMS, MONSTERS, NODES, REGIONS, SKILLS } from '../core/data';
+import { ACTIONS, ITEMS, MONSTERS, NODES, REGIONS, SKILLS, tierName } from '../core/data';
 import {
   actionDuration, bestAmmo, bestFood, combatStats, enqueue, level, MAX_QUEUE, setSettings, startNow, weaponStyle, xpPerHour,
 } from '../core/sim';
@@ -59,7 +59,7 @@ export function ActionSheet({ s, nodeId, onClose }: { s: GameState; nodeId: stri
               <span className="act-icon">{icon}</span>
               <span className="act-body">
                 <span className="row1">
-                  <b>{a.name}</b>
+                  <b>{a.kind === 'skill' && !a.inputs && ITEMS[a.outputs[0]?.item]?.tier !== undefined && `${tierName(ITEMS[a.outputs[0].item].tier!)} `}{a.name}</b>
                   <span className="xph">{fmtNum(xpPerHour(s, id))} 经验/时</span>
                 </span>
                 <span className="row2">
