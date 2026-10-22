@@ -1,4 +1,4 @@
-import { actionDuration, advance, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour } from './sim';
+import { actionDuration, advance, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour } from './sim';
 import { levelForXp, XP_TABLE } from './xp';
 import type { GameState, SkillAction, TaskMode } from './types';
 import { ACTIONS, nodeOfAction, standOf, travelMs } from './data';
@@ -323,5 +323,27 @@ describe('图鉴', () => {
     const old = { ...newGame(T0, 1), version: 2, bank: { tin_ore: 3 } } as unknown as Partial<GameState>;
     delete old.seen;
     expect(migrate(old)!.seen.tin_ore).toBe(1);
+  });
+});
+
+describe('手动寻路', () => {
+  it('关掉游戏也会走完', () => {
+    let s = newGame(T0, 1);
+    s = startWalk(s, { x: 100, y: 100 }, { x: 140, y: 100 }, 10_000);
+    const mid = advance(s, T0 + 5000).state;
+    expect(walkPos(mid)).toEqual({ x: 120, y: 100 });
+    const end = advance(s, T0 + 60_000).state;
+    expect(end.walk).toBeNull();
+    expect(end.loc).toEqual({ x: 140, y: 100 });
+  });
+
+  it('开始干活时从走到的地方出发', () => {
+    let s = newGame(T0, 1);
+    s = startWalk(s, { x: 100, y: 100 }, { x: 140, y: 100 }, 10_000);
+    s = advance(s, T0 + 5000).state;
+    s = startNow(s, 'chop_plain', { type: 'infinite' });
+    const r = advance(s, T0 + 5001).state;
+    expect(r.walk).toBeNull();
+    expect(r.travel?.total).toBe(travelMs({ x: 120, y: 100 }, standOf(nodeOfAction('chop_plain')!)));
   });
 });

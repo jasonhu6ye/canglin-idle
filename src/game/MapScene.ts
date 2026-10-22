@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { ACTIONS, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, DANGER, dangerLevel, nodeOfAction, travelMs, WALK_TILES_PER_SEC, type MapNode } from '../core/data';
-import { combatLevel, leaveWork, resumeWork, setLoc, teleport as teleportState } from '../core/sim';
+import { combatLevel, leaveWork, resumeWork, setLoc, startWalk, teleport as teleportState, walkPos } from '../core/sim';
 import { MON_ANIMS, monsterFrameSize, paintMonsterSheet, type MonAnim } from './monsterArt';
 import { HERO_ANIMS, HERO_FEET, HERO_H, HERO_W, outfitOf, paintHeroSheet, type HeroDir } from './hero';
 import type { MonsterDef, RegionId, Summary } from '../core/types';
@@ -63,6 +63,17 @@ export const playerPos = { x: SPAWN.x, y: SPAWN.y };
 
 export const nodeForAction = nodeOfAction;
 
+/** 路线总长（格） */
+function pathLength(from: { x: number; y: number }, path: { x: number; y: number }[]) {
+  let len = 0;
+  let prev = from;
+  for (const p of path) {
+    len += Math.hypot(p.x - prev.x, p.y - prev.y);
+    prev = p;
+  }
+  return len;
+}
+
 type Particle = { img: Phaser.GameObjects.Image; vx: number; vy: number; life: number; max: number; kind: Ambient };
 type Ambient = 'snow' | 'ember' | 'firefly' | 'spore' | 'mote' | 'dust' | 'leaf';
 const AMBIENT: Partial<Record<RegionId, Ambient>> = {
@@ -108,7 +119,7 @@ export class MapScene extends Phaser.Scene {
     this.addMonsters();
 
     const task = store.state.queue[0];
-    const start = store.state.loc ?? SPAWN;
+    const start = store.state.walk ? walkPos(store.state) : store.state.loc ?? SPAWN;
     this.player = this.add.container(start.x * T + T / 2, start.y * T + T / 2);
     const ring = this.add.ellipse(0, 6, 14, 6).setStrokeStyle(1, 0xe8b84a).setFillStyle(0xe8b84a, 0.25);
     this.playerBody = this.add.sprite(0, 7, 'hero').setOrigin(0.5, HERO_FEET / HERO_H);
@@ -126,6 +137,7 @@ export class MapScene extends Phaser.Scene {
       else if (store.state.travel) this.goToTask();
       else this.startWorking();
     }
+    if (!task || store.state.paused) this.resumeWalk();
     this.updateLabels();
     this.unsub.push(store.subscribe(() => {
       this.syncSkin();
@@ -734,12 +746,30 @@ export class MapScene extends Phaser.Scene {
     this.manual = true;
     this.stopWorking();
     store.dispatch(leaveWork);
+    // 记进存档：关掉游戏也会在后台走完
+    const from = this.playerTile();
+    const ms = (pathLength(from, path) / (WALK_TILES_PER_SEC * speedMultiplier)) * 1000;
+    store.dispatch((g) => startWalk(g, from, { x: tx, y: ty }, ms));
     if (!this.following) this.recenterCameraOnly();
+    this.followWalk(path, { x: tx, y: ty });
+  }
+
+  private followWalk(path: { x: number; y: number }[], to: { x: number; y: number }, speed?: number) {
     this.drawRoute(path);
     this.walkPath(path, () => {
       this.clearRoute();
-      store.dispatch((g) => setLoc(g, tx, ty));
-    });
+      store.dispatch((g) => setLoc(g, to.x, to.y));
+    }, speed);
+  }
+
+  /** 读档时还在手动寻路：从走到的大概位置接着走，剩余时间和存档一致 */
+  private resumeWalk() {
+    const w = store.state.walk;
+    if (!w) return;
+    const path = findPath(this.playerTile(), w.to);
+    if (!path) return store.dispatch((g) => setLoc(g, w.to.x, w.to.y));
+    this.manual = true;
+    this.followWalk(path, w.to, pathLength(this.playerTile(), path) / (w.ms / 1000));
   }
 
   private showMarker(tx: number, ty: number, ok: boolean) {

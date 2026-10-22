@@ -174,6 +174,8 @@ export interface GameState {
   mapSize?: number;
   /** 正在自动寻路去当前任务的地点；到达前任务不开始 */
   travel: { to: string; ms: number; total: number } | null;
+  /** 玩家手动寻路（没有任务或已暂停时）：关掉游戏也照样走完 */
+  walk?: { from: { x: number; y: number }; to: { x: number; y: number }; ms: number; total: number } | null;
   /** 玩家点地图走开了：队列保留但不干活，点「继续工作」才走回去 */
   paused?: boolean;
   /** 图鉴：获得过的物品 */

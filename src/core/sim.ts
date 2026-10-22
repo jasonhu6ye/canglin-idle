@@ -92,6 +92,7 @@ export function migrate(raw: unknown): GameState | null {
     loc: s.loc ? rescaleLoc(s.loc, s.mapSize ?? 1080) : nodeOfAction(queue[0]?.action) ? standOf(nodeOfAction(queue[0]?.action)!) : fresh.loc,
     mapSize: MAP_W,
     travel: (s.mapSize ?? 1080) === MAP_W ? s.travel ?? null : null,
+    walk: (s.mapSize ?? 1080) === MAP_W ? s.walk ?? null : null,
     bestiary: s.bestiary ?? {},
     // 旧存档：现在拥有的东西都算获得过
     seen: s.seen ?? Object.fromEntries(
@@ -514,8 +515,22 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   while (dt > 0) {
     const task = s.queue[0];
     if (!task || s.paused) {
+      // 手动寻路：离线也照样走完
+      if (s.walk) {
+        const step = Math.min(dt, s.walk.ms);
+        s.walk.ms -= step;
+        if (s.walk.ms <= 0) {
+          s.loc = { ...s.walk.to };
+          s.walk = null;
+        }
+      }
       regen(s, dt);
       break;
+    }
+    // 开始干活了：手动寻路作废，从走到的地方出发
+    if (s.walk) {
+      s.loc = walkPos(s);
+      s.walk = null;
     }
     const a0 = ACTIONS[task.action];
     // 开战前：背包食物不够设定数量就先回仓库拿（用户 10-22 要求）
@@ -608,11 +623,30 @@ export function resumeWork(prev: GameState): GameState {
   return { ...prev, paused: false };
 }
 
+/** 手动寻路走到哪了（按直线插值的大概格子） */
+export function walkPos(s: GameState): { x: number; y: number } {
+  const w = s.walk;
+  if (!w) return s.loc;
+  const k = w.total > 0 ? 1 - w.ms / w.total : 1;
+  return { x: Math.round(w.from.x + (w.to.x - w.from.x) * k), y: Math.round(w.from.y + (w.to.y - w.from.y) * k) };
+}
+
+/** 开始手动寻路：ms 是这条路走完要多久（地图场景按真实路线算好传进来） */
+export function startWalk(prev: GameState, from: { x: number; y: number }, to: { x: number; y: number }, ms: number): GameState {
+  if (prev.queue.length && !prev.paused) return prev;
+  const s = clone(prev);
+  s.loc = { ...from };
+  s.walk = ms > 0 ? { from: { ...from }, to: { ...to }, ms, total: ms } : null;
+  if (ms <= 0) s.loc = { ...to };
+  return s;
+}
+
 /** 没有任务或已暂停时，手动走到某个格子，记下位置 */
 export function setLoc(prev: GameState, x: number, y: number): GameState {
   if ((prev.queue.length && !prev.paused) || (prev.loc.x === x && prev.loc.y === y)) return prev;
   const s = clone(prev);
   s.loc = { x, y };
+  s.walk = null;
   return s;
 }
 
