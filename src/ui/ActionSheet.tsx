@@ -90,8 +90,11 @@ export function MonsterSheet({ s, actionId, onClose }: { s: GameState; actionId:
         <h2>{m.name}</h2>
         <small className="muted">{fmtNum(xpPerHour(s, actionId))} 经验/时</small>
       </div>
-      <MonsterDetail m={m} kills={s.bestiary?.[m.id] ?? 0} reveal />
-      <div className="item-detail frame"><CombatInfo s={s} monster={m.id} /></div>
+      {/* 信息区自己滚动，开始按钮固定在底部 */}
+      <div className="sheet-body">
+        <MonsterDetail m={m} kills={s.bestiary?.[m.id] ?? 0} reveal />
+        <div className="item-detail frame"><CombatInfo s={s} monster={m.id} /></div>
+      </div>
       <TaskConfig s={s} action={actionId} onDone={onClose} />
     </div>
   );

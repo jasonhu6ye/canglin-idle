@@ -286,3 +286,5 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .wardrobe-grid .slot.on { box-shadow: 0 0 0 2px var(--gold); }
 .far-bank { margin: 6px 0; } .far-bank span { flex: 2; font-size: 12px; }
 .sheet p.pad { padding: 10px 12px; }
+.sheet-body { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+.sheet-body .item-detail { position: static; margin: 8px 6px; }
