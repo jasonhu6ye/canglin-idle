@@ -5,7 +5,7 @@ import {
   weaponStyle,
 } from '../core/sim';
 import type { EquipSlot, GameState, ItemCategory, SkillId, Summary } from '../core/types';
-import { XP_TABLE, levelProgress, MAX_LEVEL } from '../core/xp';
+import { XP_TABLE, levelProgress, SPEED_PER_LEVEL, BONUS_PER_LEVEL } from '../core/xp';
 import { store } from '../store';
 import { fmtDuration, fmtNum } from './format';
 import { Codex } from './Codex';
@@ -185,27 +185,41 @@ export function SkillsPanel({ s, onPick }: { s: GameState; onPick: (nodeId: stri
                 <button key={k} className={`skill-card ${open === k ? 'sel' : ''}`} onClick={() => setOpen(open === k ? null : k)}>
                   <SkillIcon skill={k} size={30} />
                   <span className="sk-body">
-                    <span className="row1"><b style={{ color: SKILLS[k].color }}>{SKILLS[k].name}</b><span>{lvl}<small className="muted">/{MAX_LEVEL}</small></span></span>
+                    <span className="row1"><b style={{ color: SKILLS[k].color }}>{SKILLS[k].name}</b><span>Lv {lvl}</span></span>
                     <span className="bar wide"><i style={{ width: `${levelProgress(xp) * 100}%`, background: SKILLS[k].color }} /></span>
-                    <small className="muted">{fmtNum(xp)} 经验{lvl < MAX_LEVEL && ` · 还差 ${fmtNum(XP_TABLE[lvl + 1] - xp)}`}</small>
+                    <small className="muted">{fmtNum(xp)} 经验 · 还差 {fmtNum(XP_TABLE[lvl + 1] - xp)}</small>
                   </span>
                 </button>
               );
             })}
           </div>
-          {open && SKILLS[open].group === g.id && <SkillDetail skill={open} onPick={onPick} />}
+          {open && SKILLS[open].group === g.id && <SkillDetail s={s} skill={open} onPick={onPick} />}
         </section>
       ))}
     </div>
   );
 }
 
-function SkillDetail({ skill, onPick }: { skill: SkillId; onPick: (nodeId: string) => void }) {
+const pct = (x: number) => `${Math.round(x * 1000) / 10}%`;
+
+function SkillDetail({ s, skill, onPick }: { s: GameState; skill: SkillId; onPick: (nodeId: string) => void }) {
   const places = whereToTrain(skill);
   const info = SKILLS[skill];
+  const lvl = level(s, skill);
   return (
     <div className="skill-detail frame">
       <p>{info.desc}</p>
+      {info.group !== 'combat' && (
+        <p className="muted">
+          等级没有上限。每级动作速度 +{pct(SPEED_PER_LEVEL)}，当前 +{pct(lvl * SPEED_PER_LEVEL)}；
+          等级每高出动作要求 1 级，{info.group === 'gather' ? '双倍产出' : '不消耗材料'}几率 +{pct(BONUS_PER_LEVEL)}。
+        </p>
+      )}
+      {info.group === 'combat' && (
+        <p className="muted">
+          等级没有上限。{skill === 'hitpoints' ? `每级 +10 生命上限，当前 ${lvl * 10}。` : skill === 'defence' ? '每级降低被怪物命中的几率。' : '每级提高命中率和最大伤害。'}
+        </p>
+      )}
       {info.group === 'combat' && (
         <p className="muted">
           {skill === 'defence' || skill === 'hitpoints' ? '每次造成伤害都会获得 1/3 的经验。' : `装备${info.name}武器后在任意战斗点获得经验。`}

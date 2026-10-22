@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { ACTIONS, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, DANGER, dangerLevel, nodeOfAction, travelMs, WALK_TILES_PER_SEC, type MapNode } from '../core/data';
-import { combatLevel, setLoc, teleport as teleportState } from '../core/sim';
+import { combatLevel, leaveWork, resumeWork, setLoc, teleport as teleportState } from '../core/sim';
 import { HERO_ANIMS, HERO_FEET, HERO_H, HERO_W, paintHeroSheet, type HeroDir } from './hero';
 import type { RegionId, Summary } from '../core/types';
 import { store } from '../store';
@@ -85,7 +85,8 @@ export class MapScene extends Phaser.Scene {
     this.setupCamera();
     this.currentAction = task?.action;
     this.travelTo = store.state.travel?.to;
-    if (task) {
+    if (task && store.state.paused) this.manual = true;
+    else if (task) {
       if (store.state.travel?.to === 'bank') this.goToTask(NODES.find((n) => n.id === 'bank'));
       else if (store.state.travel) this.goToTask();
       else this.startWorking();
@@ -102,7 +103,10 @@ export class MapScene extends Phaser.Scene {
     // 世界地图上的「寻路前往」
     const onWalkTo = (id: string) => {
       const n = NODES.find((x) => x.id === id);
-      if (n) this.moveTo(standTile(n).x, standTile(n).y);
+      if (!n) return;
+      // 寻路去的就是当前工作的地点：等于继续工作
+      if (n === nodeForAction(this.currentAction) && store.state.paused) return store.dispatch(resumeWork);
+      this.moveTo(standTile(n).x, standTile(n).y);
     };
     this.game.events.on('walkto', onWalkTo);
     this.unsub.push(() => this.game.events.off('walkto', onWalkTo));
@@ -537,10 +541,9 @@ export class MapScene extends Phaser.Scene {
     cam.setZoom(Phaser.Math.Clamp(cam.zoom + d * DPR, this.zoomLimits.min(), this.zoomLimits.max()));
   }
 
-  /** 镜头回到角色；有任务时角色也走回任务地点 */
+  /** 镜头回到角色 */
   private recenter() {
     this.recenterCameraOnly();
-    if (this.currentAction && this.manual) this.goToTask();
   }
 
   private recenterCameraOnly() {
@@ -567,6 +570,8 @@ export class MapScene extends Phaser.Scene {
     const flash = this.add.image(this.player.x, this.player.y, 'glow').setTint(0x9ad8ff).setBlendMode(Phaser.BlendModes.ADD).setDepth(9500).setScale(0.2);
     this.tweens.add({ targets: flash, scale: 1.6, alpha: 0, duration: 600, onComplete: () => flash.destroy() });
     this.manual = nodeForAction(this.currentAction) !== n;
+    // 传送到别处等于离开了工作地点；传回工作地点就接着干
+    store.dispatch((g) => (this.manual ? leaveWork(g) : resumeWork(g)));
     if (!this.manual) this.startWorking();
   }
 
@@ -577,6 +582,7 @@ export class MapScene extends Phaser.Scene {
     if (!path) return;
     this.manual = true;
     this.stopWorking();
+    store.dispatch(leaveWork);
     if (!this.following) this.recenterCameraOnly();
     this.drawRoute(path);
     this.walkPath(path, () => {
@@ -602,9 +608,22 @@ export class MapScene extends Phaser.Scene {
   /** 队列首个任务变化时，角色走到对应资源点 */
   private travelTo?: string;
 
+  private wasPaused = !!store.state.paused;
+
   private syncTask() {
     const action = store.state.queue[0]?.action;
     const to = store.state.travel?.to;
+    const paused = !!store.state.paused;
+    if (paused !== this.wasPaused) {
+      this.wasPaused = paused;
+      // 点了「继续工作」：走回任务地点
+      if (!paused && action && action === this.currentAction && this.manual) {
+        this.travelTo = to;
+        this.goToTask();
+        this.recenterCameraOnly();
+        return;
+      }
+    }
     if (action === this.currentAction) {
       // 背包满了回仓库，或者存完东西走回资源点
       if (to !== this.travelTo) {

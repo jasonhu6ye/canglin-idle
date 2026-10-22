@@ -1,5 +1,5 @@
 import { ACTIONS, MONSTERS, NODES, SKILLS } from '../core/data';
-import { actionDuration, combatLevel, level, maxHp, removeTask, weaponStyle } from '../core/sim';
+import { actionDuration, combatLevel, level, maxHp, removeTask, resumeWork, weaponStyle } from '../core/sim';
 import type { GameState, SkillId } from '../core/types';
 import { PALETTE, SPRITES } from '../game/sprites';
 import { store } from '../store';
@@ -63,7 +63,14 @@ export function StatusChips({ s }: { s: GameState }) {
   const task = s.queue[0];
   const a = task && ACTIONS[task.action];
   let body = null;
-  if (s.travel) {
+  if (task && s.paused) {
+    body = (
+      <>
+        <b style={{ color: '#9aa0a8' }}>已暂停</b> · 你离开了{actionName(task.action)}的地点
+        <button className="pill on" onClick={() => store.dispatch(resumeWork)}>继续工作</button>
+      </>
+    );
+  } else if (s.travel) {
     const n = NODES.find((x) => x.id === s.travel!.to);
     const pct = (1 - s.travel.ms / s.travel.total) * 100;
     body = (

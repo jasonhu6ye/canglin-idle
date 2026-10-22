@@ -1,6 +1,6 @@
 import { ACTIONS, ITEMS, MONSTERS, nodeOfAction, NODES, SKILLS, SPAWN_TILE, standOf, travelMs } from './data';
 import { nextRandom } from './rng';
-import { levelForXp, XP_TABLE } from './xp';
+import { BONUS_PER_LEVEL, levelForXp, SPEED_PER_LEVEL, XP_TABLE } from './xp';
 import type {
   CombatAction, CombatStyle, EquipSlot, GameState, MonsterDef, SkillAction, SkillId, Summary, Task, TaskEndReason, TaskMode,
 } from './types';
@@ -124,7 +124,13 @@ export function toolSpeed(s: GameState, skill: SkillId, tool?: EquipSlot) {
 }
 
 /** 工具加速后的单次耗时 */
-export const actionDuration = (s: GameState, a: SkillAction) => Math.round(a.durationMs / (1 + toolSpeed(s, a.skill, a.tool)));
+/** 等级加速：非战斗技能每级 +0.5% 动作速度，没有上限 */
+export const levelSpeed = (s: GameState, skill: SkillId) => level(s, skill) * SPEED_PER_LEVEL;
+/** 等级高出动作要求的部分：采集类是双倍产出几率，生产类是不消耗材料几率 */
+export const levelBonus = (s: GameState, a: SkillAction) => Math.max(0, level(s, a.skill) - a.level) * BONUS_PER_LEVEL;
+
+export const actionDuration = (s: GameState, a: SkillAction) =>
+  Math.round(a.durationMs / (1 + toolSpeed(s, a.skill, a.tool) + levelSpeed(s, a.skill)));
 
 /** 玩家攻击间隔：看武器，匕首快、长枪和弩慢 */
 export const playerAttackMs = (s: GameState) => ITEMS[s.equipment.weapon ?? '']?.equip?.attackMs ?? PLAYER_ATTACK_MS;
@@ -372,7 +378,9 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     s.progressMs += step;
     if (s.progressMs >= duration) {
       s.progressMs = 0;
-      a.inputs?.forEach((i) => useItem(i.item, i.qty));
+      const bonus = levelBonus(s, a);
+      const gatherer = SKILLS[a.skill].group === 'gather';
+      if (!(a.inputs && !gatherer && rand() < bonus)) a.inputs?.forEach((i) => useItem(i.item, i.qty));
       const failChance = a.fail
         ? Math.max(0, a.fail.chance * (a.fail.noFailLevel - level(s, a.skill)) / (a.fail.noFailLevel - a.level))
         : 0;
@@ -381,6 +389,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         if (a.fail.stunMs) s.progressMs = -a.fail.stunMs;
       } else {
         for (const o of a.outputs) if (o.chance === undefined || rand() < o.chance) addLoot(o.item, o.qty);
+        if (gatherer && rand() < bonus) a.outputs.forEach((o) => o.chance === undefined && addLoot(o.item, o.qty));
         addXp(a.skill, a.xp);
       }
       task.done++;
@@ -448,7 +457,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
 
   while (dt > 0) {
     const task = s.queue[0];
-    if (!task) {
+    if (!task || s.paused) {
       regen(s, dt);
       break;
     }
@@ -498,6 +507,7 @@ function regen(s: GameState, ms: number) {
 export function startNow(prev: GameState, action: string, mode: TaskMode): GameState {
   const s = clone(prev);
   s.queue = [{ action, mode, done: 0, elapsedMs: 0 }, ...s.queue.slice(1)];
+  s.paused = false;
   s.progressMs = 0;
   s.combat = null;
   s.travel = null;
@@ -514,9 +524,25 @@ export function teleport(prev: GameState, nodeId: string): GameState {
   return s;
 }
 
-/** 没有任务时手动走到某个格子，记下位置 */
+/** 手动走开：当前工作停下（进度清零），队列留着等「继续工作」 */
+export function leaveWork(prev: GameState): GameState {
+  if (!prev.queue.length || prev.paused) return prev;
+  const s = clone(prev);
+  s.paused = true;
+  s.progressMs = Math.min(0, s.progressMs);
+  s.combat = null;
+  s.travel = null;
+  return s;
+}
+
+export function resumeWork(prev: GameState): GameState {
+  if (!prev.paused) return prev;
+  return { ...prev, paused: false };
+}
+
+/** 没有任务或已暂停时，手动走到某个格子，记下位置 */
 export function setLoc(prev: GameState, x: number, y: number): GameState {
-  if (prev.queue.length || (prev.loc.x === x && prev.loc.y === y)) return prev;
+  if ((prev.queue.length && !prev.paused) || (prev.loc.x === x && prev.loc.y === y)) return prev;
   const s = clone(prev);
   s.loc = { x, y };
   return s;
@@ -532,6 +558,7 @@ export function enqueue(prev: GameState, action: string, mode: TaskMode): GameSt
 export function removeTask(prev: GameState, index: number): GameState {
   const s = clone(prev);
   s.queue.splice(index, 1);
+  if (!s.queue.length) s.paused = false;
   if (index === 0) {
     s.progressMs = 0;
     s.combat = null;

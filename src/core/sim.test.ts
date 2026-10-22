@@ -1,7 +1,7 @@
-import { advance, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour } from './sim';
+import { actionDuration, advance, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour } from './sim';
 import { levelForXp, XP_TABLE } from './xp';
-import type { GameState, TaskMode } from './types';
-import { nodeOfAction, standOf, travelMs } from './data';
+import type { GameState, SkillAction, TaskMode } from './types';
+import { ACTIONS, nodeOfAction, standOf, travelMs } from './data';
 
 /** 测试默认已经站在任务地点，不算走路时间 */
 function startHere(s: GameState, action: string, mode: TaskMode) {
@@ -16,9 +16,12 @@ const owned = (s: GameState, id: string) => (s.bag[id] ?? 0) + (s.bank[id] ?? 0)
 const HOUR = 3_600_000;
 
 describe('经验曲线', () => {
-  it('99 级约 1300 万经验，且单调', () => {
-    expect(XP_TABLE[99]).toBeGreaterThan(13_000_000);
-    expect(XP_TABLE[99]).toBeLessThan(13_100_000);
+  it('没有 99 级上限，140 级约 6 亿经验，且单调', () => {
+    expect(XP_TABLE[99]).toBeGreaterThan(40_000_000);
+    expect(XP_TABLE[140]).toBeGreaterThan(600_000_000);
+    expect(levelForXp(XP_TABLE[140])).toBe(140);
+    expect(levelForXp(XP_TABLE[150] + 1)).toBe(150);
+    for (let l = 2; l < 300; l++) expect(XP_TABLE[l + 1] - XP_TABLE[l]).toBeGreaterThan(XP_TABLE[l] - XP_TABLE[l - 1]);
     expect(levelForXp(0)).toBe(1);
     expect(levelForXp(XP_TABLE[50])).toBe(50);
     expect(levelForXp(XP_TABLE[50] - 1)).toBe(49);
@@ -29,10 +32,10 @@ describe('采集', () => {
   it('挖石头 1 小时 = 1200 次', () => {
     const s = startHere(newGame(T0, 1), 'mine_stone', { type: 'infinite' });
     const { state, summary } = advance(s, T0 + HOUR);
-    // 背包装满 2000 个后要回仓库存一趟，所以略少于 1200 次
+    // 等级加速让它比 1200 次多一点；背包满了还要回仓库一趟
     expect(summary.items.stone).toBe(owned(state, 'stone'));
-    expect(owned(state, 'stone')).toBeLessThanOrEqual(1200);
-    expect(owned(state, 'stone')).toBeGreaterThan(1100);
+    expect(owned(state, 'stone')).toBeGreaterThan(1150);
+    expect(owned(state, 'stone')).toBeLessThan(1400);
     expect(state.queue).toHaveLength(1);
   });
 
@@ -72,7 +75,7 @@ describe('战斗', () => {
     const s = startHere(newGame(T0, 7), 'fight_rabbit', { type: 'time', ms: HOUR });
     const { state, summary } = advance(s, T0 + HOUR);
     expect(summary.kills.rabbit).toBeGreaterThan(60);
-    expect(levelForXp(state.xp.melee)).toBeGreaterThan(10);
+    expect(levelForXp(state.xp.melee)).toBeGreaterThan(5);
     expect(state.queue).toHaveLength(0);
   });
 
@@ -184,13 +187,33 @@ describe('背包与战斗方式', () => {
     expect(summary.taskEnds[0].reason).toBe('noAmmo');
   });
 
-  it('工具加快采集', () => {
+  it('工具和等级都加快动作', () => {
     const s = newGame(T0, 1);
+    const a = ACTIONS.mine_stone as SkillAction;
+    const base = actionDuration(s, a);
     s.equipment.pickaxe = 'wood_pickaxe';
-    const { state } = advance(startHere(s, 'mine_stone', { type: 'count', count: 300 }), T0 + 300 * 2885);
-    expect(state.bag.stone).toBe(300);
+    expect(actionDuration(s, a)).toBe(Math.round(a.durationMs / (1 + 0.04 + 0.005)));
+    s.xp.mining = XP_TABLE[140];
+    expect(actionDuration(s, a)).toBe(Math.round(a.durationMs / (1 + 0.04 + 0.7)));
+    expect(actionDuration(s, a)).toBeLessThan(base);
   });
-});
+
+  it('高出要求等级时：采集有双倍产出，生产会省材料', () => {
+    let s = newGame(T0, 5);
+    s.xp.mining = XP_TABLE[140];
+    s = startHere(s, 'mine_stone', { type: 'count', count: 1000 });
+    const { state } = advance(s, T0 + 24 * HOUR);
+    // 139 级 × 0.2% ≈ 28% 双倍
+    expect(owned(state, 'stone')!).toBeGreaterThan(1200);
+    expect(owned(state, 'stone')!).toBeLessThan(1350);
+
+    let c = newGame(T0, 5);
+    c.xp.smithing = XP_TABLE[140];
+    c.bank.tin_ore = 200;
+    c = startHere(c, 'smelt_tin', { type: 'infinite' });
+    const r = advance(c, T0 + HOUR).state;
+    expect(owned(r, 'tin_bar')!).toBeGreaterThan(110);
+  });});
 
 describe('存档迁移', () => {
   it('v1 存档补齐新技能和背包，丢掉不认识的物品', () => {
@@ -229,6 +252,24 @@ describe('自动寻路', () => {
     expect(state.bank.sapphire).toBe(1900);
     expect(owned(state, 'stone')).toBe(summary.items.stone);
     expect(Object.values(state.bag).reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(2000);
+  });
+});
+
+describe('手动走开', () => {
+  it('点地图走开后停下工作，继续工作后先走回去再干', () => {
+    const s = startHere(newGame(T0, 1), 'mine_stone', { type: 'infinite' });
+    let p = advance(s, T0 + 30_000).state;
+    const got = owned(p, 'stone');
+    p = setLoc(leaveWork(p), p.loc.x + 20, p.loc.y);
+    expect(p.paused).toBe(true);
+    p = advance(p, T0 + HOUR).state;
+    expect(owned(p, 'stone')).toBe(got);
+    expect(p.queue).toHaveLength(1);
+    p = resumeWork(p);
+    p = advance(p, T0 + HOUR + 3000).state;
+    expect(p.travel?.to).toBe(nodeOfAction('mine_stone')!.id);
+    p = advance(p, T0 + 2 * HOUR).state;
+    expect(owned(p, 'stone')!).toBeGreaterThan(got!);
   });
 });
 
