@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ACTIONS, ITEMS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, type MapNode } from '../core/data';
 import {
-  BAG_SLOTS, BAG_STACK, bagSlotsUsed, combatLevel, equip, level, playerBonuses, sell, setSettings, toBag, toBank, slotSpeed, unequip,
+  BAG_SLOTS, BAG_STACK, bagRoomFor, bagSlotsUsed, combatLevel, equip, level, playerBonuses, sell, setSettings, toBag, toBank, slotSpeed, unequip,
   weaponStyle,
 } from '../core/sim';
 import type { EquipSlot, GameState, ItemCategory, SkillId, Summary } from '../core/types';
@@ -23,7 +23,6 @@ const CATEGORIES: [ItemCategory | 'all', string][] = [
   ['all', '全部'], ['resource', '资源'], ['material', '材料'], ['food', '食物'], ['potion', '药水'], ['ammo', '弹药'],
   ['gear', '装备'], ['tool', '工具'], ['misc', '其他'],
 ];
-const BAG_CATS = ['food', 'potion', 'ammo'];
 
 /** 选中物品后的详情和操作 */
 function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 'bag' }) {
@@ -48,9 +47,11 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
         </span>
       )}
       <div className="go">
-        {from === 'bank' && e && <button className="primary" disabled={!canEquip} onClick={() => store.dispatch((g) => equip(g, id))}>装备</button>}
-        {from === 'bank' && BAG_CATS.includes(item.category) && (
-          <button className="primary" onClick={() => store.dispatch((g) => toBag(g, id, qty))}>放入背包</button>
+        {e && <button className="primary" disabled={!canEquip} onClick={() => store.dispatch((g) => equip(g, id))}>装备</button>}
+        {from === 'bank' && id !== 'coins' && (
+          <button disabled={bagRoomFor(s.bag, id) <= 0} onClick={() => store.dispatch((g) => toBag(g, id, qty))}>
+            {bagRoomFor(s.bag, id) > 0 ? '放入背包' : '背包已满'}
+          </button>
         )}
         {from === 'bank' && id !== 'coins' && (
           <>
@@ -64,7 +65,7 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
   );
 }
 
-function ItemGrid({ items, sel, onSel }: { items: [string, number][]; sel: string | null; onSel: (id: string) => void }) {
+function ItemGrid({ items, sel, onSel, empty = 0 }: { items: [string, number][]; sel: string | null; onSel: (id: string) => void; empty?: number }) {
   return (
     <div className="grid">
       {items.map(([id, n]) => (
@@ -74,6 +75,7 @@ function ItemGrid({ items, sel, onSel }: { items: [string, number][]; sel: strin
           <span className="nm">{ITEMS[id].name}</span>
         </button>
       ))}
+      {Array.from({ length: empty }, (_, i) => <span key={`e${i}`} className="cell empty-cell" />)}
     </div>
   );
 }
@@ -101,12 +103,10 @@ export function BankPanel({ s }: { s: GameState }) {
   );
 }
 
-export function BagPanel({ s }: { s: GameState }) {
-  const [sel, setSel] = useState<string | null>(null);
+/** 角色：身上的装备和工具，点一下卸下到背包 */
+export function CharacterPanel({ s }: { s: GameState }) {
   const style = weaponStyle(s);
   const b = playerBonuses(s, style);
-  const items = Object.entries(s.bag).filter(([id]) => ITEMS[id]);
-  const used = bagSlotsUsed(s.bag);
   const slot = (slotId: EquipSlot, name: string) => {
     const id = s.equipment[slotId];
     return (
@@ -116,30 +116,42 @@ export function BagPanel({ s }: { s: GameState }) {
       </button>
     );
   };
+  const weapon = ITEMS[s.equipment.weapon ?? '']?.equip;
   return (
     <div className="page">
       <h2>装备 <small className="muted">战斗等级 {combatLevel(s)} · {STYLE_NAME[style]}</small></h2>
       <div className="equip">{GEAR_SLOTS.map(([id, name]) => slot(id, name))}</div>
-      <p className="muted">攻击 +{b.attack} · 力量 +{b.strength} · 防御 +{b.defence} · 点击装备可卸下回仓库</p>
-
+      <p className="muted">
+        攻击 +{b.attack} · 力量 +{b.strength} · 防御 +{b.defence} · 攻速 {((weapon?.attackMs ?? 2400) / 1000).toFixed(1)} 秒
+      </p>
       <h2>工具</h2>
       <div className="equip tools">{TOOL_SLOTS.map(([id, name]) => slot(id, name))}</div>
-      <p className="muted">
-        {TOOL_SLOTS.map(([slot, name]) => `${name} +${Math.round(slotSpeed(s, slot) * 100)}%`).join(' · ')}
-      </p>
+      <p className="muted">{TOOL_SLOTS.map(([slot, name]) => `${name} +${Math.round(slotSpeed(s, slot) * 100)}%`).join(' · ')}</p>
+      <p className="muted">点击身上的装备会卸下放进背包，背包满了才会送回仓库。在背包或仓库里点装备可以直接穿上。</p>
+    </div>
+  );
+}
 
-      <h2>背包 <small className="muted">{used}/{BAG_SLOTS} 格 · 每格 {BAG_STACK} 个</small></h2>
+/** 背包：随身带的东西，20 格 */
+export function BagPanel({ s }: { s: GameState }) {
+  const [sel, setSel] = useState<string | null>(null);
+  const items = Object.entries(s.bag).filter(([id]) => ITEMS[id]);
+  const used = bagSlotsUsed(s.bag);
+  return (
+    <div className="page">
+      <h2>背包 <small className="muted">{used}/{BAG_SLOTS} 格 · 物品每格 {BAG_STACK} 个，装备每件一格</small></h2>
+      <div className="bag-meter"><i style={{ width: `${(used / BAG_SLOTS) * 100}%` }} /></div>
+      <ItemGrid items={items} sel={sel} onSel={setSel} empty={Math.max(0, BAG_SLOTS - used)} />
+      {sel && <ItemDetail s={s} id={sel} from="bag" />}
       <div className="opts">
-        <span className="lbl">开战自动带食物</span>
+        <span className="lbl">开战自动从仓库带食物</span>
         {[20, 50, 100, -1].map((n) => (
           <button key={n} className={s.settings.carryFood === n ? 'on' : ''} onClick={() => store.dispatch((g) => setSettings(g, { carryFood: n }))}>
             {n < 0 ? '全部' : n}
           </button>
         ))}
       </div>
-      <ItemGrid items={items} sel={sel} onSel={setSel} />
-      {!items.length && <p className="muted">背包只放食物、药水、箭和符文。开始战斗时会自动从仓库带食物进来，战斗中只吃背包里的。</p>}
-      {sel && <ItemDetail s={s} id={sel} from="bag" />}
+      <p className="muted">战斗只吃背包里的食物、只用背包里的弹药（背包没有时才从仓库补）。采集和制作的产出直接存进仓库。</p>
     </div>
   );
 }

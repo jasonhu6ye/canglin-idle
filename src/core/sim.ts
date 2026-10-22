@@ -1,4 +1,4 @@
-import { ACTIONS, ITEMS, MONSTERS, SKILLS } from './data';
+import { ACTIONS, ITEMS, MONSTERS, nodeOfAction, NODES, SKILLS, SPAWN_TILE, standOf, travelMs } from './data';
 import { nextRandom } from './rng';
 import { levelForXp, XP_TABLE } from './xp';
 import type {
@@ -41,6 +41,8 @@ export function newGame(now: number, seed = Math.floor(Math.random() * 2 ** 31))
     settings: { eatThreshold: 0.5, carryFood: DEFAULT_CARRY_FOOD },
     regenMs: 0,
     stats: { kills: 0, deaths: 0 },
+    loc: { ...SPAWN_TILE },
+    travel: null,
   };
 }
 
@@ -70,6 +72,9 @@ export function migrate(raw: unknown): GameState | null {
     settings: { ...fresh.settings, ...s.settings },
     regenMs: s.regenMs ?? 0,
     stats: { ...fresh.stats, ...s.stats },
+    // 旧存档没有位置：当作已经站在当前任务的地点
+    loc: s.loc ?? (nodeOfAction(queue[0]?.action) ? standOf(nodeOfAction(queue[0]?.action)!) : fresh.loc),
+    travel: s.travel ?? null,
   };
 }
 
@@ -120,17 +125,29 @@ export const actionDuration = (s: GameState, a: SkillAction) => Math.round(a.dur
 export const playerAttackMs = (s: GameState) => ITEMS[s.equipment.weapon ?? '']?.equip?.attackMs ?? PLAYER_ATTACK_MS;
 
 const healOf = (id: string) => ITEMS[id]?.heals ?? 0;
-const isBagItem = (id: string) => ['food', 'potion', 'ammo'].includes(ITEMS[id]?.category);
+/** 每格能叠多少个：装备和工具一件占一格，其余 100 个一格 */
+export const stackOf = (id: string) => (ITEMS[id]?.equip ? 1 : BAG_STACK);
 
 export function bagSlotsUsed(bag: Record<string, number>) {
-  return Object.values(bag).reduce((n, q) => n + Math.ceil(q / BAG_STACK), 0);
+  return Object.entries(bag).reduce((n, [id, q]) => n + Math.ceil(q / stackOf(id)), 0);
 }
 
 /** 背包里还能放下多少个这种物品 */
 export function bagRoomFor(bag: Record<string, number>, item: string) {
+  const stack = stackOf(item);
   const have = bag[item] ?? 0;
-  const partial = have % BAG_STACK ? BAG_STACK - (have % BAG_STACK) : 0;
-  return partial + (BAG_SLOTS - bagSlotsUsed(bag)) * BAG_STACK;
+  const partial = have % stack ? stack - (have % stack) : 0;
+  return partial + Math.max(0, BAG_SLOTS - bagSlotsUsed(bag)) * stack;
+}
+
+/** 放一件东西回身上：背包放得下就进背包，否则进仓库。返回去了哪里 */
+function stow(s: GameState, id: string): 'bag' | 'bank' {
+  if (bagRoomFor(s.bag, id) > 0) {
+    s.bag[id] = (s.bag[id] ?? 0) + 1;
+    return 'bag';
+  }
+  s.bank[id] = (s.bank[id] ?? 0) + 1;
+  return 'bank';
 }
 
 /** 背包里回复最多的食物或药水 */
@@ -212,6 +229,26 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     sum.taskEnds.push({ action: task.action, reason });
     s.progressMs = 0;
     s.combat = null;
+    s.travel = null;
+  };
+
+  /** 还没到任务地点就先走路，返回走了多久 */
+  const stepTravel = (task: Task, budget: number): number => {
+    const node = nodeOfAction(task.action);
+    if (!node) return 0;
+    const dest = standOf(node);
+    if (s.loc.x === dest.x && s.loc.y === dest.y) return 0;
+    if (!s.travel || s.travel.to !== node.id) {
+      const ms = travelMs(s.loc, dest);
+      s.travel = { to: node.id, ms, total: ms };
+    }
+    const step = Math.min(budget, s.travel.ms);
+    s.travel.ms -= step;
+    if (s.travel.ms <= 0) {
+      s.loc = dest;
+      s.travel = null;
+    }
+    return Math.max(step, 1);
   };
 
   const isFinished = (task: Task) =>
@@ -343,6 +380,12 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       regen(s, dt);
       break;
     }
+    const walked = stepTravel(task, dt);
+    if (walked) {
+      dt -= walked;
+      regen(s, walked);
+      continue;
+    }
     const a = ACTIONS[task.action];
     const budget = Math.min(dt, timeLeft(task));
     const used = a.kind === 'skill' ? stepSkill(task, a, budget) : stepCombat(task, a, budget);
@@ -371,6 +414,25 @@ export function startNow(prev: GameState, action: string, mode: TaskMode): GameS
   s.queue = [{ action, mode, done: 0, elapsedMs: 0 }, ...s.queue.slice(1)];
   s.progressMs = 0;
   s.combat = null;
+  s.travel = null;
+  return s;
+}
+
+/** 传送：直接站到地点上，取消正在走的路 */
+export function teleport(prev: GameState, nodeId: string): GameState {
+  const n = NODES.find((x) => x.id === nodeId);
+  if (!n) return prev;
+  const s = clone(prev);
+  s.loc = standOf(n);
+  s.travel = null;
+  return s;
+}
+
+/** 没有任务时手动走到某个格子，记下位置 */
+export function setLoc(prev: GameState, x: number, y: number): GameState {
+  if (prev.queue.length || (prev.loc.x === x && prev.loc.y === y)) return prev;
+  const s = clone(prev);
+  s.loc = { x, y };
   return s;
 }
 
@@ -387,35 +449,39 @@ export function removeTask(prev: GameState, index: number): GameState {
   if (index === 0) {
     s.progressMs = 0;
     s.combat = null;
+    s.travel = null;
   }
   return s;
 }
 
+/** 穿上装备：优先用背包里的，没有再从仓库拿；换下来的旧装备放进背包，背包满了才回仓库 */
 export function equip(prev: GameState, item: string): GameState {
   const e = ITEMS[item]?.equip;
-  if (!e || !prev.bank[item] || level(prev, e.skill) < e.level) return prev;
+  const from = prev.bag[item] ? 'bag' : prev.bank[item] ? 'bank' : null;
+  if (!e || !from || level(prev, e.skill) < e.level) return prev;
   const s = clone(prev);
+  s[from][item] -= 1;
+  if (s[from][item] <= 0) delete s[from][item];
   const old = s.equipment[e.slot];
-  if (old) s.bank[old] = (s.bank[old] ?? 0) + 1;
-  s.bank[item] -= 1;
-  if (s.bank[item] <= 0) delete s.bank[item];
   s.equipment[e.slot] = item;
+  if (old) stow(s, old);
   return s;
 }
 
+/** 卸下装备：放进背包，背包满了才回仓库 */
 export function unequip(prev: GameState, slot: EquipSlot): GameState {
   const id = prev.equipment[slot];
   if (!id) return prev;
   const s = clone(prev);
   delete s.equipment[slot];
-  s.bank[id] = (s.bank[id] ?? 0) + 1;
+  stow(s, id);
   return s;
 }
 
-/** 仓库 → 背包，只能放食物、药水、弹药，放不下的留在仓库 */
+/** 仓库 → 背包，什么都能放，放不下的留在仓库 */
 export function toBag(prev: GameState, item: string, qty: number): GameState {
   const n = Math.min(prev.bank[item] ?? 0, qty, bagRoomFor(prev.bag, item));
-  if (!isBagItem(item) || n <= 0) return prev;
+  if (item === 'coins' || n <= 0) return prev;
   const s = clone(prev);
   s.bank[item] -= n;
   if (s.bank[item] <= 0) delete s.bank[item];

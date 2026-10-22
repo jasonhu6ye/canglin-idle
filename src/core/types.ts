@@ -150,6 +150,10 @@ export interface GameState {
   /** 非战斗时回血的计时 */
   regenMs: number;
   stats: { kills: number; deaths: number };
+  /** 角色所在的格子（寻路的起点） */
+  loc: { x: number; y: number };
+  /** 正在自动寻路去当前任务的地点；到达前任务不开始 */
+  travel: { to: string; ms: number; total: number } | null;
 }
 
 export type TaskEndReason = 'complete' | 'noInput' | 'death' | 'level' | 'noAmmo';

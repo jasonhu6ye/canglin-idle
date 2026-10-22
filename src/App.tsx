@@ -8,12 +8,13 @@ import { GameCanvas, onGameEvent } from './ui/GameCanvas';
 import { actionName } from './ui/format';
 import { MapButtons, QueuePanel, StatusChips, TopBar } from './ui/hud';
 import { TplIcon } from './ui/icons';
-import { BagPanel, BankPanel, MorePanel, NodeList, OfflineModal, SkillsPanel } from './ui/panels';
+import { BagPanel, BankPanel, CharacterPanel, MorePanel, NodeList, OfflineModal, SkillsPanel } from './ui/panels';
 import { WorldMap } from './ui/WorldMap';
 
-type Tab = 'game' | 'bag' | 'bank' | 'skills' | 'more';
+type Tab = 'game' | 'char' | 'bag' | 'bank' | 'skills' | 'more';
 const TABS: { id: Tab; icon: [string, string]; label: string }[] = [
   { id: 'game', icon: ['sword', '#c5cad2'], label: '游戏' },
+  { id: 'char', icon: ['helm', '#c5cad2'], label: '角色' },
   { id: 'bag', icon: ['bag', '#a07a50'], label: '背包' },
   { id: 'bank', icon: ['coins', '#f0c850'], label: '仓库' },
   { id: 'skills', icon: ['gem', '#e8b84a'], label: '技能' },
@@ -100,6 +101,7 @@ export function App() {
   if (worldMap) side = <WorldMap s={s} onClose={() => setWorldMap(false)} onOpenNode={openNode} />;
   else if (tab === 'game' && node) side = <ActionSheet s={s} nodeId={node} onClose={() => setNode(null)} />;
   else if (tab === 'game' && wide) side = <NodeList onPick={openNode} />;
+  else if (tab === 'char') side = <CharacterPanel s={s} />;
   else if (tab === 'bag') side = <BagPanel s={s} />;
   else if (tab === 'bank') side = <BankPanel s={s} />;
   else if (tab === 'skills') side = <SkillsPanel s={s} onPick={openNode} />;

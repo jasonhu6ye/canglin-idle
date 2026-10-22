@@ -546,6 +546,20 @@ export const NODES: MapNode[] = [
 
 export const ACTIONS: Record<string, ActionDef> = Object.fromEntries(actionList.map((a) => [a.id, a]));
 
+/** 动作 → 所在地点 */
+const NODE_OF: Record<string, MapNode> = Object.fromEntries(NODES.flatMap((n) => n.actions.map((a) => [a, n])));
+export const nodeOfAction = (id: string | undefined): MapNode | undefined => (id ? NODE_OF[id] : undefined);
+/** 干活时站的格子：地点正下方一格 */
+export const standOf = (n: MapNode) => ({ x: n.x, y: n.y + 1 });
+/** 出生点：镇中心广场 */
+export const SPAWN_TILE = townXY(167, 175);
+/** 步行速度（格/秒），坐骑以后乘倍率 */
+export const WALK_TILES_PER_SEC = 4;
+/** 自动寻路要走多久：直线距离 × 1.25 估算绕路 */
+export function travelMs(from: { x: number; y: number }, to: { x: number; y: number }, speed = WALK_TILES_PER_SEC) {
+  return Math.round((Math.hypot(to.x - from.x, to.y - from.y) * 1.25 * 1000) / speed);
+}
+
 /** 世界地图危险度：按地点最强怪物和玩家战斗等级的差距 */
 export const DANGER = [
   { name: '安全', color: '#7cc46a' },

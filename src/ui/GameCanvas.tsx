@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { store } from '../store';
 import { useEffect, useRef } from 'react';
 import { DPR } from '../game/dpr';
 import { MapScene, NODE_CLICK, REGION_CHANGE } from '../game/MapScene';
@@ -41,7 +42,7 @@ export function GameCanvas({ onNodeClick }: { onNodeClick: (nodeId: string) => v
       input: { touch: { capture: true } },
     });
     // 截图脚本用：?debug 时把游戏实例挂到 window 上
-    if (location.search.includes("debug")) (window as unknown as { __game: Phaser.Game }).__game = game;
+    if (location.search.includes("debug")) Object.assign(window, { __game: game, __store: store });
     const g = game;
     g.events.on(REGION_CHANGE, relay(REGION_CHANGE));
     const ro = new ResizeObserver(() => {

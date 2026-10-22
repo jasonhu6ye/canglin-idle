@@ -1,4 +1,4 @@
-import { ACTIONS, MONSTERS, SKILLS } from '../core/data';
+import { ACTIONS, MONSTERS, NODES, SKILLS } from '../core/data';
 import { actionDuration, combatLevel, level, maxHp, removeTask, weaponStyle } from '../core/sim';
 import type { GameState, SkillId } from '../core/types';
 import { PALETTE, SPRITES } from '../game/sprites';
@@ -63,7 +63,16 @@ export function StatusChips({ s }: { s: GameState }) {
   const task = s.queue[0];
   const a = task && ACTIONS[task.action];
   let body = null;
-  if (a?.kind === 'skill') {
+  if (s.travel) {
+    const n = NODES.find((x) => x.id === s.travel!.to);
+    const pct = (1 - s.travel.ms / s.travel.total) * 100;
+    body = (
+      <>
+        <b style={{ color: '#e8b84a' }}>寻路中</b> · 前往{n?.name} · 还要 {Math.ceil(s.travel.ms / 1000)} 秒
+        <span className="bar wide"><i style={{ width: `${pct}%` }} /></span>
+      </>
+    );
+  } else if (a?.kind === 'skill') {
     const pct = (Math.max(0, s.progressMs) / actionDuration(s, a)) * 100;
     body = (
       <>

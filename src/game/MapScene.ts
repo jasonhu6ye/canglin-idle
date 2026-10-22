@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
-import { ACTIONS, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, DANGER, dangerLevel, type MapNode } from '../core/data';
-import { combatLevel } from '../core/sim';
+import { ACTIONS, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, DANGER, dangerLevel, nodeOfAction, travelMs, WALK_TILES_PER_SEC, type MapNode } from '../core/data';
+import { combatLevel, setLoc, teleport as teleportState } from '../core/sim';
 import { HERO_ANIMS, HERO_FEET, HERO_H, HERO_W, paintHeroSheet, type HeroDir } from './hero';
 import type { RegionId, Summary } from '../core/types';
 import { store } from '../store';
@@ -15,7 +15,7 @@ import {
 } from './world';
 
 /** 步行速度（格/秒）。以后的坐骑在这上面乘倍率 */
-export const WALK_TILES_PER_SEC = 4;
+export { WALK_TILES_PER_SEC };
 let speedMultiplier = 1;
 export const setSpeedMultiplier = (m: number) => {
   speedMultiplier = m;
@@ -31,9 +31,7 @@ export const REGION_CHANGE = 'region-change';
 /** 角色当前所在格子，世界地图要用 */
 export const playerPos = { x: SPAWN.x, y: SPAWN.y };
 
-export function nodeForAction(actionId: string | undefined): MapNode | undefined {
-  return actionId ? NODES.find((n) => n.actions.includes(actionId)) : undefined;
-}
+export const nodeForAction = nodeOfAction;
 
 type Particle = { img: Phaser.GameObjects.Image; vx: number; vy: number; life: number; max: number; kind: Ambient };
 type Ambient = 'snow' | 'ember' | 'firefly' | 'spore' | 'mote' | 'dust' | 'leaf';
@@ -76,7 +74,7 @@ export class MapScene extends Phaser.Scene {
     this.addMonsters();
 
     const task = store.state.queue[0];
-    const start = (task && nodeForAction(task.action)) ? standTile(nodeForAction(task.action)!) : SPAWN;
+    const start = store.state.loc ?? SPAWN;
     this.player = this.add.container(start.x * T + T / 2, start.y * T + T / 2);
     const ring = this.add.ellipse(0, 6, 14, 6).setStrokeStyle(1, 0xe8b84a).setFillStyle(0xe8b84a, 0.25);
     this.playerBody = this.add.sprite(0, 7, 'hero').setOrigin(0.5, HERO_FEET / HERO_H);
@@ -87,7 +85,10 @@ export class MapScene extends Phaser.Scene {
 
     this.setupCamera();
     this.currentAction = task?.action;
-    if (task) this.startWorking();
+    if (task) {
+      if (store.state.travel) this.goToTask();
+      else this.startWorking();
+    }
     this.updateLabels();
     this.unsub.push(store.subscribe(() => {
       this.syncTask();
@@ -97,6 +98,13 @@ export class MapScene extends Phaser.Scene {
     const onTeleport = (id: string) => this.teleport(id);
     this.game.events.on('teleport', onTeleport);
     this.unsub.push(() => this.game.events.off('teleport', onTeleport));
+    // 世界地图上的「寻路前往」
+    const onWalkTo = (id: string) => {
+      const n = NODES.find((x) => x.id === id);
+      if (n) this.moveTo(standTile(n).x, standTile(n).y);
+    };
+    this.game.events.on('walkto', onWalkTo);
+    this.unsub.push(() => this.game.events.off('walkto', onWalkTo));
     this.events.once('shutdown', () => this.unsub.forEach((u) => u()));
 
     // 水面和岩浆动画：重画图集里的液体格子
@@ -546,7 +554,9 @@ export class MapScene extends Phaser.Scene {
     const n = NODES.find((x) => x.id === nodeId);
     if (!n) return;
     this.walkTween?.stop();
+    this.clearRoute();
     this.stopWorking();
+    store.dispatch((g) => teleportState(g, nodeId));
     const s = standTile(n);
     this.player.setPosition(s.x * T + T / 2, s.y * T + T / 2).setDepth(s.y * T + T / 2 + 1000);
     this.cameras.main.centerOn(this.player.x, this.player.y);
@@ -565,7 +575,11 @@ export class MapScene extends Phaser.Scene {
     this.manual = true;
     this.stopWorking();
     if (!this.following) this.recenterCameraOnly();
-    this.walkPath(path, () => {});
+    this.drawRoute(path);
+    this.walkPath(path, () => {
+      this.clearRoute();
+      store.dispatch((g) => setLoc(g, tx, ty));
+    });
   }
 
   private showMarker(tx: number, ty: number, ok: boolean) {
@@ -601,16 +615,58 @@ export class MapScene extends Phaser.Scene {
     this.recenterCameraOnly();
   }
 
+  /** 自动寻路去任务地点：走路时间和存档里的一致，到了才开始干活 */
   private goToTask() {
     const node = nodeForAction(this.currentAction);
     if (!node) return;
     this.manual = false;
     this.stopWorking();
-    const path = findPath(this.playerTile(), standTile(node)) ?? [];
-    this.walkPath(path, () => this.startWorking());
+    const dest = standTile(node);
+    const path = findPath(this.playerTile(), dest) ?? [];
+    const st = store.state;
+    const atDest = st.loc.x === dest.x && st.loc.y === dest.y;
+    // 存档里还在路上：按剩余时间匀速走完这条路
+    const ms = st.travel?.to === node.id ? st.travel.ms : atDest ? 0 : travelMs(st.loc, dest);
+    let speed: number | undefined;
+    if (ms > 500 && path.length) {
+      let len = 0;
+      let prev = this.playerTile();
+      for (const p of path) {
+        len += Math.hypot(p.x - prev.x, p.y - prev.y);
+        prev = p;
+      }
+      speed = len / (ms / 1000);
+    }
+    this.drawRoute(path);
+    this.walkPath(path, () => {
+      this.clearRoute();
+      this.startWorking();
+    }, speed);
   }
 
-  private walkPath(path: { x: number; y: number }[], done: () => void) {
+  private route?: Phaser.GameObjects.Graphics;
+
+  /** 地图上画出要走的路线（金色虚点） */
+  private drawRoute(path: { x: number; y: number }[]) {
+    this.clearRoute();
+    if (path.length < 2) return;
+    const g = this.add.graphics().setDepth(998);
+    g.fillStyle(0xe8b84a, 0.85);
+    path.forEach((p, i) => {
+      if (i % 2) return;
+      g.fillRect(p.x * T + T / 2 - 1.5, p.y * T + T / 2 - 1.5, 3, 3);
+    });
+    const end = path[path.length - 1];
+    g.lineStyle(1, 0xe8b84a, 1).strokeRect(end.x * T + 2, end.y * T + 2, T - 4, T - 4);
+    this.route = g;
+  }
+
+  private clearRoute() {
+    this.route?.destroy();
+    this.route = undefined;
+  }
+
+  private walkPath(path: { x: number; y: number }[], done: () => void, speed?: number) {
     this.walkTween?.stop();
     if (!path.length) return done();
     const [step, ...rest] = path;
@@ -621,17 +677,17 @@ export class MapScene extends Phaser.Scene {
     if (dx || dy) {
       this.facing = Math.abs(dx) >= Math.abs(dy) ? 'side' : dy > 0 ? 'down' : 'up';
       if (this.facing === 'side') this.playerBody.setFlipX(dx < 0);
-      this.playerBody.anims.timeScale = speedMultiplier;
+      this.playerBody.anims.timeScale = (speed ?? WALK_TILES_PER_SEC * speedMultiplier) / WALK_TILES_PER_SEC;
       this.playerBody.play(`walk-${this.facing}`, true);
     }
     const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, px, py);
     this.walkTween = this.tweens.add({
       targets: this.player, x: px, y: py,
-      duration: (dist / T / (WALK_TILES_PER_SEC * speedMultiplier)) * 1000,
+      duration: (dist / T / (speed ?? WALK_TILES_PER_SEC * speedMultiplier)) * 1000,
       onUpdate: () => this.player.setDepth(this.player.y + 1000),
       onComplete: () => {
         if (!rest.length) this.idle();
-        this.walkPath(rest, done);
+        this.walkPath(rest, done, speed);
       },
     });
   }

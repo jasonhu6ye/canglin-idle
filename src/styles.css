@@ -243,3 +243,9 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .tier.t1 { background: #b8b8bc; } .tier.t2 { background: #e09058; } .tier.t3 { background: #e0e4ea; }
 .tier.t4 { background: #c87050; } .tier.t5 { background: #8ad8ff; } .tier.t6 { background: #c090ff; }
 .tier.t7 { background: #ffa040; } .tier.t8 { background: #5ae0a0; }
+
+/* 背包容量条和空格子 */
+.bag-meter { height: 6px; border-radius: 3px; background: #1a120e; border: 1px solid #6a4a2a; margin: 0 0 8px; overflow: hidden; }
+.bag-meter i { display: block; height: 100%; background: linear-gradient(90deg, #c89a40, #f0c850); }
+.grid.ghost { margin-top: 6px; }
+.empty-cell { opacity: 0.35; min-height: 64px; pointer-events: none; }
