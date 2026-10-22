@@ -79,16 +79,26 @@ export interface MonsterDef {
   id: string;
   name: string;
   level: number;
+  /** 0-7 对应 T1-T8 */
+  tier: number;
+  rank: 'normal' | 'elite' | 'boss';
+  boss?: boolean;
+  /** 种族大类和外形（外形决定动画怎么画） */
+  family: string;
+  form: string;
+  region: RegionId;
+  /** 战斗特性，见 bestiary.ts 的 TRAITS */
+  traits: string[];
+  /** 生物（动物，掉兽皮兽肉）还是怪物（掉魔核） */
+  kind: 'creature' | 'monster';
   hp: number;
   attack: number;
   defence: number;
   maxHit: number;
   attackMs: number;
+  respawnMs: number;
   drops: Drop[];
-  boss?: boolean;
-  /** 占位美术：用哪张精灵图、染什么颜色 */
-  sprite: string;
-  tint?: number;
+  art: { color: string; accent: string };
 }
 
 export type RegionId = 'town' | 'snow' | 'highland' | 'coast' | 'lava' | 'abyss' | 'swamp' | 'woodland' | 'giantwood';
@@ -150,6 +160,8 @@ export interface GameState {
   /** 非战斗时回血的计时 */
   regenMs: number;
   stats: { kills: number; deaths: number };
+  /** 每种怪物击杀数（怪物图鉴用），旧存档没有 */
+  bestiary?: Record<string, number>;
   /** 角色所在的格子（寻路的起点） */
   loc: { x: number; y: number };
   /** 正在自动寻路去当前任务的地点；到达前任务不开始 */

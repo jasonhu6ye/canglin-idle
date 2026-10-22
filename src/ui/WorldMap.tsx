@@ -95,14 +95,13 @@ export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: ()
       </div>
       {node && (
         <NodeCard nodeId={node.id} cl={cl} onOpen={() => onOpenNode(node.id)}
-          onTeleport={() => { emitToGame('teleport', node.id); onClose(); }}
           onWalk={() => { emitToGame('walkto', node.id); onClose(); }} />
       )}
     </div>
   );
 }
 
-function NodeCard({ nodeId, cl, onOpen, onTeleport, onWalk }: { nodeId: string; cl: number; onOpen: () => void; onTeleport: () => void; onWalk: () => void }) {
+function NodeCard({ nodeId, cl, onOpen, onWalk }: { nodeId: string; cl: number; onOpen: () => void; onWalk: () => void }) {
   const n = NODES.find((x) => x.id === nodeId)!;
   const d = DANGER[n.town && !n.pond ? 0 : dangerLevel(n, cl)];
   const monsters = n.actions.map((id) => ACTIONS[id]).filter((a) => a.kind === 'combat').map((a) => a.kind === 'combat' ? MONSTERS[a.monster] : null);
@@ -118,7 +117,6 @@ function NodeCard({ nodeId, cl, onOpen, onTeleport, onWalk }: { nodeId: string; 
       {monsters.length > 0 && <span>怪物：{monsters.map((m) => `${m!.name}(${m!.level}${m!.boss ? ' Boss' : ''})`).join('、')}</span>}
       <div className="go">
         <button className="primary" onClick={onWalk}>寻路前往 · 约 {Math.ceil(travelMs(playerPos, standOf(n)) / 1000)} 秒</button>
-        <button onClick={onTeleport}>传送</button>
         {n.id !== 'smithy' && <button onClick={onOpen}>查看任务</button>}
       </div>
     </div>

@@ -257,3 +257,22 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .item-detail .sub { margin-top: 4px; color: var(--gold); }
 .codex .chips-row { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
 .codex .chips-row .pill { flex: none; }
+
+/* 怪物图鉴 */
+.tabs-row { display: flex; gap: 6px; margin: 6px 0; }
+.mon-icon { image-rendering: pixelated; object-fit: contain; }
+.mon-icon.unknown, .cell.unknown .mon-icon { filter: brightness(0) opacity(0.45); }
+.mon-grid .cell { min-height: 74px; }
+.mon-grid .cell .lv { font-size: 10px; color: var(--muted); }
+.mon-grid .cell.rank-elite { box-shadow: inset 0 0 0 1px #6aa0e0; }
+.mon-grid .cell.rank-boss { box-shadow: inset 0 0 0 1px #e8b84a; }
+.traits { display: inline-flex; flex-wrap: wrap; gap: 3px; margin-left: 4px; vertical-align: middle; }
+.trait { font-size: 10px; padding: 0 4px; border-radius: 3px; background: #3a2a22; color: #f0d8a0; white-space: nowrap; }
+.trait.resist { background: #2a3a4a; color: #a0d0ff; }
+.trait.weak { background: #2a4a2a; color: #b0f0a0; }
+.trait.venom, .trait.lifesteal, .trait.berserk, .trait.fierce { background: #4a2228; color: #ffb0b0; }
+.trait.passive { background: #2a3a2a; color: #c0f0c0; }
+.stat-row { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.drop-list { display: flex; flex-direction: column; gap: 2px; }
+.drop { display: inline-flex; align-items: center; gap: 4px; }
+.mon-detail .with-icon .mon-icon { background: #2a3a24; border-radius: 4px; }

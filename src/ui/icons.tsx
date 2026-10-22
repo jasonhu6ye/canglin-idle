@@ -83,6 +83,34 @@ const TPL: Record<string, string[]> = {
     '............',
     '............',
   ],
+  meat: [
+    '............',
+    '.......kk...',
+    '......kwwk..',
+    '...kkkkwwk..',
+    '..kccccbkk..',
+    '.kcwccbbbk..',
+    'kccccbbbbak.',
+    'kcbbbbbbbak.',
+    'kbbbbbbbaak.',
+    '.kbbbbaaak..',
+    '..kkkkkkk...',
+    '............',
+  ],
+  core: [
+    '............',
+    '.....kk.....',
+    '....kcck....',
+    '...kcwcbk...',
+    '..kcwccbbk..',
+    '.kccccbbbak.',
+    '.kbbbbbbaak.',
+    '..kbbbbaak..',
+    '...kbbaak...',
+    '....kaak....',
+    '.....kk.....',
+    '............',
+  ],
   food: [
     '............',
     '............',
@@ -792,6 +820,10 @@ export function itemIcon(id: string): [string, string] {
   const tier = it?.tier ?? 0;
   const prefix = id.split('_')[0];
   if (id.startsWith('raw_')) return ['fish', '#8aa0b8'];
+  // 兽肉、魔核按阶级换颜色
+  if (id.startsWith('meat_')) return ['meat', ['#d06a6a', '#c85a5a', '#b84a5a', '#a84050', '#c05080', '#9a3a70', '#7a3a8a', '#d0a040'][tier]];
+  if (id.startsWith('steak_')) return ['meat', ['#a8643a', '#a05a30', '#985030', '#904828', '#8a4a40', '#7a3a30', '#6a3a40', '#b07a2a'][tier]];
+  if (id.startsWith('core_')) return ['core', ['#a0c070', '#d08a4a', '#c8d0e0', '#8a9098', '#70c8f0', '#b070ff', '#ff8a3a', '#40d898'][tier]];
   if (it?.category === 'food') return ['fish', '#d08a4a'];
   if (id.endsWith('_potion')) return ['potion', SPECIFIC[id.replace('_potion', '')]?.[1] ?? '#c04ae0'];
   if (id.startsWith('plank_')) return ['plank', WOOD[TIERS[tier].wood]];

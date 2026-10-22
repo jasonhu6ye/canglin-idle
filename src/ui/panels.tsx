@@ -304,7 +304,7 @@ export function NodeList({ onPick }: { onPick: (id: string) => void }) {
   return (
     <div className="page">
       <h2>地点</h2>
-      <p className="muted">点地图上的地点或下面的列表选择任务；点空地让角色走过去；右下角 ▦ 打开世界地图传送。</p>
+      <p className="muted">点地图上的地点或下面的列表选择任务；点空地让角色走过去；右下角 ▦ 打开世界地图，可以寻路前往各个地点。</p>
       {regions.map((r) => {
         const nodes = NODES.filter((n) => n.region === r);
         if (!nodes.length) return null;

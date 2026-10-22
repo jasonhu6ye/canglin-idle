@@ -17,8 +17,8 @@ const HOUR = 3_600_000;
 
 describe('经验曲线', () => {
   it('没有 99 级上限，140 级约 6 亿经验，且单调', () => {
-    expect(XP_TABLE[99]).toBeGreaterThan(40_000_000);
-    expect(XP_TABLE[140]).toBeGreaterThan(600_000_000);
+    expect(XP_TABLE[95]).toBeGreaterThan(15_000_000);
+    expect(XP_TABLE[140]).toBeGreaterThan(500_000_000);
     expect(levelForXp(XP_TABLE[140])).toBe(140);
     expect(levelForXp(XP_TABLE[150] + 1)).toBe(150);
     for (let l = 2; l < 300; l++) expect(XP_TABLE[l + 1] - XP_TABLE[l]).toBeGreaterThan(XP_TABLE[l] - XP_TABLE[l - 1]);

@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
 import { ACTIONS, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, DANGER, dangerLevel, nodeOfAction, travelMs, WALK_TILES_PER_SEC, type MapNode } from '../core/data';
 import { combatLevel, leaveWork, resumeWork, setLoc, teleport as teleportState } from '../core/sim';
+import { MON_ANIMS, monsterFrameSize, paintMonsterSheet, type MonAnim } from './monsterArt';
 import { HERO_ANIMS, HERO_FEET, HERO_H, HERO_W, paintHeroSheet, type HeroDir } from './hero';
-import type { RegionId, Summary } from '../core/types';
+import type { MonsterDef, RegionId, Summary } from '../core/types';
 import { store } from '../store';
 import { paintBuilding, paintDot, paintGlow, paintProp, paintWindmillBlades, PROP_GLOW } from './art';
 import { DPR } from './dpr';
@@ -43,7 +44,9 @@ export class MapScene extends Phaser.Scene {
   private player!: Phaser.GameObjects.Container;
   private playerBody!: Phaser.GameObjects.Sprite;
   private facing: HeroDir = 'down';
-  private foe?: Phaser.GameObjects.Image;
+  private foe?: Phaser.GameObjects.Sprite;
+  /** 上一帧的战斗状态，用来判断怪物刚出手、刚挨打、刚死 */
+  private foeSeen?: { hp: number; timer: number; respawn: number };
   private workTween?: Phaser.Tweens.Tween;
   private marker?: Phaser.GameObjects.Graphics;
   private currentAction?: string;
@@ -282,6 +285,7 @@ export class MapScene extends Phaser.Scene {
 
   update(time: number, delta: number) {
     this.stepWalker(delta);
+    this.syncFoe();
     this.updateChunks();
     for (const g of this.glows) g.img.setAlpha(g.base + Math.sin(time / 380 + g.phase) * 0.12 + (hash(Math.floor(time / 90), g.phase * 100) - 0.5) * 0.08);
     this.updateParticles();
@@ -423,24 +427,99 @@ export class MapScene extends Phaser.Scene {
     }
   }
 
-  /** 每个战斗点周围放几只怪在游荡 */
-  private addMonsters() {
-    for (const n of NODES) {
-      if (n.town) continue;
-      n.actions.forEach((id, i) => {
-        const a = ACTIONS[id];
-        if (a.kind !== 'combat') return;
-        const m = MONSTERS[a.monster];
-        const count = m.boss ? 1 : 2;
-        for (let k = 0; k < count; k++) {
-          const ox = n.x + (i % 2 ? 5 : -5) + k * 2;
-          const oy = n.y + 3 + (i >> 1) * 2;
-          const img = this.addWanderer(m.sprite, ox, oy, m.boss ? 1 : 3);
-          if (m.tint) img.setTint(m.tint);
-          if (m.boss) img.setScale(1.8);
-        }
+  /** 怪物精灵表按需生成：镜头靠近哪个点位，才画那里的怪 */
+  private monTex(m: MonsterDef) {
+    const key = `mon-${m.id}`;
+    if (this.textures.exists(key)) return key;
+    const sheet = paintMonsterSheet(m);
+    const tex = this.textures.addCanvas(key, sheet.canvas)!;
+    for (const f of sheet.frames) tex.add(f.name, 0, f.x, f.y, sheet.size, sheet.size);
+    for (const a of MON_ANIMS) {
+      this.anims.create({
+        key: `${key}-${a.key}`, frameRate: a.rate, repeat: a.repeat,
+        frames: Array.from({ length: a.frames }, (_, i) => ({ key, frame: `${a.key}-${i}` })),
       });
     }
+    return key;
+  }
+
+  private monSprite(m: MonsterDef, x: number, y: number) {
+    const key = this.monTex(m);
+    const S = monsterFrameSize(m);
+    // 原点放在脚底那一行
+    const spr = this.add.sprite(x, y, key, 'idle-0').setOrigin(0.5, (S - 3) / S);
+    spr.play({ key: `${key}-idle`, startFrame: Math.floor(Math.random() * 6) });
+    return spr;
+  }
+
+  private playMon(spr: Phaser.GameObjects.Sprite, m: MonsterDef, anim: MonAnim, thenIdle = false) {
+    spr.play(`mon-${m.id}-${anim}`, anim === 'idle' || anim === 'move');
+    if (thenIdle) spr.once('animationcomplete', () => spr.active && spr.play(`mon-${m.id}-idle`));
+  }
+
+  private spawnedNodes = new Set<string>();
+  private spawnQueue: MapNode[] = [];
+
+  /** 每个战斗点周围放几只怪在游荡；首领站在中间不动 */
+  private addMonsters() {
+    this.time.addEvent({
+      delay: 400, loop: true, callback: () => {
+        const cam = this.cameras.main;
+        const cx = cam.midPoint.x / T;
+        const cy = cam.midPoint.y / T;
+        for (const n of NODES) {
+          if (n.town || this.spawnedNodes.has(n.id)) continue;
+          if (Math.abs(n.x - cx) < 45 && Math.abs(n.y - cy) < 45) {
+            this.spawnedNodes.add(n.id);
+            this.spawnQueue.push(n);
+          }
+        }
+        // 每次只生成一个点位，避免一下子卡住
+        const n = this.spawnQueue.shift();
+        if (n) this.spawnNode(n);
+      },
+    });
+  }
+
+  private spawnNode(n: MapNode) {
+    const mons = n.actions.map((id) => ACTIONS[id]).filter((a) => a.kind === 'combat').map((a) => MONSTERS[(a as { monster: string }).monster]);
+    mons.forEach((m, i) => {
+      const ring = 5 + (i % 3) * 2;
+      const ang = (i / Math.max(1, mons.length)) * Math.PI * 2 + 0.6;
+      const ox = Math.round(n.x + Math.cos(ang) * ring);
+      const oy = Math.round(n.y + 2 + Math.sin(ang) * ring * 0.6);
+      const count = m.rank === 'normal' ? 2 : 1;
+      for (let k = 0; k < count; k++) this.addMonWanderer(m, ox + k * 2, oy + (k ? 1 : 0), m.rank === 'boss' ? 1.5 : 3);
+    });
+  }
+
+  /** 怪物游荡：走的时候播移动动画，停下来播待机 */
+  private addMonWanderer(m: MonsterDef, x: number, y: number, radius: number) {
+    const spr = this.monSprite(m, x * T + T / 2, y * T + T / 2).setDepth(y * T + 1000);
+    let i = 0;
+    const wander = () => {
+      if (!spr.active) return;
+      i++;
+      const nx = (x + (hash(i, x, y) * 2 - 1) * radius) * T + T / 2;
+      const ny = (y + (hash(y, i, x) * 2 - 1) * radius) * T + T / 2;
+      const dist = Math.hypot(nx - spr.x, ny - spr.y);
+      const pause = 800 + hash(x, i) * 3000;
+      this.time.delayedCall(pause, () => {
+        if (!spr.active) return;
+        spr.setFlipX(nx < spr.x);
+        this.playMon(spr, m, 'move');
+        this.tweens.add({
+          targets: spr, x: nx, y: ny, duration: (dist / T) * (m.traits.includes('swift') ? 350 : m.traits.includes('slow') ? 900 : 600),
+          onUpdate: () => spr.setDepth(spr.y + 1000),
+          onComplete: () => {
+            this.playMon(spr, m, 'idle');
+            wander();
+          },
+        });
+      });
+    };
+    wander();
+    return spr;
   }
 
   /** 在中心附近随机游荡的小怪或村民 */
@@ -782,6 +861,28 @@ export class MapScene extends Phaser.Scene {
     }
   }
 
+  /** 战斗中让对面的怪跟着战斗状态动：出手、挨打、倒下、重新刷出来 */
+  private syncFoe() {
+    const foe = this.foe;
+    const c = store.state.combat;
+    const a = this.currentAction ? ACTIONS[this.currentAction] : undefined;
+    if (!foe || !c || a?.kind !== 'combat') return;
+    const m = MONSTERS[a.monster];
+    const prev = this.foeSeen;
+    this.foeSeen = { hp: c.monsterHp, timer: c.monsterTimerMs, respawn: c.respawnMs };
+    if (!prev) return;
+    if (c.respawnMs > 0 && prev.respawn <= 0) {
+      this.playMon(foe, m, 'death');
+    } else if (c.respawnMs <= 0 && prev.respawn > 0) {
+      foe.setAlpha(0);
+      this.playMon(foe, m, 'idle');
+      this.tweens.add({ targets: foe, alpha: 1, duration: 300 });
+    } else if (c.respawnMs <= 0) {
+      if (c.monsterTimerMs > prev.timer + 200) this.playMon(foe, m, 'attack', true);
+      else if (c.monsterHp < prev.hp) this.playMon(foe, m, 'hurt', true);
+    }
+  }
+
   private stopWorking() {
     this.foe?.destroy();
     this.foe = undefined;
@@ -818,10 +919,10 @@ export class MapScene extends Phaser.Scene {
     if (!a || this.manual) return;
     if (a.kind === 'combat') {
       const m = MONSTERS[a.monster];
-      this.foe = this.add.image(this.player.x + 16, this.player.y, m.sprite).setFlipX(true);
-      if (m.tint) this.foe.setTint(m.tint);
-      if (m.boss) this.foe.setScale(1.6).setX(this.player.x + 20);
+      const gap = Math.max(14, monsterFrameSize(m) * 0.55);
+      this.foe = this.monSprite(m, this.player.x + gap, this.player.y + 7).setFlipX(true);
       this.foe.setDepth(this.foe.y + 1000);
+      this.foeSeen = undefined;
     }
     // 干活时侧身朝右（怪物也站在右边）
     this.facing = 'side';
@@ -847,9 +948,6 @@ export class MapScene extends Phaser.Scene {
       this.float(`+${qty} ${ITEMS[item].name}`, '#ffffff');
     } else if (s.items.coins > 0) {
       this.float(`+${s.items.coins} 金币`, '#ffd25e');
-    }
-    if (this.foe && Object.keys(s.kills).length) {
-      this.tweens.add({ targets: this.foe, alpha: 0, yoyo: true, duration: 300, hold: 900 });
     }
     for (const lu of s.levelUps) this.float(`${SKILLS[lu.skill].name} 升到 ${lu.level} 级！`, '#ffd25e', true);
   }

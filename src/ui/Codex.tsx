@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { ACTIONS, ITEMS, MONSTERS, nodeOfAction, SKILLS, TIERS, tierName } from '../core/data';
 import type { GameState, ItemDef } from '../core/types';
 import { Icon } from './icons';
+import { Bestiary } from './Bestiary';
 
 /** 图鉴的类型分类：按顺序匹配，第一个符合的就是它的类型 */
 const ORE_IDS = new Set(TIERS.map((t) => t.ore));
@@ -55,6 +56,7 @@ export function Codex({ s, onClose }: { s: GameState; onClose: () => void }) {
   const [tier, setTier] = useState<number | 'all' | 'none'>('all');
   const [type, setType] = useState('all');
   const [sel, setSel] = useState<string | null>(null);
+  const [tab, setTab] = useState<'items' | 'monsters'>('items');
   const all = useMemo(() => Object.values(ITEMS).filter((it) => it.id !== 'coins'), []);
   const got = all.filter((it) => s.seen[it.id]).length;
   const shown = all.filter((it) =>
@@ -70,9 +72,14 @@ export function Codex({ s, onClose }: { s: GameState; onClose: () => void }) {
     <div className="page codex">
       <div className="sheet-head">
         <button className="back" onClick={onClose}>‹ 返回</button>
-        <h2>物品图鉴</h2>
-        <small className="muted">已收集 {got}/{all.length}</small>
+        <h2>{tab === 'items' ? '物品图鉴' : '怪物图鉴'}</h2>
+        {tab === 'items' && <small className="muted">已收集 {got}/{all.length}</small>}
       </div>
+      <div className="tabs-row">
+        <button className={`pill ${tab === 'items' ? 'on' : ''}`} onClick={() => setTab('items')}>物品图鉴</button>
+        <button className={`pill ${tab === 'monsters' ? 'on' : ''}`} onClick={() => setTab('monsters')}>怪物图鉴</button>
+      </div>
+      {tab === 'monsters' ? <Bestiary s={s} /> : <>
       <div className="bag-meter"><i style={{ width: `${(got / all.length) * 100}%` }} /></div>
 
       <div className="chips-row">
@@ -105,6 +112,7 @@ export function Codex({ s, onClose }: { s: GameState; onClose: () => void }) {
       </div>
       {!shown.length && <p className="muted">这个分类下没有物品。</p>}
       {sel && <CodexDetail s={s} id={sel} />}
+      </>}
     </div>
   );
 }

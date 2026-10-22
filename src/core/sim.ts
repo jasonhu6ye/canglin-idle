@@ -11,7 +11,7 @@ export const MAX_QUEUE = 3;
 export const PLAYER_ATTACK_MS = 2400;
 export const RESPAWN_MS = 1500;
 const REGEN_MS = 1000;
-const MONSTER_DAMAGE_SCALE = 3;
+export const MONSTER_DAMAGE_SCALE = 3;
 
 /** 存档是纯 JSON；不用 structuredClone，iOS 15.4 以下没有 */
 const clone = (s: GameState): GameState => JSON.parse(JSON.stringify(s));
@@ -76,6 +76,7 @@ export function migrate(raw: unknown): GameState | null {
     // 旧存档没有位置：当作已经站在当前任务的地点
     loc: s.loc ?? (nodeOfAction(queue[0]?.action) ? standOf(nodeOfAction(queue[0]?.action)!) : fresh.loc),
     travel: s.travel ?? null,
+    bestiary: s.bestiary ?? {},
     // 旧存档：现在拥有的东西都算获得过
     seen: s.seen ?? Object.fromEntries(
       [...Object.keys(keep(s.bank)), ...Object.keys(keep(s.bag)), ...Object.values(equipment)].filter((id) => id && ITEMS[id]).map((id) => [id, 1 as const]),
@@ -197,11 +198,14 @@ export function combatStats(s: GameState, m: MonsterDef) {
   const b = playerBonuses(s, style);
   const ammo = bestAmmo(s, style);
   const strength = b.strength + (ammo ? ITEMS[ammo.id].ammo!.power : 0);
+  const has = (t: string) => m.traits.includes(t);
+  // 抗性和弱点只影响对应战斗方式的伤害
+  const dmgMult = (has(`resist_${style}`) ? 0.7 : 1) * (has(`weak_${style}`) ? 1.3 : 1);
   return {
     style,
     ammo: ammo?.id,
-    playerHit: hitChance((lvl + 8) * (b.attack + 64), (m.defence + 8) * 64),
-    playerMaxHit: Math.floor(0.5 + ((lvl + 8) * (strength + 64)) / 640) * 10,
+    playerHit: hitChance((lvl + 8) * (b.attack + 64), (m.defence + 8) * 64) * (has('evasive') ? 0.8 : 1),
+    playerMaxHit: Math.max(1, Math.round(Math.floor(0.5 + ((lvl + 8) * (strength + 64)) / 640) * 10 * dmgMult)),
     monsterHit: m.maxHit > 0 ? hitChance((m.attack + 8) * 64, (level(s, 'defence') + 8) * (b.defence + 64)) : 0,
     monsterMaxHit: m.maxHit * MONSTER_DAMAGE_SCALE,
   };
@@ -404,6 +408,19 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       s.combat = { monsterHp: m.hp, playerTimerMs: playerAttackMs(s), monsterTimerMs: m.attackMs, respawnMs: 0 };
     }
     const c = s.combat;
+    const has = (t: string) => m.traits.includes(t);
+    /** 玩家掉血，死了就结束任务。返回是否死亡 */
+    const hurt = (dmg: number) => {
+      if (dmg <= 0) return false;
+      s.hp -= dmg;
+      eatIfNeeded();
+      if (s.hp > 0) return false;
+      s.hp = maxHp(s);
+      s.stats.deaths++;
+      sum.deaths++;
+      endTask('death');
+      return true;
+    };
     if (c.respawnMs > 0) {
       const step = Math.min(budget, c.respawnMs);
       c.respawnMs -= step;
@@ -429,27 +446,28 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         addXp(st.style, dmg);
         addXp('defence', dmg / 3);
         addXp('hitpoints', dmg / 3);
+        // 荆棘：打它会被反伤
+        if (has('thorns') && hurt(Math.floor(dmg * 0.15))) return step;
       }
       if (c.monsterHp <= 0) {
         for (const d of m.drops) if (d.chance === undefined || rand() < d.chance) addLoot(d.item, d.qty);
         sum.kills[m.id] = (sum.kills[m.id] ?? 0) + 1;
         s.stats.kills++;
+        s.bestiary = { ...s.bestiary, [m.id]: (s.bestiary?.[m.id] ?? 0) + 1 };
         task.done++;
-        s.combat = { monsterHp: m.hp, playerTimerMs: playerAttackMs(s), monsterTimerMs: m.attackMs, respawnMs: RESPAWN_MS };
+        s.combat = { monsterHp: m.hp, playerTimerMs: playerAttackMs(s), monsterTimerMs: m.attackMs, respawnMs: m.respawnMs ?? RESPAWN_MS };
         return step;
       }
     }
     if (c.monsterTimerMs <= 0) {
       c.monsterTimerMs += m.attackMs;
+      if (has('regen')) c.monsterHp = Math.min(m.hp, c.monsterHp + Math.ceil(m.hp * 0.03));
       if (st.monsterMaxHit > 0 && rand() < st.monsterHit) {
-        s.hp -= 1 + Math.floor(rand() * st.monsterMaxHit);
-        eatIfNeeded();
-        if (s.hp <= 0) {
-          s.hp = maxHp(s);
-          s.stats.deaths++;
-          sum.deaths++;
-          endTask('death');
-        }
+        const rage = has('berserk') && c.monsterHp < m.hp / 2 ? 1.5 : 1;
+        let dmg = 1 + Math.floor(rand() * st.monsterMaxHit * rage);
+        if (has('venom')) dmg += Math.ceil(m.level / 8);
+        if (has('lifesteal')) c.monsterHp = Math.min(m.hp, c.monsterHp + Math.ceil(dmg / 2));
+        hurt(dmg);
       }
     }
     return step;
@@ -645,6 +663,6 @@ export function xpPerHour(s: GameState, actionId: string): number {
   const m = MONSTERS[a.monster];
   const st = combatStats(s, m);
   const avgDmg = st.playerHit * (1 + st.playerMaxHit) / 2;
-  const killMs = (m.hp / Math.max(avgDmg, 0.01)) * playerAttackMs(s) + RESPAWN_MS;
+  const killMs = (m.hp / Math.max(avgDmg, 0.01)) * playerAttackMs(s) + m.respawnMs;
   return Math.round((m.hp * 3600000) / killMs);
 }

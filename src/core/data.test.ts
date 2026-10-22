@@ -1,4 +1,5 @@
-import { ACTIONS, ITEMS, MONSTERS, NODES } from './data';
+import { ACTIONS, ITEMS, MONSTERS, NODES, nodeOfAction } from './data';
+import { SPECIES, TRAITS } from './bestiary';
 
 describe('数据闭环', () => {
   it('动作和掉落引用的物品都存在', () => {
@@ -54,5 +55,28 @@ describe('装备体系', () => {
         expect(q.attack + q.strength + q.defence + (q.speed ?? 0), `${it.name} 没有属性`).toBeGreaterThan(0);
       }
     }
+  });
+});
+
+describe('怪物图鉴', () => {
+  it('192 种，每阶 24 种（17 普通 5 精英 2 首领），id 不重复，特性都有定义', () => {
+    expect(SPECIES).toHaveLength(192);
+    expect(new Set(SPECIES.map((s) => s.id)).size).toBe(192);
+    for (let t = 0; t < 8; t++) {
+      const tier = SPECIES.filter((s) => s.tier === t);
+      expect(tier).toHaveLength(24);
+      expect(tier.filter((s) => s.rank === 'elite')).toHaveLength(5);
+      expect(tier.filter((s) => s.rank === 'boss')).toHaveLength(2);
+    }
+    for (const s of SPECIES) for (const tr of s.traits) expect(TRAITS[tr], `${s.id} ${tr}`).toBeDefined();
+  });
+
+  it('每种怪物都有刷新点，掉落物都存在且有用处', () => {
+    for (const s of SPECIES) {
+      expect(nodeOfAction(`fight_${s.id}`), s.id).toBeDefined();
+      for (const d of MONSTERS[s.id].drops) expect(ITEMS[d.item], `${s.id} → ${d.item}`).toBeDefined();
+    }
+    const used = new Set(Object.values(ACTIONS).flatMap((a) => (a.kind === 'skill' ? a.inputs?.map((i) => i.item) ?? [] : [])));
+    for (const id of ['bones', 'meat_1', 'meat_8', 'core_1', 'core_8']) expect(used.has(id), id).toBe(true);
   });
 });

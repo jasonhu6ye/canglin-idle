@@ -1,3 +1,5 @@
+import { MonsterIcon, TraitChips } from './Bestiary';
+import { TRAITS, type TraitId } from '../core/bestiary';
 import { useState } from 'react';
 import { ACTIONS, ITEMS, MONSTERS, NODES, REGIONS, SKILLS, tierName } from '../core/data';
 import {
@@ -53,7 +55,7 @@ export function ActionSheet({ s, nodeId, onClose }: { s: GameState; nodeId: stri
         {shown.map((id) => {
           const a = ACTIONS[id];
           const lock = isLocked(s, a);
-          const icon = a.kind === 'skill' ? (a.outputs[0] && a.outputs[0].item !== 'coins' ? <Icon item={a.outputs[0].item} size={30} /> : <SkillIcon skill={a.skill} size={30} />) : <SkillIcon skill={weaponStyle(s)} size={30} />;
+          const icon = a.kind === 'skill' ? (a.outputs[0] && a.outputs[0].item !== 'coins' ? <Icon item={a.outputs[0].item} size={30} /> : <SkillIcon skill={a.skill} size={30} />) : <MonsterIcon m={MONSTERS[a.monster]} size={34} />;
           return (
             <li key={id} className={`${selected === id ? 'sel' : ''} ${lock ? 'locked' : ''}`} onClick={() => !lock && setSelected(id)}>
               <span className="act-icon">{icon}</span>
@@ -65,7 +67,8 @@ export function ActionSheet({ s, nodeId, onClose }: { s: GameState; nodeId: stri
                 <span className="row2">
                   {a.kind === 'combat' ? (
                     <>
-                      <span className={`diff ${a.difficulty}`}>{MONSTERS[a.monster].boss ? 'BOSS' : a.difficulty}</span> {MONSTERS[a.monster].name} {MONSTERS[a.monster].level} 级 · 生命 {MONSTERS[a.monster].hp}
+                      <span className={`diff ${a.difficulty}`}>{MONSTERS[a.monster].boss ? 'BOSS' : MONSTERS[a.monster].rank === 'elite' ? '精英' : a.difficulty}</span> {tierName(MONSTERS[a.monster].tier)} · {MONSTERS[a.monster].level} 级 · 生命 {fmtNum(MONSTERS[a.monster].hp)}
+                      <TraitChips m={MONSTERS[a.monster]} />
                     </>
                   ) : (
                     <>
@@ -145,7 +148,8 @@ function CombatInfo({ s, monster }: { s: GameState; monster: string }) {
       {st.style !== 'melee' && (
         <span className={ammo ? '' : 'warn'}>{ammo ? `弹药：${ITEMS[ammo.id].name}` : `没有${st.style === 'ranged' ? '箭' : '符文'}！会立刻停止`}</span>
       )}
-      <span>掉落：{m.drops.map((d) => ITEMS[d.item].name).join('、') || '无'}</span>
+      {m.traits.map((t) => <span key={t} className="muted">{TRAITS[t as TraitId].name}：{TRAITS[t as TraitId].desc}</span>)}
+      <span>掉落：{m.drops.map((d) => `${ITEMS[d.item].name}×${d.qty}${d.chance ? ` ${Math.round(d.chance * 1000) / 10}%` : ''}`).join('、') || '无'}</span>
       <span className={food ? '' : 'warn'}>{food ? `食物：最好的是${ITEMS[food].name}，共 ${fmtNum(foodCount)} 份` : '没有食物！挂机可能阵亡'}</span>
     </span>
   );
