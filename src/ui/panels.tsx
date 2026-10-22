@@ -10,6 +10,7 @@ import { store } from '../store';
 import { fmtDuration, fmtNum } from './format';
 import { Codex } from './Codex';
 import { Wardrobe } from './Wardrobe';
+import { exportSave, importSave } from '../saveCode';
 import { outfitOf } from '../game/hero';
 import { Icon, SkillIcon } from './icons';
 
@@ -284,6 +285,7 @@ export function MorePanel({ s }: { s: GameState }) {
       <p>苍岭放置（暂定名）v2 单机版。角色会一直执行队列里的任务，关掉网页也会在下次打开时结算离线收益，最多 24 小时。</p>
       <p className="muted">世界 1480×1480 格，9 个区域。资源、装备和 192 种怪物都是正式数值；美术是程序生成的像素图。存档保存在本浏览器里。</p>
       <h2>存档</h2>
+      <SaveBackup s={s} />
       {confirming ? (
         <div className="go">
           <button className="danger" onClick={() => { store.reset(); setConfirming(false); }}>确定删除</button>
@@ -292,6 +294,52 @@ export function MorePanel({ s }: { s: GameState }) {
       ) : (
         <button className="danger" onClick={() => setConfirming(true)}>删除存档，重新开始</button>
       )}
+    </div>
+  );
+}
+
+/** 存档码导出/导入：换手机或浏览器清了数据时用 */
+function SaveBackup({ s }: { s: GameState }) {
+  const [mode, setMode] = useState<'none' | 'export' | 'import'>('none');
+  const [code, setCode] = useState('');
+  const [msg, setMsg] = useState('');
+  const doExport = async () => {
+    setMode('export');
+    setMsg('');
+    setCode(await exportSave(s));
+  };
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setMsg('已复制，找个地方（备忘录、聊天）存好');
+    } catch {
+      setMsg('复制失败，请长按文本框手动全选复制');
+    }
+  };
+  const doImport = async () => {
+    const next = await importSave(code);
+    if (!next) return setMsg('存档码不对，请检查是否复制完整');
+    store.replace(next);
+  };
+  return (
+    <div className="save-backup">
+      <p className="muted">存档只保存在这个浏览器里。iOS 长时间不打开网站可能会被清掉，建议定期导出存档码保存。</p>
+      <div className="go">
+        <button onClick={doExport}>导出存档码</button>
+        <button onClick={() => { setMode('import'); setCode(''); setMsg(''); }}>导入存档码</button>
+      </div>
+      {mode !== 'none' && (
+        <>
+          <textarea className="save-code" value={code} readOnly={mode === 'export'} placeholder={mode === 'import' ? '把存档码粘贴到这里' : '生成中…'}
+            onChange={(e) => setCode(e.target.value)} onFocus={(e) => mode === 'export' && e.target.select()} />
+          <div className="go">
+            {mode === 'export' ? <button className="primary" disabled={!code} onClick={copy}>复制</button>
+              : <button className="danger" disabled={!code.trim()} onClick={doImport}>导入并覆盖当前存档</button>}
+            <button onClick={() => setMode('none')}>收起</button>
+          </div>
+        </>
+      )}
+      {msg && <p className="warn">{msg}</p>}
     </div>
   );
 }

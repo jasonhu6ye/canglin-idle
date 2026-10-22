@@ -82,6 +82,14 @@ class Store {
     this.emit();
   }
 
+  /** 导入存档：存下来后刷新页面，地图场景按新存档重建 */
+  replace(next: GameState) {
+    this.state = next;
+    this.offline = null;
+    this.save();
+    location.reload();
+  }
+
   reset() {
     this.state = newGame(Date.now());
     this.offline = null;
