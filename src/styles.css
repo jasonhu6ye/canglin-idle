@@ -249,3 +249,11 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .bag-meter i { display: block; height: 100%; background: linear-gradient(90deg, #c89a40, #f0c850); }
 .grid.ghost { margin-top: 6px; }
 .empty-cell { opacity: 0.35; min-height: 64px; pointer-events: none; }
+
+/* 图鉴：没获得过的物品显示成剪影 */
+.cell.unknown .icon { filter: brightness(0) opacity(0.45); }
+.cell.unknown .tier { filter: grayscale(1) opacity(0.6); }
+.cell.unknown .nm { color: var(--muted); }
+.item-detail .sub { margin-top: 4px; color: var(--gold); }
+.codex .chips-row { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.codex .chips-row .pill { flex: none; }

@@ -8,6 +8,7 @@ import type { EquipSlot, GameState, ItemCategory, SkillId, Summary } from '../co
 import { XP_TABLE, levelProgress, MAX_LEVEL } from '../core/xp';
 import { store } from '../store';
 import { fmtDuration, fmtNum } from './format';
+import { Codex } from './Codex';
 import { Icon, SkillIcon } from './icons';
 
 const GEAR_SLOTS: [EquipSlot, string][] = [
@@ -219,13 +220,20 @@ function SkillDetail({ skill, onPick }: { skill: SkillId; onPick: (nodeId: strin
   );
 }
 
-export function MorePanel() {
+export function MorePanel({ s }: { s: GameState }) {
   const [confirming, setConfirming] = useState(false);
+  const [codex, setCodex] = useState(false);
+  if (codex) return <Codex s={s} onClose={() => setCodex(false)} />;
+  const total = Object.keys(ITEMS).length - 1;
+  const got = Object.keys(s.seen).filter((id) => id !== 'coins' && ITEMS[id]).length;
   return (
     <div className="page">
+      <h2>物品图鉴 <small className="muted">已收集 {got}/{total}</small></h2>
+      <div className="bag-meter"><i style={{ width: `${(got / total) * 100}%` }} /></div>
+      <button className="primary" onClick={() => setCodex(true)}>打开图鉴</button>
       <h2>关于</h2>
       <p>苍岭放置（暂定名）v2 单机版。角色会一直执行队列里的任务，关掉网页也会在下次打开时结算离线收益，最多 24 小时。</p>
-      <p className="muted">世界 1080×1080 格，9 个区域。装备、怪物和资源是占位数值，美术是程序生成的像素图，后续会替换。存档保存在本浏览器里。</p>
+      <p className="muted">世界 1080×1080 格，9 个区域。资源和装备是正式数值，怪物还是占位；美术是程序生成的像素图。存档保存在本浏览器里。</p>
       <h2>存档</h2>
       {confirming ? (
         <div className="go">

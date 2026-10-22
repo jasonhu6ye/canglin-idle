@@ -154,6 +154,8 @@ export interface GameState {
   loc: { x: number; y: number };
   /** 正在自动寻路去当前任务的地点；到达前任务不开始 */
   travel: { to: string; ms: number; total: number } | null;
+  /** 图鉴：获得过的物品 */
+  seen: Record<string, 1>;
 }
 
 export type TaskEndReason = 'complete' | 'noInput' | 'death' | 'level' | 'noAmmo';

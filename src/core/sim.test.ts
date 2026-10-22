@@ -218,3 +218,14 @@ describe('自动寻路', () => {
     expect(state.bank.stone).toBe(1);
   });
 });
+
+describe('图鉴', () => {
+  it('采到的东西记为获得过，旧存档按现有物品补上', () => {
+    const { state } = advance(startHere(newGame(T0, 1), 'mine_stone', { type: 'count', count: 1 }), T0 + HOUR);
+    expect(state.seen.stone).toBe(1);
+    expect(state.seen.copper_ore).toBeUndefined();
+    const old = { ...newGame(T0, 1), version: 2, bank: { tin_ore: 3 } } as unknown as Partial<GameState>;
+    delete old.seen;
+    expect(migrate(old)!.seen.tin_ore).toBe(1);
+  });
+});

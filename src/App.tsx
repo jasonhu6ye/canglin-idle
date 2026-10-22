@@ -105,7 +105,7 @@ export function App() {
   else if (tab === 'bag') side = <BagPanel s={s} />;
   else if (tab === 'bank') side = <BankPanel s={s} />;
   else if (tab === 'skills') side = <SkillsPanel s={s} onPick={openNode} />;
-  else if (tab === 'more') side = <MorePanel />;
+  else if (tab === 'more') side = <MorePanel s={s} />;
 
   return (
     <div className="app">

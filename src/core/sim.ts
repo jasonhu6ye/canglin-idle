@@ -43,6 +43,7 @@ export function newGame(now: number, seed = Math.floor(Math.random() * 2 ** 31))
     stats: { kills: 0, deaths: 0 },
     loc: { ...SPAWN_TILE },
     travel: null,
+    seen: { minnow: 1, wood_sword: 1 },
   };
 }
 
@@ -75,6 +76,10 @@ export function migrate(raw: unknown): GameState | null {
     // 旧存档没有位置：当作已经站在当前任务的地点
     loc: s.loc ?? (nodeOfAction(queue[0]?.action) ? standOf(nodeOfAction(queue[0]?.action)!) : fresh.loc),
     travel: s.travel ?? null,
+    // 旧存档：现在拥有的东西都算获得过
+    seen: s.seen ?? Object.fromEntries(
+      [...Object.keys(keep(s.bank)), ...Object.keys(keep(s.bag)), ...Object.values(equipment)].filter((id) => id && ITEMS[id]).map((id) => [id, 1 as const]),
+    ),
   };
 }
 
@@ -213,6 +218,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   const addItem = (item: string, qty: number) => {
     s.bank[item] = (s.bank[item] ?? 0) + qty;
     if (s.bank[item] <= 0) delete s.bank[item];
+    if (qty > 0) s.seen[item] = 1;
     sum.items[item] = (sum.items[item] ?? 0) + qty;
   };
 
