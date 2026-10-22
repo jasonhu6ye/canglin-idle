@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { ACTIONS, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, DANGER, dangerLevel, type MapNode } from '../core/data';
 import { combatLevel } from '../core/sim';
+import { HERO_ANIMS, HERO_FEET, HERO_H, HERO_W, paintHeroSheet, type HeroDir } from './hero';
 import type { RegionId, Summary } from '../core/types';
 import { store } from '../store';
 import { paintBuilding, paintDot, paintGlow, paintProp, paintWindmillBlades, PROP_GLOW } from './art';
@@ -42,7 +43,8 @@ const AMBIENT: Partial<Record<RegionId, Ambient>> = {
 
 export class MapScene extends Phaser.Scene {
   private player!: Phaser.GameObjects.Container;
-  private playerBody!: Phaser.GameObjects.Image;
+  private playerBody!: Phaser.GameObjects.Sprite;
+  private facing: HeroDir = 'down';
   private foe?: Phaser.GameObjects.Image;
   private walkTween?: Phaser.Tweens.Tween;
   private workTween?: Phaser.Tweens.Tween;
@@ -77,8 +79,9 @@ export class MapScene extends Phaser.Scene {
     const start = (task && nodeForAction(task.action)) ? standTile(nodeForAction(task.action)!) : SPAWN;
     this.player = this.add.container(start.x * T + T / 2, start.y * T + T / 2);
     const ring = this.add.ellipse(0, 6, 14, 6).setStrokeStyle(1, 0xe8b84a).setFillStyle(0xe8b84a, 0.25);
-    this.playerBody = this.add.image(0, 0, 'player');
-    const name = this.add.text(0, -14, '[苍岭] 你', { fontFamily: FONT, fontSize: '7px', color: '#ffffff', stroke: '#000', strokeThickness: 2, resolution: 4 }).setOrigin(0.5);
+    this.playerBody = this.add.sprite(0, 7, 'hero').setOrigin(0.5, HERO_FEET / HERO_H);
+    this.playerBody.play('idle-down');
+    const name = this.add.text(0, -22, '[苍岭] 你', { fontFamily: FONT, fontSize: '7px', color: '#ffffff', stroke: '#000', strokeThickness: 2, resolution: 4 }).setOrigin(0.5);
     this.player.add([ring, this.playerBody, name]).setDepth(this.player.y + 1000);
     this.tweens.add({ targets: ring, alpha: 0.4, yoyo: true, repeat: -1, duration: 700 });
 
@@ -113,6 +116,17 @@ export class MapScene extends Phaser.Scene {
     for (const [key, rows] of Object.entries(SPRITES)) this.textures.addCanvas(key, paintSprite(rows));
     for (const [key, v] of Object.entries(SPRITE_VARIANTS)) this.textures.addCanvas(key, paintSprite(SPRITES[v.base], 1, v.swap));
     this.textures.addCanvas('glow', paintGlow());
+    // 主角多帧动画
+    const hero = paintHeroSheet();
+    const tex = this.textures.addCanvas('hero', hero.canvas)!;
+    for (const f of hero.frames) tex.add(f.name, 0, f.x, f.y, HERO_W, HERO_H);
+    for (const a of HERO_ANIMS) {
+      if (this.anims.exists(a.key)) continue;
+      this.anims.create({
+        key: a.key, frameRate: a.rate, repeat: -1,
+        frames: Array.from({ length: a.frames }, (_, i) => ({ key: 'hero', frame: `${a.key}-${i}` })),
+      });
+    }
     this.textures.addCanvas('windmill-blades', paintWindmillBlades());
     const dots: [string, number, string][] = [
       ['p-snow', 2, '#ffffff'], ['p-ember', 1, '#ffa040'], ['p-firefly', 1, '#e8ff7a'], ['p-spore', 1, '#c8a0ff'],
@@ -602,17 +616,21 @@ export class MapScene extends Phaser.Scene {
     const [step, ...rest] = path;
     const px = step.x * T + T / 2;
     const py = step.y * T + T / 2;
-    if (px !== this.player.x) this.playerBody.setFlipX(px < this.player.x);
+    const dx = px - this.player.x;
+    const dy = py - this.player.y;
+    if (dx || dy) {
+      this.facing = Math.abs(dx) >= Math.abs(dy) ? 'side' : dy > 0 ? 'down' : 'up';
+      if (this.facing === 'side') this.playerBody.setFlipX(dx < 0);
+      this.playerBody.anims.timeScale = speedMultiplier;
+      this.playerBody.play(`walk-${this.facing}`, true);
+    }
     const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, px, py);
     this.walkTween = this.tweens.add({
       targets: this.player, x: px, y: py,
       duration: (dist / T / (WALK_TILES_PER_SEC * speedMultiplier)) * 1000,
-      onUpdate: () => {
-        this.player.setDepth(this.player.y + 1000);
-        this.playerBody.y = Math.sin(this.time.now / 60) > 0 ? -1 : 0;
-      },
+      onUpdate: () => this.player.setDepth(this.player.y + 1000),
       onComplete: () => {
-        this.playerBody.y = 0;
+        if (!rest.length) this.idle();
         this.walkPath(rest, done);
       },
     });
@@ -622,7 +640,31 @@ export class MapScene extends Phaser.Scene {
     this.foe?.destroy();
     this.foe = undefined;
     this.workTween?.stop();
-    this.playerBody.setPosition(0, 0);
+    this.idle();
+  }
+
+  private idle() {
+    this.playerBody.anims.timeScale = 1;
+    this.playerBody.play(`idle-${this.facing}`, true);
+  }
+
+  /** 当前任务对应的动作动画 */
+  private workAnim(): string {
+    const a = this.currentAction ? ACTIONS[this.currentAction] : undefined;
+    if (!a) return `idle-${this.facing}`;
+    if (a.kind === 'combat') {
+      const w = store.state.equipment.weapon ?? '';
+      const key = w.slice(w.indexOf('_') + 1);
+      if (key === 'spear' || key === 'dagger') return `fight-${key}`;
+      if (['shortbow', 'longbow', 'crossbow'].includes(key)) return 'fight-bow';
+      if (key === 'staff') return 'fight-staff';
+      return 'fight-sword';
+    }
+    const bySkill: Partial<Record<string, string>> = {
+      mining: 'work-mine', woodcutting: 'work-chop', fishing: 'work-fish', hunting: 'work-skin', thieving: 'work-steal',
+    };
+    if (a.skill === 'farming') return a.tool === 'sickle' ? 'work-gather' : 'work-farm';
+    return bySkill[a.skill] ?? 'work-craft';
   }
 
   private startWorking() {
@@ -634,15 +676,17 @@ export class MapScene extends Phaser.Scene {
       if (m.tint) this.foe.setTint(m.tint);
       if (m.boss) this.foe.setScale(1.6).setX(this.player.x + 20);
       this.foe.setDepth(this.foe.y + 1000);
-      this.workTween = this.tweens.add({ targets: this.playerBody, x: 3, yoyo: true, repeat: -1, duration: 160, repeatDelay: 2080 });
-    } else {
-      this.workTween = this.tweens.add({ targets: this.playerBody, y: -2, yoyo: true, repeat: -1, duration: 220, repeatDelay: 300 });
     }
+    // 干活时侧身朝右（怪物也站在右边）
+    this.facing = 'side';
+    this.playerBody.setFlipX(false);
+    this.playerBody.anims.timeScale = 1;
+    this.playerBody.play(this.workAnim(), true);
   }
 
   private float(text: string, color: string, big = false) {
     const t = this.add
-      .text(this.player.x, this.player.y - 18, text, {
+      .text(this.player.x, this.player.y - 26, text, {
         fontFamily: FONT, fontSize: big ? '10px' : '7px', color, stroke: '#000', strokeThickness: 2, resolution: 4,
       })
       .setOrigin(0.5)
