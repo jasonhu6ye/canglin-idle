@@ -34,7 +34,7 @@ export function newGame(now: number, seed = Math.floor(Math.random() * 2 ** 31))
     hp: 100,
     bank: { coins: 50, minnow: 10 },
     bag: {},
-    equipment: { weapon: 'stone_sword' },
+    equipment: { weapon: 'wood_sword' },
     queue: [],
     progressMs: 0,
     combat: null,
@@ -102,16 +102,22 @@ export function playerBonuses(s: GameState, style = weaponStyle(s)) {
 }
 
 export const TOOL_FOR: Partial<Record<SkillId, EquipSlot>> = {
-  mining: 'pickaxe', woodcutting: 'axe', fishing: 'rod', farming: 'hoe', hunting: 'knife', thieving: 'gloves',
+  mining: 'pickaxe', woodcutting: 'axe', fishing: 'rod', farming: 'hoe', hunting: 'knife', smithing: 'hammer', crafting: 'needle',
 };
 
-export function toolSpeed(s: GameState, skill: SkillId) {
-  const slot = TOOL_FOR[skill];
-  return (slot && ITEMS[s.equipment[slot] ?? '']?.equip?.speed) || 0;
+/** 某个工具栏位当前的速度加成 */
+export const slotSpeed = (s: GameState, slot: EquipSlot) => ITEMS[s.equipment[slot] ?? '']?.equip?.speed || 0;
+
+export function toolSpeed(s: GameState, skill: SkillId, tool?: EquipSlot) {
+  const slot = tool ?? TOOL_FOR[skill];
+  return slot ? slotSpeed(s, slot) : 0;
 }
 
 /** 工具加速后的单次耗时 */
-export const actionDuration = (s: GameState, a: SkillAction) => Math.round(a.durationMs / (1 + toolSpeed(s, a.skill)));
+export const actionDuration = (s: GameState, a: SkillAction) => Math.round(a.durationMs / (1 + toolSpeed(s, a.skill, a.tool)));
+
+/** 玩家攻击间隔：看武器，匕首快、长枪和弩慢 */
+export const playerAttackMs = (s: GameState) => ITEMS[s.equipment.weapon ?? '']?.equip?.attackMs ?? PLAYER_ATTACK_MS;
 
 const healOf = (id: string) => ITEMS[id]?.heals ?? 0;
 const isBagItem = (id: string) => ['food', 'potion', 'ammo'].includes(ITEMS[id]?.category);
@@ -277,7 +283,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     const m = MONSTERS[a.monster];
     if (!s.combat) {
       carryFood();
-      s.combat = { monsterHp: m.hp, playerTimerMs: PLAYER_ATTACK_MS, monsterTimerMs: m.attackMs, respawnMs: 0 };
+      s.combat = { monsterHp: m.hp, playerTimerMs: playerAttackMs(s), monsterTimerMs: m.attackMs, respawnMs: 0 };
     }
     const c = s.combat;
     if (c.respawnMs > 0) {
@@ -298,7 +304,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         else addItem(ammo.id, -1);
         sum.ammoUsed++;
       }
-      c.playerTimerMs += PLAYER_ATTACK_MS;
+      c.playerTimerMs += playerAttackMs(s);
       if (rand() < st.playerHit) {
         const dmg = Math.min(c.monsterHp, 1 + Math.floor(rand() * st.playerMaxHit));
         c.monsterHp -= dmg;
@@ -311,7 +317,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         sum.kills[m.id] = (sum.kills[m.id] ?? 0) + 1;
         s.stats.kills++;
         task.done++;
-        s.combat = { monsterHp: m.hp, playerTimerMs: PLAYER_ATTACK_MS, monsterTimerMs: m.attackMs, respawnMs: RESPAWN_MS };
+        s.combat = { monsterHp: m.hp, playerTimerMs: playerAttackMs(s), monsterTimerMs: m.attackMs, respawnMs: RESPAWN_MS };
         return step;
       }
     }
@@ -449,6 +455,6 @@ export function xpPerHour(s: GameState, actionId: string): number {
   const m = MONSTERS[a.monster];
   const st = combatStats(s, m);
   const avgDmg = st.playerHit * (1 + st.playerMaxHit) / 2;
-  const killMs = (m.hp / Math.max(avgDmg, 0.01)) * PLAYER_ATTACK_MS + RESPAWN_MS;
+  const killMs = (m.hp / Math.max(avgDmg, 0.01)) * playerAttackMs(s) + RESPAWN_MS;
   return Math.round((m.hp * 3600000) / killMs);
 }

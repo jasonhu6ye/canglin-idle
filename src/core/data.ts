@@ -1,5 +1,5 @@
 import type {
-  ActionDef, CombatStyle, Drop, EquipSlot, ItemCategory, ItemDef, ItemStack, MonsterDef, RegionId, SkillGroup, SkillId,
+  ActionDef, CombatStyle, Drop, EquipSlot, ItemCategory, ItemDef, ItemStack, MonsterDef, RegionId, SkillGroup, SkillId, ToolSlot,
 } from './types';
 
 /*
@@ -16,17 +16,17 @@ export const SKILLS: Record<SkillId, SkillInfo> = {
   mining: { name: '挖矿', color: '#b08d57', group: 'gather', desc: '采集矿石、符文石和宝石' },
   woodcutting: { name: '伐木', color: '#6a9a4a', group: 'gather', desc: '砍伐各地的树木' },
   fishing: { name: '钓鱼', color: '#4f86b8', group: 'gather', desc: '在湖泊、海岸和熔池钓鱼' },
-  farming: { name: '种植', color: '#8fbf4a', group: 'gather', desc: '种作物、采棉花和草药' },
-  hunting: { name: '狩猎', color: '#b0703a', group: 'gather', desc: '在野外狩猎野兽，剥取兽皮' },
+  farming: { name: '种植', color: '#8fbf4a', group: 'gather', desc: '用锄头种作物，用镰刀采棉花和草药' },
+  hunting: { name: '狩猎', color: '#b0703a', group: 'gather', desc: '在野外狩猎野兽，用刮皮刀剥取兽皮' },
   thieving: { name: '偷窃', color: '#8a7ab8', group: 'gather', desc: '从镇民和商队身上摸金币，失败会被晕眩' },
   cooking: { name: '烹饪', color: '#d4a03c', group: 'produce', desc: '把鱼和作物做成回血的食物' },
-  smithing: { name: '锻造', color: '#c26a3a', group: 'produce', desc: '冶炼金属锭，打造近战武器、重甲、工具和箭头' },
-  fletching: { name: '制弓', color: '#a8944a', group: 'produce', desc: '制作弓、箭和鱼竿' },
+  smithing: { name: '锻造', color: '#c26a3a', group: 'produce', desc: '冶炼精炼锭，打造剑、长枪、匕首、板甲、工具和箭头' },
+  fletching: { name: '制弓', color: '#a8944a', group: 'produce', desc: '加工木材，制作短弓、长弓、弩、鱼竿和箭' },
   herblore: { name: '药剂', color: '#4ab89a', group: 'produce', desc: '用草药调配治疗药水' },
-  crafting: { name: '工艺', color: '#b87a9a', group: 'produce', desc: '制作符文、法杖、皮甲、法袍和首饰' },
+  crafting: { name: '工艺', color: '#b87a9a', group: 'produce', desc: '鞣制皮革、纺织布料，制作皮甲、布甲、法杖、符文和首饰' },
   enhancing: { name: '强化', color: '#e8d04a', group: 'produce', desc: '制作强化石（装备强化系统待开放）' },
-  melee: { name: '近战', color: '#c84a4a', group: 'combat', desc: '装备剑类武器时获得经验' },
-  ranged: { name: '远程', color: '#6ab84a', group: 'combat', desc: '装备弓时获得经验，消耗箭' },
+  melee: { name: '近战', color: '#c84a4a', group: 'combat', desc: '装备剑、长枪、匕首时获得经验' },
+  ranged: { name: '远程', color: '#6ab84a', group: 'combat', desc: '装备短弓、长弓、弩时获得经验，消耗箭' },
   magic: { name: '魔法', color: '#5a7ae8', group: 'combat', desc: '装备法杖时获得经验，消耗符文' },
   defence: { name: '防御', color: '#7a8ab8', group: 'combat', desc: '任何战斗都会获得，决定能穿的护甲' },
   hitpoints: { name: '生命', color: '#d0566b', group: 'combat', desc: '任何战斗都会获得，每级 10 点生命上限' },
@@ -66,9 +66,9 @@ item('bones', '骨头', 'misc', 3);
  * T1 石头直接打磨成石料，T3 起用两种矿石合炼。
  */
 export const TIERS = [
-  { id: 'stone', metal: '石', ore: 'stone', oreName: '石头', wood: 'plain', woodName: '原木', rune: '石', level: 1 },
+  { id: 'wood', metal: '木', ore: 'stone', oreName: '石头', wood: 'plain', woodName: '原木', rune: '木', level: 1 },
   { id: 'copper', metal: '铜', ore: 'copper_ore', oreName: '铜矿', wood: 'birch', woodName: '桦木', rune: '铜', level: 10 },
-  { id: 'bronze', metal: '青铜', ore: 'tin_ore', oreName: '锡矿', wood: 'pine', woodName: '松木', rune: '青铜', level: 20 },
+  { id: 'tin', metal: '锡', ore: 'tin_ore', oreName: '锡矿', wood: 'pine', woodName: '松木', rune: '锡', level: 20 },
   { id: 'iron', metal: '铁', ore: 'iron_ore', oreName: '铁矿', wood: 'oak', woodName: '橡木', rune: '铁', level: 30 },
   { id: 'titanium', metal: '钛', ore: 'titanium_ore', oreName: '钛矿', wood: 'cedar', woodName: '雪松木', rune: '钛', level: 40 },
   { id: 'runic', metal: '符文', ore: 'rune_ore', oreName: '符文矿', wood: 'bloodoak', woodName: '血橡木', rune: '秘纹', level: 55 },
@@ -124,12 +124,17 @@ HERBS.forEach(([id, name, lvl, heals]) => {
   item(`${id}_potion`, `${name}药水`, 'potion', Math.round(15 + lvl * 4), { heals });
 });
 
-// 金属锭、箭杆、箭头、箭、符文
+// ---- 加工材料 ----
+// 精炼锭（锻造）：T1 是硬木锭（原木 + 石头打磨），T2 起由同阶矿石冶炼
+// 加工木材（制弓）、皮革和布料（工艺）都是同阶原料 ×2 → 1
 TIERS.forEach((t, i) => {
-  item(`${t.id}_bar`, i === 0 ? '石料' : `${t.metal}锭`, 'material', BAR_VALUE[i]);
-  item(`${t.id}_arrowhead`, `${t.metal}箭头`, 'material', Math.ceil(BAR_VALUE[i] / 12));
-  item(`${t.id}_arrow`, `${t.metal}箭`, 'ammo', Math.ceil(BAR_VALUE[i] / 8), { ammo: { style: 'ranged', power: Math.round(POWER[i] / 2) } });
-  item(`${t.id}_rune`, `${t.rune}符文`, 'ammo', Math.ceil(BAR_VALUE[i] / 8), { ammo: { style: 'magic', power: Math.round(POWER[i] / 2) } });
+  item(`${t.id}_bar`, i === 0 ? '硬木锭' : `${t.metal}锭`, 'material', BAR_VALUE[i], { tier: i });
+  item(`plank_${i + 1}`, `${t.woodName}板材`, 'material', RES_VALUE[i] * 3, { tier: i });
+  item(`leather_${i + 1}`, '皮革', 'material', RES_VALUE[i] * 3, { tier: i });
+  item(`cloth_${i + 1}`, '布料', 'material', RES_VALUE[i] * 3, { tier: i });
+  item(`${t.id}_arrowhead`, `${t.metal}箭头`, 'material', Math.ceil(BAR_VALUE[i] / 12), { tier: i });
+  item(`${t.id}_arrow`, `${t.metal}箭`, 'ammo', Math.ceil(BAR_VALUE[i] / 8), { tier: i, ammo: { style: 'ranged', power: Math.round(POWER[i] / 2) } });
+  item(`${t.id}_rune`, `${t.rune}符文`, 'ammo', Math.ceil(BAR_VALUE[i] / 8), { tier: i, ammo: { style: 'magic', power: Math.round(POWER[i] / 2) } });
 });
 item('shaft', '箭杆', 'material', 1);
 
@@ -139,60 +144,94 @@ const STONES: [string, string, number][] = [
 ];
 for (const [id, name, lvl] of STONES) item(id, name, 'material', 20 + lvl * 12);
 
-// 装备
-const gear = (
-  id: string, name: string, slot: EquipSlot, skill: SkillId, level: number, value: number,
-  stats: { attack?: number; strength?: number; defence?: number; style?: CombatStyle; speed?: number },
-) => item(id, name, TOOL_SLOTS.includes(slot) ? 'tool' : 'gear', value, {
-  equip: { slot, skill, level, attack: stats.attack ?? 0, strength: stats.strength ?? 0, defence: stats.defence ?? 0, style: stats.style, speed: stats.speed },
-});
-const TOOL_SLOTS: EquipSlot[] = ['pickaxe', 'axe', 'rod', 'hoe', 'gloves', 'knife'];
-
-TIERS.forEach((t, i) => {
-  const p = POWER[i];
-  const v = BAR_VALUE[i];
-  gear(`${t.id}_sword`, `${t.metal}剑`, 'weapon', 'melee', t.level, v * 2, { attack: p, strength: Math.round(p * 0.85), style: 'melee' });
-  gear(`${t.id}_helm`, `${t.metal}头盔`, 'head', 'defence', t.level, v * 2, { defence: Math.round(p * 0.6) });
-  gear(`${t.id}_shield`, `${t.metal}盾`, 'shield', 'defence', t.level, v * 3, { defence: Math.round(p * 0.9) });
-  gear(`${t.id}_legs`, `${t.metal}腿甲`, 'legs', 'defence', t.level, v * 3, { defence: Math.round(p * 1.0) });
-  gear(`${t.id}_body`, `${t.metal}胸甲`, 'body', 'defence', t.level, v * 4, { defence: Math.round(p * 1.4) });
-  gear(`${t.id}_pickaxe`, `${t.metal}镐`, 'pickaxe', 'mining', t.level, v * 2, { speed: TOOL_SPEED[i] });
-  gear(`${t.id}_axe`, `${t.metal}斧`, 'axe', 'woodcutting', t.level, v * 2, { speed: TOOL_SPEED[i] });
-  gear(`${t.id}_hoe`, `${t.metal}锄`, 'hoe', 'farming', t.level, v * 2, { speed: TOOL_SPEED[i] });
-  gear(`${t.id}_knife`, `${t.metal}剥皮刀`, 'knife', 'hunting', t.level, v * 2, { speed: TOOL_SPEED[i] });
-  gear(`${t.wood}_bow`, `${t.woodName}弓`, 'weapon', 'ranged', t.level, v * 2, { attack: p, strength: Math.round(p * 0.5), style: 'ranged' });
-  gear(`${t.wood}_staff`, `${t.woodName}法杖`, 'weapon', 'magic', t.level, v * 2, { attack: p, strength: Math.round(p * 0.4), style: 'magic' });
-  gear(`${t.wood}_rod`, `${t.woodName}鱼竿`, 'rod', 'fishing', t.level, v * 2, { speed: TOOL_SPEED[i] });
-});
-
-/** 皮甲（远程，兽皮做）和法袍（魔法，棉花做）各 8 阶 */
-const LEATHER_NAME = ['粗', '软', '硬', '厚', '韧', '血纹', '烬', '白鬃'];
-const CLOTH_NAME = ['粗布', '细布', '柔棉', '丝棉', '锦棉', '霞棉', '烬棉', '月白'];
-const LIGHT_PIECES: { key: string; slot: EquipSlot; leather: string; robe: string; qty: number; def: number; lvl: number }[] = [
-  { key: 'head', slot: 'head', leather: '皮帽', robe: '兜帽', qty: 1, def: 0.4, lvl: 0 },
-  { key: 'legs', slot: 'legs', leather: '皮裤', robe: '长裙', qty: 2, def: 0.6, lvl: 3 },
-  { key: 'body', slot: 'body', leather: '皮甲', robe: '法袍', qty: 3, def: 0.9, lvl: 6 },
+// ---- 装备 ----
+/*
+ * T1 木制 … T8 精金，每阶都有下面全部装备。基础属性 = 本阶强度 POWER × 系数。
+ * mat 是材料：bar 精炼锭、plank 加工木材、leather 皮革、cloth 布料。
+ * plus 是在本阶解锁等级上再加几级才能做。
+ */
+type Mat = 'bar' | 'plank' | 'leather' | 'cloth';
+export interface EquipType {
+  key: string;
+  name: string;
+  slot: EquipSlot;
+  /** 穿戴要求的技能 */
+  skill: SkillId;
+  /** 制作技能 */
+  maker: SkillId;
+  mats: [Mat, number][];
+  plus: number;
+  stats: { attack?: number; strength?: number; defence?: number; style?: CombatStyle; speed?: boolean; attackMs?: number };
+  group: string;
+}
+const W = (key: string, name: string, skill: SkillId, maker: SkillId, mats: [Mat, number][], plus: number, attack: number, strength: number, attackMs: number, style: CombatStyle): EquipType =>
+  ({ key, name, slot: 'weapon', skill, maker, mats, plus, stats: { attack, strength, attackMs, style }, group: '武器' });
+const ARMOR_SLOTS: [EquipSlot, number, number][] = [
+  // [部位, 防御占比, 制作多加几级]
+  ['head', 0.3, 2], ['body', 0.5, 6], ['feet', 0.2, 3], ['hands', 0.15, 1],
 ];
+const A = (type: string, names: string[], mat: Mat, maker: SkillId, def: number, attack: number, strength: number, style: CombatStyle): EquipType[] =>
+  ARMOR_SLOTS.map(([slot, k, plus], j) => ({
+    key: `${type}_${slot}`, name: names[j], slot, skill: 'defence' as SkillId, maker, mats: [[mat, [2, 4, 2, 1][j]]] as [Mat, number][], plus,
+    stats: { defence: def * k, attack: attack * k, strength: strength * k, style }, group: { plate: '板甲', leather: '皮甲', cloth: '布甲' }[type]!,
+  }));
+const TL = (key: string, name: string, slot: EquipSlot, skill: SkillId, maker: SkillId, mats: [Mat, number][], plus: number): EquipType =>
+  ({ key, name, slot, skill, maker, mats, plus, stats: { speed: true }, group: '工具' });
+
+export const EQUIP_TYPES: EquipType[] = [
+  // 近战：精炼锭
+  W('sword', '剑', 'melee', 'smithing', [['bar', 2]], 1, 1.0, 1.0, 2400, 'melee'),
+  W('spear', '长枪', 'melee', 'smithing', [['bar', 2], ['plank', 1]], 3, 0.8, 1.4, 3000, 'melee'),
+  W('dagger', '匕首', 'melee', 'smithing', [['bar', 1]], 0, 1.25, 0.65, 2000, 'melee'),
+  // 远程：皮革 + 加工木材
+  W('shortbow', '短弓', 'ranged', 'fletching', [['plank', 2], ['leather', 1]], 1, 1.0, 0.6, 2200, 'ranged'),
+  W('longbow', '长弓', 'ranged', 'fletching', [['plank', 3], ['leather', 1]], 4, 1.25, 0.8, 2800, 'ranged'),
+  W('crossbow', '弩', 'ranged', 'fletching', [['plank', 3], ['leather', 2]], 6, 0.85, 1.3, 3400, 'ranged'),
+  // 魔法：加工木材 + 布料
+  W('staff', '法杖', 'magic', 'crafting', [['plank', 2], ['cloth', 1]], 4, 1.0, 0.6, 2600, 'magic'),
+  // 护甲：头、身、脚、手
+  ...A('plate', ['板甲头盔', '板甲胸甲', '板甲战靴', '板甲护手'], 'bar', 'smithing', 2.0, 0, 0.25, 'melee'),
+  ...A('leather', ['皮帽', '皮甲', '皮靴', '皮手套'], 'leather', 'crafting', 1.4, 0.5, 0, 'ranged'),
+  ...A('cloth', ['布帽', '布袍', '布鞋', '布手套'], 'cloth', 'crafting', 1.0, 0.3, 0.4, 'magic'),
+  // 工具
+  TL('axe', '斧头', 'axe', 'woodcutting', 'smithing', [['bar', 1], ['plank', 1]], 1),
+  TL('pickaxe', '镐子', 'pickaxe', 'mining', 'smithing', [['bar', 1], ['plank', 1]], 1),
+  TL('sickle', '镰刀', 'sickle', 'farming', 'smithing', [['bar', 1], ['plank', 1]], 1),
+  TL('knife', '刮皮刀', 'knife', 'hunting', 'smithing', [['bar', 1], ['plank', 1]], 1),
+  TL('hoe', '锄头', 'hoe', 'farming', 'smithing', [['bar', 1], ['plank', 1]], 2),
+  TL('hammer', '锻造锤', 'hammer', 'smithing', 'smithing', [['bar', 2], ['plank', 1]], 2),
+  TL('rod', '鱼竿', 'rod', 'fishing', 'fletching', [['plank', 2], ['cloth', 1]], 2),
+  TL('needle', '缝纫针', 'needle', 'crafting', 'smithing', [['bar', 1]], 0),
+];
+const TOOL_SLOTS: EquipSlot[] = ['axe', 'pickaxe', 'sickle', 'knife', 'rod', 'hoe', 'hammer', 'needle'];
+const matItem = (m: Mat, i: number) => (m === 'bar' ? `${TIERS[i].id}_bar` : `${m}_${i + 1}`);
+const matCost = (m: Mat, i: number) => (m === 'bar' ? BAR_VALUE[i] : RES_VALUE[i] * 3);
+
 TIERS.forEach((t, i) => {
   const p = POWER[i];
-  for (const piece of LIGHT_PIECES) {
-    gear(`leather${i + 1}_${piece.key}`, `${LEATHER_NAME[i]}${piece.leather}`, piece.slot, 'defence', t.level, BAR_VALUE[i] * 2,
-      { defence: Math.round(p * piece.def), attack: Math.round(p * 0.2), style: 'ranged' });
-    gear(`robe${i + 1}_${piece.key}`, `${CLOTH_NAME[i]}${piece.robe}`, piece.slot, 'defence', t.level, BAR_VALUE[i] * 2,
-      { defence: Math.round(p * piece.def * 0.7), strength: Math.round(p * 0.2), style: 'magic' });
+  for (const e of EQUIP_TYPES) {
+    const st = e.stats;
+    const value = Math.round(e.mats.reduce((v, [m, q]) => v + matCost(m, i) * q, 0) * 1.5);
+    item(`${t.id}_${e.key}`, `${t.metal}${e.name}`, TOOL_SLOTS.includes(e.slot) ? 'tool' : 'gear', value, {
+      tier: i,
+      equip: {
+        slot: e.slot, skill: e.skill, level: t.level,
+        attack: Math.round(p * (st.attack ?? 0)), strength: Math.round(p * (st.strength ?? 0)), defence: Math.round(p * (st.defence ?? 0)),
+        style: st.style, speed: st.speed ? TOOL_SPEED[i] : undefined, attackMs: st.attackMs,
+      },
+    });
   }
-  gear(`leather${i + 1}_gloves`, `${LEATHER_NAME[i]}皮手套`, 'gloves', 'thieving', t.level, BAR_VALUE[i] * 2, { speed: TOOL_SPEED[i] });
 });
 
-/** 首饰：金属锭 + 宝石 */
+/** 首饰：精炼锭 + 宝石 */
 const JEWELS: { gem: string; name: string; level: number; power: number; bar: string }[] = [
   { gem: 'sapphire', name: '蓝宝石', level: 40, power: 8, bar: 'titanium_bar' },
   { gem: 'ruby', name: '红宝石', level: 55, power: 13, bar: 'runic_bar' },
   { gem: 'diamond', name: '钻石', level: 70, power: 20, bar: 'meteor_bar' },
 ];
 for (const j of JEWELS) {
-  gear(`${j.gem}_ring`, `${j.name}戒指`, 'ring', 'hitpoints', j.level, 200 + j.power * 40, { attack: j.power });
-  gear(`${j.gem}_amulet`, `${j.name}项链`, 'neck', 'hitpoints', j.level, 220 + j.power * 40, { strength: j.power });
+  item(`${j.gem}_ring`, `${j.name}戒指`, 'gear', 200 + j.power * 40, { equip: { slot: 'ring', skill: 'hitpoints', level: j.level, attack: j.power, strength: 0, defence: 0 } });
+  item(`${j.gem}_amulet`, `${j.name}项链`, 'gear', 220 + j.power * 40, { equip: { slot: 'neck', skill: 'hitpoints', level: j.level, attack: 0, strength: j.power, defence: 0 } });
 }
 
 export const ITEMS: Record<string, ItemDef> = Object.fromEntries(itemList.map((i) => [i.id, i]));
@@ -275,9 +314,9 @@ const actionList: ActionDef[] = [];
 const xpFor = (level: number) => Math.round(8.4 + level * 1.6);
 
 /** 采集：durationMs 随等级变长，经验随等级变多 */
-function gather(id: string, name: string, skill: SkillId, level: number, outputs: Drop[], extra: { ms?: number; xp?: number; fail?: { chance: number; noFailLevel: number; stunMs?: number } } = {}) {
+function gather(id: string, name: string, skill: SkillId, level: number, outputs: Drop[], extra: { ms?: number; xp?: number; fail?: { chance: number; noFailLevel: number; stunMs?: number }; tool?: ToolSlot } = {}) {
   actionList.push({
-    id, kind: 'skill', name, skill, level, durationMs: extra.ms ?? 3000 + (level - 1) * 20, xp: extra.xp ?? xpFor(level), outputs, fail: extra.fail,
+    id, kind: 'skill', name, skill, level, durationMs: extra.ms ?? 3000 + (level - 1) * 20, xp: extra.xp ?? xpFor(level), outputs, fail: extra.fail, tool: extra.tool,
   });
   return id;
 }
@@ -307,7 +346,7 @@ const mine = (t: number, suffix = '') =>
 const chop = (t: number, suffix = '') =>
   gather(`chop_${TIERS[t].wood}${suffix}`, TIERS[t].woodName, 'woodcutting', TIERS[t].level, [one(`${TIERS[t].wood}_log`)]);
 const cotton = (t: number, suffix = '') =>
-  gather(`cotton_${t + 1}${suffix}`, '棉花', 'farming', TIERS[t].level, [one(`cotton_${t + 1}`), { item: `cotton_${t + 1}`, qty: 1, chance: 0.2 }]);
+  gather(`cotton_${t + 1}${suffix}`, '棉花', 'farming', TIERS[t].level, [one(`cotton_${t + 1}`), { item: `cotton_${t + 1}`, qty: 1, chance: 0.2 }], { tool: 'sickle' });
 const hunt = (t: number, suffix = '') =>
   gather(`hunt_${t + 1}${suffix}`, '兽皮', 'hunting', TIERS[t].level, [one(`hide_${t + 1}`), { item: 'bones', qty: 1, chance: 0.3 }]);
 const fishAt = (fish: string, suffix = '') => {
@@ -316,55 +355,38 @@ const fishAt = (fish: string, suffix = '') => {
 };
 const herb = (id: string, suffix = '') => {
   const h = HERBS.find((x) => x[0] === id)!;
-  return gather(`farm_${id}${suffix}`, `采集${h[1]}`, 'farming', h[2], [one(id), { item: id, qty: 1, chance: 0.2 }]);
+  return gather(`farm_${id}${suffix}`, `采集${h[1]}`, 'farming', h[2], [one(id), { item: id, qty: 1, chance: 0.2 }], { tool: 'sickle' });
 };
 const steal = (id: string, name: string, level: number, coins: number, extra: Drop[] = []) =>
   gather(`steal_${id}`, name, 'thieving', level, [one('coins', coins), ...extra], {
     ms: 2500 + level * 15, fail: { chance: 0.5, noFailLevel: level + 30, stunMs: 4000 },
   });
 
-// 生产动作
-/** 冶炼配方：T1 石头打磨，T3 铜锡合炼，T5 起用本阶矿石 + 上一阶矿石 */
-const SMELT: ItemStack[][] = [
-  [one('stone', 2)], [one('copper_ore', 2)], [one('copper_ore'), one('tin_ore')], [one('iron_ore', 2)],
-  [one('titanium_ore', 2), one('iron_ore')], [one('rune_ore', 2), one('titanium_ore')],
-  [one('meteor_ore', 2), one('rune_ore')], [one('adamant_ore', 2), one('meteor_ore')],
-];
+// 生产动作：采集 → 加工（锭 / 板材 / 皮革 / 布料）→ 制作装备
 TIERS.forEach((t, i) => {
   const lvl = t.level;
-  make(`smelt_${t.id}`, i === 0 ? '打磨石料' : `冶炼${t.metal}锭`, 'smithing', lvl, SMELT[i], [one(`${t.id}_bar`)], 0.8);
-  const bar = `${t.id}_bar`;
-  const smith = (key: string, name: string, bars: number, plus: number, qty = 1) =>
-    make(`smith_${t.id}_${key}`, name, 'smithing', lvl + plus, [one(bar, bars)], [one(`${t.id}_${key}`, qty)], bars);
-  smith('sword', `${t.metal}剑`, 1, 0);
-  smith('arrowhead', `${t.metal}箭头 ×15`, 1, 0, 15);
-  smith('pickaxe', `${t.metal}镐`, 1, 1);
-  smith('axe', `${t.metal}斧`, 1, 1);
-  smith('knife', `${t.metal}剥皮刀`, 1, 1);
-  smith('helm', `${t.metal}头盔`, 1, 2);
-  smith('hoe', `${t.metal}锄`, 1, 3);
-  smith('shield', `${t.metal}盾`, 2, 4);
-  smith('legs', `${t.metal}腿甲`, 2, 6);
-  smith('body', `${t.metal}胸甲`, 3, 8);
-
-  const log = `${t.wood}_log`;
-  make(`fletch_${t.wood}_bow`, `${t.woodName}弓`, 'fletching', lvl, [one(log, 2)], [one(`${t.wood}_bow`)], 2);
-  make(`fletch_${t.wood}_rod`, `${t.woodName}鱼竿`, 'fletching', lvl + 3, [one(log)], [one(`${t.wood}_rod`)]);
-  make(`fletch_${t.id}_arrow`, `${t.metal}箭 ×10`, 'fletching', lvl, [one('shaft', 10), one(`${t.id}_arrowhead`, 10)], [one(`${t.id}_arrow`, 10)], 1.5);
-
-  make(`craft_${t.id}_rune`, `${t.rune}符文 ×5`, 'crafting', lvl, [one(t.ore)], [one(`${t.id}_rune`, 5)]);
-  make(`craft_${t.wood}_staff`, `${t.woodName}法杖`, 'crafting', lvl + 2, [one(log), one(t.ore, 2)], [one(`${t.wood}_staff`)], 2);
-
-  for (const piece of LIGHT_PIECES) {
-    const leather = `leather${i + 1}_${piece.key}`;
-    const robe = `robe${i + 1}_${piece.key}`;
-    make(`craft_${leather}`, ITEMS[leather].name, 'crafting', lvl + piece.lvl, [one(`hide_${i + 1}`, piece.qty)], [one(leather)], piece.qty);
-    make(`craft_${robe}`, ITEMS[robe].name, 'crafting', lvl + piece.lvl, [one(`cotton_${i + 1}`, piece.qty * 2)], [one(robe)], piece.qty);
+  const n = i + 1;
+  // 加工
+  make(`smelt_${t.id}`, i === 0 ? '打磨硬木锭' : `冶炼${t.metal}锭`, 'smithing', lvl,
+    i === 0 ? [one('plain_log', 2), one('stone')] : [one(t.ore, 2)], [one(`${t.id}_bar`)], 0.8);
+  make(`plank_${n}`, `${t.woodName}板材`, 'fletching', lvl, [one(`${t.wood}_log`, 2)], [one(`plank_${n}`)], 0.8);
+  make(`tan_${n}`, '鞣制皮革', 'crafting', lvl, [one(`hide_${n}`, 2)], [one(`leather_${n}`)], 0.8);
+  make(`weave_${n}`, '纺织布料', 'crafting', lvl, [one(`cotton_${n}`, 2)], [one(`cloth_${n}`)], 0.8);
+  // 装备
+  const prefix = { smithing: 'smith', fletching: 'fletch', crafting: 'craft' } as Record<SkillId, string>;
+  for (const e of EQUIP_TYPES) {
+    const id = `${t.id}_${e.key}`;
+    const inputs = e.mats.map(([m, q]) => one(matItem(m, i), q));
+    const qty = inputs.reduce((a, x) => a + x.qty, 0);
+    make(`${prefix[e.maker]}_${id}`, ITEMS[id].name, e.maker, lvl + e.plus, inputs, [one(id)], Math.max(1, qty * 0.8));
   }
-  make(`craft_leather${i + 1}_gloves`, ITEMS[`leather${i + 1}_gloves`].name, 'crafting', lvl + 1, [one(`hide_${i + 1}`)], [one(`leather${i + 1}_gloves`)]);
+  // 弹药
+  make(`smith_${t.id}_arrowhead`, `${t.metal}箭头 ×15`, 'smithing', lvl, [one(`${t.id}_bar`)], [one(`${t.id}_arrowhead`, 15)]);
+  make(`fletch_${t.id}_arrow`, `${t.metal}箭 ×10`, 'fletching', lvl, [one('shaft', 10), one(`${t.id}_arrowhead`, 10)], [one(`${t.id}_arrow`, 10)], 1.5);
+  make(`craft_${t.id}_rune`, `${t.rune}符文 ×5`, 'crafting', lvl, [one(t.ore), one(`cloth_${n}`)], [one(`${t.id}_rune`, 5)]);
 });
-make('fletch_shaft', '箭杆 ×15', 'fletching', 1, [one('plain_log')], [one('shaft', 15)]);
-make('fletch_shaft_birch', '箭杆 ×25', 'fletching', 10, [one('birch_log')], [one('shaft', 25)]);
+make('fletch_shaft', '箭杆 ×15', 'fletching', 1, [one('plank_1')], [one('shaft', 15)]);
+make('fletch_shaft_birch', '箭杆 ×25', 'fletching', 10, [one('plank_2')], [one('shaft', 25)]);
 
 for (const j of JEWELS) {
   const inputs = [one(j.bar), one(j.gem)];
@@ -388,7 +410,7 @@ HERBS.forEach(([id, name, lvl], i) => {
   make(`brew_${id}`, `${name}药水`, 'herblore', potionLvl, [one(id, 2)], [one(`${id}_potion`)], 1.5);
 });
 
-make('enhance_basic', '初级强化石', 'enhancing', 1, [one('stone_bar', 2), one('stone', 3)], [one('enh_basic')]);
+make('enhance_basic', '初级强化石', 'enhancing', 1, [one('wood_bar', 2), one('stone', 3)], [one('enh_basic')]);
 make('enhance_mid', '中级强化石', 'enhancing', 30, [one('iron_bar', 2), one('sapphire')], [one('enh_mid')], 2);
 make('enhance_high', '高级强化石', 'enhancing', 55, [one('runic_bar', 2), one('ruby')], [one('enh_high')], 3);
 make('enhance_legend', '传说强化石', 'enhancing', 85, [one('adamant_bar', 2), one('diamond')], [one('enh_legend')], 4);
@@ -439,8 +461,8 @@ export const NODES: MapNode[] = [
   town('bank', '仓库', 151, 158, 'bank', [], { opens: 'bank' }),
   town('smithy', '铁匠铺', 174, 158, 'anvil', filterIds('smelt_').concat(filterIds('smith_'))),
   town('kitchen', '灶台', 184, 158, 'stove', filterIds('cook_')),
-  town('workshop', '工坊', 151, 170, 'bench', filterIds('craft_')),
-  town('bowyer', '制弓台', 159, 170, 'bowyer', filterIds('fletch_')),
+  town('workshop', '工坊', 151, 170, 'bench', filterIds('tan_').concat(filterIds('weave_'), filterIds('craft_'))),
+  town('bowyer', '制弓台', 159, 170, 'bowyer', filterIds('plank_').concat(filterIds('fletch_'))),
   town('apothecary', '药剂铺', 177, 170, 'potion', filterIds('brew_')),
   town('enhancer', '强化台', 185, 170, 'enhance', filterIds('enhance_')),
   town('market', '集市', 155, 182, 'market', [

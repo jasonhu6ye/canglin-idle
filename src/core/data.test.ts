@@ -39,3 +39,20 @@ describe('数据闭环', () => {
     }
   });
 });
+
+describe('装备体系', () => {
+  it('每阶每种装备都存在、能做出来、有属性', async () => {
+    const { EQUIP_TYPES, TIERS } = await import('./data');
+    const makers = new Set<string>();
+    for (const a of Object.values(ACTIONS)) if (a.kind === 'skill') a.outputs.forEach((o) => makers.add(o.item));
+    for (const t of TIERS) {
+      for (const e of EQUIP_TYPES) {
+        const it = ITEMS[`${t.id}_${e.key}`];
+        expect(it?.equip, `${t.id}_${e.key}`).toBeDefined();
+        expect(makers.has(it.id), `${it.name} 做不出来`).toBe(true);
+        const q = it.equip!;
+        expect(q.attack + q.strength + q.defence + (q.speed ?? 0), `${it.name} 没有属性`).toBeGreaterThan(0);
+      }
+    }
+  });
+});

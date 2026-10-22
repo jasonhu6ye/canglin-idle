@@ -12,8 +12,11 @@ export type ResKind = 'ore' | 'log' | 'cotton' | 'hide';
 export function resOf(id: string): { kind: ResKind; tier: number } | null {
   const tier = ITEMS[id]?.tier;
   if (tier === undefined) return null;
-  const kind: ResKind = id.startsWith('cotton_') ? 'cotton' : id.startsWith('hide_') ? 'hide' : id.endsWith('_log') ? 'log' : 'ore';
-  return { kind, tier };
+  if (id === TIERS[tier].ore) return { kind: 'ore', tier };
+  if (id === `${TIERS[tier].wood}_log`) return { kind: 'log', tier };
+  if (id === `cotton_${tier + 1}`) return { kind: 'cotton', tier };
+  if (id === `hide_${tier + 1}`) return { kind: 'hide', tier };
+  return null;
 }
 
 // ---- 配色 ----

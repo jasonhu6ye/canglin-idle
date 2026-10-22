@@ -10,8 +10,8 @@ export type SkillGroup = 'gather' | 'produce' | 'combat';
 
 export type CombatStyle = 'melee' | 'ranged' | 'magic';
 
-export type GearSlot = 'weapon' | 'shield' | 'head' | 'body' | 'legs' | 'neck' | 'ring';
-export type ToolSlot = 'pickaxe' | 'axe' | 'rod' | 'hoe' | 'knife' | 'gloves';
+export type GearSlot = 'weapon' | 'head' | 'body' | 'feet' | 'hands' | 'neck' | 'ring';
+export type ToolSlot = 'axe' | 'pickaxe' | 'sickle' | 'knife' | 'rod' | 'hoe' | 'hammer' | 'needle';
 export type EquipSlot = GearSlot | ToolSlot;
 
 export type ItemCategory = 'resource' | 'material' | 'food' | 'potion' | 'ammo' | 'gear' | 'tool' | 'seed' | 'misc';
@@ -38,8 +38,10 @@ export interface ItemDef {
     defence: number;
     /** 武器决定战斗方式；护甲上的 style 表示攻击和力量加成只对这种战斗方式生效 */
     style?: CombatStyle;
-    /** 工具：对应采集技能的速度加成，0.1 = 快 10% */
+    /** 工具：对应技能的速度加成，0.1 = 快 10% */
     speed?: number;
+    /** 武器：每次攻击间隔（毫秒），不填用默认 */
+    attackMs?: number;
   };
 }
 
@@ -69,6 +71,8 @@ export interface SkillAction {
    * 烹饪失败得到 item（烧焦）；偷窃被抓住晕眩 stunMs。
    */
   fail?: { chance: number; noFailLevel: number; item?: string; stunMs?: number };
+  /** 用哪个工具加速；不填按技能默认 */
+  tool?: ToolSlot;
 }
 
 export interface MonsterDef {

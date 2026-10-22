@@ -46,13 +46,11 @@ describe('制作', () => {
   it('材料用完就停', () => {
     let s = newGame(T0, 1);
     s.xp.smithing = XP_TABLE[20];
-    s.bank.copper_ore = 7;
     s.bank.tin_ore = 5;
-    s = startNow(s, 'smelt_bronze', { type: 'infinite' });
+    s = startNow(s, 'smelt_tin', { type: 'infinite' });
     const { state, summary } = advance(s, T0 + HOUR);
-    expect(state.bank.bronze_bar).toBe(5);
-    expect(state.bank.copper_ore).toBe(2);
-    expect(state.bank.tin_ore).toBeUndefined();
+    expect(state.bank.tin_bar).toBe(2);
+    expect(state.bank.tin_ore).toBe(1);
     expect(summary.taskEnds[0].reason).toBe('noInput');
   });
 });
@@ -122,11 +120,11 @@ describe('装备', () => {
   it('等级不够不能装备', () => {
     let s = newGame(T0, 1);
     s.bank.copper_sword = 1;
-    expect(equip(s, 'copper_sword').equipment.weapon).toBe('stone_sword');
+    expect(equip(s, 'copper_sword').equipment.weapon).toBe('wood_sword');
     s.xp.melee = XP_TABLE[10];
     const e = equip(s, 'copper_sword');
     expect(e.equipment.weapon).toBe('copper_sword');
-    expect(e.bank.stone_sword).toBe(1);
+    expect(e.bank.wood_sword).toBe(1);
   });
 });
 
@@ -151,13 +149,13 @@ describe('背包与战斗方式', () => {
 
   it('远程没有箭就停止，有箭会消耗并练远程', () => {
     let s = newGame(T0, 2);
-    s.equipment.weapon = 'pine_bow';
+    s.equipment.weapon = 'wood_shortbow';
     const none = advance(startNow(s, 'fight_dummy', { type: 'infinite' }), T0 + 10_000);
     expect(none.summary.taskEnds[0].reason).toBe('noAmmo');
-    s.bank.bronze_arrow = 20;
+    s.bank.wood_arrow = 20;
     const { state, summary } = advance(startNow(s, 'fight_dummy', { type: 'infinite' }), T0 + HOUR);
     expect(summary.ammoUsed).toBe(20);
-    expect(state.bank.bronze_arrow).toBeUndefined();
+    expect(state.bank.wood_arrow).toBeUndefined();
     expect(summary.xp.ranged).toBeGreaterThan(0);
     expect(summary.xp.melee).toBeUndefined();
     expect(summary.taskEnds[0].reason).toBe('noAmmo');
@@ -165,7 +163,7 @@ describe('背包与战斗方式', () => {
 
   it('工具加快采集', () => {
     const s = newGame(T0, 1);
-    s.equipment.pickaxe = 'stone_pickaxe';
+    s.equipment.pickaxe = 'wood_pickaxe';
     const { state } = advance(startNow(s, 'mine_stone', { type: 'infinite' }), T0 + HOUR);
     expect(state.bank.stone).toBe(Math.floor(HOUR / Math.round(3000 / 1.04)));
   });

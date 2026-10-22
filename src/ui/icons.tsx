@@ -209,6 +209,230 @@ const TPL: Record<string, string[]> = {
     'kOOk........',
     '.kk.........',
   ],
+  spear: [
+    '.........kk.',
+    '........kcck',
+    '.......kcwbk',
+    '........kbk.',
+    '.......kGk..',
+    '......kOk...',
+    '.....kOk....',
+    '....kOk.....',
+    '...kOk......',
+    '..kOk.......',
+    '.kOk........',
+    '.kk.........',
+  ],
+  dagger: [
+    '............',
+    '.........kk.',
+    '........kck.',
+    '.......kcbk.',
+    '......kcbk..',
+    '.....kcbk...',
+    '...kkcbk....',
+    '...kGbk.....',
+    '..kOkGk.....',
+    '.kOk.kk.....',
+    '.kk.........',
+    '............',
+  ],
+  longbow: [
+    '..kk........',
+    '..kbk.......',
+    '..kbkw......',
+    '...kbkw.....',
+    '...kbk.w....',
+    '...kOk.w....',
+    '...kOk.w....',
+    '...kbk.w....',
+    '...kbkw.....',
+    '..kbkw......',
+    '..kbk.......',
+    '..kk........',
+  ],
+  crossbow: [
+    '............',
+    '.kk......kk.',
+    '.kbkk..kkbk.',
+    '..kbbkkbbk..',
+    '...kkcckk...',
+    '....kcwk....',
+    '....kOOk....',
+    '....kOOk....',
+    '....kOOk....',
+    '....kOOk....',
+    '....kkkk....',
+    '............',
+  ],
+  boots: [
+    '............',
+    '............',
+    '.kkkk..kkkk.',
+    '.kcbk..kcbk.',
+    '.kcbk..kcbk.',
+    '.kcbk..kcbk.',
+    '.kcbk..kcbk.',
+    '.kcbbkkkcbbk',
+    'kcwbbakcwbbk',
+    'kbbbbakbbbak',
+    'kkkkkkkkkkkk',
+    '............',
+  ],
+  gauntlet: [
+    '............',
+    '..kkkkkk....',
+    '.kcwcbbbk...',
+    '.kccbkbkbk..',
+    '.kcbbkbkbk..',
+    '.kcbbbbbbkk.',
+    '.kcbbbbbbkbk',
+    '.kbbbbbbbbk.',
+    '..kHhHhHhk..',
+    '..khHhHhHk..',
+    '..kkkkkkkk..',
+    '............',
+  ],
+  cap: [
+    '............',
+    '............',
+    '............',
+    '....kkkk....',
+    '...kccbbk...',
+    '..kcwcbbak..',
+    '..kccbbbak..',
+    '.kbbbbbbbak.',
+    'kOOOOOOOOOOk',
+    '.kkkkkkkkkk.',
+    '............',
+    '............',
+  ],
+  jacket: [
+    '............',
+    '..kk....kk..',
+    '.kcbkkkkbak.',
+    'kcbbkOOkbbak',
+    'kcbbbkkbbbak',
+    'kcbbbOkbbbak',
+    '.kkbbbkbbkk.',
+    '..kbbbObbk..',
+    '..kbbbkbak..',
+    '..kOOOOOOk..',
+    '..kkkkkkkk..',
+    '............',
+  ],
+  hood: [
+    '............',
+    '....kkkk....',
+    '...kccbbk...',
+    '..kcwcbbbk..',
+    '..kcckkbbk..',
+    '.kcbkeekbak.',
+    '.kcbkeekbak.',
+    '.kcbbkkbbak.',
+    '.kbbbbbbbak.',
+    'kbbbbbbbbaak',
+    'kkkkkkkkkkkk',
+    '............',
+  ],
+  robe: [
+    '............',
+    '...kk..kk...',
+    '..kcbkkbak..',
+    '.kcbbggbbak.',
+    'kcbkbggbkbak',
+    'kbk.kbbk.kak',
+    '.k.kcbbbk.k.',
+    '...kcbbbak..',
+    '..kcbbbbbak.',
+    '..kbbbbbbak.',
+    '.kggggggggk.',
+    '.kkkkkkkkkk.',
+  ],
+  shoes: [
+    '............',
+    '............',
+    '............',
+    '............',
+    '..kkk...kkk.',
+    '.kcbk..kcbk.',
+    '.kcbbk.kcbbk',
+    'kcwbbbkcwbbk',
+    'kbbbbakbbbak',
+    'kkkkkkkkkkkk',
+    '............',
+    '............',
+  ],
+  sickle: [
+    '............',
+    '....kkkk....',
+    '...kccbbk...',
+    '..kck..kbk..',
+    '.kck....kbk.',
+    '.kbk.....kk.',
+    '.kbk........',
+    '..kbk.......',
+    '...kkkk.....',
+    '.....kOk....',
+    '......kOk...',
+    '.......kk...',
+  ],
+  hammer: [
+    '............',
+    '.kkkkkkk....',
+    'kcwcccbbk...',
+    'kccbbbbak...',
+    'kbbbbbaak...',
+    '.kkkOkkk....',
+    '....kOk.....',
+    '....kOk.....',
+    '....kOk.....',
+    '....kOk.....',
+    '....kOk.....',
+    '....kkk.....',
+  ],
+  needle: [
+    '..........k.',
+    '.........kwk',
+    '........kck.',
+    '.......kck..',
+    '......kck...',
+    '.....kck....',
+    '....kck.....',
+    '...kck.rr...',
+    '..kck.r..r..',
+    '.kck...rr...',
+    '.kk.........',
+    '............',
+  ],
+  plank: [
+    '............',
+    '............',
+    '.kkkkkkkkkk.',
+    'kccccccccbbk',
+    'kbbbObbbbbak',
+    'kkkkkkkkkkkk',
+    'kccccccccbbk',
+    'kbbbbbbObbak',
+    'kkkkkkkkkkkk',
+    '............',
+    '............',
+    '............',
+  ],
+  leather: [
+    '............',
+    '..kkkkkkkk..',
+    '.kccccbbbbk.',
+    '.kcwcbbbbak.',
+    '.kcbbbbbbak.',
+    'kcbbbbbbbbak',
+    'kcbbkkkkbbak',
+    'kbbk....kbak',
+    '.kk......kk.',
+    '............',
+    '............',
+    '............',
+  ],
   rune: [
     '............',
     '...kkkkkk...',
@@ -536,7 +760,7 @@ export function iconUrl(tpl: string, tint: string): string {
 }
 
 const METAL: Record<string, string> = {
-  stone: '#9a9a9e', copper: '#d07a3a', bronze: '#c09040', iron: '#8a8f99', titanium: '#8ad8ff', runic: '#b070ff', meteor: '#ff8a2a', adamant: '#4ad898',
+  wood: '#c89a60', copper: '#d07a3a', tin: '#d8dce4', iron: '#8a8f99', titanium: '#8ad8ff', runic: '#b070ff', meteor: '#ff8a2a', adamant: '#4ad898',
 };
 const WOOD: Record<string, string> = {
   plain: '#a87a48', birch: '#e0d8c0', pine: '#d0a860', oak: '#8a6a40', cedar: '#d08060', bloodoak: '#c02a2a', ashbark: '#5a5450', white: '#f4ecc8',
@@ -552,26 +776,39 @@ const SPECIFIC: Record<string, [string, string]> = {
   enh_basic: ['stone', '#8ad8ff'], enh_mid: ['stone', '#7ac04a'], enh_high: ['stone', '#e0a040'], enh_legend: ['stone', '#e04ae0'],
 };
 
-/** 物品 → [模板, 颜色]（分阶资源另有专门的图，见 resIconUrl） */
+/** 装备 key → 图标模板 */
+const EQUIP_TPL: Record<string, string> = {
+  sword: 'sword', spear: 'spear', dagger: 'dagger', shortbow: 'bow', longbow: 'longbow', crossbow: 'crossbow', staff: 'staff',
+  plate_head: 'helm', plate_body: 'body', plate_feet: 'boots', plate_hands: 'gauntlet',
+  leather_head: 'cap', leather_body: 'jacket', leather_feet: 'boots', leather_hands: 'gloves',
+  cloth_head: 'hood', cloth_body: 'robe', cloth_feet: 'shoes', cloth_hands: 'gloves',
+  axe: 'axe', pickaxe: 'pickaxe', sickle: 'sickle', knife: 'knife', rod: 'rod', hoe: 'hoe', hammer: 'hammer', needle: 'needle',
+};
+
+/** 物品 → [模板, 颜色]（矿石、木头、棉花、兽皮另有专门的图，见 resIconUrl） */
 export function itemIcon(id: string): [string, string] {
   if (SPECIFIC[id]) return SPECIFIC[id];
   const it = ITEMS[id];
+  const tier = it?.tier ?? 0;
   const prefix = id.split('_')[0];
   if (id.startsWith('raw_')) return ['fish', '#8aa0b8'];
   if (it?.category === 'food') return ['fish', '#d08a4a'];
   if (id.endsWith('_potion')) return ['potion', SPECIFIC[id.replace('_potion', '')]?.[1] ?? '#c04ae0'];
+  if (id.startsWith('plank_')) return ['plank', WOOD[TIERS[tier].wood]];
+  if (id.startsWith('leather_')) return ['leather', HIDE_TINT[tier]];
+  if (id.startsWith('cloth_')) return ['cloth', CLOTH_TINT[tier]];
   if (id.endsWith('_bar')) return ['bar', METAL[prefix] ?? '#aaa'];
   if (id.endsWith('_arrowhead')) return ['arrowhead', METAL[prefix]];
   if (id.endsWith('_arrow')) return ['arrow', METAL[prefix]];
   if (id.endsWith('_rune')) return ['rune', METAL[prefix]];
   const e = it?.equip;
   if (e) {
-    const light = /^(leather|robe)(\d)_/.exec(id);
-    const tint = light ? (light[1] === 'leather' ? HIDE_TINT : CLOTH_TINT)[+light[2] - 1] : METAL[prefix] ?? WOOD[prefix] ?? '#c8c8c8';
-    if (e.slot === 'weapon') return [e.style === 'ranged' ? 'bow' : e.style === 'magic' ? 'staff' : 'sword', tint];
     if (e.slot === 'ring' || e.slot === 'neck') return [e.slot === 'ring' ? 'ring' : 'amulet', SPECIFIC[prefix]?.[1] ?? '#f0c850'];
-    const tpl = { head: 'helm', body: 'body', legs: 'legs', shield: 'shield', pickaxe: 'pickaxe', axe: 'axe', rod: 'rod', hoe: 'hoe', knife: 'knife', gloves: 'gloves' }[e.slot];
-    return [tpl ?? 'bag', tint];
+    const key = id.slice(prefix.length + 1);
+    // 皮甲用皮革色，布甲用布料色，弓和法杖用本阶木色，其余用金属色
+    const tint = key.startsWith('leather_') ? HIDE_TINT[tier] : key.startsWith('cloth_') ? CLOTH_TINT[tier]
+      : ['shortbow', 'longbow', 'crossbow', 'staff', 'rod'].includes(key) ? WOOD[TIERS[tier].wood] : METAL[prefix] ?? '#c8c8c8';
+    return [EQUIP_TPL[key] ?? 'bag', tint];
   }
   return ['bag', '#a08060'];
 }
@@ -596,7 +833,15 @@ export function Icon({ item, size = 32 }: { item: string; size?: number }) {
     );
   }
   const [tpl, tint] = itemIcon(item);
-  return <img className="icon" src={iconUrl(tpl, tint)} width={size} height={size} alt="" draggable={false} />;
+  const tier = ITEMS[item]?.tier;
+  const img = <img className="icon" src={iconUrl(tpl, tint)} width={size} height={size} alt="" draggable={false} />;
+  if (tier === undefined || size < 22) return img;
+  return (
+    <span className="icon-tier" style={{ width: size, height: size }}>
+      {img}
+      <b className={`tier t${tier + 1}`}>{tierName(tier)}</b>
+    </span>
+  );
 }
 
 export function SkillIcon({ skill, size = 24 }: { skill: SkillId; size?: number }) {

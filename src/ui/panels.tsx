@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ACTIONS, ITEMS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, type MapNode } from '../core/data';
 import {
-  BAG_SLOTS, BAG_STACK, bagSlotsUsed, combatLevel, equip, level, playerBonuses, sell, setSettings, toBag, toBank, toolSpeed, unequip,
+  BAG_SLOTS, BAG_STACK, bagSlotsUsed, combatLevel, equip, level, playerBonuses, sell, setSettings, toBag, toBank, slotSpeed, unequip,
   weaponStyle,
 } from '../core/sim';
 import type { EquipSlot, GameState, ItemCategory, SkillId, Summary } from '../core/types';
@@ -11,10 +11,11 @@ import { fmtDuration, fmtNum } from './format';
 import { Icon, SkillIcon } from './icons';
 
 const GEAR_SLOTS: [EquipSlot, string][] = [
-  ['head', '头部'], ['neck', '项链'], ['weapon', '武器'], ['body', '身体'], ['shield', '副手'], ['legs', '腿部'], ['ring', '戒指'],
+  ['head', '头部'], ['neck', '项链'], ['weapon', '武器'], ['body', '身体'], ['hands', '手部'], ['feet', '脚部'], ['ring', '戒指'],
 ];
 const TOOL_SLOTS: [EquipSlot, string, SkillId][] = [
-  ['pickaxe', '镐', 'mining'], ['axe', '斧', 'woodcutting'], ['rod', '鱼竿', 'fishing'], ['hoe', '锄', 'farming'], ['knife', '剥皮刀', 'hunting'], ['gloves', '手套', 'thieving'],
+  ['axe', '斧头', 'woodcutting'], ['pickaxe', '镐子', 'mining'], ['sickle', '镰刀', 'farming'], ['knife', '刮皮刀', 'hunting'],
+  ['rod', '鱼竿', 'fishing'], ['hoe', '锄头', 'farming'], ['hammer', '锻造锤', 'smithing'], ['needle', '缝纫针', 'crafting'],
 ];
 const STYLE_NAME = { melee: '近战', ranged: '远程', magic: '魔法' };
 
@@ -42,7 +43,7 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
       {e && (
         <span className={canEquip ? '' : 'warn'}>
           需要{SKILLS[e.skill].name} {e.level} 级
-          {e.speed ? ` · ${SKILLS[e.skill].name}速度 +${Math.round(e.speed * 100)}%` : ` · 攻 +${e.attack} 力 +${e.strength} 防 +${e.defence}`}
+          {e.speed ? ` · ${SKILLS[e.skill].name}速度 +${Math.round(e.speed * 100)}%` : ` · 攻 +${e.attack} 力 +${e.strength} 防 +${e.defence}${e.attackMs ? ` · 攻速 ${(e.attackMs / 1000).toFixed(1)} 秒` : ''}`}
           {e.style && e.slot !== 'weapon' && `（攻、力只对${STYLE_NAME[e.style]}生效）`}
         </span>
       )}
@@ -124,7 +125,7 @@ export function BagPanel({ s }: { s: GameState }) {
       <h2>工具</h2>
       <div className="equip tools">{TOOL_SLOTS.map(([id, name]) => slot(id, name))}</div>
       <p className="muted">
-        {TOOL_SLOTS.map(([, name, skill]) => `${name} +${Math.round(toolSpeed(s, skill) * 100)}%`).join(' · ')}
+        {TOOL_SLOTS.map(([slot, name]) => `${name} +${Math.round(slotSpeed(s, slot) * 100)}%`).join(' · ')}
       </p>
 
       <h2>背包 <small className="muted">{used}/{BAG_SLOTS} 格 · 每格 {BAG_STACK} 个</small></h2>
