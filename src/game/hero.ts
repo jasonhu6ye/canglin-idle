@@ -1,7 +1,7 @@
 import { Pix } from './pix';
 
 /*
- * 主角多帧动画：头、身体、双臂、双腿、披风分开画，每一帧按姿势参数重新拼一次，
+ * 主角多帧动画（冒险者造型，衣橱可换配色）：头、身体、双臂、双腿、围巾、行囊分开画，每一帧按姿势参数重新拼一次，
  * 工具和武器跟着手的角度旋转，最后统一描边。生成一张精灵表，交给 Phaser 播放。
  *
  * 角度约定：0 = 朝下，π/2 = 朝前（脸朝的方向），π = 朝上，再大就是往身后。
@@ -12,10 +12,65 @@ export const HERO_H = 30;
 /** 脚底所在的行，精灵原点放在这里 */
 export const HERO_FEET = 27;
 
-const HOOD = ['#2f2547', '#3b2c5c', '#5a4385', '#7a63a8'];
-const SKIN = ['#c8946a', '#f0c8a0'];
-const PANTS = ['#2e2836', '#463e52'];
-const BOOT = ['#2a1a10', '#5a3a22'];
+/** 一套外观的配色：衣橱里每套皮肤就是一组颜色和几个开关 */
+export interface Outfit {
+  id: string;
+  name: string;
+  desc: string;
+  skin: string[];
+  hair: string[];
+  /** 皮背心 / 外衣：暗、中、亮、高光 */
+  coat: string[];
+  /** 衬衣袖子 */
+  shirt: string[];
+  pants: string[];
+  boots: string[];
+  scarf: string[];
+  /** 背包、睡袋卷 */
+  pack: string[];
+  roll: string;
+  /** 兜帽代替头发 */
+  hood?: boolean;
+}
+
+export const OUTFITS: Outfit[] = [
+  {
+    id: 'adventurer', name: '冒险者', desc: '原皮。皮背心、红围巾、背着行囊的旅人。',
+    skin: ['#c8946a', '#f2c9a0'], hair: ['#4a2a18', '#7a4a28', '#a8703a'],
+    coat: ['#4a2a18', '#6e4226', '#8e5a34', '#b07a48'], shirt: ['#b8a888', '#e8dcc0'],
+    pants: ['#2a3438', '#3e4c52'], boots: ['#2a1a10', '#5a3a22'], scarf: ['#8a1e22', '#c83a32'],
+    pack: ['#5a3a22', '#8a6038', '#b08050'], roll: '#4e7a4a',
+  },
+  {
+    id: 'ranger', name: '林地游侠', desc: '绿色斗篷兜帽，适合在林子里打猎。',
+    skin: ['#c8946a', '#f2c9a0'], hair: ['#2a3a1a', '#3a5a2a', '#5a7a3a'],
+    coat: ['#23381e', '#335230', '#4a7040', '#6a9058'], shirt: ['#8a7a58', '#b8a47a'],
+    pants: ['#3a2e22', '#54432f'], boots: ['#2a1a10', '#4a3020'], scarf: ['#5a4a2a', '#8a7038'],
+    pack: ['#4a3a22', '#6e5a34', '#8e7a48'], roll: '#a08a5a', hood: true,
+  },
+  {
+    id: 'snow', name: '雪原旅人', desc: '白色毛领外套和蓝围巾，冰原上不怕冷。',
+    skin: ['#d8a882', '#f8dcc0'], hair: ['#c8b080', '#e0cc98', '#f8ecc0'],
+    coat: ['#6a7a90', '#a8b8c8', '#d8e2ec', '#ffffff'], shirt: ['#5a6a80', '#7a8ca4'],
+    pants: ['#3a4250', '#525c6e'], boots: ['#4a3a30', '#7a6050'], scarf: ['#2a5a9a', '#4a8ad8'],
+    pack: ['#5a5a6a', '#7a7a8c', '#9a9aac'], roll: '#c8382e',
+  },
+  {
+    id: 'shadow', name: '暗影刺客', desc: '黑色紧身装束，深红围巾。',
+    skin: ['#b88660', '#e0b890'], hair: ['#141418', '#26262e', '#3a3a46'],
+    coat: ['#141418', '#24242c', '#363642', '#50505e'], shirt: ['#2a2a34', '#3e3e4a'],
+    pants: ['#16161a', '#24242a'], boots: ['#0e0e10', '#26262c'], scarf: ['#5a0e14', '#9a1a24'],
+    pack: ['#26262c', '#3a3a42', '#50505a'], roll: '#5a1a2a', hood: true,
+  },
+  {
+    id: 'noble', name: '王都骑士', desc: '蓝白罩衣配金边，镇上骑士团的制式装扮。',
+    skin: ['#c8946a', '#f2c9a0'], hair: ['#c89a3a', '#e8c060', '#fff0a0'],
+    coat: ['#1a2a5a', '#2a4088', '#3e5cb8', '#7a98e0'], shirt: ['#a8acb4', '#e0e4ec'],
+    pants: ['#3a3a44', '#565662'], boots: ['#3a2a1a', '#6a4a2a'], scarf: ['#b08a2a', '#f0c84a'],
+    pack: ['#6a6a74', '#9a9aa4', '#c8c8d0'], roll: '#2a4088',
+  },
+];
+export const outfitOf = (id?: string) => OUTFITS.find((o) => o.id === id) ?? OUTFITS[0];
 const GOLD = '#e8b84a';
 const EYE = '#1a1a1a';
 const WOOD = ['#5a3a22', '#8a5c34'];
@@ -170,7 +225,7 @@ function drawTool(p: Pix, tool: HeroTool, hx: number, hy: number, a: number, pos
   }
 }
 
-function drawFrame(pose: Pose): Pix {
+function drawFrame(pose: Pose, o: Outfit): Pix {
   const p = new Pix(HERO_W, HERO_H);
   const cx = 13;
   const crouch = pose.crouch ?? 0;
@@ -179,22 +234,30 @@ function drawFrame(pose: Pose): Pix {
   const shoulderY = 12 + bob;
   const headY = 7 + bob;
   const side = pose.dir === 'side';
+  const up = pose.dir === 'up';
+  const down = pose.dir === 'down';
+  const wave = pose.cape ?? 0;
+  const C = o.coat;
 
-  // ---- 披风（身后） ----
-  const cape = pose.cape ?? 0;
+  // ---- 围巾尾巴（身后飘） ----
   if (side) {
-    for (let y = shoulderY; y <= hipY + 2; y++) {
-      const k = (y - shoulderY) / (hipY + 2 - shoulderY);
-      const x = cx - 3 - Math.round(k * (2 + cape));
-      p.line(x, y, cx - 2, y, k > 0.6 ? HOOD[0] : HOOD[1]);
-    }
-  } else if (pose.dir === 'up') {
-    for (let y = shoulderY; y <= hipY + 2; y++) {
-      const k = (y - shoulderY) / (hipY + 2 - shoulderY);
-      const hw = 3 + Math.round(k * 2);
-      const sway = Math.round(cape * k);
-      p.line(cx - hw + sway, y, cx + hw + sway, y, k > 0.7 ? HOOD[0] : HOOD[1]);
-    }
+    p.line(cx - 2, shoulderY, cx - 5, shoulderY + 2 + wave, o.scarf[1]);
+    p.line(cx - 2, shoulderY + 1, cx - 6, shoulderY + 3 + wave, o.scarf[0]);
+  }
+
+  // ---- 行囊（背在身后） ----
+  if (side) {
+    p.rect(cx - 5, shoulderY + 1, 3, 6, o.pack[1]);
+    p.line(cx - 5, shoulderY + 1, cx - 5, shoulderY + 6, o.pack[0]);
+    p.line(cx - 4, shoulderY + 3, cx - 3, shoulderY + 3, o.pack[2]);
+    p.rect(cx - 6, shoulderY - 1, 4, 2, o.roll);
+    p.set(cx - 6, shoulderY - 1, o.pack[0]);
+  } else if (up) {
+    p.rect(cx - 3, shoulderY + 1, 7, 7, o.pack[1]);
+    p.line(cx - 3, shoulderY + 8, cx + 3, shoulderY + 8, o.pack[0]);
+    p.rect(cx - 2, shoulderY + 4, 5, 2, o.pack[2]);
+    p.set(cx, shoulderY + 5, GOLD);
+    p.rect(cx - 4, shoulderY - 1, 9, 2, o.roll);
   }
 
   // ---- 后面的手臂 ----
@@ -204,8 +267,9 @@ function drawFrame(pose: Pose): Pix {
     const sx = cx - 1;
     const sy = shoulderY + 1;
     const [dx, dy] = v(a, armLen);
-    thick(p, sx, sy, sx + dx, sy + dy, HOOD[0]);
-    p.set(sx + dx, sy + dy, SKIN[0]);
+    thick(p, sx, sy, sx + dx * 0.55, sy + dy * 0.55, o.shirt[0]);
+    thick(p, sx + dx * 0.55, sy + dy * 0.55, sx + dx, sy + dy, o.coat[0]);
+    p.set(sx + dx, sy + dy, o.skin[0]);
   }
 
   // ---- 腿 ----
@@ -215,73 +279,114 @@ function drawFrame(pose: Pose): Pix {
       const [dx, dy] = v(a, legLen);
       const fx = cx + dx;
       const fy = hipY + dy;
-      thick(p, cx, hipY, fx, fy, back ? PANTS[0] : PANTS[1]);
-      p.rect(Math.round(fx), Math.round(fy), 3, 2, back ? BOOT[0] : BOOT[1]);
+      thick(p, cx, hipY, fx, fy, back ? o.pants[0] : o.pants[1]);
+      p.rect(Math.round(fx), Math.round(fy) - 1, 3, 3, back ? o.boots[0] : o.boots[1]);
+      p.set(Math.round(fx) + 2, Math.round(fy) + 1, back ? o.boots[0] : o.boots[1]);
+      if (!back) p.set(Math.round(fx), Math.round(fy) - 1, o.boots[0]);
     };
-    // 下蹲时膝盖往前顶
     leg((pose.legB ?? 0) - crouch * 0.12, true);
     leg((pose.legF ?? 0) + crouch * 0.2, false);
   } else {
     const leg = (x: number, lift: number) => {
-      const top = hipY;
       const bottom = hipY + legLen - Math.round(lift);
-      p.rect(x, top, 2, bottom - top, PANTS[1]);
-      p.set(x + 1, top + 1, PANTS[0]);
-      p.rect(x, bottom, 2, 2, pose.dir === 'up' ? BOOT[0] : BOOT[1]);
+      p.rect(x, hipY, 2, bottom - hipY, o.pants[1]);
+      p.set(x + (x < cx ? 0 : 1), hipY + 1, o.pants[0]);
+      p.rect(x, bottom - 1, 2, 3, up ? o.boots[0] : o.boots[1]);
+      p.line(x, bottom - 1, x + 1, bottom - 1, o.boots[0]);
     };
     leg(cx - 3, pose.legB ?? 0);
     leg(cx + 1, pose.legF ?? 0);
   }
 
-  // ---- 身体（法袍） ----
-  for (let y = shoulderY; y <= hipY + 2; y++) {
-    const k = (y - shoulderY) / (hipY + 2 - shoulderY);
-    const hw = side ? 2 + Math.round(k * 1.5) : 3 + Math.round(k * 1.6);
+  // ---- 身体：衬衣 + 敞开的皮背心 ----
+  for (let y = shoulderY; y <= hipY + 1; y++) {
+    const k = (y - shoulderY) / (hipY + 1 - shoulderY);
+    const hw = side ? 2 + (k > 0.6 ? 1 : 0) : 3 + (k > 0.7 ? 1 : 0);
     for (let x = cx - hw; x <= cx + hw; x++) {
       const s = side ? (x - cx) / (hw + 0.5) : -(x - cx) / (hw + 0.5);
-      p.set(x, y, s > 0.4 ? HOOD[3] : s > -0.3 ? HOOD[2] : HOOD[1]);
+      p.set(x, y, s > 0.5 ? C[3] : s > -0.2 ? C[2] : s > -0.7 ? C[1] : C[0]);
     }
   }
-  // 腰带和金色滚边
+  // 衬衣：正面露出中间一条，侧面露在胸前
+  if (down) {
+    p.line(cx, shoulderY + 1, cx, shoulderY + 4, o.shirt[1]);
+    p.line(cx + 1, shoulderY + 1, cx + 1, shoulderY + 3, o.shirt[0]);
+  } else if (side) {
+    p.line(cx + 2, shoulderY + 1, cx + 2, shoulderY + 4, o.shirt[1]);
+  }
+  // 背带
+  if (down) {
+    p.line(cx - 2, shoulderY, cx - 2, shoulderY + 4, o.pack[0]);
+    p.line(cx + 3, shoulderY, cx + 3, shoulderY + 4, o.pack[0]);
+  } else if (side) {
+    p.line(cx - 1, shoulderY, cx + 1, shoulderY + 5, o.pack[0]);
+  }
+  // 腰带、扣子和挂包
   const beltY = shoulderY + 5;
-  p.line(cx - (side ? 3 : 4), beltY, cx + (side ? 3 : 4), beltY, '#4a3322');
-  if (pose.dir !== 'up') p.set(cx + (side ? 1 : 0), beltY, GOLD);
-  if (pose.dir === 'down') p.line(cx, shoulderY + 1, cx, beltY - 1, GOLD);
-  p.line(cx - (side ? 3 : 4), hipY + 2, cx + (side ? 3 : 4), hipY + 2, HOOD[0]);
+  p.line(cx - (side ? 2 : 3), beltY, cx + (side ? 3 : 4), beltY, '#2e1c10');
+  if (!up) p.set(cx + (side ? 2 : 0), beltY, GOLD);
+  if (down) p.rect(cx + 2, beltY + 1, 2, 2, o.pack[1]);
+  if (side) p.rect(cx - 2, beltY + 1, 2, 2, o.pack[1]);
+  // 下摆
+  p.line(cx - (side ? 3 : 4), hipY + 1, cx + (side ? 3 : 4), hipY + 1, C[0]);
 
-  // ---- 头（兜帽） ----
-  const hr = 4.6;
+  // ---- 头 ----
+  const H = o.hair;
+  const hr = 4.2;
+  // 先画整颗头（头发色），再在前面挖出脸
   for (let y = Math.floor(headY - hr); y <= headY + hr; y++) {
     for (let x = Math.floor(cx - hr); x <= cx + hr + 1; x++) {
       const dx = x - cx - 0.5;
       const dy = y - headY;
       if (dx * dx + dy * dy > hr * hr + 1) continue;
       const s = (side ? dx : -dx) * 0.4 - dy * 0.5;
-      p.set(x, y, s > 1.2 ? HOOD[3] : s > -0.8 ? HOOD[2] : HOOD[1]);
+      const pal = o.hood ? C : H;
+      p.set(x, y, s > 1.3 ? pal[o.hood ? 3 : 2] : s > -0.7 ? pal[o.hood ? 2 : 1] : pal[0]);
     }
   }
-  // 兜帽尖
-  if (side) {
-    p.set(cx - 4, headY - 3, HOOD[2]);
-    p.set(cx - 5, headY - 2 + Math.round(cape * 0.5), HOOD[1]);
-  } else {
-    p.set(cx, headY - 5, HOOD[2]);
-    p.set(cx + 1, headY - 5, HOOD[2]);
-  }
-  if (pose.dir === 'down') {
-    p.rect(cx - 2, headY - 1, 6, 4, SKIN[1]);
-    p.line(cx - 2, headY + 2, cx + 3, headY + 2, SKIN[0]);
-    p.set(cx - 1, headY, EYE);
-    p.set(cx + 2, headY, EYE);
-    p.line(cx - 2, headY - 2, cx + 3, headY - 2, HOOD[0]);
+  const S = o.skin;
+  if (down) {
+    p.rect(cx - 2, headY - 1, 6, 5, S[1]);
+    p.line(cx - 2, headY + 3, cx + 3, headY + 3, S[0]);
+    p.set(cx - 1, headY + 1, EYE);
+    p.set(cx + 2, headY + 1, EYE);
+    p.set(cx - 2, headY + 2, '#e89a88');
+    p.set(cx + 3, headY + 2, '#e89a88');
+    // 刘海
+    if (!o.hood) {
+      p.line(cx - 2, headY - 1, cx + 3, headY - 1, H[1]);
+      p.set(cx - 1, headY, H[1]);
+      p.set(cx + 2, headY, H[0]);
+    } else {
+      p.line(cx - 2, headY - 1, cx + 3, headY - 1, C[0]);
+    }
   } else if (side) {
-    p.rect(cx + 1, headY - 1, 4, 4, SKIN[1]);
-    p.line(cx + 1, headY + 2, cx + 4, headY + 2, SKIN[0]);
-    p.set(cx + 3, headY, EYE);
-    p.line(cx + 1, headY - 2, cx + 4, headY - 2, HOOD[0]);
-    p.set(cx + 5, headY + 1, SKIN[1]);
-  } else {
-    p.line(cx - 1, headY + 3, cx + 2, headY + 3, HOOD[1]);
+    p.rect(cx + 1, headY - 1, 4, 5, S[1]);
+    p.line(cx + 1, headY + 3, cx + 4, headY + 3, S[0]);
+    p.set(cx + 3, headY + 1, EYE);
+    p.set(cx + 5, headY + 1, S[1]);
+    p.set(cx + 4, headY + 2, '#e89a88');
+    if (!o.hood) {
+      p.line(cx + 1, headY - 1, cx + 4, headY - 1, H[1]);
+      p.set(cx + 1, headY, H[1]);
+      p.set(cx, headY + 1, S[0]);
+      // 发梢往后飘
+      p.set(cx - 4, headY + 1 + Math.round(wave * 0.5), H[0]);
+      p.set(cx - 5, headY + Math.round(wave * 0.5), H[1]);
+    } else {
+      p.line(cx + 1, headY - 1, cx + 4, headY - 1, C[0]);
+      p.set(cx - 4, headY - 3, C[2]);
+      p.set(cx - 5, headY - 2 + Math.round(wave * 0.5), C[1]);
+    }
+  } else if (!o.hood) {
+    p.line(cx - 2, headY + 3, cx + 3, headY + 4, H[0]);
+  }
+  // 围巾绕脖子
+  p.line(cx - 3, shoulderY - 1, cx + 3, shoulderY - 1, o.scarf[1]);
+  p.line(cx - 2, shoulderY, cx + 2, shoulderY, o.scarf[0]);
+  if (down) {
+    p.set(cx + 2, shoulderY + 1, o.scarf[1]);
+    p.set(cx + 2, shoulderY + 2 + Math.round(wave * 0.5), o.scarf[0]);
   }
 
   // ---- 前面的手臂和工具 ----
@@ -293,16 +398,20 @@ function drawFrame(pose: Pose): Pix {
     const hx = sx + dx + (pose.reach ?? 0) * 0.7;
     const hy = sy + dy;
     const tool = pose.tool ?? 'none';
-    // 弓：手臂伸直向前，弓画在手的位置
     if (tool !== 'none') drawTool(p, tool, hx, hy, a + (pose.toolTurn ?? 0), pose);
-    thick(p, sx, sy, hx, hy, HOOD[2]);
-    p.set(hx, hy, SKIN[1]);
-    p.set(hx + 1, hy, SKIN[0]);
+    // 袖子到手肘，小臂戴皮护腕
+    const ex = sx + (hx - sx) * 0.55;
+    const ey = sy + (hy - sy) * 0.55;
+    thick(p, sx, sy, ex, ey, o.shirt[1]);
+    thick(p, ex, ey, hx, hy, C[1]);
+    p.set(hx, hy, S[1]);
+    p.set(hx + 1, hy, S[0]);
   } else {
     const [l, r] = pose.armLift ?? [0, 0];
     const arm = (x: number, lift: number) => {
-      p.rect(x, shoulderY + 1 - lift, 2, 6, pose.dir === 'up' ? HOOD[1] : HOOD[2]);
-      if (pose.dir === 'down') p.rect(x, shoulderY + 7 - lift, 2, 1, SKIN[1]);
+      p.rect(x, shoulderY + 1 - lift, 2, 3, up ? o.shirt[0] : o.shirt[1]);
+      p.rect(x, shoulderY + 4 - lift, 2, 3, up ? C[0] : C[1]);
+      if (!up) p.rect(x, shoulderY + 7 - lift, 2, 1, S[1]);
     };
     arm(cx - 6, l);
     arm(cx + 5, r);
@@ -409,11 +518,10 @@ export const HERO_ANIMS: HeroAnim[] = [
 ];
 
 /** 生成整张精灵表；frames 里是每帧在表上的位置 */
-export function paintHeroSheet() {
+export function paintHeroSheet(outfit: Outfit = OUTFITS[0], canvas = document.createElement('canvas')) {
   const total = HERO_ANIMS.reduce((n, a) => n + a.frames, 0);
   const cols = 16;
   const rows = Math.ceil(total / cols);
-  const canvas = document.createElement('canvas');
   canvas.width = cols * HERO_W;
   canvas.height = rows * HERO_H;
   const ctx = canvas.getContext('2d')!;
@@ -423,7 +531,8 @@ export function paintHeroSheet() {
     for (let i = 0; i < a.frames; i++) {
       const x = (k % cols) * HERO_W;
       const y = Math.floor(k / cols) * HERO_H;
-      ctx.drawImage(drawFrame(a.pose(i / a.frames, i)).canvas(), x, y);
+      ctx.clearRect(x, y, HERO_W, HERO_H);
+      ctx.drawImage(drawFrame(a.pose(i / a.frames, i), outfit).canvas(), x, y);
       frames.push({ name: `${a.key}-${i}`, x, y });
       k++;
     }

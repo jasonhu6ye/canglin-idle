@@ -1,35 +1,35 @@
 import { ACTIONS, MONSTERS, NODES, SKILLS } from '../core/data';
 import { actionDuration, combatLevel, level, maxHp, removeTask, resumeWork, weaponStyle } from '../core/sim';
 import type { GameState, SkillId } from '../core/types';
-import { PALETTE, SPRITES } from '../game/sprites';
+import { HERO_W, outfitOf, paintHeroSheet } from '../game/hero';
 import { store } from '../store';
 import { emitToGame } from './GameCanvas';
 import { actionName, fmtNum, modeLabel } from './format';
 import { SkillIcon, TplIcon } from './icons';
 
-/** 顶栏头像：用角色精灵图 */
-const PORTRAIT = (() => {
-  const rows = SPRITES.player;
-  const c = document.createElement('canvas');
-  c.width = c.height = 16;
-  const ctx = c.getContext('2d')!;
-  rows.forEach((row, y) => {
-    for (let x = 0; x < 16; x++) {
-      const col = PALETTE[row[x]];
-      if (!col) continue;
-      ctx.fillStyle = col;
-      ctx.fillRect(x, y, 1, 1);
-    }
-  });
-  return c.toDataURL();
-})();
+/** 顶栏头像：取当前外观正面站立帧的上半身 */
+const portraits = new Map<string, string>();
+function portrait(skin?: string): string {
+  const o = outfitOf(skin);
+  let url = portraits.get(o.id);
+  if (!url) {
+    const sheet = paintHeroSheet(o);
+    const f = sheet.frames.find((x) => x.name === 'idle-down-0')!;
+    const c = document.createElement('canvas');
+    c.width = c.height = HERO_W;
+    c.getContext('2d')!.drawImage(sheet.canvas, f.x, f.y, HERO_W, HERO_W, 0, 0, HERO_W, HERO_W);
+    url = c.toDataURL();
+    portraits.set(o.id, url);
+  }
+  return url;
+}
 
 export function TopBar({ s }: { s: GameState }) {
   const total = (Object.keys(SKILLS) as SkillId[]).reduce((n, k) => n + level(s, k), 0);
   const hpPct = (s.hp / maxHp(s)) * 100;
   return (
     <header className="topbar">
-      <span className="avatar"><img src={PORTRAIT} alt="" /></span>
+      <span className="avatar"><img src={portrait(s.settings.skin)} alt="" /></span>
       <span className="stat" title="战斗等级 / 总等级"><SkillIcon skill="melee" size={16} /> {combatLevel(s)} <small className="muted">/ {total}</small></span>
       <span className="hp" title="生命">
         <SkillIcon skill="hitpoints" size={16} /> <span className="bar"><i style={{ width: `${hpPct}%` }} /></span> {s.hp}

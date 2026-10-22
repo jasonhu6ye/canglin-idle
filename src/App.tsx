@@ -97,6 +97,11 @@ export function App() {
     setNode(id);
   }, []);
 
+  // 面板里点了「寻路去仓库」之类：回到游戏画面
+  useEffect(() => store.subscribe(() => {
+    if (store.pendingWalk) { setTab('game'); setNode(null); setWorldMap(false); }
+  }), []);
+
   let side: ReactNode = null;
   if (worldMap) side = <WorldMap s={s} onClose={() => setWorldMap(false)} onOpenNode={openNode} />;
   else if (tab === 'game' && node) side = <ActionSheet s={s} nodeId={node} onClose={() => setNode(null)} />;

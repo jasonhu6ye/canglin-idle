@@ -61,6 +61,13 @@ class Store {
     this.emit();
   }
 
+  /** 界面要求角色寻路去某个地点（地图场景来取） */
+  pendingWalk: string | null = null;
+  requestWalk(nodeId: string) {
+    this.pendingWalk = nodeId;
+    this.emit();
+  }
+
   dismissOffline() {
     this.offline = null;
     this.emit();

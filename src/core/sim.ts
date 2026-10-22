@@ -588,7 +588,7 @@ export function removeTask(prev: GameState, index: number): GameState {
 /** 穿上装备：优先用背包里的，没有再从仓库拿；换下来的旧装备放进背包，背包满了才回仓库 */
 export function equip(prev: GameState, item: string): GameState {
   const e = ITEMS[item]?.equip;
-  const from = prev.bag[item] ? 'bag' : prev.bank[item] ? 'bank' : null;
+  const from = prev.bag[item] ? 'bag' : prev.bank[item] && atBank(prev) ? 'bank' : null;
   if (!e || !from || level(prev, e.skill) < e.level) return prev;
   const s = clone(prev);
   s[from][item] -= 1;
@@ -599,10 +599,19 @@ export function equip(prev: GameState, item: string): GameState {
   return s;
 }
 
-/** 卸下装备：放进背包，背包满了才回仓库 */
+/** 站在仓库旁边多少格以内才能存取（用户 10-22 要求：仓库的东西要到仓库才能拿） */
+export const BANK_REACH = 5;
+const BANK_STAND = standOf(NODES.find((n) => n.id === 'bank')!);
+export const bankStand = () => ({ ...BANK_STAND });
+export function atBank(s: GameState): boolean {
+  return !s.travel && Math.hypot(s.loc.x - BANK_STAND.x, s.loc.y - BANK_STAND.y) <= BANK_REACH;
+}
+
+/** 卸下装备：放进背包；背包满了，人在仓库旁才能放回仓库 */
 export function unequip(prev: GameState, slot: EquipSlot): GameState {
   const id = prev.equipment[slot];
   if (!id) return prev;
+  if (bagRoomFor(prev.bag, id) <= 0 && !atBank(prev)) return prev;
   const s = clone(prev);
   delete s.equipment[slot];
   stow(s, id);
@@ -612,7 +621,7 @@ export function unequip(prev: GameState, slot: EquipSlot): GameState {
 /** 仓库 → 背包，什么都能放，放不下的留在仓库 */
 export function toBag(prev: GameState, item: string, qty: number): GameState {
   const n = Math.min(prev.bank[item] ?? 0, qty, bagRoomFor(prev.bag, item));
-  if (item === 'coins' || n <= 0) return prev;
+  if (item === 'coins' || n <= 0 || !atBank(prev)) return prev;
   const s = clone(prev);
   s.bank[item] -= n;
   if (s.bank[item] <= 0) delete s.bank[item];
@@ -622,7 +631,7 @@ export function toBag(prev: GameState, item: string, qty: number): GameState {
 
 export function toBank(prev: GameState, item: string, qty: number): GameState {
   const n = Math.min(prev.bag[item] ?? 0, qty);
-  if (n <= 0) return prev;
+  if (n <= 0 || !atBank(prev)) return prev;
   const s = clone(prev);
   s.bag[item] -= n;
   if (s.bag[item] <= 0) delete s.bag[item];
@@ -632,6 +641,7 @@ export function toBank(prev: GameState, item: string, qty: number): GameState {
 
 /** 背包里除了食物和弹药，全部存进仓库 */
 export function depositLoot(prev: GameState): GameState {
+  if (!atBank(prev)) return prev;
   const s = clone(prev);
   for (const [id, q] of Object.entries(s.bag)) {
     if (healOf(id) > 0 || ITEMS[id]?.ammo) continue;

@@ -1,4 +1,4 @@
-import { actionDuration, advance, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour } from './sim';
+import { actionDuration, advance, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour } from './sim';
 import { levelForXp, XP_TABLE } from './xp';
 import type { GameState, SkillAction, TaskMode } from './types';
 import { ACTIONS, nodeOfAction, standOf, travelMs } from './data';
@@ -133,6 +133,7 @@ describe('离线结算', () => {
 describe('装备', () => {
   it('等级不够不能装备', () => {
     let s = newGame(T0, 1);
+    s.loc = bankStand();
     s.bank.copper_sword = 1;
     expect(equip(s, 'copper_sword').equipment.weapon).toBe('wood_sword');
     s.xp.melee = XP_TABLE[10];
@@ -150,8 +151,26 @@ describe('装备', () => {
     expect(s.bag.wood_sword).toBeUndefined();
     for (let i = 0; i < 20; i++) s.bag[`raw_${['minnow', 'shrimp', 'carp', 'trout', 'bass', 'cod', 'salmon', 'eel', 'lava_eel', 'ghostfish', 'abyssfish'][i % 11]}`] = 100 * (i < 11 ? 1 : 2);
     expect(bagSlotsUsed(s.bag)).toBe(20);
+    // 不在仓库旁：背包满了卸不下
+    expect(unequip(s, 'weapon').equipment.weapon).toBe('wood_sword');
+    s.loc = bankStand();
     s = unequip(s, 'weapon');
     expect(s.bank.wood_sword).toBe(1);
+  });
+
+  it('仓库的东西要走到仓库旁才能存取', () => {
+    let s = newGame(T0, 1);
+    s.bank.minnow = 10;
+    s.bag.copper_ore = 5;
+    expect(atBank(s)).toBe(false);
+    expect(toBag(s, 'minnow', 10)).toBe(s);
+    expect(toBank(s, 'copper_ore', 5)).toBe(s);
+    expect(depositLoot(s)).toBe(s);
+    s.loc = bankStand();
+    s = toBag(s, 'minnow', 10);
+    expect(s.bag.minnow).toBe(10);
+    s = depositLoot(s);
+    expect(s.bank.copper_ore).toBe(5);
   });
 });
 
@@ -169,6 +188,7 @@ describe('背包与战斗方式', () => {
   it('背包 20 格、每格 100 个', () => {
     let s = newGame(T0, 1);
     s.bank.minnow = 5000;
+    s.loc = bankStand();
     s = toBag(s, 'minnow', 5000);
     expect(s.bag.minnow).toBe(2000);
   });

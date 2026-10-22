@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { ACTIONS, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, DANGER, dangerLevel, nodeOfAction, travelMs, WALK_TILES_PER_SEC, type MapNode } from '../core/data';
 import { combatLevel, leaveWork, resumeWork, setLoc, teleport as teleportState } from '../core/sim';
 import { MON_ANIMS, monsterFrameSize, paintMonsterSheet, type MonAnim } from './monsterArt';
-import { HERO_ANIMS, HERO_FEET, HERO_H, HERO_W, paintHeroSheet, type HeroDir } from './hero';
+import { HERO_ANIMS, HERO_FEET, HERO_H, HERO_W, outfitOf, paintHeroSheet, type HeroDir } from './hero';
 import type { MonsterDef, RegionId, Summary } from '../core/types';
 import { store } from '../store';
 import { paintBuilding, paintDot, paintGlow, paintProp, paintWindmillBlades, PROP_GLOW } from './art';
@@ -96,6 +96,8 @@ export class MapScene extends Phaser.Scene {
     }
     this.updateLabels();
     this.unsub.push(store.subscribe(() => {
+      this.syncSkin();
+      this.takeWalk();
       this.syncTask();
       this.updateLabels();
     }));
@@ -112,8 +114,17 @@ export class MapScene extends Phaser.Scene {
       this.moveTo(standTile(n).x, standTile(n).y);
     };
     this.game.events.on('walkto', onWalkTo);
+    this.takeWalk = () => {
+      const id = store.pendingWalk;
+      if (!id) return;
+      store.pendingWalk = null;
+      onWalkTo(id);
+    };
     this.unsub.push(() => this.game.events.off('walkto', onWalkTo));
-    this.events.once('shutdown', () => this.unsub.forEach((u) => u()));
+    // 切到别的标签时整个游戏被销毁，只会触发 destroy，不会触发 shutdown
+    const cleanup = () => { this.unsub.forEach((u) => u()); this.unsub = []; };
+    this.events.once('shutdown', cleanup);
+    this.events.once('destroy', cleanup);
 
     // 水面和岩浆动画：重画图集里的液体格子
     this.time.addEvent({
@@ -128,13 +139,30 @@ export class MapScene extends Phaser.Scene {
 
   // ---- 纹理 ----
 
+  /** 处理界面发来的寻路请求（create 里赋值） */
+  private takeWalk = () => {};
+  private heroSkin?: string;
+  private heroCanvas!: HTMLCanvasElement;
+  private heroTex!: Phaser.Textures.CanvasTexture;
+
+  /** 衣橱换装：同一张画布重画，帧坐标不变 */
+  private syncSkin() {
+    const skin = store.state.settings.skin;
+    if (skin === this.heroSkin) return;
+    this.heroSkin = skin;
+    paintHeroSheet(outfitOf(skin), this.heroCanvas);
+    this.heroTex.refresh();
+  }
+
   private makeTextures() {
     for (const [key, rows] of Object.entries(SPRITES)) this.textures.addCanvas(key, paintSprite(rows));
     for (const [key, v] of Object.entries(SPRITE_VARIANTS)) this.textures.addCanvas(key, paintSprite(SPRITES[v.base], 1, v.swap));
     this.textures.addCanvas('glow', paintGlow());
     // 主角多帧动画
-    const hero = paintHeroSheet();
-    const tex = this.textures.addCanvas('hero', hero.canvas)!;
+    this.heroSkin = store.state.settings.skin;
+    const hero = paintHeroSheet(outfitOf(this.heroSkin));
+    this.heroCanvas = hero.canvas;
+    const tex = this.heroTex = this.textures.addCanvas('hero', hero.canvas)!;
     for (const f of hero.frames) tex.add(f.name, 0, f.x, f.y, HERO_W, HERO_H);
     for (const a of HERO_ANIMS) {
       if (this.anims.exists(a.key)) continue;

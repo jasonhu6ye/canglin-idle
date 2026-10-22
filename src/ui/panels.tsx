@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ACTIONS, ITEMS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, type MapNode } from '../core/data';
 import {
-  BAG_SLOTS, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip,
+  atBank, BAG_SLOTS, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip,
   weaponStyle,
 } from '../core/sim';
 import type { EquipSlot, GameState, ItemCategory, SkillId, Summary } from '../core/types';
@@ -9,6 +9,8 @@ import { XP_TABLE, levelProgress, SPEED_PER_LEVEL, BONUS_PER_LEVEL } from '../co
 import { store } from '../store';
 import { fmtDuration, fmtNum } from './format';
 import { Codex } from './Codex';
+import { Wardrobe } from './Wardrobe';
+import { outfitOf } from '../game/hero';
 import { Icon, SkillIcon } from './icons';
 
 const GEAR_SLOTS: [EquipSlot, string][] = [
@@ -25,13 +27,24 @@ const CATEGORIES: [ItemCategory | 'all', string][] = [
   ['gear', '装备'], ['tool', '工具'], ['misc', '其他'],
 ];
 
+/** 不在仓库旁时的提示和寻路按钮 */
+function FarFromBank() {
+  return (
+    <div className="go far-bank">
+      <span className="muted">要走到城镇的仓库旁边才能存取</span>
+      <button onClick={() => store.requestWalk('bank')}>寻路去仓库</button>
+    </div>
+  );
+}
+
 /** 选中物品后的详情和操作 */
 function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 'bag' }) {
   const item = ITEMS[id];
   const qty = (from === 'bank' ? s.bank[id] : s.bag[id]) ?? 0;
   if (!item || qty <= 0) return null;
   const e = item.equip;
-  const canEquip = e && level(s, e.skill) >= e.level;
+  const near = atBank(s);
+  const canEquip = e && level(s, e.skill) >= e.level && (from === 'bag' || near);
   return (
     <div className="item-detail frame">
       <div className="row1">
@@ -50,7 +63,7 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
       <div className="go">
         {e && <button className="primary" disabled={!canEquip} onClick={() => store.dispatch((g) => equip(g, id))}>装备</button>}
         {from === 'bank' && id !== 'coins' && (
-          <button disabled={bagRoomFor(s.bag, id) <= 0} onClick={() => store.dispatch((g) => toBag(g, id, qty))}>
+          <button disabled={!near || bagRoomFor(s.bag, id) <= 0} onClick={() => store.dispatch((g) => toBag(g, id, qty))}>
             {bagRoomFor(s.bag, id) > 0 ? '放入背包' : '背包已满'}
           </button>
         )}
@@ -60,7 +73,7 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
             <button onClick={() => store.dispatch((g) => sell(g, id, qty))}>全部卖出</button>
           </>
         )}
-        {from === 'bag' && <button className="primary" onClick={() => store.dispatch((g) => toBank(g, id, qty))}>放回仓库</button>}
+        {from === 'bag' && <button className="primary" disabled={!near} onClick={() => store.dispatch((g) => toBank(g, id, qty))}>放回仓库</button>}
       </div>
     </div>
   );
@@ -97,6 +110,7 @@ export function BankPanel({ s }: { s: GameState }) {
   return (
     <div className="page">
       <h2>仓库 <small className="muted">{all.length} 种 · 估值 {fmtNum(value)} 金币</small></h2>
+      {!atBank(s) && <FarFromBank />}
       <div className="chips-row">
         {CATEGORIES.map(([c, name]) => {
           const n = c === 'all' ? all.length : all.filter(([id]) => ITEMS[id].category === c).length;
@@ -135,7 +149,7 @@ export function CharacterPanel({ s }: { s: GameState }) {
       <h2>工具</h2>
       <div className="equip tools">{TOOL_SLOTS.map(([id, name]) => slot(id, name))}</div>
       <p className="muted">{TOOL_SLOTS.map(([slot, name]) => `${name} +${Math.round(slotSpeed(s, slot) * 100)}%`).join(' · ')}</p>
-      <p className="muted">点击身上的装备会卸下放进背包，背包满了才会送回仓库。在背包或仓库里点装备可以直接穿上。</p>
+      <p className="muted">点击身上的装备会卸下放进背包，背包满了才会送回仓库。背包里的装备随时能穿；仓库里的要站在仓库旁才能穿。</p>
     </div>
   );
 }
@@ -151,7 +165,8 @@ export function BagPanel({ s }: { s: GameState }) {
       <div className="bag-meter"><i style={{ width: `${(used / BAG_SLOTS) * 100}%` }} /></div>
       <ItemGrid items={items} sel={sel} onSel={setSel} empty={Math.max(0, BAG_SLOTS - used)} split />
       {sel && <ItemDetail s={s} id={sel} from="bag" />}
-      {items.length > 0 && <button className="primary" onClick={() => store.dispatch(depositLoot)}>全部存入仓库（保留食物和弹药）</button>}
+      {items.length > 0 && <button className="primary" disabled={!atBank(s)} onClick={() => store.dispatch(depositLoot)}>全部存入仓库（保留食物和弹药）</button>}
+      {items.length > 0 && !atBank(s) && <FarFromBank />}
       <div className="opts">
         <span className="lbl">开战自动从仓库带食物</span>
         {[20, 50, 100, -1].map((n) => (
@@ -160,7 +175,7 @@ export function BagPanel({ s }: { s: GameState }) {
           </button>
         ))}
       </div>
-      <p className="muted">战斗只吃背包里的食物、只用背包里的弹药（背包没有时才从仓库补）。采集、制作和打怪的产出先放进背包；背包满了，角色会自动走回仓库存好（食物和弹药留在身上），再走回去接着干。制作时材料先用背包里的，不够再用仓库的。</p>
+      <p className="muted">战斗只吃背包里的食物、只用背包里的弹药（背包没有时才从仓库补）。采集、制作和打怪的产出先放进背包；背包满了，角色会自动走回仓库存好（食物和弹药留在身上），再走回去接着干。制作时材料先用背包里的，不够再用仓库的。手动把东西在背包和仓库之间搬，要先走到城镇的仓库旁边。</p>
     </div>
   );
 }
@@ -245,7 +260,9 @@ function SkillDetail({ s, skill, onPick }: { s: GameState; skill: SkillId; onPic
 export function MorePanel({ s }: { s: GameState }) {
   const [confirming, setConfirming] = useState(false);
   const [codex, setCodex] = useState(false);
+  const [wardrobe, setWardrobe] = useState(false);
   if (codex) return <Codex s={s} onClose={() => setCodex(false)} />;
+  if (wardrobe) return <Wardrobe s={s} onClose={() => setWardrobe(false)} />;
   const total = Object.keys(ITEMS).length - 1;
   const got = Object.keys(s.seen).filter((id) => id !== 'coins' && ITEMS[id]).length;
   return (
@@ -253,9 +270,11 @@ export function MorePanel({ s }: { s: GameState }) {
       <h2>物品图鉴 <small className="muted">已收集 {got}/{total}</small></h2>
       <div className="bag-meter"><i style={{ width: `${(got / total) * 100}%` }} /></div>
       <button className="primary" onClick={() => setCodex(true)}>打开图鉴</button>
+      <h2>衣橱 <small className="muted">当前：{outfitOf(s.settings.skin).name}</small></h2>
+      <button className="primary" onClick={() => setWardrobe(true)}>打开衣橱</button>
       <h2>关于</h2>
       <p>苍岭放置（暂定名）v2 单机版。角色会一直执行队列里的任务，关掉网页也会在下次打开时结算离线收益，最多 24 小时。</p>
-      <p className="muted">世界 1080×1080 格，9 个区域。资源和装备是正式数值，怪物还是占位；美术是程序生成的像素图。存档保存在本浏览器里。</p>
+      <p className="muted">世界 1080×1080 格，9 个区域。资源、装备和 192 种怪物都是正式数值；美术是程序生成的像素图。存档保存在本浏览器里。</p>
       <h2>存档</h2>
       {confirming ? (
         <div className="go">

@@ -276,3 +276,12 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .drop-list { display: flex; flex-direction: column; gap: 2px; }
 .drop { display: inline-flex; align-items: center; gap: 4px; }
 .mon-detail .with-icon .mon-icon { background: #2a3a24; border-radius: 4px; }
+
+/* 衣橱 */
+.pix { image-rendering: pixelated; }
+.wardrobe-stage { display: flex; gap: 14px; align-items: center; padding: 12px; margin: 8px 0; }
+.wardrobe-stage p { margin: 4px 0 10px; font-size: 12px; }
+.wardrobe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
+.wardrobe-grid .slot { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; font-size: 12px; }
+.wardrobe-grid .slot.on { box-shadow: 0 0 0 2px var(--gold); }
+.far-bank { margin: 6px 0; } .far-bank span { flex: 2; font-size: 12px; }
