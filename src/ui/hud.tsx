@@ -73,9 +73,11 @@ export function StatusChips({ s }: { s: GameState }) {
   } else if (s.travel) {
     const n = NODES.find((x) => x.id === s.travel!.to);
     const pct = (1 - s.travel.ms / s.travel.total) * 100;
+    const t0 = s.queue[0];
+    const supply = s.travel.to === 'bank' && t0 && ACTIONS[t0.action]?.kind === 'combat' && !t0.stocked;
     body = (
       <>
-        <b style={{ color: '#e8b84a' }}>{s.travel.to === 'bank' ? '背包满了' : '寻路中'}</b> · {s.travel.to === 'bank' ? '回仓库存东西' : `前往${n?.name}`} · 还要 {Math.ceil(s.travel.ms / 1000)} 秒
+        <b style={{ color: '#e8b84a' }}>{supply ? '补给' : s.travel.to === 'bank' ? '背包满了' : '寻路中'}</b> · {supply ? '回仓库拿食物' : s.travel.to === 'bank' ? '回仓库存东西' : `前往${n?.name}`} · 还要 {Math.ceil(s.travel.ms / 1000)} 秒
         <span className="bar wide"><i style={{ width: `${pct}%` }} /></span>
       </>
     );

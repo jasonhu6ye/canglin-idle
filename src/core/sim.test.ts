@@ -3,10 +3,11 @@ import { levelForXp, XP_TABLE } from './xp';
 import type { GameState, SkillAction, TaskMode } from './types';
 import { ACTIONS, nodeOfAction, standOf, travelMs } from './data';
 
-/** 测试默认已经站在任务地点，不算走路时间 */
+/** 测试默认已经站在任务地点、补给也带好了，不算走路时间 */
 function startHere(s: GameState, action: string, mode: TaskMode) {
   const r = startNow(s, action, mode);
   r.loc = standOf(nodeOfAction(action)!);
+  r.queue[0].stocked = true;
   return r;
 }
 
@@ -175,14 +176,30 @@ describe('装备', () => {
 });
 
 describe('背包与战斗方式', () => {
-  it('开战时按设置把仓库的食物带进背包，只吃背包里的', () => {
+  it('开战前食物不够会先回仓库按设置拿，只吃背包里的', () => {
     let s = newGame(T0, 9);
     s.bank.minnow = 300;
     s.settings.carryFood = 50;
-    s = startHere(s, 'fight_grey_wolf', { type: 'time', ms: 60_000 });
-    const { state, summary } = advance(s, T0 + 60_000);
+    s = startNow(s, 'fight_grey_wolf', { type: 'time', ms: 10 * 60_000 });
+    s.loc = standOf(nodeOfAction('fight_grey_wolf')!);
+    // 刚开始在往仓库走，东西还没拿
+    const mid = advance(s, T0 + 1000).state;
+    expect(mid.travel?.to).toBe('bank');
+    expect(mid.bag.minnow).toBeUndefined();
+    const { state, summary } = advance(s, T0 + 10 * 60_000);
+    expect(summary.bankTrips).toBe(1);
     expect(state.bank.minnow).toBe(250);
     expect((state.bag.minnow ?? 0) + summary.foodEaten).toBe(50);
+  });
+
+  it('背包食物够了就不回仓库', () => {
+    let s = newGame(T0, 9);
+    s.bank = {};
+    s.bag.minnow = 60;
+    s.settings.carryFood = 50;
+    s = startNow(s, 'fight_grey_wolf', { type: 'time', ms: 1000 });
+    s.loc = standOf(nodeOfAction('fight_grey_wolf')!);
+    expect(advance(s, T0 + 500).state.travel).toBeNull();
   });
 
   it('背包 20 格、每格 100 个', () => {

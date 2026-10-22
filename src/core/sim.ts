@@ -264,8 +264,9 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     return out;
   };
 
-  /** 背包满了：走回仓库，存下除食物和弹药外的东西，再走回来接着干 */
-  const stepBankTrip = (budget: number): number => {
+  /** 背包满了：走回仓库，存下除食物和弹药外的东西，再走回来接着干。
+   *  supply：开战前回仓库按设置拿食物和药水 */
+  const stepBankTrip = (budget: number, supply = false): number => {
     const bank = NODES.find((n) => n.id === 'bank')!;
     const dest = standOf(bank);
     if (!s.travel || s.travel.to !== 'bank') {
@@ -285,6 +286,10 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
           delete s.bag[id];
         }
         if (!pass && BAG_SLOTS - bagSlotsUsed(s.bag) >= 5) break;
+      }
+      if (supply) {
+        carryFood();
+        s.queue[0].stocked = true;
       }
       sum.bankTrips++;
     }
@@ -356,10 +361,16 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     }
   };
 
-  /** 开战时按设置从仓库把食物补进背包，好的先拿 */
+  const foodTarget = () => (s.settings.carryFood < 0 ? Infinity : s.settings.carryFood);
+  const bagFood = () => Object.entries(s.bag).reduce((n, [id, q]) => n + (healOf(id) ? q : 0), 0);
+  /** 背包里的食物不够设定数量，仓库里又有：要先回仓库拿 */
+  const needSupply = () =>
+    bagFood() < foodTarget() && Object.keys(s.bank).some((id) => healOf(id) > 0 && bagRoomFor(s.bag, id) > 0);
+
+  /** 在仓库旁按设置把食物和药水补进背包，好的先拿 */
   const carryFood = () => {
-    const target = s.settings.carryFood < 0 ? Infinity : s.settings.carryFood;
-    let have = Object.entries(s.bag).reduce((n, [id, q]) => n + (healOf(id) ? q : 0), 0);
+    const target = foodTarget();
+    let have = bagFood();
     const foods = Object.keys(s.bank).filter((id) => healOf(id)).sort((a, b) => healOf(b) - healOf(a));
     for (const id of foods) {
       const n = Math.min(s.bank[id], target - have, bagRoomFor(s.bag, id));
@@ -404,7 +415,6 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   const stepCombat = (task: Task, a: CombatAction, budget: number): number => {
     const m = MONSTERS[a.monster];
     if (!s.combat) {
-      carryFood();
       s.combat = { monsterHp: m.hp, playerTimerMs: playerAttackMs(s), monsterTimerMs: m.attackMs, respawnMs: 0 };
     }
     const c = s.combat;
@@ -480,6 +490,18 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       break;
     }
     const a0 = ACTIONS[task.action];
+    // 开战前：背包食物不够设定数量就先回仓库拿（用户 10-22 要求）
+    if (a0.kind === 'combat' && !task.stocked && !s.combat) {
+      if (s.travel?.to === 'bank' || needSupply()) {
+        const used = stepBankTrip(Math.min(dt, timeLeft(task)), true);
+        dt -= used;
+        regen(s, used);
+        task.elapsedMs += used;
+        if (isFinished(task)) endTask('complete');
+        continue;
+      }
+      task.stocked = true;
+    }
     // 新一轮开始前（采集一次 / 打下一只怪前）检查背包，装不下就先回仓库
     const between = a0.kind === 'skill' ? s.progressMs === 0 : !s.combat || s.combat.respawnMs > 0;
     if (s.travel?.to === 'bank' || (between && !s.travel && !fits(lootOf(a0)))) {

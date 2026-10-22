@@ -125,6 +125,8 @@ export interface Task {
   /** 已完成次数 / 已用时，用于判断 count/time 模式是否结束 */
   done: number;
   elapsedMs: number;
+  /** 战斗任务：开打前已经回仓库补过食物（或者不用补） */
+  stocked?: boolean;
 }
 
 export interface CombatState {
