@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ACTIONS, ITEMS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, type MapNode } from '../core/data';
 import {
-  BAG_SLOTS, BAG_STACK, bagRoomFor, bagSlotsUsed, combatLevel, equip, level, playerBonuses, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip,
+  BAG_SLOTS, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip,
   weaponStyle,
 } from '../core/sim';
 import type { EquipSlot, GameState, ItemCategory, SkillId, Summary } from '../core/types';
@@ -66,11 +66,18 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
   );
 }
 
-function ItemGrid({ items, sel, onSel, empty = 0 }: { items: [string, number][]; sel: string | null; onSel: (id: string) => void; empty?: number }) {
+function ItemGrid({ items, sel, onSel, empty = 0, split = false }: { items: [string, number][]; sel: string | null; onSel: (id: string) => void; empty?: number; split?: boolean }) {
+  // 背包按格子拆开：每格最多放一叠（物品 100 个，装备 1 件），多出来的占下一格
+  const cells: [string, number, number][] = split
+    ? items.flatMap(([id, n]) => {
+      const k = stackOf(id);
+      return Array.from({ length: Math.ceil(n / k) }, (_, i) => [id, Math.min(k, n - i * k), i] as [string, number, number]);
+    })
+    : items.map(([id, n]) => [id, n, 0]);
   return (
     <div className="grid">
-      {items.map(([id, n]) => (
-        <button key={id} className={`cell ${sel === id ? 'sel' : ''}`} onClick={() => onSel(id)} title={ITEMS[id].name}>
+      {cells.map(([id, n, i]) => (
+        <button key={`${id}#${i}`} className={`cell ${sel === id ? 'sel' : ''}`} onClick={() => onSel(id)} title={ITEMS[id].name}>
           <Icon item={id} />
           <span className="qty">{fmtNum(n)}</span>
           <span className="nm">{ITEMS[id].name}</span>
@@ -142,7 +149,7 @@ export function BagPanel({ s }: { s: GameState }) {
     <div className="page">
       <h2>背包 <small className="muted">{used}/{BAG_SLOTS} 格 · 物品每格 {BAG_STACK} 个，装备每件一格</small></h2>
       <div className="bag-meter"><i style={{ width: `${(used / BAG_SLOTS) * 100}%` }} /></div>
-      <ItemGrid items={items} sel={sel} onSel={setSel} empty={Math.max(0, BAG_SLOTS - used)} />
+      <ItemGrid items={items} sel={sel} onSel={setSel} empty={Math.max(0, BAG_SLOTS - used)} split />
       {sel && <ItemDetail s={s} id={sel} from="bag" />}
       {items.length > 0 && <button className="primary" onClick={() => store.dispatch(depositLoot)}>全部存入仓库（保留食物和弹药）</button>}
       <div className="opts">
