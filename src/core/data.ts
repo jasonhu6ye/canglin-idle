@@ -8,9 +8,9 @@ import { FORM_FAMILY, isAnimal, SPECIES, type Family, type Species } from './bes
  * 闭环：采集 → 仓库 → 生产 → 装备/消耗品 → 战斗 → 掉落 → 生产或卖钱。
  */
 
-/** 世界大小：1080 → 1480（用户 10-22 嫌挤，要求扩大） */
-export const MAP_W = 1480;
-export const MAP_H = 1480;
+/** 世界大小：1080 → 1480 → 2188（用户 10-22 嫌挤，两次要求扩大） */
+export const MAP_W = 2188;
+export const MAP_H = 2188;
 
 export interface SkillInfo { name: string; color: string; group: SkillGroup; desc: string }
 

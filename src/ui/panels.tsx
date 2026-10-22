@@ -283,7 +283,7 @@ export function MorePanel({ s }: { s: GameState }) {
       <button className="primary" onClick={() => setWardrobe(true)}>打开衣橱</button>
       <h2>关于</h2>
       <p>苍岭放置（暂定名）v2 单机版。角色会一直执行队列里的任务，关掉网页也会在下次打开时结算离线收益，最多 24 小时。</p>
-      <p className="muted">世界 1480×1480 格，9 个区域。资源、装备和 192 种怪物都是正式数值；美术是程序生成的像素图。存档保存在本浏览器里。</p>
+      <p className="muted">世界 2188×2188 格，9 个区域。资源、装备和 192 种怪物都是正式数值；美术是程序生成的像素图。存档保存在本浏览器里。</p>
       <h2>存档</h2>
       <SaveBackup s={s} />
       {confirming ? (

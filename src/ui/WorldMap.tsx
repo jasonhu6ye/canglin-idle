@@ -10,7 +10,7 @@ import { MonsterIcon } from './Bestiary';
 import { store } from '../store';
 
 /** 缩略图每像素代表几格 */
-const STEP = 3;
+const STEP = Math.max(3, Math.round(MAP_W / 500));
 let overviewUrl: string | null = null;
 
 function overview(): string {
