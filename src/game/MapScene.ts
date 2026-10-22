@@ -506,7 +506,7 @@ export class MapScene extends Phaser.Scene {
         const cy = cam.midPoint.y / T;
         for (const n of NODES) {
           if (n.town || this.spawnedNodes.has(n.id)) continue;
-          if (Math.abs(n.x - cx) < 45 && Math.abs(n.y - cy) < 45) {
+          if (Math.abs(n.x - cx) < 55 && Math.abs(n.y - cy) < 55) {
             this.spawnedNodes.add(n.id);
             this.spawnQueue.push(n);
           }
@@ -521,12 +521,13 @@ export class MapScene extends Phaser.Scene {
   private spawnNode(n: MapNode) {
     const mons = n.actions.map((id) => ACTIONS[id]).filter((a) => a.kind === 'combat').map((a) => MONSTERS[(a as { monster: string }).monster]);
     mons.forEach((m, i) => {
-      const ring = 5 + (i % 3) * 2;
+      // 地图扩大后怪物也散开些，不挤在点位旁边
+      const ring = 8 + (i % 4) * 4;
       const ang = (i / Math.max(1, mons.length)) * Math.PI * 2 + 0.6;
       const ox = Math.round(n.x + Math.cos(ang) * ring);
       const oy = Math.round(n.y + 2 + Math.sin(ang) * ring * 0.6);
       const count = m.rank === 'normal' ? 2 : 1;
-      for (let k = 0; k < count; k++) this.addMonWanderer(m, ox + k * 2, oy + (k ? 1 : 0), m.rank === 'boss' ? 1.5 : 3);
+      for (let k = 0; k < count; k++) this.addMonWanderer(m, ox + k * 3, oy + (k ? 2 : 0), m.rank === 'boss' ? 2 : 4);
     });
   }
 

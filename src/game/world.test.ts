@@ -1,5 +1,5 @@
 import { findPath, isWalkable, regionAt, SPAWN, standTile } from './world';
-import { NODES, townXY } from '../core/data';
+import { MAP_W, NODES, townXY } from '../core/data';
 
 describe('世界', { timeout: 30_000 }, () => {
   it('每个资源点都在区域图上规定的区域里', () => {
@@ -16,7 +16,7 @@ describe('世界', { timeout: 30_000 }, () => {
   });
 
   it('海里和房子里走不进去', () => {
-    expect(isWalkable(1077, 530)).toBe(false);
+    expect(isWalkable(MAP_W - 3, 530)).toBe(false);
     expect(findPath(SPAWN, townXY(162, 152))).toBeNull();
   });
 });

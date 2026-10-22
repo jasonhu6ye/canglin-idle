@@ -8,8 +8,9 @@ import { FORM_FAMILY, isAnimal, SPECIES, type Family, type Species } from './bes
  * 闭环：采集 → 仓库 → 生产 → 装备/消耗品 → 战斗 → 掉落 → 生产或卖钱。
  */
 
-export const MAP_W = 1080;
-export const MAP_H = 1080;
+/** 世界大小：1080 → 1480（用户 10-22 嫌挤，要求扩大） */
+export const MAP_W = 1480;
+export const MAP_H = 1480;
 
 export interface SkillInfo { name: string; color: string; group: SkillGroup; desc: string }
 
@@ -481,7 +482,8 @@ const wild = (id: string, name: string, u: number, v: number, region: RegionId, 
   return { id, name, ...at(u, v), region, lv: [Math.min(...lvls), Math.max(...lvls)], sprite, actions, pond };
 };
 
-export const TOWN_CENTER = { x: 518, y: 529 };
+/** 镇中心：原来 1080 地图上的 (518, 529)，按比例放到新地图 */
+export const TOWN_CENTER = { x: Math.round((518 * MAP_W) / 1080), y: Math.round((529 * MAP_H) / 1080) };
 /** 城镇布局按「镇中心 = (167, 170)」画的，这里平移到真正的镇中心 */
 export const townXY = (x: number, y: number) => ({ x: x - 167 + TOWN_CENTER.x, y: y - 170 + TOWN_CENTER.y });
 

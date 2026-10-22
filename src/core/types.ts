@@ -168,6 +168,8 @@ export interface GameState {
   bestiary?: Record<string, number>;
   /** 角色所在的格子（寻路的起点） */
   loc: { x: number; y: number };
+  /** 存档时的地图边长；地图扩大后用来换算旧位置 */
+  mapSize?: number;
   /** 正在自动寻路去当前任务的地点；到达前任务不开始 */
   travel: { to: string; ms: number; total: number } | null;
   /** 玩家点地图走开了：队列保留但不干活，点「继续工作」才走回去 */

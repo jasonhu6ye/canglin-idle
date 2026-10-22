@@ -1,4 +1,4 @@
-import { ACTIONS, ITEMS, MONSTERS, nodeOfAction, NODES, SKILLS, SPAWN_TILE, standOf, travelMs } from './data';
+import { ACTIONS, ITEMS, MAP_W, MONSTERS, nodeOfAction, NODES, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, travelMs } from './data';
 import { nextRandom } from './rng';
 import { BONUS_PER_LEVEL, levelForXp, SPEED_PER_LEVEL, XP_TABLE } from './xp';
 import type {
@@ -42,12 +42,24 @@ export function newGame(now: number, seed = Math.floor(Math.random() * 2 ** 31))
     regenMs: 0,
     stats: { kills: 0, deaths: 0 },
     loc: { ...SPAWN_TILE },
+    mapSize: MAP_W,
     travel: null,
     seen: { minnow: 1, wood_sword: 1 },
   };
 }
 
 /** 旧存档升级到当前版本；认不出的物品和任务直接丢掉，避免读档崩溃 */
+/** 地图扩大后换算旧存档的位置：城镇里的跟着镇中心平移（建筑大小不变），野外的按比例放大 */
+function rescaleLoc(loc: { x: number; y: number }, old: number) {
+  if (old === MAP_W) return loc;
+  const k = MAP_W / old;
+  const oldCenter = { x: Math.round(TOWN_CENTER.x / k), y: Math.round(TOWN_CENTER.y / k) };
+  if (Math.abs(loc.x - oldCenter.x) < 60 && Math.abs(loc.y - oldCenter.y) < 60) {
+    return { x: loc.x - oldCenter.x + TOWN_CENTER.x, y: loc.y - oldCenter.y + TOWN_CENTER.y };
+  }
+  return { x: Math.round(loc.x * k), y: Math.round(loc.y * k) };
+}
+
 export function migrate(raw: unknown): GameState | null {
   const s = raw as Omit<Partial<GameState>, "version"> & { version?: number };
   if (!s || typeof s !== 'object' || ![1, 2, 3].includes(s.version ?? 0)) return null;
@@ -74,8 +86,9 @@ export function migrate(raw: unknown): GameState | null {
     regenMs: s.regenMs ?? 0,
     stats: { ...fresh.stats, ...s.stats },
     // 旧存档没有位置：当作已经站在当前任务的地点
-    loc: s.loc ?? (nodeOfAction(queue[0]?.action) ? standOf(nodeOfAction(queue[0]?.action)!) : fresh.loc),
-    travel: s.travel ?? null,
+    loc: s.loc ? rescaleLoc(s.loc, s.mapSize ?? 1080) : nodeOfAction(queue[0]?.action) ? standOf(nodeOfAction(queue[0]?.action)!) : fresh.loc,
+    mapSize: MAP_W,
+    travel: (s.mapSize ?? 1080) === MAP_W ? s.travel ?? null : null,
     bestiary: s.bestiary ?? {},
     // 旧存档：现在拥有的东西都算获得过
     seen: s.seen ?? Object.fromEntries(

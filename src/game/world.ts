@@ -2,7 +2,7 @@ import { MAP_H, MAP_W, NODES, townXY, type MapNode } from '../core/data';
 import type { RegionId } from '../core/types';
 
 /*
- * 1080×1080 的世界，按区域图生成。格子太多，整张图一次算完在手机上要好几秒，所以分两层：
+ * 1480×1480 的世界，按区域图生成。格子太多，整张图一次算完在手机上要好几秒，所以分两层：
  * - 启动时只算粗网格（每 4×4 格一个点）：区域归属、道路走向
  * - 地面和装饰物按 32×32 的块懒加载，第一次用到哪块才算哪块（渲染、寻路都走这里）
  * 全部是确定性的，同一份代码每次生成的世界都一样。
@@ -75,8 +75,8 @@ const SEEDS: { x: number; y: number; r: number }[] = [
   ...NODES.filter((n) => !n.town || n.pond).map((n) => ({ x: n.x, y: n.y, r: REGION_IDS.indexOf(n.region) })),
 ];
 /** 区域边界扰动的幅度和尺度（格） */
-const WARP = 90;
-const WARP_SCALE = 130;
+const WARP = Math.round((90 * MAP_W) / 1080);
+const WARP_SCALE = Math.round((130 * MAP_W) / 1080);
 
 function regionRaw(x: number, y: number) {
   const wx = x + (fbm(x, y, 11, WARP_SCALE) - 0.5) * WARP;
@@ -505,7 +505,7 @@ const seenBuf = new Uint32Array(N);
 let searchId = 0;
 
 /** A* 寻路（8 方向，斜走不切墙角）；终点不可走或走不到返回 null。返回值不含起点。 */
-export function findPath(from: Pt, to: Pt, maxNodes = 400_000): Pt[] | null {
+export function findPath(from: Pt, to: Pt, maxNodes = Math.round(N * 0.7)): Pt[] | null {
   if (!isWalkable(to.x, to.y) || !inMap(from.x, from.y)) return null;
   const id = ++searchId;
   const start = idx(from.x, from.y);
