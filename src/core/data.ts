@@ -821,6 +821,8 @@ export interface MapNode {
   site?: { kind: SiteKind; r: number };
   /** 大型洞窟入口（用户 10-23：先占位，以后开放） */
   cave?: boolean;
+  /** 暂未开放的建筑（用户 10-23：强化台先不开放） */
+  closed?: boolean;
 }
 export type SiteKind = 'islands' | 'bamboo' | 'saltflat' | 'crater' | 'fungal' | 'glacier' | 'obsidian' | 'starabyss'
   | 'oasis' | 'mesa' | 'atoll' | 'crystalheart';
@@ -868,7 +870,7 @@ export const NODES: MapNode[] = [
   town('workshop', '工坊', 151, 170, 'bench', filterIds('tan_').concat(filterIds('weave_'), filterIds('craft_'))),
   town('bowyer', '制弓台', 159, 170, 'bowyer', filterIds('plank_').concat(filterIds('fletch_'))),
   town('apothecary', '药剂铺', 177, 170, 'potion', filterIds('brew_')),
-  town('enhancer', '强化台', 185, 170, 'enhance', filterIds('enhance_')),
+  town('enhancer', '强化台', 185, 170, 'enhance', filterIds('enhance_'), { closed: true }),
   town('market', '集市', 155, 182, 'market', [
     steal('farmer', '偷农夫', 1, 3, [{ item: 'potato', qty: 2, chance: 0.3 }, { item: 'seed_potato', qty: 2, chance: 0.2 }, { item: 'seed_carrot', qty: 1, chance: 0.08 }]),
     steal('vendor', '偷小贩', 10, 9, [{ item: 'cotton_1', qty: 2, chance: 0.2 }, { item: 'seed_onion', qty: 1, chance: 0.08 }, { item: 'seed_tomato', qty: 1, chance: 0.05 }]),
@@ -976,7 +978,7 @@ export const NODES: MapNode[] = [
   town2('workshop2', '落霞城·工坊', 28, 17, 'bench', filterIds('tan_').concat(filterIds('weave_'), filterIds('craft_'))),
   town2('bowyer2', '落霞城·制弓台', 27, -4, 'bowyer', filterIds('plank_').concat(filterIds('fletch_'))),
   town2('apothecary2', '落霞城·药剂铺', -27, -1, 'potion', filterIds('brew_')),
-  town2('enhancer2', '落霞城·强化台', -4, 16, 'enhance', filterIds('enhance_')),
+  town2('enhancer2', '落霞城·强化台', -4, 16, 'enhance', filterIds('enhance_'), { closed: true }),
   // 金穗草原
   ring('golden_plain', '金穗原野', 0.06, 0.42, 'savanna', 'camp', [mat('spice', 1), mat('resin', 1), mat('feather', 1), chop(1, '_plain')]),
   ring('lion_rock', '狮吼岩', 0.15, 0.63, 'savanna', 'boss', [mat('crystal', 1), mat('crystal', 2), mat('feather', 2), mine(1, '_lion')]),

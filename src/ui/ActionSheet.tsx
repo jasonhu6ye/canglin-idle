@@ -43,7 +43,7 @@ export function ActionSheet({ s, nodeId, onClose }: { s: GameState; nodeId: stri
   const [cat, setCat] = useState<string>('all');
   const [tier, setTier] = useState<number | 'all'>('all');
   // 野外的怪物不在点位页面里列出，直接点地图上的怪物（用户 10-22 要求）；城镇的训练假人保留
-  const all = node.town ? node.actions : node.actions.filter((id) => ACTIONS[id].kind !== 'combat');
+  const all = node.closed ? [] : node.town ? node.actions : node.actions.filter((id) => ACTIONS[id].kind !== 'combat');
   const unlocked = all.filter((id) => !isLocked(s, ACTIONS[id]));
   const locked = all.filter((id) => isLocked(s, ACTIONS[id]));
   // 已解锁的按等级从高到低（最好的在上面），未解锁的按等级从低到高
@@ -81,7 +81,7 @@ export function ActionSheet({ s, nodeId, onClose }: { s: GameState; nodeId: stri
         {shown.map((id) => {
           const a = ACTIONS[id];
           const lock = isLocked(s, a);
-          const icon = a.kind === 'skill' ? (a.outputs[0] && a.outputs[0].item !== 'coins' ? <Icon item={a.outputs[0].item} size={30} info={false} /> : <SkillIcon skill={a.skill} size={30} />) : <MonsterIcon m={MONSTERS[a.monster]} size={34} />;
+          const icon = a.kind === 'skill' ? (a.outputs[0] && a.outputs[0].item !== 'coins' ? <Icon item={a.outputs[0].item} size={30} /> : <SkillIcon skill={a.skill} size={30} />) : <MonsterIcon m={MONSTERS[a.monster]} size={34} />;
           return (
             <li key={id} className={`${selected === id ? 'sel' : ''} ${lock ? 'locked' : ''}`} onClick={() => !lock && setSelected(id)}>
               <span className="act-icon">{icon}</span>
@@ -113,8 +113,9 @@ export function ActionSheet({ s, nodeId, onClose }: { s: GameState; nodeId: stri
       </ul>
 
       {node.sprite === 'market' && <SeedShop s={s} />}
+      {node.closed && <p className="muted pad">{node.name}暂未开放，敬请期待。</p>}
       {node.cave && <p className="muted pad">大型洞窟入口。里面的内容还在筹备，暂未开放，敬请期待。</p>}
-      {!all.length && !node.cave && <p className="muted pad">这里是怪物出没的地方。点地图上的怪物或生物，就能查看它的信息并开打。</p>}
+      {!all.length && !node.cave && !node.closed && <p className="muted pad">这里是怪物出没的地方。点地图上的怪物或生物，就能查看它的信息并开打。</p>}
       {all.length > 0 && <TaskConfig s={s} action={selected} onDone={onClose} far={node.town && !nearNode(s, node) ? node : undefined} />}
     </div>
   );

@@ -685,7 +685,7 @@ export class MapScene extends Phaser.Scene {
     this.lastCombatLevel = cl;
     for (const { node, text } of this.nodeLabels) {
       if (node.town && !node.pond) {
-        text.setText(node.name);
+        text.setText(node.closed ? `${node.name}（未开放）` : node.name);
         continue;
       }
       const d = DANGER[dangerLevel(node, cl)];

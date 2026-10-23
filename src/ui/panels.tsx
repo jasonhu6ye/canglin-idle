@@ -291,7 +291,7 @@ export function SkillsPanel({ s, onPick }: { s: GameState; onPick: (nodeId: stri
 const pct = (x: number) => `${Math.round(x * 1000) / 10}%`;
 
 function SkillDetail({ s, skill, onPick }: { s: GameState; skill: SkillId; onPick: (nodeId: string) => void }) {
-  const places = whereToTrain(skill);
+  const places = whereToTrain(skill).filter((p) => !p.node.closed);
   const info = SKILLS[skill];
   const lvl = level(s, skill);
   // 离角色最近、且当前等级能做的地点；制作技能就是城里对应的建筑
@@ -301,6 +301,7 @@ function SkillDetail({ s, skill, onPick }: { s: GameState; skill: SkillId; onPic
   return (
     <div className="skill-detail frame">
       <p>{info.desc}</p>
+      {skill === 'enhancing' && <p className="warn">强化台暂未开放，敬请期待。</p>}
       {info.group !== 'combat' && (
         <p className="muted">
           等级没有上限。动作速度随等级提升，前期涨得快、后期慢，最多接近 +{pct(SPEED_CAP)}；当前 +{pct(speedForLevel(lvl))}，下一级 +{pct(speedForLevel(lvl + 1))}；
@@ -472,7 +473,7 @@ export function NodeList({ s, onPick }: { s: GameState; onPick: (id: string) => 
   if (tab.id === 'town') {
     rows = NODES.filter((n) => n.town).map((n) => {
       const kinds = [...new Set(n.actions.map((id) => { const a = ACTIONS[id]; return a.kind === 'skill' ? SKILLS[a.skill].name : '战斗'; }))];
-      return { key: n.id, id: n.id, name: n.name.replace('落霞城·', ''), sub: `${townName(n)} · ${n.opens === 'bank' ? '存取物品' : kinds.join('、')}` };
+      return { key: n.id, id: n.id, name: n.name.replace('落霞城·', ''), sub: `${townName(n)} · ${n.closed ? '暂未开放' : n.opens === 'bank' ? '存取物品' : kinds.join('、')}`, dim: n.closed };
     }).sort((a, b) => (a.sub.startsWith('主城') === b.sub.startsWith('主城') ? 0 : a.sub.startsWith('主城') ? -1 : 1));
   } else if (tab.id === 'boss') {
     rows = BOSSES.map((m) => ({ key: m.id, id: `fight_${m.id}`, name: m.name, sub: `${REGIONS[m.region].name} · ${s.bestiary?.[m.id] ? `已击败 ${s.bestiary[m.id]} 次` : '未击败'}`, lv: `Lv${m.level}` }));

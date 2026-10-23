@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { ACTIONS, ITEMS, MONSTERS, nodeOfAction, SKILLS, TIERS, tierName } from '../core/data';
+import { ACTIONS, buffText, ITEMS, MONSTERS, nodeOfAction, SKILLS, TIERS, tierName } from '../core/data';
+import { maxHp, POTION_AT } from '../core/sim';
 import type { GameState, ItemDef } from '../core/types';
 import { Icon } from './icons';
 import { Bestiary } from './Bestiary';
@@ -140,7 +141,21 @@ export function CodexDetail({ s, id, reveal = false }: { s: GameState; id: strin
         <span className="with-icon"><Icon item={id} size={28} /> <b>{it.tier !== undefined && `${tierName(it.tier)} `}{it.name}</b></span>
         <span className="muted">{type} · 单价 {it.value} · 拥有 {owned}</span>
       </div>
-      {it.heals && <span>回复 {it.heals} 生命</span>}
+      {it.heals && (
+        <span>
+          回复 <b className="gold">{it.heals}</b> 生命（你的生命上限 {maxHp(s)}，约 {Math.min(100, Math.round((it.heals / maxHp(s)) * 100))}%）
+          {it.buff && <b className="gold"> · {buffText(it.buff)}</b>}
+        </span>
+      )}
+      {it.category === 'potion' && (
+        <span className="muted">
+          用法：在背包里点它「放进药水栏」，或回仓库补给时自动带上。战斗中血量低于 {Math.round(POTION_AT * 100)}% 会先喝药水救急，然后才吃食物；药水栏不占背包。
+        </span>
+      )}
+      {it.category === 'food' && it.heals && (
+        <span className="muted">用法：放进食物栏或背包，战斗中血量低于设定的进食阈值时自动吃{it.buff ? '，吃下后获得限时增益' : ''}。</span>
+      )}
+      {it.desc && <span className="muted">{it.desc}</span>}
       {it.ammo && <span>{it.ammo.style === 'ranged' ? '箭矢' : '符文'} · 威力 +{it.ammo.power}</span>}
       {e && (
         <span>
