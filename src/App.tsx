@@ -6,13 +6,14 @@ import { store, useGame, useOffline } from './store';
 import { toggleMount } from './core/sim';
 import { ActionSheet, MonsterSheet } from './ui/ActionSheet';
 import { emitToGame, GameCanvas, onGameEvent } from './ui/GameCanvas';
-import { openItem } from './ui/itemOpen';
+import { onOpenNodeSheet, openItem } from './ui/itemOpen';
 import { actionName } from './ui/format';
 import { BossBar, MapButtons, QuestCard, QueuePanel, StatusChips, TopBar } from './ui/hud';
 import { QUESTS, questText } from './core/quests';
 import { TplIcon } from './ui/icons';
 import { ItemPopup, LootReveal } from './ui/ItemPopup';
 import { Guide, openGuide } from './ui/Guide';
+import { News } from './ui/News';
 import { GuildPanel, onOpenGuild } from './ui/Guild';
 import { CombatLog, onOpenCombatLog } from './ui/CombatLog';
 import { UpdateBanner } from './ui/UpdateBanner';
@@ -116,6 +117,8 @@ export function App() {
   const wide = useWide();
   const [tab, setTab] = useState<Tab>('game');
   const [node, setNode] = useState<string | null>(null);
+  // 每次打开地点页面都重新挂载，从配方跳过来时能重新选中
+  const [nodeSeq, setNodeSeq] = useState(0);
   const [worldMap, setWorldMap] = useState(false);
   const [monster, setMonster] = useState<string | null>(null);
   // 电脑端右侧面板默认收起，点标签、地点或按快捷键才展开（用户 10-23）
@@ -152,7 +155,10 @@ export function App() {
     }
     setTab('game');
     setNode(id);
+    setNodeSeq((n) => n + 1);
   }, []);
+
+  useEffect(() => onOpenNodeSheet(openNode), [openNode]);
 
   // 日志小窗：展开 / 收起记在本地（用户 10-23）
   const [combatLog, setCombatLogRaw] = useState(() => {
@@ -219,7 +225,7 @@ export function App() {
   if (worldMap) side = <WorldMap s={s} onClose={() => setWorldMap(false)} onOpenNode={openNode} />;
   else if (!showSide) side = null;
   else if (tab === 'game' && monster) side = <MonsterSheet s={s} actionId={monster} onClose={() => setMonster(null)} />;
-  else if (tab === 'game' && node) side = <ActionSheet s={s} nodeId={node} onClose={() => setNode(null)} />;
+  else if (tab === 'game' && node) side = <ActionSheet key={nodeSeq} s={s} nodeId={node} onClose={() => setNode(null)} />;
   else if (tab === 'game' && wide) side = <NodeList s={s} onPick={openNode} />;
   else if (tab === 'char') side = <CharacterPanel s={s} />;
   else if (tab === 'bag') side = <BagPanel s={s} />;
@@ -280,6 +286,7 @@ export function App() {
       <ItemPopup s={s} />
       <LootReveal />
       <Guide />
+      <News />
       <UpdateBanner />
     </div>
   );

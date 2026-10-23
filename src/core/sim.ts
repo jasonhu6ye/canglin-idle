@@ -1,7 +1,8 @@
-import { ACTIONS, CROP_DEFS, PLOT_BY_ID, ITEMS, MAP_W, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, travelMs, type MapNode } from './data';
+import { ACTIONS, CROP_DEFS, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAP_W, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, travelMs, type MapNode } from './data';
 import { nextRandom } from './rng';
 import { stepQuests } from './quests';
 import { stepAutoFarm } from './farm';
+import { isRaining, RAIN_FISH } from './weather';
 import { BONUS_PER_LEVEL, levelForXp, speedForLevel, XP_TABLE } from './xp';
 import type {
   CombatLogEntry,
@@ -48,6 +49,7 @@ export function newGame(now: number, seed = Math.floor(Math.random() * 2 ** 31))
     mapSize: MAP_W,
     travel: null,
     seen: { minnow: 1, wood_sword: 1, seed_potato: 1 },
+    waystones: [WAYSTONE_HOME],
   };
 }
 
@@ -112,6 +114,7 @@ export function migrate(raw: unknown): GameState | null {
     buffs: s.buffs ?? {},
     mounted: !!s.mounted && !!equipment.mount,
     redeemed: s.redeemed ?? [],
+    waystones: [...new Set([WAYSTONE_HOME, ...(s.waystones ?? []).filter((id) => WAYSTONES.some((n) => n.id === id))])],
     // 地块里种的作物改过名或删掉了就清掉
     farm: Object.fromEntries(Object.entries(s.farm ?? {}).filter(([id, p]) => PLOT_BY_ID[id] && p && CROP_DEFS[p.crop])),
     // 栏位里的东西改过名或删掉了就丢掉，免得界面读不到物品
@@ -280,8 +283,15 @@ export function eat(prev: GameState, id: string): GameState {
   return s;
 }
 
-export const actionDuration = (s: GameState, a: SkillAction) =>
-  Math.round(a.durationMs / (1 + toolSpeed(s, a.skill, a.tool) + levelSpeed(s, a.skill) + buffPct(s, 'speed')));
+export const actionDuration = (s: GameState, a: SkillAction, t = Date.now()) =>
+  Math.round(a.durationMs / (1 + toolSpeed(s, a.skill, a.tool) + levelSpeed(s, a.skill) + buffPct(s, 'speed') + rainBonus(s, a, t)));
+
+/** 雨天钓鱼增益：钓点所在区域正在下雨时，钓鱼更快（用户 10-23） */
+export function rainBonus(s: GameState, a: SkillAction, t = Date.now()) {
+  if (a.skill !== 'fishing') return 0;
+  const n = nodeOfAction(a.id, s.loc);
+  return n && isRaining(n.region, t) ? RAIN_FISH : 0;
+}
 
 /** 玩家攻击间隔：看武器，匕首快、长枪和弩慢 */
 export const playerAttackMs = (s: GameState) => ITEMS[s.equipment.weapon ?? '']?.equip?.attackMs ?? PLAYER_ATTACK_MS;
@@ -615,7 +625,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       if (a.inputs && !a.inputs.every((i) => haveItem(i.item) >= i.qty)) return endTask('noInput'), 0;
     }
     // 进度为负表示偷窃失败后的晕眩，先走完晕眩停在 0，再做下一次的条件检查
-    const duration = actionDuration(s, a);
+    const duration = actionDuration(s, a, now - dt);
     const step = Math.min(budget, s.progressMs < 0 ? -s.progressMs : Math.max(0, duration - s.progressMs));
     s.progressMs += step;
     if (s.progressMs >= duration) {
@@ -810,6 +820,11 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     }
   }
   stepAutoFarm(s, sum, from, now);
+  // 走到（或寻路到）石碑旁边就激活
+  if (!s.travel && !s.walk) {
+    const got = unlockNear(s, s.loc);
+    if (got.length) sum.waystones = got;
+  }
   const before = s.quest?.i ?? 0;
   if (stepQuests(s, sum).length) sum.quests = Array.from({ length: (s.quest?.i ?? 0) - before }, (_, k) => before + k);
   return { state: s, summary: sum };
@@ -849,6 +864,44 @@ export function teleport(prev: GameState, nodeId: string): GameState {
   if (!n) return prev;
   const s = clone(prev);
   s.loc = standOf(n);
+  s.travel = null;
+  return s;
+}
+
+/** 激活 at 附近（4 格内）还没激活的石碑，返回激活了哪些 */
+export const WAYSTONE_REACH = 4;
+function unlockNear(s: GameState, at: { x: number; y: number }): string[] {
+  const got: string[] = [];
+  for (const n of WAYSTONES) {
+    if (s.waystones?.includes(n.id)) continue;
+    const st = standOf(n);
+    if (Math.hypot(at.x - st.x, at.y - st.y) > WAYSTONE_REACH) continue;
+    (s.waystones ??= []).push(n.id);
+    got.push(n.id);
+  }
+  return got;
+}
+
+/** 地图上角色路过石碑：按画面上的位置激活（走路途中也算） */
+export function unlockWaystone(prev: GameState, at: { x: number; y: number }): { state: GameState; got: string[] } {
+  const s = clone(prev);
+  const got = unlockNear(s, at);
+  return got.length ? { state: s, got } : { state: prev, got };
+}
+
+/** 站在哪座激活过的石碑旁边 */
+export function atWaystone(s: GameState): MapNode | undefined {
+  return WAYSTONES.find((n) => s.waystones?.includes(n.id) && nearNode(s, n));
+}
+
+/** 用石碑传送：要站在一座激活过的石碑旁，目的地也要激活过。正在做的工作暂停（队列留着） */
+export function useWaystone(prev: GameState, to: string): GameState {
+  const dest = WAYSTONES.find((n) => n.id === to);
+  const from = atWaystone(prev);
+  if (!dest || !from || from === dest || !prev.waystones?.includes(to)) return prev;
+  const s = clone(leaveWork(prev));
+  s.loc = standOf(dest);
+  s.walk = null;
   s.travel = null;
   return s;
 }

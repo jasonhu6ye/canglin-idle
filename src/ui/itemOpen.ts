@@ -28,3 +28,14 @@ export function onOpenItem(fn: Listener) {
 
 /** 电脑端（有鼠标）：左键看物品详情，右键直接用（用户 10-23） */
 export const FINE_POINTER = typeof matchMedia !== 'undefined' && matchMedia('(hover: hover) and (pointer: fine)').matches;
+
+/** 打开某个地点的页面（配方里点缺的材料跳过去用） */
+type NodeListener = (id: string) => void;
+const nodeListeners = new Set<NodeListener>();
+export function openNodeSheet(id: string) {
+  nodeListeners.forEach((f) => f(id));
+}
+export function onOpenNodeSheet(fn: NodeListener) {
+  nodeListeners.add(fn);
+  return () => { nodeListeners.delete(fn); };
+}

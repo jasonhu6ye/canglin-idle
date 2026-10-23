@@ -1,6 +1,6 @@
 import { MonsterDetail, MonsterIcon, TraitChips } from './Bestiary';
-import { useState } from 'react';
-import { ACTIONS, ITEMS, MONSTERS, NODES, REGIONS, SEED_PRICE, SEED_SHOP, SKILLS, tierName } from '../core/data';
+import { useEffect, useRef, useState } from 'react';
+import { ACTIONS, nodeOfAction, ITEMS, MONSTERS, NODES, REGIONS, SEED_PRICE, SEED_SHOP, SKILLS, tierName } from '../core/data';
 import {
   actionDuration, atMarket, bestAmmo, bestFood, buySeed, combatStats, enqueue, level, MAX_QUEUE, nearNode, setSettings, startNow, weaponStyle, xpPerHour,
 } from '../core/sim';
@@ -8,6 +8,8 @@ import type { ActionDef, GameState, SkillAction, TaskMode } from '../core/types'
 import type { MapNode } from '../core/data';
 import { store } from '../store';
 import { FarmSheet } from './FarmSheet';
+import { openNodeSheet } from './itemOpen';
+import { WaystoneSheet } from './WaystoneSheet';
 import { fmtNum, stacks } from './format';
 import { Icon, SkillIcon } from './icons';
 
@@ -41,13 +43,27 @@ const isLocked = (s: GameState, a: ActionDef) => a.kind === 'skill' && level(s, 
 export function ActionSheet({ s, nodeId, onClose }: { s: GameState; nodeId: string; onClose: () => void }) {
   const node = NODES.find((n) => n.id === nodeId)!;
   if (node.farm) return <FarmSheet s={s} nodeId={nodeId} onClose={onClose} />;
+  if (node.waystone) return <WaystoneSheet s={s} nodeId={nodeId} onClose={onClose} />;
   return <NodeSheet s={s} node={node} onClose={onClose} />;
 }
 
 function NodeSheet({ s, node, onClose }: { s: GameState; node: MapNode; onClose: () => void }) {
-  const [selected, setSelected] = useState<string | null>(null);
+  // 从别的配方跳过来：直接选中要做的那个（用户 10-23）
+  const focus = store.focusAction && node.actions.includes(store.focusAction) ? store.focusAction : null;
+  const [selected, setSelectedRaw] = useState<string | null>(focus);
   const [cat, setCat] = useState<string>('all');
   const [tier, setTier] = useState<number | 'all'>('all');
+  const setSelected = (id: string | null) => {
+    store.focusAction = null;
+    setSelectedRaw(id);
+  };
+  const list = useRef<HTMLUListElement>(null);
+  useEffect(() => {
+    if (!focus) return;
+    list.current?.querySelector(`[data-id="${focus}"]`)?.scrollIntoView({ block: 'center' });
+    // 已经站在这里了，选中就算用掉了
+    if (!node.town || nearNode(store.state, node)) store.focusAction = null;
+  }, [node.id]); // eslint-disable-line react-hooks/exhaustive-deps
   // 野外的怪物不在点位页面里列出，直接点地图上的怪物（用户 10-22 要求）；城镇的训练假人保留
   const all = node.closed ? [] : node.town ? node.actions : node.actions.filter((id) => ACTIONS[id].kind !== 'combat');
   const unlocked = all.filter((id) => !isLocked(s, ACTIONS[id]));
@@ -83,13 +99,13 @@ function NodeSheet({ s, node, onClose }: { s: GameState; node: MapNode; onClose:
           {tiers.map((t) => <button key={t} className={`pill ${tier === t ? 'on' : ''}`} onClick={() => setTier(t)}>{tierName(t)}</button>)}
         </div>
       )}
-      <ul className="action-list">
+      <ul className="action-list" ref={list}>
         {shown.map((id) => {
           const a = ACTIONS[id];
           const lock = isLocked(s, a);
           const icon = a.kind === 'skill' ? (a.outputs[0] && a.outputs[0].item !== 'coins' ? <Icon item={a.outputs[0].item} size={30} /> : <SkillIcon skill={a.skill} size={30} />) : <MonsterIcon m={MONSTERS[a.monster]} size={34} />;
           return (
-            <li key={id} className={`${selected === id ? 'sel' : ''} ${lock ? 'locked' : ''}`} onClick={() => !lock && setSelected(id)}>
+            <li key={id} data-id={id} className={`${selected === id ? 'sel' : ''} ${lock ? 'locked' : ''}`} onClick={() => !lock && setSelected(id)}>
               <span className="act-icon">{icon}</span>
               <span className="act-body">
                 <span className="row1">
@@ -129,23 +145,49 @@ function NodeSheet({ s, node, onClose }: { s: GameState; node: MapNode; onClose:
 
 /** 选中的配方：材料和产物都画成图标，点图标看物品详情 */
 function Recipe({ s, a }: { s: GameState; a: SkillAction }) {
-  const cell = (st: { item: string; qty: number; chance?: number }, need: boolean) => (
-    <span key={st.item} className="rc-cell">
-      <Icon item={st.item} size={24} />
-      <small>
-        ×{st.qty}{st.chance !== undefined && ` ${Math.round(st.chance * 1000) / 10}%`}
-        {need && <i className={(s.bank[st.item] ?? 0) >= st.qty ? '' : 'warn'}> / {fmtNum(s.bank[st.item] ?? 0)}</i>}
-      </small>
-    </span>
-  );
+  const have = (id: string) => (s.bag[id] ?? 0) + (s.bank[id] ?? 0);
+  const cell = (st: { item: string; qty: number; chance?: number }, need: boolean) => {
+    const short = need && have(st.item) < st.qty;
+    const src = need ? producerOf(s, st.item) : undefined;
+    return (
+      <span key={st.item} className={`rc-cell ${short ? 'short' : ''} ${src ? 'jump' : ''}`}
+        title={src ? `去做${ITEMS[st.item].name}：${NODES.find((n) => n.id === src.node)?.name}` : undefined}
+        onClick={src ? (e) => { e.stopPropagation(); jumpTo(src.action, src.node); } : undefined}>
+        <Icon item={st.item} size={24} info={!src} />
+        <small>
+          ×{st.qty}{st.chance !== undefined && ` ${Math.round(st.chance * 1000) / 10}%`}
+          {need && <i className={short ? 'warn' : ''}> / {fmtNum(have(st.item))}</i>}
+        </small>
+        {short && src && <em className="rc-go">去做 ›</em>}
+      </span>
+    );
+  };
   return (
     <span className="recipe">
       {a.inputs?.map((st) => cell(st, true))}
       {a.inputs && <b className="rc-arrow">→</b>}
       {a.outputs.map((st) => cell(st, false))}
-      <small className="muted rc-tip">点图标看物品详情</small>
+      <small className="muted rc-tip">{a.inputs ? '点材料跳到它的制作或采集地点（缺的标红）；点产物看详情' : '点图标看物品详情'}</small>
     </span>
   );
+}
+
+/**
+ * 某样材料去哪做（用户 10-23：城镇制作不用来回找）：
+ * 产出它的动作里，先挑等级够的、再挑等级最低的；地点挑离角色最近的那一处
+ */
+function producerOf(s: GameState, item: string): { action: string; node: string } | undefined {
+  const all = Object.values(ACTIONS).filter((x): x is SkillAction => x.kind === 'skill' && x.outputs.some((o) => o.item === item && o.chance === undefined));
+  if (!all.length) return undefined;
+  const best = all.sort((x, y) => Number(level(s, y.skill) >= y.level) - Number(level(s, x.skill) >= x.level) || x.level - y.level)[0];
+  const node = nodeOfAction(best.id, s.loc);
+  return node ? { action: best.id, node: node.id } : undefined;
+}
+
+/** 跳到那个配方：打开它所在地点的页面并选中；人不在旁边就用页面里的「寻路」，走到了会自动再打开并选中 */
+function jumpTo(action: string, node: string) {
+  store.focusAction = action;
+  openNodeSheet(node);
 }
 
 /** 集市的种子摊：T1-T2 种子，金币从仓库扣、种子进仓库 */

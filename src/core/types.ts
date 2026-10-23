@@ -252,6 +252,8 @@ export interface GameState {
   paused?: boolean;
   /** 图鉴：获得过的物品 */
   seen: Record<string, 1>;
+  /** 激活过的传说石碑 */
+  waystones?: string[];
   /** 田里种着的地块（地块 id → 作物），空地不存 */
   farm?: Record<string, Plot>;
 }
@@ -275,4 +277,6 @@ export interface Summary {
   quests?: number[];
   /** 战斗日志（只留最近 LOG_CAP 条） */
   log?: CombatLogEntry[];
+  /** 这次激活的传说石碑 */
+  waystones?: string[];
 }

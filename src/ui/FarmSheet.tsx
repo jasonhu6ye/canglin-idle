@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { CROP_DEFS, cropsOfField, NODES, plotsOf, REGIONS, tierName, WATER_SPEEDUP } from '../core/data';
 import { canPlantCrop, fieldCounts, growMs, harvestAll, nearField, pickSeed, plantAll, plotGrowth, plotPhase, seedCount, waterAll } from '../core/farm';
 import { level, setSettings } from '../core/sim';
@@ -20,14 +21,14 @@ export function FarmSheet({ s, nodeId, onClose }: { s: GameState; nodeId: string
   const now = Date.now();
   const near = nearField(s, nodeId);
   const crops = cropsOfField(nodeId);
-  const pick = pickSeed(s, nodeId);
-  const chosen = s.settings.farmSeed?.[nodeId] ?? pick;
+  const chosen = s.settings.farmSeed?.[nodeId] ?? pickSeed(s, nodeId);
   const n = fieldCounts(s, nodeId, now);
   const auto = !!s.settings.autoFarm?.[nodeId];
   const seeds = chosen ? seedCount(s, chosen) : 0;
   const farmLv = level(s, 'farming');
   const plots = plotsOf(nodeId);
   const cols = Math.ceil(plots.length / 4);
+  const [pick, setPick] = useState<string | null>(null);
   const choose = (id: string) => store.dispatch((g) => setSettings(g, { farmSeed: { ...g.settings.farmSeed, [nodeId]: id } }));
 
   return (
@@ -44,13 +45,14 @@ export function FarmSheet({ s, nodeId, onClose }: { s: GameState; nodeId: string
           const ph = plotPhase(plot, now);
           const g = plot ? plotGrowth(plot, now) : 0;
           return (
-            <i key={p.id} className={`fp ${ph} ${plot?.water ? 'wet' : ''}`}
+            <i key={p.id} className={`fp ${ph} ${plot?.water ? 'wet' : ''} ${pick === p.id ? 'sel' : ''}`} onClick={() => setPick(pick === p.id ? null : p.id)}
               title={plot ? `${CROP_DEFS[plot.crop]?.name} · ${ph === 'ripe' ? '可以收获' : `${Math.floor(g * 100)}%，约 ${dur(plot.ripe - now)}${plot.water ? ' · 浇过水' : ' · 没浇水'}`}` : '空地'}>
               {plot && <b style={{ height: `${Math.max(15, g * 100)}%` }} />}
             </i>
           );
         })}
       </div>
+      {pick && <PlotDetail s={s} id={pick} now={now} />}
       <p className="farm-stat">
         空地 <b>{n.empty}</b> · 生长中 <b>{n.growing}</b>{n.dry > 0 && <span className="muted">（{n.dry} 格没浇水）</span>} · 可收获 <b className={n.ripe ? 'gold' : ''}>{n.ripe}</b>
         {n.next < Infinity && <span className="muted"> · 下一格约 {dur(n.next)}后熟</span>}
@@ -102,5 +104,20 @@ export function FarmSheet({ s, nodeId, onClose }: { s: GameState; nodeId: string
         种子不够可以去集市的种子摊买。
       </p>
     </div>
+  );
+}
+
+/** 点了小图上的一格：种的什么、长到几成、还要多久熟、浇没浇水 */
+function PlotDetail({ s, id, now }: { s: GameState; id: string; now: number }) {
+  const p = s.farm?.[id];
+  const no = Number(id.split(':')[1]) + 1;
+  if (!p) return <p className="farm-detail">第 {no} 格 · 空地，在地图上点它就能播种</p>;
+  const c = CROP_DEFS[p.crop];
+  const ripe = plotPhase(p, now) === 'ripe';
+  return (
+    <p className="farm-detail">
+      第 {no} 格 · <Icon item={p.crop} size={14} /> <b>{c?.name}</b> ·{' '}
+      {ripe ? <b className="gold">熟了，可以收获</b> : <>长到 {Math.floor(plotGrowth(p, now) * 100)}% · 约 {dur(p.ripe - now)}后熟 · {p.water ? '已浇水' : <span className="warn">没浇水</span>}</>}
+    </p>
   );
 }

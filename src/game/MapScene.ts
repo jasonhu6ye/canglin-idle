@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
-import { ACTIONS, CROP_DEFS, CROPS, cropsOfField, FARM_PLOTS, PLOT_BY_ID, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, DANGER, dangerLevel, nodeOfAction, travelMs, WALK_TILES_PER_SEC, type MapNode } from '../core/data';
-import { actionDuration, combatLevel, combatStats, isBankId, leaveWork, maxHp, moveSpeed, resumeWork, setLoc, startWalk, teleport as teleportState, walkPos } from '../core/sim';
+import { ACTIONS, CROP_DEFS, CROPS, cropsOfField, FARM_PLOTS, PLOT_BY_ID, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, DANGER, dangerLevel, nodeOfAction, nodesOfAction, WAYSTONES, travelMs, WALK_TILES_PER_SEC, type MapNode } from '../core/data';
+import { unlockWaystone, useWaystone, WAYSTONE_REACH, actionDuration, combatLevel, combatStats, isBankId, leaveWork, maxHp, moveSpeed, resumeWork, setLoc, startWalk, teleport as teleportState, walkPos } from '../core/sim';
 import { pickSeed, plotGrowth, plotPhase, tendPlot } from '../core/farm';
+import { paintWaystone } from './waystoneArt';
 import { MON_ANIMS, monsterFrameSize, paintMonsterSheet, type MonAnim } from './monsterArt';
 import { paintWolfSheet, wolfSaddle, WOLF_ANIMS, WOLF_FEET, WOLF_H, WOLF_W } from './wolfArt';
 import { HERO_ANIMS, HERO_FEET, HERO_H, HERO_W, NPC_ANIMS, NPC_OUTFITS, outfitOf, paintHeroSheet, type HeroDir } from './hero';
@@ -69,7 +70,13 @@ export const BOSS_BANNER = 'boss-banner';
 /** 角色当前所在格子，世界地图要用 */
 export const playerPos = { x: SPAWN.x, y: SPAWN.y };
 
-export const nodeForAction = nodeOfAction;
+/** 任务现在对应的地点：正在走去的那个，否则离存档位置最近的那个（好几处都能做的动作，和存档算的是同一处） */
+export const nodeForAction = (id: string | undefined): MapNode | undefined => {
+  const st = store.state;
+  return nodesOfAction(id).find((n) => n.id === st.travel?.to) ?? nodeOfAction(id, st.loc);
+};
+/** 能钓鱼的水面 */
+const FISH_WATER = new Set<string>(['water', 'ocean', 'swampwater', 'shallows']);
 
 /** 路线总长（格） */
 /** 离 p 最近的能走的格子（按存档估出来的位置可能落在水里或墙里） */
@@ -175,13 +182,19 @@ export class MapScene extends Phaser.Scene {
     }
     if (!task || store.state.paused) this.resumeWalk();
     this.updateLabels();
+    this.syncStones();
     this.unsub.push(store.subscribe(() => {
+      this.syncStones();
       this.syncSkin();
       this.takeWalk();
       this.syncTask();
       this.updateLabels();
     }));
     this.unsub.push(store.onGain((s) => this.showGain(s)));
+    const onStone = (id: string) => this.stoneJump(id);
+    this.game.events.on('waystone', onStone);
+    this.unsub.push(() => this.game.events.off('waystone', onStone));
+    this.time.addEvent({ delay: 300, loop: true, callback: () => this.checkStones() });
     const onTeleport = (id: string) => this.teleport(id);
     this.game.events.on('teleport', onTeleport);
     this.unsub.push(() => this.game.events.off('teleport', onTeleport));
@@ -191,7 +204,11 @@ export class MapScene extends Phaser.Scene {
       if (!n) return;
       // 寻路去的就是当前工作的地点：等于继续工作
       if (n === nodeForAction(this.currentAction) && store.state.paused) return store.dispatch(resumeWork);
+      const old = this.walker;
       this.moveTo(standTile(n).x, standTile(n).y);
+      // 走到建筑、资源点、石碑旁边：自动打开它的页面（用户 10-23）
+      const opens = n.town || n.waystone || n.farm || n.actions.some((a) => ACTIONS[a].kind !== 'combat');
+      if (opens && this.walker && this.walker !== old) this.arrive = () => this.game.events.emit(NODE_CLICK, n.id);
     };
     this.game.events.on('walkto', onWalkTo);
     this.takeWalk = () => {
@@ -389,24 +406,48 @@ export class MapScene extends Phaser.Scene {
     return key;
   }
 
-  /** 地块的土：翻过的深色土垄，浇过水更深、带一点反光 */
-  private soilTex(wet: boolean) {
-    const key = wet ? 'plot-wet' : 'plot-dry';
+  /**
+   * 地块的土（用户 10-23：种上种子田要有变化）：
+   * 空地 = 平整的浅色松土，四角插着小木桩；种下 = 翻成一条条土垄，中间一个埋了种子的小土包；
+   * 浇过水 = 土色变深、垄沟里有一点水光
+   */
+  private soilTex(kind: 'empty' | 'dry' | 'wet') {
+    const key = `plot-${kind}`;
     if (!this.textures.exists(key)) {
       const c = document.createElement('canvas');
       c.width = T;
       c.height = T;
       const g = c.getContext('2d')!;
-      const [edge, base, ridge, lit] = wet ? ['#24160c', '#3a2414', '#4a2e1a', '#6a5a5a'] : ['#3a2616', '#5a3c22', '#6e4a2a', '#8a6236'];
-      g.fillStyle = edge;
-      g.fillRect(1, 1, T - 2, T - 2);
-      g.fillStyle = base;
-      g.fillRect(2, 2, T - 4, T - 4);
-      for (const y of [4, 8, 12]) {
-        g.fillStyle = ridge;
-        g.fillRect(3, y, T - 6, 1);
-        g.fillStyle = lit;
-        for (let x = 3 + (y % 3); x < T - 3; x += 4) g.fillRect(x, y - 1, 1, 1);
+      const px = (x: number, y: number, col: string) => { g.fillStyle = col; g.fillRect(x, y, 1, 1); };
+      if (kind === 'empty') {
+        g.fillStyle = '#6e5232';
+        g.fillRect(1, 1, T - 2, T - 2);
+        g.fillStyle = '#86663e';
+        g.fillRect(2, 2, T - 4, T - 4);
+        // 松土的颗粒
+        for (let i = 0; i < 18; i++) px(2 + ((i * 7) % (T - 4)), 2 + ((i * 5 + (i >> 2)) % (T - 4)), i % 3 ? '#9a7848' : '#6a4e2e');
+        // 四角的小木桩
+        for (const [x, y] of [[1, 1], [T - 2, 1], [1, T - 2], [T - 2, T - 2]]) { px(x, y, '#c8a060'); px(x, y + (y < 8 ? 1 : -1), '#7a5a30'); }
+      } else {
+        const wet = kind === 'wet';
+        const [edge, base, ridge, lit] = wet ? ['#1e120a', '#352010', '#4a2c18', '#7a8ca8'] : ['#3a2616', '#563a20', '#6e4a2a', '#94693a'];
+        g.fillStyle = edge;
+        g.fillRect(1, 1, T - 2, T - 2);
+        g.fillStyle = base;
+        g.fillRect(2, 2, T - 4, T - 4);
+        // 三条土垄：上沿亮、下沿暗
+        for (const y of [4, 8, 12]) {
+          g.fillStyle = ridge;
+          g.fillRect(3, y, T - 6, 1);
+          g.fillStyle = edge;
+          g.fillRect(3, y + 1, T - 6, 1);
+          for (let x = 3 + (y % 3); x < T - 3; x += 4) px(x, y - 1, lit);
+        }
+        // 中间埋种子的小土包
+        g.fillStyle = wet ? '#4a2c18' : '#7a5430';
+        g.fillRect(6, 9, 4, 2);
+        g.fillRect(7, 8, 2, 1);
+        if (wet) { px(4, 13, '#a8c8e8'); px(11, 5, '#a8c8e8'); }
       }
       this.textures.addCanvas(key, c);
     }
@@ -446,13 +487,14 @@ export class MapScene extends Phaser.Scene {
       }
     }
     for (const p of FARM_PLOTS) {
-      const soil = this.add.image(p.x * T + T / 2, p.y * T + T / 2, this.soilTex(false)).setDepth(1);
+      const soil = this.add.image(p.x * T + T / 2, p.y * T + T / 2, this.soilTex('empty')).setDepth(1);
       const crop = this.add.image(p.x * T + T / 2, p.y * T + T + 1, this.cropTex('potato', 0)).setOrigin(0.5, 1).setDepth(p.y * T + T + 1000).setVisible(false);
       const glint = this.add.image(p.x * T + T / 2 + 4, p.y * T + 3, this.glintTex()).setDepth(D_FLOAT - 5).setVisible(false);
       this.plots.push({ id: p.id, field: p.field, x: p.x, y: p.y, soil, crop, glint, key: '' });
     }
     this.growFields();
     this.time.addEvent({ delay: 500, loop: true, callback: () => this.growFields() });
+    this.time.addEvent({ delay: 250, loop: true, callback: () => this.tickPlotInfo() });
   }
 
   /** 按存档把每格地换成对应的图：空地 / 长到第几阶段 / 熟了闪光 */
@@ -469,11 +511,46 @@ export class MapScene extends Phaser.Scene {
       if (key === p.key) continue;
       p.key = key;
       p.crop.setScale(ph === 'ripe' ? 1.15 : 1);
-      p.soil.setTexture(this.soilTex(!!plot?.water));
+      p.soil.setTexture(this.soilTex(!plot ? 'empty' : plot.water ? 'wet' : 'dry'));
       const known = !!plot && CROPS.some((c) => c[0] === plot.crop);
       p.crop.setVisible(known);
       if (known) p.crop.setTexture(this.cropTex(plot!.crop, stage));
     }
+  }
+
+  /** 地块头顶的小牌子：种的什么、长到几成、还要多久熟、浇没浇水（用户 10-23） */
+  private plotInfo?: { id: string; text: Phaser.GameObjects.Text; until: number };
+  private plotInfoText(id: string) {
+    const p = store.state.farm?.[id];
+    const now = Date.now();
+    if (!p) {
+      const seed = pickSeed(store.state, PLOT_BY_ID[id].field);
+      return seed ? `空地 · 点一下种${CROP_DEFS[seed].name}` : '空地 · 没有能种的种子';
+    }
+    const c = CROP_DEFS[p.crop];
+    if (plotPhase(p, now) === 'ripe') return `${c?.name ?? ''} · 熟了，点一下收获`;
+    const left = Math.max(0, Math.ceil((p.ripe - now) / 1000));
+    const t = left >= 60 ? `${Math.floor(left / 60)}分${left % 60}秒` : `${left}秒`;
+    return `${c?.name ?? ''} · ${Math.floor(plotGrowth(p, now) * 100)}% · ${t}后熟\n${p.water ? '已浇水（快 25%）' : '没浇水 · 点一下浇水'}`;
+  }
+  private showPlotInfo(id: string, ms: number) {
+    const plot = PLOT_BY_ID[id];
+    if (!plot) return;
+    if (!this.plotInfo) {
+      const text = this.add.text(0, 0, '', {
+        fontFamily: FONT, fontSize: '7px', color: '#fff3c4', backgroundColor: '#1b120cdd', padding: { x: 3, y: 1 }, resolution: 4, align: 'center',
+      }).setOrigin(0.5, 1).setDepth(D_LABEL + 1);
+      this.plotInfo = { id, text, until: 0 };
+    }
+    this.plotInfo.id = id;
+    this.plotInfo.until = this.time.now + ms;
+    this.plotInfo.text.setText(this.plotInfoText(id)).setPosition(plot.x * T + T / 2, plot.y * T - 8).setVisible(true);
+  }
+  private tickPlotInfo() {
+    const pi = this.plotInfo;
+    if (!pi || !pi.text.visible) return;
+    if (this.time.now > pi.until) pi.text.setVisible(false);
+    else pi.text.setText(this.plotInfoText(pi.id));
   }
 
   /** 电脑端鼠标移到地块上：描一圈框，提示能点 */
@@ -487,6 +564,7 @@ export class MapScene extends Phaser.Scene {
       this.plotHover?.setVisible(false);
       return;
     }
+    this.showPlotInfo(id, 1500);
     this.plotHover ??= this.add.graphics().setDepth(2);
     const ripe = plotPhase(store.state.farm?.[id], Date.now()) === 'ripe';
     this.plotHover.clear().lineStyle(1, ripe ? 0xffe070 : 0xfff3c4, 0.9).strokeRect(x * T + 0.5, y * T + 0.5, T - 1, T - 1).setVisible(true);
@@ -517,6 +595,7 @@ export class MapScene extends Phaser.Scene {
       }
       const before = store.state;
       store.farm((g, t) => tendPlot(g, id, crop, t));
+      this.showPlotInfo(id, 3000);
       if (store.state === before) return;
       const ph = plotPhase(p, now);
       this.facePlot(plot);
@@ -787,7 +866,103 @@ export class MapScene extends Phaser.Scene {
     });
   }
 
+  // ───────── 传说石碑 ─────────
+  private stones = new Map<string, { img: Phaser.GameObjects.Image; glow: Phaser.GameObjects.Image; text: Phaser.GameObjects.Text; lit?: boolean }>();
+
+  private addStone(n: MapNode) {
+    for (const lit of [false, true]) {
+      const key = `waystone-${lit ? 'on' : 'off'}`;
+      if (!this.textures.exists(key)) this.textures.addCanvas(key, paintWaystone(lit));
+    }
+    const cx = n.x * T + T / 2;
+    const cy = n.y * T + T / 2;
+    const img = this.add.image(cx, cy + T / 2 + 2, 'waystone-off').setOrigin(0.5, 1).setScale(1.2).setDepth(cy + T / 2 + 1000);
+    const glow = this.add.image(cx, cy - 20, 'glow').setTint(0x6ad8f0).setBlendMode(Phaser.BlendModes.ADD).setDepth(cy + T / 2 + 1001).setScale(0.9).setAlpha(0);
+    this.tweens.add({ targets: glow, scale: 1.15, yoyo: true, repeat: -1, duration: 1400, ease: 'Sine.inOut' });
+    const text = this.add.text(cx, cy - 46, '', {
+      fontFamily: FONT, fontSize: '7px', color: '#c8f4ff', backgroundColor: '#1b120ccc', padding: { x: 3, y: 1 }, resolution: 4, align: 'center',
+    }).setOrigin(0.5, 1).setDepth(D_LABEL);
+    this.add.zone(cx, cy - 12, T * 2.5, T * 3.5).setInteractive({ useHandCursor: true }).setData('node', n.id);
+    this.stones.set(n.id, { img, glow, text });
+    // 激活的石碑周围飘几点青色的光
+    this.time.addEvent({
+      delay: 900, loop: true, callback: () => {
+        if (!this.stones.get(n.id)?.lit || !this.cameras.main.worldView.contains(cx, cy)) return;
+        const p = this.add.image(cx + (Math.random() - 0.5) * 18, cy + 6, 'p-ember').setTint(0x8ae8ff).setDepth(D_PARTICLE);
+        this.tweens.add({ targets: p, y: cy - 30 - Math.random() * 16, alpha: 0, duration: 1600, onComplete: () => p.destroy() });
+      },
+    });
+  }
+
+  /** 按存档换石碑的样子：激活过的亮起来 */
+  private syncStones() {
+    const on = store.state.waystones ?? [];
+    for (const [id, st] of this.stones) {
+      const lit = on.includes(id);
+      if (st.lit === lit) continue;
+      st.lit = lit;
+      st.img.setTexture(`waystone-${lit ? 'on' : 'off'}`);
+      st.glow.setAlpha(lit ? 0.55 : 0);
+      const n = WAYSTONES.find((x) => x.id === id)!;
+      st.text.setText(lit ? n.name : `${n.name}\n（未激活）`).setColor(lit ? '#c8f4ff' : '#b0a898');
+    }
+  }
+
+  /** 角色走到没激活的石碑旁边：激活它（走路途中路过也算） */
+  private checkStones() {
+    const me = this.playerTile();
+    const on = store.state.waystones ?? [];
+    if (!WAYSTONES.some((n) => !on.includes(n.id) && Math.hypot(n.x - me.x, n.y + 1 - me.y) <= WAYSTONE_REACH)) return;
+    let got: string[] = [];
+    store.dispatch((g) => {
+      const r = unlockWaystone(g, me);
+      got = r.got;
+      return r.state;
+    });
+    this.stonesUnlocked(got);
+  }
+
+  private stonesUnlocked(ids: string[]) {
+    for (const id of ids) {
+      const n = WAYSTONES.find((x) => x.id === id);
+      if (!n) continue;
+      this.float(`激活了${n.name}`, '#8ae8ff', true);
+      const flash = this.add.image(n.x * T + T / 2, n.y * T - 12, 'glow').setTint(0x6ad8f0).setBlendMode(Phaser.BlendModes.ADD).setDepth(D_FLOAT).setScale(0.3);
+      this.tweens.add({ targets: flash, scale: 2.2, alpha: 0, duration: 900, onComplete: () => flash.destroy() });
+    }
+  }
+
+  /** 用石碑传送到另一座石碑：一道光，人出现在那边，镜头跟过去 */
+  private stoneJump(id: string) {
+    const dest = WAYSTONES.find((n) => n.id === id);
+    if (!dest || this.mountBusy) return;
+    const before = store.state.loc;
+    store.dispatch((g) => useWaystone(g, id));
+    const st = store.state;
+    const to = standTile(dest);
+    if (st.loc.x !== to.x || st.loc.y !== to.y || (before.x === to.x && before.y === to.y)) return;
+    const out = this.add.image(this.player.x, this.player.y - 8, 'glow').setTint(0x6ad8f0).setBlendMode(Phaser.BlendModes.ADD).setDepth(D_FLOAT).setScale(0.2);
+    this.tweens.add({ targets: out, scale: 2, alpha: 0, duration: 600, onComplete: () => out.destroy() });
+    this.walker = undefined;
+    this.clearRoute();
+    this.stopWorking();
+    this.manual = st.queue.length > 0;
+    this.wasPaused = !!st.paused;
+    this.travelTo = undefined;
+    this.player.setPosition(to.x * T + T / 2, to.y * T + T / 2).setDepth(to.y * T + T / 2 + 1000);
+    this.cameras.main.centerOn(this.player.x, this.player.y);
+    this.recenterCameraOnly();
+    const flash = this.add.image(this.player.x, this.player.y - 8, 'glow').setTint(0x9ae8ff).setBlendMode(Phaser.BlendModes.ADD).setDepth(D_FLOAT).setScale(0.2);
+    this.tweens.add({ targets: flash, scale: 1.8, alpha: 0, duration: 700, onComplete: () => flash.destroy() });
+    this.float(`传送到${dest.name}`, '#8ae8ff', true);
+    this.idle();
+  }
+
   private addNode(n: MapNode) {
+    if (n.waystone) {
+      this.addStone(n);
+      return;
+    }
     this.addResources(n);
     const cx = n.x * T + T / 2;
     const cy = n.y * T + T / 2;
@@ -1644,7 +1819,65 @@ export class MapScene extends Phaser.Scene {
     }
   }
 
+  /** 钓鱼的水在哪边：从站的地方往四个方向找最近的水 */
+  private waterDir(): 'left' | 'right' | 'up' | 'down' | undefined {
+    const me = this.playerTile();
+    const wet = (x: number, y: number) => FISH_WATER.has(GROUNDS[groundIndex(x, y)]);
+    for (let r = 1; r <= 4; r++) {
+      this.waterDist = r;
+      if (wet(me.x, me.y - r)) return 'up';
+      if (wet(me.x + r, me.y)) return 'right';
+      if (wet(me.x - r, me.y)) return 'left';
+      if (wet(me.x, me.y + r)) return 'down';
+    }
+    return undefined;
+  }
+  private waterDist = 1;
+
+  /** 背对 / 面朝镜头钓鱼：竿从手里伸出去，鱼线垂到水里，浮漂一沉一浮 */
+  private fishGfx?: Phaser.GameObjects.Graphics;
+  private fishTimer?: Phaser.Time.TimerEvent;
+  private drawFishLine(dir: 'up' | 'down') {
+    this.clearFishLine();
+    const g = this.add.graphics();
+    this.fishGfx = g;
+    const sgn = dir === 'up' ? -1 : 1;
+    let t = 0;
+    const draw = () => {
+      g.clear();
+      const px = Math.round(this.player.x);
+      const py = Math.round(this.player.y);
+      // 手的位置：举竿时在肩膀上方
+      const hx = px + 3;
+      const hy = py - (dir === 'up' ? 17 : 13);
+      const tipX = px + 7;
+      const tipY = hy + sgn * 13 - (dir === 'down' ? 4 : 0);
+      const bob = Math.sin(t * 0.25) > 0.7 ? 1 : 0;
+      const bx = px + 9;
+      // 浮漂落在最近那格水再往里一格
+      const by = py + sgn * (this.waterDist + 0.4) * T + bob;
+      g.lineStyle(1.2, 0x5a3c22, 1).lineBetween(hx, hy, tipX, tipY);
+      g.lineStyle(0.6, 0xd8dce0, 0.9).lineBetween(tipX, tipY, bx, by - 1);
+      g.fillStyle(0xe04a4a, 1).fillRect(bx - 1, by - 1, 2, 2);
+      g.fillStyle(0xffffff, 1).fillRect(bx - 1, by - 2, 2, 1);
+      // 水波：一圈淡淡的涟漪
+      g.lineStyle(0.5, 0xffffff, 0.35 + (bob ? 0.2 : 0)).strokeEllipse(bx, by + 0.5, 6 + (t % 8), 2.5 + (t % 8) * 0.3);
+      g.setDepth(dir === 'up' ? this.player.depth - 1 : this.player.depth + 1);
+      t++;
+    };
+    draw();
+    this.fishTimer = this.time.addEvent({ delay: 120, loop: true, callback: draw });
+  }
+
+  private clearFishLine() {
+    this.fishTimer?.remove();
+    this.fishTimer = undefined;
+    this.fishGfx?.destroy();
+    this.fishGfx = undefined;
+  }
+
   private stopWorking() {
+    this.clearFishLine();
     this.working = false;
     this.foe?.destroy();
     this.foe = undefined;
@@ -1913,12 +2146,20 @@ export class MapScene extends Phaser.Scene {
         this.cameras.main.shake(300, 0.004);
       }
     }
-    // 干活时侧身朝右（怪物也站在右边）
+    // 干活时侧身朝右（怪物也站在右边）；钓鱼朝着水
     this.working = true;
     this.facing = 'side';
     this.playerBody.setFlipX(false);
     this.playerBody.anims.timeScale = 1;
+    const fishTo = a.kind === 'skill' && a.skill === 'fishing' ? this.waterDir() : undefined;
+    if (fishTo === 'left') this.playerBody.setFlipX(true);
     if (this.mountMode === 'ride' || this.mountBusy) return;
+    if (fishTo === 'up' || fishTo === 'down') {
+      this.facing = fishTo;
+      this.playerBody.play(`work-fish-${fishTo}`, true);
+      this.drawFishLine(fishTo);
+      return;
+    }
     this.playerBody.play(this.workAnim(), true);
   }
 
@@ -1933,6 +2174,7 @@ export class MapScene extends Phaser.Scene {
   }
 
   private showGain(s: Summary) {
+    if (s.waystones?.length) this.stonesUnlocked(s.waystones);
     const gained = Object.entries(s.items).filter(([id, q]) => q > 0 && id !== 'coins');
     if (gained.length) {
       const [item, qty] = gained[0];

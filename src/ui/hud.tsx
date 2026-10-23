@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { ACTIONS, MONSTERS, nodeOfAction, NODES, SKILLS } from '../core/data';
 import { QUESTS, questProgress, questText } from '../core/quests';
-import { actionDuration, combatLevel, isBankId, level, maxHp, removeTask, resumeWork, toggleMount, weaponStyle } from '../core/sim';
+import { actionDuration, combatLevel, rainBonus, isBankId, level, maxHp, removeTask, resumeWork, toggleMount, weaponStyle } from '../core/sim';
 import { wolfIconUrl } from '../game/wolfArt';
 import { openCombatLog } from './CombatLog';
 import type { BuffKind, GameState, SkillId } from '../core/types';
@@ -107,6 +107,7 @@ export function StatusChips({ s, extra, log }: { s: GameState; extra?: ReactNode
     body = (
       <>
         <SkillIcon skill={a.skill} size={14} /> <b style={{ color: SKILLS[a.skill].color }}>{SKILLS[a.skill].name}</b> · {a.name}
+        {rainBonus(s, a) > 0 && <em className="rain-buff" title="钓点在下雨，鱼更容易上钩"> 雨天钓鱼 +{Math.round(rainBonus(s, a) * 100)}%</em>}
         {s.progressMs < 0 && <em> 晕眩中</em>}
         <span className="bar wide"><i style={{ width: `${pct}%` }} /></span>
       </>

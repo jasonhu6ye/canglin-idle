@@ -757,6 +757,15 @@ export const HERO_ANIMS: HeroAnim[] = [
       };
     },
   },
+  // 背对 / 面朝镜头钓鱼（水在上方或下方）：双手举竿，竿和鱼线由地图场景另外画
+  ...(['up', 'down'] as const).map((dir): HeroAnim => ({
+    key: `work-fish-${dir}`, frames: 10, rate: 7,
+    pose: (t, i) => {
+      const casting = t < 0.4;
+      const lift = casting ? keys([[0, 1.4], [0.2, 3.2], [0.4, 2.0]], t) : 2.0 + (i % 2 ? 0.2 : 0);
+      return { dir, armLift: [lift, lift - 0.4], legF: 0, legB: 0, cape: casting ? 1 : 0 };
+    },
+  })),
   {
     key: 'work-steal', frames: 6, rate: 7,
     pose: (t) => ({ dir: 'side', crouch: 2, armF: keys([[0, 1.2], [0.5, 1.7], [1, 1.2]], t), reach: keys([[0, 0], [0.5, 3], [1, 0]], t), armB: -0.4, legF: 0.5, legB: -0.5, cape: 1 }),

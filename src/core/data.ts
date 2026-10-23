@@ -708,7 +708,7 @@ TIERS.forEach((t, i) => {
 
 // ---- 料理（用户 10-22 要求）：鱼 + 配菜，回血更多，吃下后有限时增益 ----
 // 增益随阶级变强、持续更久；同类增益只保留一个（新吃的覆盖旧的）
-const BUFF_NAME: Record<BuffKind, string> = { atk: '命中', str: '最高伤害', def: '防御', speed: '干活速度', xp: '获得经验' };
+export const BUFF_NAME: Record<BuffKind, string> = { atk: '命中', str: '最高伤害', def: '防御', speed: '干活速度', xp: '获得经验' };
 const BUFF_BASE: Record<BuffKind, number> = { atk: 0.04, str: 0.04, def: 0.05, speed: 0.03, xp: 0.04 };
 export const buffText = (b: Buff) => `${BUFF_NAME[b.kind]} +${Math.round(b.pct * 100)}%，持续 ${Math.round(b.ms / 60000)} 分钟`;
 type Side = { item: string; qty: number; name: (fish: string) => string; kind: BuffKind; note: string };
@@ -814,7 +814,7 @@ const filterIds = (prefix: string) => actionList.filter((a) => a.id.startsWith(p
 
 export type NodeSprite =
   | 'ore' | 'tree' | 'fish' | 'herb' | 'camp' | 'boss' | 'anvil' | 'furnace' | 'stove' | 'bench' | 'bowyer' | 'potion' | 'enhance'
-  | 'market' | 'farm' | 'bank' | 'dummy' | 'cave' | 'atelier';
+  | 'market' | 'farm' | 'bank' | 'dummy' | 'cave' | 'atelier' | 'waystone';
 
 export interface MapNode {
   id: string;
@@ -840,6 +840,8 @@ export interface MapNode {
   closed?: boolean;
   /** 田地：能种哪几阶的作物（地块制种田） */
   farm?: number[];
+  /** 传说石碑：传送点 */
+  waystone?: boolean;
 }
 export type SiteKind = 'islands' | 'bamboo' | 'saltflat' | 'crater' | 'fungal' | 'glacier' | 'obsidian' | 'starabyss'
   | 'oasis' | 'mesa' | 'atoll' | 'crystalheart';
@@ -1064,6 +1066,25 @@ export const NODES: MapNode[] = [
     n.lv = [Math.min(...lvls), Math.max(...lvls)];
   }
 })();
+
+/**
+ * 传说石碑（用户 10-23：地图太大，加传送点）：主城、落霞城各一座，每个野外区域一座，
+ * 立在该区域最低级的野外点位旁边。第一次要走到石碑旁边激活，之后站在任意一座激活过的石碑旁就能传到别的石碑。
+ */
+export const WAYSTONE_HOME = 'stone_town';
+const stoneAt = (id: string, name: string, x: number, y: number, region: RegionId, town = false): MapNode =>
+  ({ id: `stone_${id}`, name, x, y, region, lv: [1, 1], sprite: 'waystone', actions: [], waystone: true, ...(town ? { town: true } : {}) });
+export const WAYSTONES: MapNode[] = [
+  stoneAt('town', '传说石碑·苍岭城', townXY(160, 181).x, townXY(160, 181).y, 'town', true),
+  stoneAt('town2', '传说石碑·落霞城', town2XY(6, 4).x, town2XY(6, 4).y, 'savanna', true),
+  ...(Object.keys(REGIONS) as RegionId[]).filter((r) => r !== 'town' && r !== 'savanna').flatMap((r) => {
+    const pool = NODES.filter((n) => n.region === r && !n.town && !n.cave && !n.site && n.actions.length);
+    if (!pool.length) return [];
+    const hub = pool.reduce((a, b) => (b.lv[0] < a.lv[0] ? b : a));
+    return [stoneAt(r, `传说石碑·${REGIONS[r].name}`, hub.x + 6, hub.y + 2, r)];
+  }),
+];
+NODES.push(...WAYSTONES);
 
 export const ACTIONS: Record<string, ActionDef> = Object.fromEntries(actionList.map((a) => [a.id, a]));
 

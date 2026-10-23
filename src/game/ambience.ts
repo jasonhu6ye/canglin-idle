@@ -6,11 +6,9 @@ import Phaser from 'phaser';
 import type { RegionId } from '../core/types';
 import { paintBird, paintButterfly, paintRain, paintSplash } from './fxArt';
 import { hash } from './world';
+import { gameHour, isRaining } from '../core/weather';
 
-/** 一个游戏日 = 现实 24 分钟 */
-export const DAY_MS = 24 * 60 * 1000;
-/** 天气按 8 分钟一段随机 */
-const WEATHER_MS = 8 * 60 * 1000;
+export { DAY_MS, gameHour, isRaining, RAIN_FISH } from '../core/weather';
 
 /** 所有世界里的东西深度都在 y+1000 以内（地图最大 81408 像素），特效层放在这上面 */
 export const TOP = 200_000;
@@ -21,8 +19,6 @@ export const D_PARTICLE = TOP + 30;
 export const D_LABEL = TOP + 40;
 export const D_FLOAT = TOP + 50;
 
-/** 当前游戏内的小时（0-24，带小数） */
-export const gameHour = (now = Date.now()) => ((now % DAY_MS) / DAY_MS) * 24;
 
 const smooth = (a: number, b: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -39,14 +35,6 @@ function duskGlow(h: number) {
   const bell = (c: number, w: number) => Math.max(0, 1 - Math.abs(h - c) / w);
   return Math.max(bell(6, 1.4), bell(18.6, 1.6));
 }
-
-/** 雨只下在会下雨的地方：雪原下雪、熔岩和深渊不下 */
-const RAINY: Partial<Record<RegionId, number>> = {
-  town: 0.3, woodland: 0.45, giantwood: 0.4, swamp: 0.55, coast: 0.35, highland: 0.3,
-  savanna: 0.15, autumn: 0.35, jungle: 0.65, tropic: 0.4, canyon: 0.08,
-};
-export const isRaining = (region: RegionId, now = Date.now()) =>
-  hash(Math.floor(now / WEATHER_MS), 7, 31) < (RAINY[region] ?? 0);
 
 interface Drop { img: Phaser.GameObjects.Image; vx: number; vy: number; until: number }
 interface Critter { img: Phaser.GameObjects.Sprite; shadow?: Phaser.GameObjects.Ellipse; vx: number; vy: number; life: number; max: number; phase: number; kind: 'bird' | 'fly' }

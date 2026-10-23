@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ACTIONS, DANGER, dangerLevel, MAP_H, MAP_W, MONSTERS, NODES, OLD_BOX, REGIONS, SKILLS, standOf, travelMs } from '../core/data';
+import { ACTIONS, DANGER, dangerLevel, MAP_H, MAP_W, MONSTERS, NODES, OLD_BOX, REGIONS, SKILLS, standOf, travelMs, type MapNode } from '../core/data';
 import { combatLevel, moveSpeed } from '../core/sim';
-import type { GameState, RegionId } from '../core/types';
+import type { GameState, RegionId, SkillId } from '../core/types';
 import { playerPos } from '../game/MapScene';
 import { GROUND_COLOR } from '../game/tiles';
 import { overviewGround } from '../game/world';
@@ -54,9 +54,32 @@ const TOWN_MARK: Record<string, string> = { smithy: '城镇', market2: '落霞�
 
 const MAX_ZOOM = 8;
 
+/** 世界地图筛选（用户 10-23）：按用途看地点 */
+type Filter = 'all' | 'stone' | 'town' | 'boss' | 'cave' | SkillId;
+const FILTERS: [Filter, string][] = [
+  ['all', '全部'], ['stone', '传送石碑'], ['town', '城镇'], ['mining', '采矿'], ['woodcutting', '伐木'], ['fishing', '钓鱼'],
+  ['gathering', '采集'], ['hunting', '狩猎'], ['thieving', '偷窃'], ['boss', '首领'], ['cave', '洞窟'],
+];
+const skillsOf = (n: MapNode) => new Set(n.actions.map((id) => ACTIONS[id]).flatMap((a) => (a.kind === 'skill' ? [a.skill] : [])));
+function passes(n: MapNode, f: Filter) {
+  if (f === 'all') return true;
+  if (f === 'stone') return !!n.waystone;
+  if (f === 'town') return !!TOWN_MARK[n.id];
+  if (f === 'cave') return !!n.cave;
+  if (f === 'boss') return n.sprite === 'boss' || n.actions.some((id) => { const a = ACTIONS[id]; return a.kind === 'combat' && MONSTERS[a.monster].rank === 'boss'; });
+  return skillsOf(n).has(f);
+}
+
 export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: () => void; onOpenNode: (id: string) => void }) {
   const [zoom, setZoom] = useState(1);
   const [sel, setSel] = useState<string | null>(null);
+  const [filter, setFilter] = useState<Filter>(() => {
+    try { return (localStorage.getItem('canglin-wm-filter') as Filter) || 'all'; } catch { return 'all'; }
+  });
+  const pickFilter = (f: Filter) => {
+    setFilter(f);
+    try { localStorage.setItem('canglin-wm-filter', f); } catch { /* 存不了就算了 */ }
+  };
   const scroller = useRef<HTMLDivElement>(null);
   const url = useMemo(overview, []);
   const cl = combatLevel(s);
@@ -141,20 +164,26 @@ export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: ()
           <button onClick={() => zoomAt(zoom * 1.4)} disabled={zoom >= MAX_ZOOM}>＋</button>
         </span>
       </div>
+      <div className="chips-row wm-filter">
+        {FILTERS.map(([id, name]) => (
+          <button key={id} className={`pill ${filter === id ? 'on' : ''}`} onClick={() => pickFilter(id)}>{name}</button>
+        ))}
+      </div>
       <div className={`wm-scroll ${FINE_POINTER ? 'grab' : ''}`} ref={scroller} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerLeave={onPointerUp}>
         <div className="wm-canvas" style={{ width: `${zoom * 100}%` }}>
           <img src={url} alt="" draggable={false} />
           {(Object.keys(LABELS) as RegionId[]).map((r) => (
             <span key={r} className="wm-region" style={{ left: `${LABELS[r][0] * 100}%`, top: `${LABELS[r][1] * 100}%` }}>{REGIONS[r].name}</span>
           ))}
-          {NODES.filter((n) => !n.town || n.pond || TOWN_MARK[n.id]).map((n) => {
+          {NODES.filter((n) => (!n.town || n.pond || TOWN_MARK[n.id] || n.waystone) && passes(n, filter)).map((n) => {
             const d = n.town && !n.pond ? 0 : dangerLevel(n, cl);
-            const name = TOWN_MARK[n.id] ?? n.name;
-            const big = n.site || TOWN_MARK[n.id];
+            const lit = n.waystone && s.waystones?.includes(n.id);
+            const name = n.waystone ? n.name.replace('传说石碑·', '石碑·') : TOWN_MARK[n.id] ?? n.name;
+            const big = n.site || TOWN_MARK[n.id] || (n.waystone && filter === 'stone');
             return (
-              <button key={n.id} className={`wm-node ${sel === n.id ? 'sel' : ''} ${n.cave ? 'cave' : ''}`} style={{ left: `${(n.x / MAP_W) * 100}%`, top: `${(n.y / MAP_H) * 100}%` }}
+              <button key={n.id} className={`wm-node ${sel === n.id ? 'sel' : ''} ${n.cave ? 'cave' : ''} ${n.waystone ? `stone ${lit ? 'lit' : ''}` : ''}`} style={{ left: `${(n.x / MAP_W) * 100}%`, top: `${(n.y / MAP_H) * 100}%` }}
                 onClick={() => setSel(n.id)}>
-                <i style={{ background: n.cave ? '#2a2030' : DANGER[d].color }} />
+                <i style={n.waystone ? undefined : { background: n.cave ? '#2a2030' : DANGER[d].color }} />
                 {/* 特色地点和城镇一直标名字 */}
                 {(zoom > 1 || big) && <span className={big ? 'site' : ''}>{name}</span>}
               </button>
@@ -165,18 +194,19 @@ export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: ()
       </div>
       <div className="wm-legend">
         {DANGER.map((d) => <span key={d.name}><i style={{ background: d.color }} />{d.name}</span>)}
+        <span><i className="stone-mark" />传送石碑</span>
         <span><i className="me" />你</span>
         {FINE_POINTER && <span className="wm-hint">滚轮缩放 · 按住左键拖动</span>}
       </div>
       {node && (
-        <NodeCard nodeId={node.id} cl={cl} onOpen={() => onOpenNode(node.id)}
+        <NodeCard s={s} nodeId={node.id} cl={cl} onOpen={() => onOpenNode(node.id)}
           onWalk={() => { emitToGame('walkto', node.id); onClose(); }} />
       )}
     </div>
   );
 }
 
-function NodeCard({ nodeId, cl, onOpen, onWalk }: { nodeId: string; cl: number; onOpen: () => void; onWalk: () => void }) {
+function NodeCard({ s, nodeId, cl, onOpen, onWalk }: { s: GameState; nodeId: string; cl: number; onOpen: () => void; onWalk: () => void }) {
   const n = NODES.find((x) => x.id === nodeId)!;
   const d = DANGER[n.town && !n.pond ? 0 : dangerLevel(n, cl)];
   const monsters = n.actions.map((id) => ACTIONS[id]).filter((a) => a.kind === 'combat').map((a) => a.kind === 'combat' ? MONSTERS[a.monster] : null);
@@ -189,6 +219,7 @@ function NodeCard({ nodeId, cl, onOpen, onWalk }: { nodeId: string; cl: number; 
       </div>
       <small className="muted">{REGIONS[n.region].name}{!n.town && !n.cave && ` · Lv${n.lv[0]}${n.lv[1] !== n.lv[0] ? `-${n.lv[1]}` : ''}`}</small>
       {n.cave && <span>大型洞窟 · 尚未开放，敬请期待</span>}
+      {n.waystone && <span>{s.waystones?.includes(n.id) ? '已激活：站在任意一座激活过的石碑旁就能传送到这里' : '未激活：走到石碑旁边就会激活'}</span>}
       {skills.length > 0 && <span>可练：{skills.join('、')}</span>}
       {monsters.length > 0 && (
         <span className="wm-mons">
@@ -202,7 +233,7 @@ function NodeCard({ nodeId, cl, onOpen, onWalk }: { nodeId: string; cl: number; 
       )}
       <div className="go">
         <button className="primary" onClick={onWalk}>寻路前往 · 约 {Math.ceil(travelMs(playerPos, standOf(n), moveSpeed(store.state)) / 1000)} 秒</button>
-        {!TOWN_MARK[n.id] && (n.town || skills.length > 0) && <button onClick={onOpen}>查看任务</button>}
+        {!TOWN_MARK[n.id] && (n.town || skills.length > 0 || n.waystone) && <button onClick={onOpen}>{n.waystone ? '打开石碑' : '查看任务'}</button>}
       </div>
     </div>
   );

@@ -76,7 +76,7 @@ class Store {
     this.state = state;
     this.absorb(summary);
     if (fromBackground && summary.elapsedMs >= OFFLINE_POPUP_MS) this.offline = summary;
-    else if (Object.keys(summary.items).length || summary.levelUps.length || summary.taskEnds.length || summary.deaths) {
+    else if (Object.keys(summary.items).length || summary.levelUps.length || summary.taskEnds.length || summary.deaths || summary.waystones?.length) {
       this.gainListeners.forEach((l) => l(summary));
     }
     if (Date.now() - this.lastSave > SAVE_EVERY_MS) this.save();
@@ -105,6 +105,9 @@ class Store {
     this.emit();
     return r;
   }
+
+  /** 点了配方里缺的材料：要打开的那个配方，制作页打开时直接选中它（到了地方也一样） */
+  focusAction: string | null = null;
 
   /** 界面要求角色寻路去某个地点（地图场景来取） */
   pendingWalk: string | null = null;

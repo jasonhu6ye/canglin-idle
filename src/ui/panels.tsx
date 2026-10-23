@@ -1,14 +1,15 @@
-import { useState } from 'react';
-import { ACTIONS, buffText, cropsOfField, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, type MapNode } from '../core/data';
+import { useState, type ReactNode } from 'react';
+import { ACTIONS, BUFF_NAME, buffText, cropsOfField, WAYSTONES, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, type MapNode } from '../core/data';
 import {
   atBank, atMarket, nearestBank, nearestMarket, BAG_SLOTS, BELT_CAP, beltSlotOf, eat, fromBelt, POTION_AT, toBelt, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip, openContainer,
-  weaponStyle,
+  weaponStyle, bestAmmo, buffPct, levelSpeed, maxHp, moveSpeed, playerAttackMs,
   redeemCode, toggleMount,
 } from '../core/sim';
-import type { EquipSlot, GameState, ItemCategory, SkillId, Summary } from '../core/types';
+import type { BuffKind, EquipSlot, GameState, ItemCategory, SkillId, Summary } from '../core/types';
 import { openCombatLog } from './CombatLog';
 import { XP_TABLE, levelProgress, speedForLevel, SPEED_CAP, BONUS_PER_LEVEL } from '../core/xp';
 import { store } from '../store';
+import { RAIN_FISH } from '../core/weather';
 import { fmtDuration, fmtNum } from './format';
 import { Codex } from './Codex';
 import { Wardrobe } from './Wardrobe';
@@ -17,6 +18,7 @@ import { outfitOf } from '../game/hero';
 import { Icon, SkillIcon } from './icons';
 import { FINE_POINTER, openItem, showLoot } from './itemOpen';
 import { openGuide } from './Guide';
+import { openNews } from './News';
 import { openGuild } from './Guild';
 
 const GEAR_SLOTS: [EquipSlot, string][] = [
@@ -175,7 +177,6 @@ export function BankPanel({ s }: { s: GameState }) {
 /** 角色：身上的装备和工具，点一下卸下到背包 */
 export function CharacterPanel({ s }: { s: GameState }) {
   const style = weaponStyle(s);
-  const b = playerBonuses(s, style);
   const slot = (slotId: EquipSlot, name: string) => {
     const id = s.equipment[slotId];
     return (
@@ -187,14 +188,11 @@ export function CharacterPanel({ s }: { s: GameState }) {
       </button>
     );
   };
-  const weapon = ITEMS[s.equipment.weapon ?? '']?.equip;
   return (
     <div className="page">
       <h2>装备 <small className="muted">战斗等级 {combatLevel(s)} · {STYLE_NAME[style]}</small></h2>
       <div className="equip">{GEAR_SLOTS.map(([id, name]) => slot(id, name))}</div>
-      <p className="muted">
-        攻击 +{b.attack} · 力量 +{b.strength} · 防御 +{b.defence} · 攻速 {((weapon?.attackMs ?? 2400) / 1000).toFixed(1)} 秒
-      </p>
+      <Attributes s={s} />
       <h2>坐骑 <small className="muted">骑上坐骑走路更快</small></h2>
       <div className="equip tools">
         {slot('mount', '暂无坐骑')}
@@ -226,6 +224,64 @@ export function CharacterPanel({ s }: { s: GameState }) {
       <p className="muted">{TOOL_SLOTS.map(([slot, name]) => `${name} +${Math.round(slotSpeed(s, slot) * 100)}%`).join(' · ')}</p>
       <p className="muted">点击身上的装备会卸下放进背包，背包满了才会送回仓库。背包里的装备随时能穿；仓库里的要站在仓库旁才能穿。</p>
     </div>
+  );
+}
+
+/**
+ * 人物属性（用户 10-23）：战斗属性逐项写出来自哪里（等级、装备、弹药、料理），
+ * 再列各项速度加成、坐骑、天气和增益。
+ */
+function Attributes({ s }: { s: GameState }) {
+  const style = weaponStyle(s);
+  const b = playerBonuses(s, style);
+  const lvl = level(s, style);
+  const weapon = ITEMS[s.equipment.weapon ?? '']?.equip;
+  const ammo = bestAmmo(s, style, true);
+  const ammoPow = ammo ? ITEMS[ammo.id].ammo!.power : 0;
+  const atkBuff = buffPct(s, 'atk');
+  const strBuff = buffPct(s, 'str');
+  const defBuff = buffPct(s, 'def');
+  const maxHit = Math.max(1, Math.round((((lvl + 8) * (b.strength + ammoPow + 64)) / 64) * (1 + strBuff)));
+  const atkMs = playerAttackMs(s);
+  const pct = (x: number) => `${Math.round(x * 100)}%`;
+  const buffs = Object.entries(s.buffs ?? {}) as [BuffKind, { pct: number; ms: number }][];
+  const mountMove = s.mounted ? ITEMS[s.equipment.mount ?? '']?.equip?.move ?? 0 : 0;
+  const row = (name: string, value: ReactNode, from: ReactNode) => (
+    <li key={name}><span>{name}</span><b>{value}</b><small className="muted">{from}</small></li>
+  );
+  return (
+    <>
+      <h2>属性 <small className="muted">数值来自等级、装备、弹药和料理增益</small></h2>
+      <ul className="attr-list">
+        {row('生命', `${s.hp}/${maxHp(s)}`, `生命等级 ${level(s, 'hitpoints')} ×10`)}
+        {row('战斗方式', STYLE_NAME[style], weapon ? ITEMS[s.equipment.weapon!].name : '空手')}
+        {row('攻击加成', `+${b.attack}`, <>装备{atkBuff > 0 && <> · 料理命中 +{pct(atkBuff)}</>} · {STYLE_NAME[style]}等级 {lvl}</>)}
+        {row('力量加成', `+${b.strength + ammoPow}`, <>装备 +{b.strength}{ammoPow > 0 && <> · 弹药 +{ammoPow}</>}{strBuff > 0 && <> · 料理伤害 +{pct(strBuff)}</>}</>)}
+        {row('最高伤害', maxHit, `${STYLE_NAME[style]}等级 ${lvl} 和力量加成算出`)}
+        {row('攻击间隔', `${(atkMs / 1000).toFixed(1)} 秒`, weapon ? '看武器种类：匕首快、长枪和弩慢' : '默认')}
+        {row('防御加成', `+${b.defence}`, <>全身装备 · 防御等级 {level(s, 'defence')}{defBuff > 0 && <> · 料理防御 +{pct(defBuff)}</>}</>)}
+        {row('移动速度', `${moveSpeed(s).toFixed(1)} 格/秒`, mountMove ? `步行 4 格/秒 · 坐骑 +${pct(mountMove)}` : '步行 4 格/秒')}
+      </ul>
+      <h2>干活加速 <small className="muted">动作时间 ÷（1 + 等级 + 工具 + 料理）</small></h2>
+      <ul className="attr-list speed">
+        {TOOL_SLOTS.map(([slot, name, skill]) => {
+          const lv = levelSpeed(s, skill);
+          const tool = slotSpeed(s, slot);
+          const food = buffPct(s, 'speed');
+          return row(SKILLS[skill].name, `+${pct(lv + tool + food)}`, <>等级 {level(s, skill)} +{pct(lv)} · {name} +{pct(tool)}{food > 0 && <> · 料理 +{pct(food)}</>}</>);
+        })}
+        {row('钓鱼（下雨）', `+${pct(RAIN_FISH)}`, '在下雨的钓点钓鱼额外加快，雨停就没了')}
+      </ul>
+      <p className="muted">采集类技能等级每高出要求 1 级，多 {pct(BONUS_PER_LEVEL)} 几率双倍产出；生产类是不消耗材料的几率。</p>
+      {buffs.length > 0 && (
+        <>
+          <h2>增益</h2>
+          <ul className="attr-list">
+            {buffs.map(([k, v]) => row(BUFF_NAME[k], `+${pct(v.pct)}`, `还剩 ${Math.ceil(v.ms / 60000)} 分钟`))}
+          </ul>
+        </>
+      )}
+    </>
   );
 }
 
@@ -363,6 +419,8 @@ export function MorePanel({ s }: { s: GameState }) {
     <div className="page">
       <h2>公会 <small className="muted">多人功能开发中</small></h2>
       <button className="primary" onClick={openGuild}>打开公会</button>
+      <h2>更新公告 <small className="muted">最近更新了什么</small></h2>
+      <button className="primary" onClick={openNews}>查看更新公告</button>
       <h2>新手指引</h2>
       <button className="primary" onClick={openGuide}>重新查看新手指引</button>
       <h2>日志 <small className="muted">战斗掉落、采集制作的产出和经验</small></h2>
@@ -508,7 +566,7 @@ export function OfflineModal({ sum }: { sum: Summary }) {
 /** 地点列表（电脑端右侧）：按用途分类，玩家一眼知道去哪练什么（用户 10-23） */
 type NodeTab = { id: string; name: string; skill?: SkillId };
 const NODE_TABS: NodeTab[] = [
-  { id: 'town', name: '城镇设施' },
+  { id: 'town', name: '城镇设施' }, { id: 'stone', name: '传送石碑' },
   { id: 'mining', name: '采矿', skill: 'mining' }, { id: 'woodcutting', name: '伐木', skill: 'woodcutting' },
   { id: 'fishing', name: '钓鱼', skill: 'fishing' }, { id: 'gathering', name: '采集', skill: 'gathering' },
   { id: 'hunting', name: '狩猎', skill: 'hunting' }, { id: 'farming', name: '种植', skill: 'farming' },
@@ -523,11 +581,16 @@ export function NodeList({ s, onPick }: { s: GameState; onPick: (id: string) => 
   let rows: { key: string; id: string; name: string; sub: string; lv?: string; dim?: boolean }[] = [];
   if (tab.id === 'town') {
     rows = NODES.filter((n) => n.town).map((n) => {
-      const kinds = n.farm ? ['种植'] : [...new Set(n.actions.map((id) => { const a = ACTIONS[id]; return a.kind === 'skill' ? SKILLS[a.skill].name : '战斗'; }))];
+      const kinds = n.waystone ? ['传送'] : n.farm ? ['种植'] : [...new Set(n.actions.map((id) => { const a = ACTIONS[id]; return a.kind === 'skill' ? SKILLS[a.skill].name : '战斗'; }))];
       return { key: n.id, id: n.id, name: n.name.replace('落霞城·', ''), sub: `${townName(n)} · ${n.closed ? '暂未开放' : n.opens === 'bank' ? '存取物品' : kinds.join('、')}`, dim: n.closed };
     }).sort((a, b) => (a.sub.startsWith('主城') === b.sub.startsWith('主城') ? 0 : a.sub.startsWith('主城') ? -1 : 1));
   } else if (tab.id === 'boss') {
     rows = BOSSES.map((m) => ({ key: m.id, id: `fight_${m.id}`, name: m.name, sub: `${REGIONS[m.region].name} · ${s.bestiary?.[m.id] ? `已击败 ${s.bestiary[m.id]} 次` : '未击败'}`, lv: `Lv${m.level}` }));
+  } else if (tab.id === 'stone') {
+    rows = WAYSTONES.map((n) => {
+      const on = s.waystones?.includes(n.id);
+      return { key: n.id, id: n.id, name: n.name.replace('传说石碑·', ''), sub: `${REGIONS[n.region].name} · ${on ? '已激活' : '未激活'}`, dim: !on };
+    });
   } else if (tab.id === 'cave') {
     rows = NODES.filter((n) => n.cave).map((n) => ({ key: n.id, id: n.id, name: n.name, sub: `${REGIONS[n.region].name} · 未开放`, dim: true }));
   } else {

@@ -119,7 +119,7 @@ export function DayClock({ region }: { region: RegionId }) {
   const left = Math.ceil((((phase.to - h) / 24) * DAY_MS) / 60000);
   const next = phase.to === 24 ? '' : `，约 ${left} 分钟后进入${phaseOf(phase.to % 24).name}`;
   return (
-    <div className="day-clock" title={`游戏时间 ${hh}:${mm} · ${phase.name}${next} · ${REGIONS[region].name}${rain ? ' · 下雨' : ''}`}>
+    <div className="day-clock" title={`游戏时间 ${hh}:${mm} · ${phase.name}${next} · ${REGIONS[region].name}${rain ? ' · 下雨（在这里钓鱼快 25%）' : ''}`}>
       <canvas ref={ref} width={N} height={N} />
       <span className="day-clock-label">
         <b>{hh}:{mm}</b> {phase.name}{rain && <i className="rain-dot" title="下雨" />}

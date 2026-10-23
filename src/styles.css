@@ -235,11 +235,19 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .wm-node span.site { color: #ffd86a; font-weight: bold; }
 .wm-node.cave i { border-radius: 50% 50% 0 0; transform: none; box-shadow: 0 0 0 1px #000, 0 0 0 2px #b8a8d0; }
 .wm-node.sel i { box-shadow: 0 0 0 1px #000, 0 0 0 3px var(--gold), 0 0 10px var(--gold); }
-.wm-me { position: absolute; width: 12px; height: 12px; transform: translate(-50%, -50%); border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px var(--gold), 0 0 10px #fff; animation: blink 1s infinite alternate; pointer-events: none; }
+.wm-me { position: absolute; z-index: 3; width: 14px; height: 14px; transform: translate(-50%, -50%); border-radius: 50%; background: #ff2fa0; border: 2px solid #fff; box-shadow: 0 0 0 2px #000, 0 0 12px 3px #ff2fa0; pointer-events: none; }
+.wm-me::after { content: ''; position: absolute; inset: -9px; border-radius: 50%; border: 2px solid #ff2fa0; animation: wm-ping 1.2s ease-out infinite; }
+@keyframes wm-ping { from { transform: scale(0.4); opacity: 1; } to { transform: scale(1.4); opacity: 0; } }
 @keyframes blink { to { opacity: 0.4; } }
 .wm-legend { display: flex; gap: 10px; flex-wrap: wrap; padding: 6px 12px; font-size: 11px; color: var(--muted); border-top: 2px solid var(--edge); flex: none; }
 .wm-legend i { display: inline-block; width: 8px; height: 8px; margin-right: 4px; transform: rotate(45deg); }
-.wm-legend i.me { background: #fff; border-radius: 50%; transform: none; }
+.wm-legend i.me { background: #ff2fa0; border: 1px solid #fff; border-radius: 50%; transform: none; }
+.wm-legend i.stone-mark { background: #6ad8f0; transform: none; width: 6px; height: 10px; clip-path: polygon(50% 0, 100% 25%, 100% 100%, 0 100%, 0 25%); }
+.wm-node.stone i { width: 8px; height: 13px; transform: none; background: #6a6672; clip-path: polygon(50% 0, 100% 25%, 100% 100%, 0 100%, 0 25%); box-shadow: none; }
+.wm-node.stone.lit i { background: #6ad8f0; filter: drop-shadow(0 0 3px #6ad8f0); }
+.wm-node.stone span { color: #c8f4ff; }
+.wm-filter { padding: 6px 10px; flex: none; overflow-x: auto; flex-wrap: nowrap; }
+.wm-filter .pill { flex: none; }
 .wm-card { position: absolute; left: 10px; right: 10px; bottom: 44px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 0 0 2px var(--edge), inset 0 0 0 1px var(--gold), 0 6px 16px rgba(0, 0, 0, 0.6); }
 
 /* ---- 弹窗 ---- */
@@ -505,3 +513,29 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .farm-sheet .pad.small { font-size: 11px; }
 .farm-btns button:not(.primary) { background: #3a2a1a; border: 1px solid #8a6232; color: #f0e0c0; border-radius: 4px; }
 .farm-btns button:disabled { opacity: 0.45; cursor: default; }
+
+/* 传说石碑 */
+.stone-list li { display: flex; align-items: center; gap: 10px; }
+.stone-list li > button { flex: none; padding: 4px 12px; }
+.stone-dot { width: 10px; height: 18px; flex: none; margin-left: 4px; background: #5a5662; clip-path: polygon(50% 0, 100% 25%, 100% 100%, 0 100%, 0 25%); }
+.stone-dot.on { background: #6ad8f0; box-shadow: 0 0 6px #6ad8f0; }
+.rain-buff { color: #8ad0ff; font-style: normal; }
+
+/* 人物属性 */
+.attr-list { list-style: none; margin: 4px 0 8px; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
+.attr-list li { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 0 8px; padding: 4px 8px; background: #00000026; border-radius: 3px; }
+.attr-list li > span { color: #c8b898; font-size: 12px; }
+.attr-list li > b { text-align: right; color: #fff3c4; }
+.attr-list li > small { grid-column: 1 / -1; font-size: 10px; }
+@media (max-width: 700px) { .attr-list { grid-template-columns: 1fr; } }
+.farm-grid .fp { cursor: pointer; }
+.farm-grid .fp.sel { outline: 1px solid #fff3c4; outline-offset: 1px; }
+.farm-detail { margin: 2px 12px; font-size: 12px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.rc-cell.jump { cursor: pointer; position: relative; }
+.rc-cell.jump:hover { outline: 1px solid var(--gold); }
+.rc-cell.short { box-shadow: inset 0 0 0 1px #c0503a; }
+.rc-go { display: block; font-size: 10px; font-style: normal; color: #ffb070; text-align: center; }
+.news { max-width: 520px; width: 100%; }
+.news-body { max-height: 60vh; overflow-y: auto; }
+.news-body h3 { margin: 10px 0 4px; font-size: 14px; }
+.news-body ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.6; }

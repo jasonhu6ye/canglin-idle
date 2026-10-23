@@ -1,4 +1,4 @@
-import { actionDuration, advance, buySeed, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour, openContainer, redeemCode, toggleMount, moveSpeed } from './sim';
+import { actionDuration, advance, buySeed, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour, openContainer, redeemCode, toggleMount, moveSpeed, rainBonus } from './sim';
 import { levelForXp, speedForLevel, XP_TABLE } from './xp';
 import type { GameState, SkillAction, TaskMode } from './types';
 import { ACTIONS, CROP_DEFS, FARM_NODES, nodeOfAction, plotsOf, standOf, travelMs, WATER_SPEEDUP } from './data';
@@ -618,5 +618,48 @@ describe('坐骑和兑换码', () => {
     s = unequip(s, 'mount');
     expect(s.mounted).toBe(false);
     expect(moveSpeed(s)).toBe(walk);
+  });
+});
+
+describe('传说石碑', () => {
+  it('城里那座一开始就激活；走到别的石碑旁才激活，之后能在石碑之间传送', async () => {
+    const { WAYSTONES, standOf: st } = await import('./data');
+    const { unlockWaystone, useWaystone, atWaystone } = await import('./sim');
+    const g = newGame(T0, 3);
+    expect(g.waystones).toEqual(['stone_town']);
+    const far = WAYSTONES.find((n) => n.id !== 'stone_town')!;
+    // 没激活：传不过去
+    g.loc = st(WAYSTONES[0]);
+    expect(atWaystone(g)?.id).toBe('stone_town');
+    expect(useWaystone(g, far.id)).toBe(g);
+    // 走到那边激活（离线寻路到达也算）
+    const walked = advance({ ...g, walk: { from: g.loc, to: st(far), ms: 1000, total: 1000 } }, T0 + 2000);
+    expect(walked.summary.waystones).toEqual([far.id]);
+    expect(unlockWaystone(g, { x: 0, y: 0 }).got).toEqual([]);
+    // 回到城里石碑旁，再传过去；正在做的工作暂停
+    const s = startHere({ ...walked.state, loc: st(WAYSTONES[0]) }, 'fish_minnow', { type: 'infinite' });
+    s.loc = st(WAYSTONES[0]);
+    const t = useWaystone(s, far.id);
+    expect(t.loc).toEqual(st(far));
+    expect(t.paused).toBe(true);
+    expect(t.queue.length).toBe(1);
+    // 不站在石碑旁传不了
+    expect(useWaystone({ ...t, loc: { x: 0, y: 0 } }, 'stone_town').loc).toEqual({ x: 0, y: 0 });
+  });
+});
+
+describe('雨天钓鱼', () => {
+  it('钓点下雨时钓鱼更快，别的技能不受影响', async () => {
+    const { isRaining, RAIN_FISH } = await import('./weather');
+    const s = newGame(T0, 1);
+    const fish = ACTIONS.fish_minnow as SkillAction;
+    const region = nodeOfAction('fish_minnow', s.loc)!.region;
+    let wet = T0;
+    while (!isRaining(region, wet)) wet += 8 * 60_000;
+    let dry = T0;
+    while (isRaining(region, dry)) dry += 8 * 60_000;
+    expect(actionDuration(s, fish, wet)).toBeLessThan(actionDuration(s, fish, dry));
+    expect(rainBonus(s, fish, wet)).toBe(RAIN_FISH);
+    expect(rainBonus(s, ACTIONS.mine_stone as SkillAction, wet)).toBe(0);
   });
 });
