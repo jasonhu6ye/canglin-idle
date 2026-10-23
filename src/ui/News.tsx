@@ -7,8 +7,9 @@ import { useEffect, useState } from 'react';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
-    id: '2026-10-23-e', date: '10 月 23 日', title: '传说石碑、人物属性与一大波优化',
+    id: '2026-10-23-f', date: '10 月 23 日', title: '传说石碑、人物属性与一大波优化',
     lines: [
+      '制作更顺手：不在灶台、铁匠铺等设施旁边也能直接点「寻路并开始」或「加入队列」，角色会自己走过去做；新手任务点「去做」会直接选中要做的那一项。',
       '坐骑「Chinese can fly」骑乘移速加成从 +100% 提高到 +160%。',
       '新技能「养殖」占位：技能页已经能看到（羊的图标），玩法还在做，标着「即将开放」。',
       '游戏画面左上角（任务条下面）新增增益栏：料理增益、雨天钓鱼、骑乘，图标下面写剩余时间，点一下看说明。',
