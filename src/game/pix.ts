@@ -12,6 +12,26 @@ export function phash(x: number, y: number, salt = 0): number {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
+/** 两个 #rrggbb 颜色按 t 混合 */
+export function mix(a: string, b: string, t: number): string {
+  const ch = (c: string, i: number) => parseInt(c.slice(1 + i * 2, 3 + i * 2), 16);
+  let out = '#';
+  for (let i = 0; i < 3; i++) out += Math.round(ch(a, i) + (ch(b, i) - ch(a, i)) * t).toString(16).padStart(2, '0');
+  return out;
+}
+
+/** 暗部往冷紫偏、亮部往暖黄偏，比单纯加黑加白更像手绘 */
+const COOL = '#1c1030';
+const WARM = '#fff4d6';
+/** 由 2-4 个给定颜色补成 5 阶色板：最暗、暗、中、亮、高光 */
+export function ramp(cols: string[]): string[] {
+  const [a, b, c, d] = cols;
+  const deep = mix(a, COOL, 0.4);
+  if (d) return [deep, a, b, c, d];
+  if (c) return [deep, a, b, c, mix(c, WARM, 0.45)];
+  return [deep, a, mix(a, b ?? a, 0.5), b ?? a, mix(b ?? a, WARM, 0.45)];
+}
+
 export class Pix {
   data: (string | null)[];
   constructor(public w: number, public h: number) {
@@ -68,6 +88,19 @@ export class Pix {
       }
     }
     for (const i of add) this.data[i] = c;
+    return this;
+  }
+  /** 描边颜色跟着旁边像素走（深一号的同色），比统一黑边柔和 */
+  outlineTinted(c = OUTLINE, k = 0.72) {
+    const add: [number, string][] = [];
+    for (let y = 0; y < this.h; y++) {
+      for (let x = 0; x < this.w; x++) {
+        if (this.get(x, y)) continue;
+        const n = this.get(x, y - 1) || this.get(x - 1, y) || this.get(x + 1, y) || this.get(x, y + 1);
+        if (n) add.push([y * this.w + x, mix(n, c, k)]);
+      }
+    }
+    for (const [i, col] of add) this.data[i] = col;
     return this;
   }
   canvas(): HTMLCanvasElement {
