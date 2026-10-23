@@ -20,3 +20,13 @@ describe('世界', { timeout: 30_000 }, () => {
     expect(findPath(SPAWN, townXY(162, 152))).toBeNull();
   });
 });
+
+describe('远路', { timeout: 120_000 }, () => {
+  it('野外地点能走到落霞城（粗网格不能直接穿河）', () => {
+    const to = standTile(NODES.find((n) => n.id === 'bank2')!);
+    for (const id of ['golden_plain', 'whisper_pool', 'town_lake', 'stone_jungle', 'python_marsh']) {
+      const from = NODES.find((n) => n.id === id);
+      if (from) expect(findPath(standTile(from), to), id).not.toBeNull();
+    }
+  });
+});

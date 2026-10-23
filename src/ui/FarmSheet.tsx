@@ -47,12 +47,14 @@ export function FarmSheet({ s, nodeId, onClose }: { s: GameState; nodeId: string
           return (
             <i key={p.id} className={`fp ${ph} ${plot?.water ? 'wet' : ''} ${pick === p.id ? 'sel' : ''}`} onClick={() => setPick(pick === p.id ? null : p.id)}
               title={plot ? `${CROP_DEFS[plot.crop]?.name} · ${ph === 'ripe' ? '可以收获' : `${Math.floor(g * 100)}%，约 ${dur(plot.ripe - now)}${plot.water ? ' · 浇过水' : ' · 没浇水'}`}` : '空地'}>
-              {plot && <b style={{ height: `${Math.max(15, g * 100)}%` }} />}
+              {plot && <span className={`fp-ic ${ph === 'ripe' ? '' : g < 0.5 ? 'young' : 'half'}`}><Icon item={g < 0.5 && ph !== 'ripe' ? `seed_${plot.crop}` : plot.crop} size={20} /></span>}
+              {plot && ph !== 'ripe' && <b style={{ width: `${Math.max(6, g * 100)}%` }} />}
             </i>
           );
         })}
       </div>
       {pick && <PlotDetail s={s} id={pick} now={now} />}
+      <FieldCrops s={s} nodeId={nodeId} now={now} />
       <p className="farm-stat">
         空地 <b>{n.empty}</b> · 生长中 <b>{n.growing}</b>{n.dry > 0 && <span className="muted">（{n.dry} 格没浇水）</span>} · 可收获 <b className={n.ripe ? 'gold' : ''}>{n.ripe}</b>
         {n.next < Infinity && <span className="muted"> · 下一格约 {dur(n.next)}后熟</span>}
@@ -119,5 +121,40 @@ function PlotDetail({ s, id, now }: { s: GameState; id: string; now: number }) {
       第 {no} 格 · <Icon item={p.crop} size={14} /> <b>{c?.name}</b> ·{' '}
       {ripe ? <b className="gold">熟了，可以收获</b> : <>长到 {Math.floor(plotGrowth(p, now) * 100)}% · 约 {dur(p.ripe - now)}后熟 · {p.water ? '已浇水' : <span className="warn">没浇水</span>}</>}
     </p>
+  );
+}
+
+/** 这块田里种了哪些作物：每种几格、熟了几格、最快还要多久（用户 10-23 要求农田页显示种植物信息） */
+function FieldCrops({ s, nodeId, now }: { s: GameState; nodeId: string; now: number }) {
+  const by = new Map<string, { n: number; ripe: number; dry: number; next: number }>();
+  for (const p of plotsOf(nodeId)) {
+    const plot = s.farm?.[p.id];
+    if (!plot) continue;
+    const e = by.get(plot.crop) ?? { n: 0, ripe: 0, dry: 0, next: Infinity };
+    e.n++;
+    if (plotPhase(plot, now) === 'ripe') e.ripe++;
+    else {
+      e.next = Math.min(e.next, plot.ripe - now);
+      if (!plot.water) e.dry++;
+    }
+    by.set(plot.crop, e);
+  }
+  if (!by.size) return null;
+  return (
+    <ul className="field-crops">
+      {[...by].map(([id, e]) => (
+        <li key={id}>
+          <Icon item={id} size={24} />
+          <span>
+            <b>{CROP_DEFS[id]?.name}</b> <span className="muted">× {e.n} 格</span>
+            <small>
+              {e.ripe > 0 && <b className="gold">{e.ripe} 格可收获 </b>}
+              {e.next < Infinity && <span className="muted">最快 {dur(e.next)}后熟</span>}
+              {e.dry > 0 && <span className="warn"> · {e.dry} 格没浇水</span>}
+            </small>
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }

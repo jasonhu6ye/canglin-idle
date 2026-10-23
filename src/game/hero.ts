@@ -1,4 +1,4 @@
-import { mix, Pix, ramp } from './pix';
+import { mix, phash, Pix, ramp } from './pix';
 
 /*
  * 主角多帧动画（冒险者造型，衣橱可换配色）：头、身体、双臂、双腿、围巾、行囊分开画，每一帧按姿势参数重新拼一次，
@@ -36,6 +36,22 @@ export interface Outfit {
   hood?: boolean;
   /** 镇上的村民：不背行囊 */
   npc?: boolean;
+  /** 兑换码外观（用户 10-23）：特殊头部造型，hair 这时是头部主色 */
+  head?: 'pumpkin' | 'voidpumpkin' | 'paleknight' | 'jester' | 'bone';
+  /** 不背行囊、没有围巾尾巴 */
+  noPack?: boolean;
+  /** 身后的破披风 */
+  cloak?: string[];
+  /** 副手：提灯 / 盾牌 */
+  offhand?: 'lantern' | 'shield';
+  /** 发光色（眼睛、脸、灯、粒子）：暗、中、亮 */
+  glow?: string[];
+  /** 粒子特效 */
+  fx?: 'embers' | 'wisps' | 'sparks' | 'mist' | 'confetti';
+  /** 衣服上的菱格花纹（小丑） */
+  harlequin?: boolean;
+  /** 要用这个兑换码解锁 */
+  code?: string;
 }
 
 export const OUTFITS: Outfit[] = [
@@ -74,7 +90,55 @@ export const OUTFITS: Outfit[] = [
     pants: ['#3a3a44', '#565662'], boots: ['#3a2a1a', '#6a4a2a'], scarf: ['#b08a2a', '#f0c84a'],
     pack: ['#6a6a74', '#9a9aa4', '#c8c8d0'], roll: '#2a4088',
   },
+  // ---- 兑换码「为爱发电」解锁的五套（用户 10-23 给的参考图和录屏，按本作画法重画） ----
+  {
+    id: 'pumpkin', name: '南瓜提灯人', desc: '雕着笑脸的南瓜头，眼里的火一明一暗；破旧的灰绿斗篷，手提一盏冒火星的油灯。',
+    skin: ['#5a4a3a', '#7a6650'], hair: ['#a8300c', '#e0561a', '#ff8a2a', '#ffc060'],
+    coat: ['#1e2420', '#2e3a32', '#46564a', '#6a7a6c'], shirt: ['#2a2018', '#40321f'],
+    pants: ['#1a1a18', '#2a2a26'], boots: ['#141412', '#2e2a24'], scarf: ['#3a4a3a', '#5a6e58'],
+    pack: ['#2a2018', '#3e3024', '#5a4632'], roll: '#3a4a3a',
+    head: 'pumpkin', noPack: true, cloak: ['#26342c', '#3a4c40', '#56705c'], offhand: 'lantern',
+    glow: ['#c84a10', '#ffa020', '#fff0a0'], fx: 'embers', code: '为爱发电',
+  },
+  {
+    id: 'voidpumpkin', name: '幽蓝南瓜', desc: '烧成焦黑的南瓜头里亮着幽蓝的鬼火，偶尔闪过一丝红光；提灯里的火也是冷的。',
+    skin: ['#3a3a40', '#5a5a62'], hair: ['#16161c', '#26262e', '#3a3a44', '#565662'],
+    coat: ['#1a201e', '#283430', '#3c4c46', '#5c6e66'], shirt: ['#1e1e22', '#2e2e34'],
+    pants: ['#141416', '#222226'], boots: ['#0e0e10', '#24242a'], scarf: ['#2e3e38', '#4a6058'],
+    pack: ['#1e1e22', '#2e2e34', '#44444c'], roll: '#2e3e38',
+    head: 'voidpumpkin', noPack: true, cloak: ['#1e2c28', '#2e423c', '#465e56'], offhand: 'lantern',
+    glow: ['#1a6ab0', '#4ab0ff', '#c8f0ff'], fx: 'wisps', code: '为爱发电',
+  },
+  {
+    id: 'paleknight', name: '白发魔骑', desc: '一头乱翘的白发，灰白的脸上一双红眼；黑铁铠甲配一面染血的木盾，脚下缠着暗红的雾。',
+    skin: ['#6a6e78', '#a8acb6'], hair: ['#8a909a', '#c8ccd6', '#eef0f6', '#ffffff'],
+    coat: ['#141418', '#26262e', '#3c3c48', '#6a6a7a'], shirt: ['#4a4a56', '#9a9aa8'],
+    pants: ['#16161a', '#28282e'], boots: ['#0e0e10', '#2a2a30'], scarf: ['#2a2228', '#4a3a40'],
+    pack: ['#4a2a1a', '#6e3e22', '#8e5a34'], roll: '#4a2a1a',
+    head: 'paleknight', noPack: true, cloak: ['#141418', '#22222a', '#34343e'], offhand: 'shield',
+    glow: ['#8a0e0e', '#ff3a2a', '#ffb08a'], fx: 'mist', code: '为爱发电',
+  },
+  {
+    id: 'jester', name: '红黑小丑', desc: '红黑两色的分叉小丑帽挂着银铃，白面具上画着红泪痕；菱格衣服，走到哪都撒红色的纸花。',
+    skin: ['#c8c8d0', '#f4f4f8'], hair: ['#2a2a32', '#44444e', '#62626e', '#8a8a96'],
+    coat: ['#141418', '#26262e', '#3a3a44', '#585864'], shirt: ['#8a0e14', '#e01e28'],
+    pants: ['#1e1e24', '#34343c'], boots: ['#7a0a10', '#c81a22'], scarf: ['#b8b8c4', '#ffffff'],
+    pack: ['#26262e', '#3a3a44', '#585864'], roll: '#8a0e14',
+    head: 'jester', noPack: true, harlequin: true,
+    glow: ['#8a0e14', '#ff2a3a', '#ffd0d0'], fx: 'confetti', code: '为爱发电',
+  },
+  {
+    id: 'bone', name: '骸骨术士', desc: '戴着兽骨头盔、肩披骨甲，眼窝里燃着青色的魂火，身边飘着点点灵光。',
+    skin: ['#8a7e6a', '#d8ccb4'], hair: ['#8a7e6a', '#c8bca4', '#ece2cc', '#fffaf0'],
+    coat: ['#1a1a1e', '#2c2a2a', '#4a4440', '#6a6258'], shirt: ['#a89a84', '#e8dece'],
+    pants: ['#241c16', '#3a2e24'], boots: ['#141010', '#2e2420'], scarf: ['#1a6a5a', '#3aa890'],
+    pack: ['#3a2e24', '#5a4634', '#7a6248'], roll: '#5a2a1a',
+    head: 'bone', noPack: true, cloak: ['#1a2a28', '#2a4440', '#3e5e58'],
+    glow: ['#1a8aa0', '#5ae0f0', '#e0ffff'], fx: 'sparks', code: '为爱发电',
+  },
 ];
+/** 兑换码解锁的外观 */
+export const OUTFIT_CODES = new Set(OUTFITS.map((o) => o.code).filter(Boolean) as string[]);
 const SKIN = ['#c8946a', '#f2c9a0'];
 /** 镇上走动的村民，用和主角同一套画法，只换配色、不背行囊 */
 export const NPC_OUTFITS: Record<string, Outfit> = {
@@ -161,6 +225,9 @@ interface Pose {
   bobber?: [number, number];
   /** 眨眼 */
   blink?: boolean;
+  /** 这一帧在动作里的进度 0-1、帧序号（特效闪烁用，生成精灵表时填） */
+  t?: number;
+  seed?: number;
 }
 
 const v = (a: number, len: number): [number, number] => [Math.sin(a) * len, Math.cos(a) * len];
@@ -359,6 +426,7 @@ function rampsOf(o: Outfit): Ramps {
 const BANGS = [1.4, 0.4, 0.9, 1.6, 0.5, 1.2, 0.3, 1.0, 1.5, 0.6, 1.1];
 
 function drawHead(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose: Pose) {
+  if (o.head) return drawSpecialHead(p, o, R, cx, cy, pose);
   const { dir } = pose;
   const side = dir === 'side';
   const wave = pose.cape ?? 0;
@@ -467,9 +535,14 @@ function drawFrame(pose: Pose, o: Outfit): Pix {
   const sy = hipY - 7.4 + (pose.bob ?? 0);
   const headY = sy - 4.6;
   const C = R.coat;
+  let lantern: [number, number] | null = null;
+
+  const bare = !!(o.npc || o.noPack);
+  // ---- 破披风（身后） ----
+  if (o.cloak && !up) drawCloak(p, o, cx, sy, hipY, pose);
 
   // ---- 围巾尾巴（身后飘） ----
-  if (side) {
+  if (side && !o.noPack) {
     capsule(p, cx - 2, sy + 0.3, cx - 6.2, sy + 1.8 + wave, 0.9, R.scarf);
     capsule(p, cx - 2, sy + 1, cx - 5.4, sy + 3.6 + wave * 0.7, 0.75, R.scarf, 1);
   }
@@ -484,7 +557,7 @@ function drawFrame(pose: Pose, o: Outfit): Pix {
       }
     }
   };
-  if (side && !o.npc) {
+  if (side && !bare) {
     pack(cx - 5.9, sy + 0.8, 3.8, 6.2);
     p.line(cx - 5.6, sy + 2.8, cx - 2.4, sy + 2.8, R.pack[0]);
     p.set(cx - 4, sy + 3.8, GOLD[2]);
@@ -513,7 +586,10 @@ function drawFrame(pose: Pose, o: Outfit): Pix {
       },
     };
   };
-  if (side) sideArm(pose.armB ?? 0, pose.elbowB ?? 0, 0, 1).draw();
+  const back = side ? sideArm(pose.armB ?? 0, pose.elbowB ?? 0, 0, 1) : null;
+  // 盾牌背在后手外侧：先画盾，后手压在上面
+  if (back && o.offhand === 'shield') drawShield(p, back.hx - 1, back.hy - 1, 'side');
+  back?.draw();
 
   // ---- 腿 ----
   if (side) {
@@ -568,6 +644,10 @@ function drawFrame(pose: Pose, o: Outfit): Pix {
         if (down && Math.abs(px - cx) < openAt(k)) pal = R.shirt;
         if (side && px > r - 1.4 && k < 0.6) pal = R.shirt;
       }
+      if (o.harlequin && pal === C && !up) {
+        const u = x - Math.round(cx) + 40;
+        if (((u + y) >> 1) % 2 === ((u - y + 80) >> 1) % 2) pal = R.shirt;
+      }
       p.set(x, y, tone(pal, nx, ny));
     }
   }
@@ -579,11 +659,11 @@ function drawFrame(pose: Pose, o: Outfit): Pix {
       p.set(Math.ceil(cx + open - 0.5), y, C[2]);
     }
     // 背带
-    if (!o.npc) {
+    if (!bare) {
       p.line(cx - 2.6, sy + 0.5, cx - 2.6, beltY - 1, R.pack[1]);
       p.line(cx + 2.4, sy + 0.5, cx + 2.4, beltY - 1, R.pack[0]);
     }
-  } else if (side && !o.npc) {
+  } else if (side && !bare) {
     p.line(cx - 1.1, sy + 0.3, cx + 1.1, beltY - 0.5, R.pack[1]);
     p.line(cx - 1.8, sy + 0.6, cx + 0.4, beltY, R.pack[0]);
   }
@@ -605,6 +685,7 @@ function drawFrame(pose: Pose, o: Outfit): Pix {
   }
 
   // ---- 正面 / 背面的手臂 ----
+  let hands: [number, number][] = [];
   if (!side) {
     const [l, r] = pose.armLift ?? [0, 0];
     const arm = (x: number, lift: number) => {
@@ -616,10 +697,13 @@ function drawFrame(pose: Pose, o: Outfit): Pix {
     };
     arm(cx - 4.4, l);
     arm(cx + 4.4, r);
+    hands = [[cx - 4.4, sy + 7.1 - l], [cx + 4.4, sy + 7.1 - r]];
   }
 
+  // ---- 背面：披风盖住整个背 ----
+  if (up && o.cloak) drawCloak(p, o, cx, sy, hipY, pose);
   // ---- 背面：大背包压在身上 ----
-  if (up && !o.npc) {
+  if (up && !bare) {
     pack(cx - 3.7, sy + 1, 7.4, 7);
     for (let x = Math.floor(cx - 3.4); x <= Math.ceil(cx + 2.9); x++) {
       p.set(x, sy + 3.6, R.pack[0]);
@@ -633,12 +717,26 @@ function drawFrame(pose: Pose, o: Outfit): Pix {
 
   // ---- 围巾绕脖子 ----
   capsule(p, cx - (side ? 2.2 : 3), sy - 0.2, cx + (side ? 2.7 : 3), sy - 0.2, 1.2, R.scarf);
-  if (down) capsule(p, cx + 1.8, sy + 0.6, cx + 2.1 + wave * 0.2, sy + 3.8, 0.85, R.scarf);
+  if (down && !o.noPack) capsule(p, cx + 1.8, sy + 0.6, cx + 2.1 + wave * 0.2, sy + 3.8, 0.85, R.scarf);
+  if (o.head === 'jester') {
+    // 小丑的白色褶领：一圈小圆
+    for (let i = -2; i <= 2; i++) ball(p, cx + i * 1.6 + (side ? 0.4 : 0), sy - 0.1 + (i & 1 ? 0.4 : 0), 1, 0.9, R.scarf);
+  }
+  if (o.head === 'bone' && !up) {
+    // 骨质肩甲
+    for (const sx of side ? [cx + 1] : [cx - 4.2, cx + 4.2]) {
+      ball(p, sx, sy + 0.6, 2, 1.5, ramp(o.hair.slice(0, 3)));
+      p.set(sx, sy + 1.6, R.coat[0]);
+    }
+  }
+  if (o.head === 'paleknight' && !up) {
+    for (const sx of side ? [cx + 0.8] : [cx - 4.3, cx + 4.3]) ball(p, sx, sy + 0.6, 2, 1.5, R.shirt);
+  }
 
   // ---- 头 ----
   drawHead(p, o, R, cx, headY, pose);
 
-  if (up && !o.npc) capsule(p, cx - 4.3, sy - 0.2, cx + 4.3, sy - 0.2, 1.5, R.roll);
+  if (up && !bare) capsule(p, cx - 4.3, sy - 0.2, cx + 4.3, sy - 0.2, 1.5, R.roll);
 
   // ---- 前面的手臂和工具 ----
   if (side) {
@@ -646,8 +744,335 @@ function drawFrame(pose: Pose, o: Outfit): Pix {
     const tool = pose.tool ?? 'none';
     if (tool !== 'none') drawTool(p, tool, arm.hx, arm.hy, arm.a + (pose.toolTurn ?? 0), pose);
     arm.draw();
+    hands = [[back!.hx, back!.hy], [arm.hx, arm.hy]];
+    if (o.offhand === 'lantern') {
+      // 空手时灯提在前手，拿着工具就换到后手
+      const [lx, ly] = tool === 'none' && !pose.reach ? [arm.hx, arm.hy] : [back!.hx, back!.hy];
+      lantern = drawLantern(p, o, lx, ly, pose);
+    }
+  } else if (o.offhand === 'lantern' && hands.length) {
+    lantern = drawLantern(p, o, hands[1][0], hands[1][1], pose, up);
   }
-  return p.outlineTinted();
+  if (o.offhand === 'shield' && down) drawShield(p, cx - 5.6, sy + 3.2, 'front');
+  if (o.offhand === 'shield' && up) drawShield(p, cx - 2.6, sy + 1.4, 'back');
+  const out = p.outlineTinted();
+  if (o.fx) drawFx(out, o, pose, { cx, sy, hipY, headY, lantern });
+  return out;
+}
+
+// ---- 兑换码外观的特殊部件（用户 10-23：南瓜提灯人、幽蓝南瓜、白发魔骑、红黑小丑、骸骨术士） ----
+
+/** 发光强度 0-1：按帧进度和帧号起伏，像火苗一明一暗 */
+const flicker = (pose: Pose, speed = 3) => {
+  const t = pose.t ?? 0;
+  const s = pose.seed ?? 0;
+  return 0.5 + 0.32 * Math.sin(t * TAU * speed + s * 1.7) + 0.18 * Math.sin(t * TAU * 7 + s * 0.6);
+};
+const glowAt = (o: Outfit, k: number) => {
+  const G = o.glow ?? ['#c84a10', '#ffa020', '#fff0a0'];
+  return k > 0.62 ? G[2] : k > 0.3 ? G[1] : G[0];
+};
+/** 少数帧换个表情（南瓜「哦？」、幽蓝南瓜红眼） */
+const oddFrame = (pose: Pose) => (pose.seed ?? 0) % 17 === 5;
+
+function drawSpecialHead(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose: Pose) {
+  const { dir } = pose;
+  const side = dir === 'side';
+  const up = dir === 'up';
+  const H = ramp(o.hair);
+  const hx = side ? cx + 0.6 : cx;
+  const f = flicker(pose);
+  const lit = glowAt(o, f);
+  const mid = glowAt(o, f - 0.3);
+  const ey = Math.round(cy + 0.2);
+
+  if (o.head === 'pumpkin' || o.head === 'voidpumpkin') {
+    // 扁圆的南瓜，五道竖棱，顶上一截弯梗和一片叶子
+    ball(p, hx, cy - 0.2, side ? 5.2 : 5.7, 4.7, H);
+    for (const k of side ? [-0.55, 0.05, 0.6] : [-0.62, -0.22, 0.22, 0.62]) {
+      for (let y = Math.floor(cy - 4); y <= Math.ceil(cy + 3.6); y++) {
+        const yy = (y + 0.5 - cy) / 4.7;
+        const x = Math.round(hx + k * 5.4 * Math.sqrt(Math.max(0, 1 - yy * yy)) - 0.5);
+        if (H.includes(p.get(x, y) ?? '')) p.set(x, y, H[1]);
+      }
+    }
+    const STEM = o.head === 'pumpkin' ? ['#1e3a14', '#2e5a1e', '#4a8a2e', '#7ab84a', '#a8e070'] : ['#141a16', '#22302a', '#34483e', '#4e6a5c', '#6a8a7a'];
+    capsule(p, hx - 0.3, cy - 4.4, hx + 0.6, cy - 6.6, 0.9, STEM);
+    p.set(hx + 1.6, cy - 6.6, STEM[3]);
+    p.set(hx + 2.4, cy - 6.2, STEM[2]);
+    p.set(hx + 2, cy - 5.6, STEM[2]);
+    if (up) return;
+    const red = o.head === 'voidpumpkin' && oddFrame(pose);
+    const eye = red ? '#ff3a2a' : lit;
+    const surprised = o.head === 'pumpkin' && oddFrame(pose);
+    const fx = side ? hx + 2.2 : hx;
+    const pts: [number, number, string][] = [];
+    if (surprised) {
+      // 「哦？」：两个方眼一张圆嘴
+      for (const ex of side ? [1] : [-3, 2]) for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) pts.push([Math.round(fx - 0.5) + ex + dx - (side ? 0 : 0.5), ey - 2 + dy, eye]);
+      for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) pts.push([Math.round(fx - 0.5) + dx - (side ? -1 : 0.5), ey + 1 + dy, mid]);
+    } else {
+      // 斜着往里压的三角眼，中间隔一行南瓜皮，下面一张锯齿笑口（牙缝是暗的）
+      const DARKP = H[1];
+      const L = Math.round(fx - 0.5);
+      const face: [number, number, string][] = side
+        ? [[0, -2, mid], [0, -1, eye], [1, -1, eye], [2, -1, mid],
+          [0, 1, mid], [1, 1, lit], [2, 1, DARKP], [3, 1, mid], [1, 2, mid], [2, 2, lit], [3, 2, mid]]
+        : [[-3, -2, mid], [-3, -1, eye], [-2, -1, eye], [-1, -1, mid],
+          [3, -2, mid], [3, -1, eye], [2, -1, eye], [1, -1, mid],
+          [-3, 1, mid], [-2, 1, lit], [-1, 1, DARKP], [0, 1, lit], [1, 1, DARKP], [2, 1, lit], [3, 1, mid],
+          [-2, 2, mid], [-1, 2, lit], [0, 2, lit], [1, 2, lit], [2, 2, mid]];
+      for (const [dx, dy, c] of face) pts.push([L + dx + (side ? 0 : 0.5) - 0.5, ey + dy, c]);
+    }
+    for (const [x, y, c] of pts) {
+      if (side && x < hx - 0.5) continue;
+      p.set(x, y, c);
+    }
+    return;
+  }
+
+  if (o.head === 'paleknight') {
+    // 乱翘的白发：一圈尖刺 + 盖住额头的刘海；灰白的脸，红眼
+    const spikes = up ? [-2.0, -1.4, -0.8, -0.25, 0.3, 0.85, 1.45, 2.05] : side ? [-2.3, -1.7, -1.1, -0.5, 0.1, 0.7] : [-1.95, -1.35, -0.8, -0.25, 0.3, 0.85, 1.4, 1.95];
+    spikes.forEach((a, i) => {
+      const len = 5.4 + ((i * 5) % 3) * 0.9;
+      const [dx, dy] = [Math.sin(a) * len * 1.1, -Math.cos(a) * len];
+      for (let k = 0; k <= 1; k += 0.1) {
+        const r = 1.35 * (1 - k) + 0.3;
+        ball(p, hx + dx * k, cy - 2 + dy * k, r, r, H);
+      }
+    });
+    ball(p, hx, cy - 2, 5.2, 3.7, H);
+    // 几缕暗一点的发丝
+    for (const [x0, x1] of [[-2, -3], [1, 2], [-0.5, -0.5]]) for (let y = 0; y < 3; y++) {
+      const x = Math.round(hx + x0 + ((x1 - x0) * y) / 3);
+      const yy = Math.round(cy - 4 + y);
+      if (H.includes(p.get(x, yy) ?? '')) p.set(x, yy, H[1]);
+    }
+    if (up) return;
+    const S = R.skin;
+    const fx = side ? hx + 1.2 : hx;
+    const bang = (x: number) => cy - 0.9 + (((Math.round(x) * 7) % 4 + 4) % 4) * 0.4;
+    ball(p, fx, cy + 1.6, side ? 3.5 : 3.9, 3.4, faceRamp(S), 0, (x, y) => y + 0.5 >= bang(x) && (!side || x + 0.5 > hx - 0.2));
+    const eyes = side ? [Math.round(hx + 2.6)] : [Math.round(hx - 2), Math.round(hx + 1)];
+    for (const x of eyes) {
+      p.set(x, ey + 1, pose.blink ? S[0] : f > 0.6 ? '#ff6a4a' : '#e8241c');
+      p.set(x, ey, S[0]);
+    }
+    p.set(side ? Math.round(hx + 2) : Math.round(hx - 0.5), ey + 3, S[0]);
+    return;
+  }
+
+  if (o.head === 'jester') {
+    // 分叉小丑帽：左红右黑两只角往外卷，角尖挂银铃；白面具
+    const RED = ramp(['#7a0a10', '#c81a22', '#ff3a44']);
+    const BLK = ramp(['#1e1e24', '#34343c', '#50505a']);
+    const BELL = ['#5a5a66', '#9a9aa6', '#d8d8e0', '#f4f4f8', '#ffffff'];
+    const wob = Math.sin((pose.t ?? 0) * TAU) * 0.6;
+    const horn = (sgn: number, R2: string[], back: boolean) => {
+      const pts: [number, number][] = [[1.5, -3.6], [4, -5.6], [6.4, -5.8 + wob * 0.5], [7.8, -4.2 + wob], [8, -2 + wob]];
+      for (let i = 1; i < pts.length; i++) {
+        const [x0, y0] = pts[i - 1];
+        const [x1, y1] = pts[i];
+        capsule(p, hx + sgn * x0, cy + y0, hx + sgn * x1, cy + y1, 1.5 - i * 0.2, R2, back ? 1 : 0);
+      }
+      const [bx, by] = pts[pts.length - 1];
+      ball(p, hx + sgn * bx, cy + by + 1.2, 1.2, 1.2, BELL);
+    };
+    if (side) {
+      horn(-1, BLK, true);
+    } else {
+      horn(-1, up ? BLK : RED, false);
+      horn(1, up ? RED : BLK, false);
+    }
+    ball(p, hx, cy - 2.2, 4.8, 3, BLK, 0, (_, y) => y < cy - 0.4);
+    capsule(p, hx, cy - 4.4, hx + 0.6, cy - 7, 1, BLK);
+    ball(p, hx + 0.7, cy - 7.4, 1, 1, BELL);
+    if (side) horn(1, RED, false);
+    // 帽檐一道红边
+    for (let x = Math.round(hx - 4); x <= Math.round(hx + 3); x++) p.set(x, Math.round(cy - 0.6), RED[2]);
+    if (up) return;
+    const S = R.skin;
+    const fx = side ? hx + 1 : hx;
+    ball(p, fx, cy + 1.6, side ? 3.4 : 3.8, 3, [S[2], S[3], S[3], S[4], S[4]], 0, (x, y) => y > cy - 0.2 && (!side || x + 0.5 > hx - 0.4));
+    const eyes = side ? [Math.round(hx + 2.4)] : [Math.round(hx - 2), Math.round(hx + 1)];
+    for (const x of eyes) p.set(x, ey + 1, pose.blink ? S[1] : EYE);
+    // 右眼下一道红色菱形泪痕
+    const tx = side ? eyes[0] : eyes[1];
+    p.set(tx, ey + 2, RED[2]);
+    p.set(tx, ey + 3, RED[1]);
+    // 咧开的笑
+    const mx = side ? Math.round(hx + 1.5) : Math.round(hx - 2);
+    for (let i = 0; i < (side ? 3 : 4); i++) p.set(mx + i, ey + 3 + (i === 0 || i === 3 ? -0.6 : 0), EYE);
+    return;
+  }
+
+  if (o.head === 'bone') {
+    // 兽骨头盔：头顶一道骨冠，两侧青色的鳍；眼窝里青色魂火，下面一排牙
+    const FIN = ramp(['#1a6a5a', '#3aa890', '#7ae0c8']);
+    for (const sgn of side ? [-1] : [-1, 1]) {
+      capsule(p, hx + sgn * 4.2, cy - 0.5, hx + sgn * 6.6, cy - 4.6, 1, FIN, side ? 1 : 0);
+      capsule(p, hx + sgn * 4.6, cy + 1, hx + sgn * 6.8, cy - 1.4, 0.8, FIN, 1);
+    }
+    ball(p, hx, cy - 0.4, 4.9, 4.7, H);
+    for (let y = Math.round(cy - 5.4); y <= Math.round(cy - 2); y++) p.set(hx - 0.5, y, H[3]);
+    p.set(hx - 0.5, cy - 6, H[4]);
+    if (side) {
+      capsule(p, hx + 3.6, cy + 1.6, hx + 5.4, cy + 2.4, 1, H);
+    }
+    if (up) {
+      for (let y = Math.round(cy - 3); y <= Math.round(cy + 3); y++) if (y % 2 === 0) p.set(hx - 0.5, y, H[1]);
+      return;
+    }
+    const DARK = '#141418';
+    const eyes = side ? [Math.round(hx + 2.2)] : [Math.round(hx - 2.4), Math.round(hx + 1.4)];
+    for (const x of eyes) {
+      for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) p.set(x + dx, ey - 0.5 + dy, DARK);
+      p.set(x + (side ? 1 : dxEye(x, hx)), ey + 0.5, lit);
+      if (f > 0.6) p.set(x + (side ? 1 : dxEye(x, hx)), ey - 0.5, glowAt(o, 0.4));
+    }
+    const ty = Math.round(cy + 3.2);
+    for (let x = Math.round((side ? hx + 1 : hx - 2.5)); x <= Math.round(hx + (side ? 4 : 2)); x++) p.set(x, ty, x % 2 ? DARK : H[3]);
+    p.set(Math.round(side ? hx + 3.4 : hx - 0.5), ey + 2, DARK);
+  }
+}
+const dxEye = (x: number, hx: number) => (x < hx ? 1 : 0);
+
+/** 破披风：侧面往身后飘，正面从两肩露出来，背面盖住整个背；下摆一缕一缕的 */
+function drawCloak(p: Pix, o: Outfit, cx: number, sy: number, hipY: number, pose: Pose) {
+  const CL = ramp(o.cloak!);
+  const wave = pose.cape ?? 0;
+  const side = pose.dir === 'side';
+  const up = pose.dir === 'up';
+  const bottom = hipY + (up ? 4.5 : 4);
+  for (let y = Math.floor(sy - 0.5); y <= Math.ceil(bottom); y++) {
+    const k = (y - sy) / (bottom - sy);
+    let l: number, r: number;
+    if (side) {
+      l = cx - 2.4 - k * (3.4 + wave * 0.9);
+      r = cx + 0.8 - k * 1.2;
+    } else {
+      const hw = 4.2 + k * (up ? 1.8 : 1.6);
+      l = cx - hw;
+      r = cx + hw;
+    }
+    for (let x = Math.floor(l); x <= Math.ceil(r); x++) {
+      if (x + 0.5 < l || x + 0.5 > r) continue;
+      // 下摆撕成几缕：按列长短不一
+      const ragged = bottom - (phash(x, 3, 11) * 2.4 + (x & 1) * 0.6);
+      if (y > ragged) continue;
+      const nx = ((x + 0.5 - (l + r) / 2) / ((r - l) / 2 || 1)) * 0.8;
+      const fold = Math.sin(x * 1.3 + wave) > 0.6 ? 1 : 0;
+      p.set(x, y, tone(CL, nx, k < 0.1 ? -0.6 : 0.1, fold));
+    }
+  }
+}
+
+/** 木盾：深色木板 + 铁边 + 一道血红 */
+function drawShield(p: Pix, x: number, y: number, view: 'front' | 'side' | 'back') {
+  const W = view === 'side' ? 3 : 5;
+  const H = 8;
+  const WOODS = ['#2e1a10', '#4a2a18', '#6e4226', '#8e5a34'];
+  for (let j = 0; j < H; j++) {
+    for (let i = 0; i < W; i++) {
+      const edge = i === 0 || i === W - 1 || j === 0 || j === H - 1;
+      const xx = Math.round(x) + i;
+      const yy = Math.round(y) + j;
+      if ((j === H - 1 && (i === 0 || i === W - 1))) continue;
+      let c = edge ? (i === 0 || j === 0 ? STEEL[2] : STEEL[1]) : WOODS[1 + ((i + (j >> 1)) % 2)];
+      if (!edge && view !== 'back' && (i === 1 || j === 3) && phash(i, j, 4) > 0.25) c = j === 3 ? '#8a1a14' : '#6a1410';
+      p.set(xx, yy, c);
+    }
+  }
+  if (view === 'front') p.set(Math.round(x) + 2, Math.round(y) + 4, STEEL[3]);
+}
+
+/** 提灯：铁框玻璃罩，里面的火一明一暗，周围一圈光晕；返回灯芯位置给粒子用 */
+function drawLantern(p: Pix, o: Outfit, hx: number, hy: number, pose: Pose, hidden = false): [number, number] {
+  const x = Math.round(hx);
+  const y = Math.round(hy + 1);
+  const f = flicker(pose, 4);
+  if (hidden) return [x, y + 3];
+  const IRON = ['#1e1e22', '#3a3a42', '#5a5a64'];
+  p.set(x, y, IRON[1]);
+  for (let j = 1; j <= 4; j++) {
+    for (let i = -1; i <= 1; i++) {
+      const frame = i !== 0 || j === 1 || j === 4;
+      p.set(x + i, y + j, frame ? IRON[j === 1 ? 2 : i < 0 ? 1 : 0] : glowAt(o, f + 0.2));
+    }
+  }
+  p.set(x, y + 2, glowAt(o, f + 0.4));
+  p.set(x, y + 3, glowAt(o, f));
+  p.set(x, y + 5, IRON[0]);
+  return [x, y + 2];
+}
+
+/** 粒子特效：画在描边之后，不带黑边；按帧进度循环，位置用哈希打散 */
+function drawFx(p: Pix, o: Outfit, pose: Pose, at: { cx: number; sy: number; hipY: number; headY: number; lantern: [number, number] | null }) {
+  const t = pose.t ?? 0;
+  const seed = pose.seed ?? 0;
+  const G = o.glow ?? ['#c84a10', '#ffa020', '#fff0a0'];
+  const { cx, sy, hipY, headY, lantern } = at;
+  const put = (x: number, y: number, c: string) => {
+    if (x >= 0 && y >= 0 && x < HERO_W && y < HERO_H) p.set(x, y, c);
+  };
+  if (o.fx === 'embers' || o.fx === 'wisps') {
+    // 火星 / 鬼火：从灯里往上飘，越往上越暗，到头就灭
+    const src: [number, number][] = [];
+    if (lantern) src.push(lantern);
+    src.push([cx, headY - 1]);
+    for (let j = 0; j < 4; j++) {
+      const [sx, sy0] = src[j % src.length];
+      const ph = (t * (o.fx === 'wisps' ? 1 : 2) + j * 0.27 + (seed % 5) * 0.03) % 1;
+      if (ph > 0.85) continue;
+      const x = sx + Math.sin(ph * 7 + j * 2) * (1 + ph * 1.5) + (j - 1.5) * 0.6;
+      const y = sy0 - 1 - ph * (o.fx === 'wisps' ? 9 : 7);
+      put(x, y, ph < 0.25 ? G[2] : ph < 0.55 ? G[1] : G[0]);
+      if (o.fx === 'wisps' && ph < 0.4) put(x, y + 1, G[0]);
+    }
+    if (o.fx === 'embers' && lantern && flicker(pose, 4) > 0.7) put(lantern[0] + 2, lantern[1] - 1, G[1]);
+  } else if (o.fx === 'sparks') {
+    // 青色灵光：身边几处一闪一闪的小方块和十字星
+    for (let j = 0; j < 7; j++) {
+      const ph = (t * 2 + j * 0.37 + phash(j, 1, 7)) % 1;
+      if (ph > 0.55) continue;
+      const ang = phash(j, 2, 7) * TAU + t * TAU * 0.5;
+      const rad = 7 + phash(j, 3, 7) * 5;
+      const x = Math.round(cx + Math.cos(ang) * rad);
+      const y = Math.round((sy + hipY) / 2 - 2 + Math.sin(ang) * rad * 0.9);
+      const c = ph < 0.2 ? G[2] : ph < 0.4 ? G[1] : G[0];
+      put(x, y, c);
+      if (ph < 0.15 && j % 2 === 0) {
+        put(x - 1, y, G[0]);
+        put(x + 1, y, G[0]);
+        put(x, y - 1, G[0]);
+        put(x, y + 1, G[0]);
+      }
+    }
+  } else if (o.fx === 'mist') {
+    // 脚下缠着的暗红雾气：贴地左右漂
+    const MIST = ['#3a0a12', '#5a1420', '#8a1e28'];
+    for (let j = 0; j < 9; j++) {
+      const ph = (t + j / 9) % 1;
+      const x = Math.round(cx - 9 + ((j * 7 + ph * 18) % 18));
+      const y = HERO_FEET - (j % 3) - Math.round(Math.sin(ph * TAU) * 0.6);
+      if (p.get(x, y) && j % 3 !== 0) continue;
+      put(x, y, MIST[(j + Math.floor(ph * 3)) % 3]);
+    }
+    if (flicker(pose) > 0.75) put(cx + (pose.dir === 'side' ? 4 : 0), Math.round(headY - 1), G[1]);
+  } else if (o.fx === 'confetti') {
+    // 红白纸花：从帽尖的铃铛撒下来，转着往下飘
+    for (let j = 0; j < 5; j++) {
+      const ph = (t * 1.5 + j * 0.21 + (seed % 3) * 0.05) % 1;
+      const side = j % 2 ? 1 : -1;
+      const x = Math.round(cx + side * (8 - ph * 2) + Math.sin(ph * 9 + j) * 1.2);
+      const y = Math.round(headY - 4 + ph * 16);
+      if (p.get(x, y)) continue;
+      const c = j % 3 === 0 ? '#ffffff' : ph < 0.5 ? G[1] : G[0];
+      put(x, y, c);
+      if ((Math.floor(ph * 8) + j) % 2 === 0) put(x + 1, y, c);
+    }
+  }
 }
 
 // ---- 动作表 ----
@@ -813,7 +1238,10 @@ export function paintHeroSheet(outfit: Outfit = OUTFITS[0], canvas = document.cr
       const x = (k % cols) * HERO_W;
       const y = Math.floor(k / cols) * HERO_H;
       ctx.clearRect(x, y, HERO_W, HERO_H);
-      ctx.drawImage(drawFrame(a.pose(i / a.frames, i), outfit).canvas(), x, y);
+      const pose = a.pose(i / a.frames, i);
+      pose.t = i / a.frames;
+      pose.seed = k;
+      ctx.drawImage(drawFrame(pose, outfit).canvas(), x, y);
       frames.push({ name: `${a.key}-${i}`, x, y });
       k++;
     }

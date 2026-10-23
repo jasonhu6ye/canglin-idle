@@ -13,7 +13,7 @@ import { RAIN_FISH } from '../core/weather';
 import { fmtDuration, fmtNum } from './format';
 import { Codex } from './Codex';
 import { Wardrobe } from './Wardrobe';
-import { exportSave, importSave } from '../saveCode';
+import { exportSave, importError, importSave } from '../saveCode';
 import { outfitOf } from '../game/hero';
 import { Icon, SkillIcon } from './icons';
 import { FINE_POINTER, openItem, showLoot } from './itemOpen';
@@ -517,10 +517,28 @@ function SaveBackup({ s }: { s: GameState }) {
       setMsg('复制失败，请长按文本框手动全选复制');
     }
   };
-  const doImport = async () => {
-    const next = await importSave(code);
-    if (!next) return setMsg('存档码不对，请检查是否复制完整');
+  const doImport = async (text = code) => {
+    const next = await importSave(text);
+    if (!next) return setMsg(importError || '存档码不对，请检查是否复制完整');
     store.replace(next);
+  };
+  // 存档文件：电脑下载后用 AirDrop / 微信传到手机，再选文件导入，不用复制长串（用户 10-23）
+  const download = async () => {
+    const text = code || await exportSave(s);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+    const d = new Date();
+    a.download = `苍岭存档-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    setMsg('存档文件已下载，传到另一台设备后点「从文件导入」');
+  };
+  const fromFile = async (f?: File) => {
+    if (!f) return;
+    if (!confirm('用这个存档文件覆盖当前存档？')) return;
+    await doImport(await f.text());
   };
   return (
     <div className="save-backup">
@@ -529,13 +547,21 @@ function SaveBackup({ s }: { s: GameState }) {
         <button onClick={doExport}>导出存档码</button>
         <button onClick={() => { setMode('import'); setCode(''); setMsg(''); }}>导入存档码</button>
       </div>
+      <div className="go">
+        <button onClick={download}>下载存档文件</button>
+        <label className="btn-like">
+          从文件导入
+          <input type="file" accept=".txt,text/plain" hidden onChange={(e) => { fromFile(e.target.files?.[0]); e.target.value = ''; }} />
+        </label>
+      </div>
       {mode !== 'none' && (
         <>
           <textarea className="save-code" value={code} readOnly={mode === 'export'} placeholder={mode === 'import' ? '把存档码粘贴到这里' : '生成中…'}
             onChange={(e) => setCode(e.target.value)} onFocus={(e) => mode === 'export' && e.target.select()} />
+          {code && <p className="muted small-note">共 {code.replace(/\s+/g, '').length} 个字符 · 开头 {code.slice(0, 9)} · 结尾 {code.slice(-6)}（两边对一下就知道复制全没全）</p>}
           <div className="go">
             {mode === 'export' ? <button className="primary" disabled={!code} onClick={copy}>复制</button>
-              : <button className="danger" disabled={!code.trim()} onClick={doImport}>导入并覆盖当前存档</button>}
+              : <button className="danger" disabled={!code.trim()} onClick={() => doImport()}>导入并覆盖当前存档</button>}
             <button onClick={() => setMode('none')}>收起</button>
           </div>
         </>

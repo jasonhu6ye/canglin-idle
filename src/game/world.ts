@@ -640,6 +640,7 @@ function coarsePath(from: Pt, to: Pt): number[] | null {
       const j = ny * CW + nx;
       if (!coarseOpen[j] && j !== goal) continue;
       if (dx && dy && (!coarseOpen[y * CW + nx] || !coarseOpen[ny * CW + x])) continue;
+      if (riverBetween(i, j)) continue;
       const ng = g0 + c * (coarseRoad[j] ? 0.55 : 1);
       if (coarseSeen[j] === id && coarseG[j] <= ng + 1e-3) continue;
       coarseSeen[j] = id;
@@ -652,6 +653,28 @@ function coarsePath(from: Pt, to: Pt): number[] | null {
   const out: number[] = [];
   for (let c = goal; c !== -1; c = coarsePrev[c]) out.push(c);
   return out.reverse();
+}
+
+/**
+ * 河是噪声的等值线，只有几格宽，粗网格每格采一个点经常漏掉，走廊就会直接穿河（落霞城、外圈很多地点走不到）。
+ * 两个相邻粗格子中心分在等值线两边，中间就隔着一条河；除非两边都是路（有桥），否则不能直接过。
+ */
+const rvCache = new Float32Array(CW * CH).fill(NaN);
+function rvAt(c: number) {
+  let v = rvCache[c];
+  if (v !== v) v = rvCache[c] = fbm(clampX((c % CW) * C + 4), clampY(Math.floor(c / CW) * C + 4), 51, 170) - 0.5;
+  return v;
+}
+function riverBetween(i: number, j: number) {
+  if ((rvAt(i) > 0) === (rvAt(j) > 0)) return false;
+  if (coarseRoad[i] && coarseRoad[j]) return false;
+  const x = clampX((j % CW) * C + 4);
+  const y = clampY(Math.floor(j / CW) * C + 4);
+  const g = RIVER[REGION_IDS[regionIdx(x, y)]];
+  if (!g || !blockedG[G[g]]) return false;
+  // 城镇周围、特色地点里没有河（见 landform）
+  if (Math.hypot(x - SPAWN_GUESS.x, y - SPAWN_GUESS.y) < 74 || (Math.abs(x - T2.x) < 74 && Math.abs(y - T2.y) < 64)) return false;
+  return siteGround(x, y) === undefined;
 }
 
 /** 粗格子里离中心最近的能走的细格 */
@@ -803,6 +826,16 @@ for (const [k, x, y] of TOWN_PROPS_LOCAL) TOWN_PROPS.set(idx(tx(x), ty(y)), k);
   for (let y = -WY; y <= WY; y++) {
     if (Math.abs(y) > 3) { put('wall', -WX, y); put('wall', WX, y); }
   }
+  // 粗网格只看地面，看不见城墙：压着城墙、又不在城门口的粗格子标成不能走，远路才会找城门进城
+  const wallCells = new Set<number>();
+  const gateCells = new Set<number>();
+  for (let x = -WX; x <= WX; x++) {
+    for (const y of [-WY, WY]) (Math.abs(x) > 3 ? wallCells : gateCells).add(cellOf(town2XY(x, y)));
+  }
+  for (let y = -WY; y <= WY; y++) {
+    for (const x of [-WX, WX]) (Math.abs(y) > 3 ? wallCells : gateCells).add(cellOf(town2XY(x, y)));
+  }
+  for (const c of wallCells) if (!gateCells.has(c)) coarseOpen[c] = 0;
   for (const [x, y] of [[-4, -WY - 1], [4, -WY - 1], [-4, WY + 1], [4, WY + 1], [-WX - 1, -4], [-WX - 1, 4], [WX + 1, -4], [WX + 1, 4]]) put('banner', x, y);
   for (const [x, y] of [[-24, -19], [24, -19], [-24, 19], [24, 19], [-6, -6], [6, -6], [-6, 6], [6, 6], [-20, 0], [20, 0], [0, -24], [0, 24]]) put('lamp', x, y);
   for (const [k, x, y] of [['barrel', -19, -9], ['barrel', -20, -9], ['crate', -12, -9], ['crate', 18, -9], ['barrel', 10, -9],
@@ -941,40 +974,60 @@ const DIRS: [number, number, number][] = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, 
 /** 单次细寻路最多展开的格子数：大地图上不能整图搜索，远路靠粗网格走廊分段 */
 const MAX_NODES = 400_000;
 
+/** 每段细寻路的尝试：[沿走廊往前几格, 最多展开格子数] */
+const SEG_TRIES: [number, number][] = [[8, 60_000], [4, 60_000], [12, 120_000], [2, 60_000]];
+
 /** A* 寻路（8 方向，斜走不切墙角）；终点不可走或走不到返回 null。返回值不含起点。 */
 export function findPath(from: Pt, to: Pt, maxNodes = MAX_NODES): Pt[] | null {
   if (!isWalkable(to.x, to.y) || !inMap(from.x, from.y)) return null;
   const far = Math.max(Math.abs(from.x - to.x), Math.abs(from.y - to.y)) > 48;
   // 远路：先在粗网格上找走廊，再沿走廊一段一段细找；绕湖绕河也很快
   if (far) {
-    const cp = coarsePath(from, to);
-    if (cp) {
-      const out: Pt[] = [];
-      let cur = from;
-      let ok = true;
+    const out: Pt[] = [];
+    let cur = from;
+    // 粗网格每格只采一个点，会漏看细山脊、窄河：某段细找走不通，就把那几格粗格子标成不通，从当前位置重新找走廊
+    for (let round = 0; round < 12; round++) {
+      const cp = coarsePath(cur, to);
+      if (!cp) break;
       let k = 0;
-      while (ok && k < cp.length - 1) {
-        // 下一个落脚点：走廊上往前 8 格；那格走不通就再往前挪，最多试 4 次
+      let stuck = false;
+      while (k < cp.length - 1) {
         let seg: Pt[] | null = null;
         let wp: Pt | null = null;
         let next = k;
-        for (let tries = 0; tries < 4 && !seg; tries++) {
-          next = Math.min(cp.length - 1, next + 8);
+        for (const [step, budget] of SEG_TRIES) {
+          next = Math.min(cp.length - 1, k + step);
           wp = next === cp.length - 1 ? to : walkableIn(cp[next]);
-          if (wp) seg = astar(cur, wp, 80_000);
-          if (next === cp.length - 1) break;
+          if (wp) seg = astar(cur, wp, budget);
+          if (seg) break;
         }
-        if (!seg || !wp) ok = false;
-        else {
-          out.push(...seg);
-          cur = wp;
-          k = next;
-        }
+        if (!seg || !wp) { stuck = true; break; }
+        out.push(...seg);
+        cur = wp;
+        k = next;
       }
-      if (ok) return out;
+      if (!stuck) return out;
+      if (!learnBlocked(cp.slice(k, k + 14), cellOf(to))) break;
     }
   }
   return astar(from, to, maxNodes);
+}
+
+/** 把走廊上压着障碍（1/8 以上走不了：山脊、成排的石头树木）的粗格子标成不通；返回标了几格 */
+function learnBlocked(cells: number[], keep: number): number {
+  let n = 0;
+  for (const c of cells) {
+    if (c === keep || !coarseOpen[c] || coarseRoad[c]) continue;
+    const x0 = (c % CW) * C;
+    const y0 = Math.floor(c / CW) * C;
+    let bad = 0;
+    for (let y = y0; y < y0 + C; y++) for (let x = x0; x < x0 + C; x++) if (!isWalkable(x, y)) bad++;
+    if (bad >= (C * C) / 8) {
+      coarseOpen[c] = 0;
+      n++;
+    }
+  }
+  return n;
 }
 
 function astar(from: Pt, to: Pt, maxNodes: number): Pt[] | null {
@@ -1038,3 +1091,6 @@ export const WANDERERS = [
     ['villager2', -30, -8, 4], ['villager3', 28, 2, 4], ['cow', 30, 28, 3], ['sheep', -26, 30, 3], ['chicken', -40, 20, 2],
   ] as [WandererKind, number, number, number][]).map(([kind, x, y, radius]) => ({ kind, ...town2XY(x, y), radius })),
 ];
+
+
+

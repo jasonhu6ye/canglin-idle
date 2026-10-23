@@ -13,7 +13,7 @@ import { WaystoneSheet } from './WaystoneSheet';
 import { fmtNum, stacks } from './format';
 import { Icon, SkillIcon } from './icons';
 
-const COUNTS = [10, 50, 100, 500];
+const COUNTS = [1, 10, 50, 100, 500];
 const TIMES = [10, 30, 60, 240];
 const THRESHOLDS = [0.25, 0.5, 0.75];
 /** 配方分类（用户 10-23：用分类和阶级筛选代替「点击展开更多」） */
@@ -241,6 +241,14 @@ export function MonsterSheet({ s, actionId, onClose }: { s: GameState; actionId:
 function TaskConfig({ s, action: selected, onDone, far }: { s: GameState; action: string | null; onDone: () => void; far?: MapNode }) {
   const [modeType, setModeType] = useState<TaskMode['type']>('infinite');
   const [count, setCount] = useState(50);
+  // 做装备、工具默认只做 1 件（用户 10-23）
+  useEffect(() => {
+    const a = selected ? ACTIONS[selected] : null;
+    if (a?.kind === 'skill' && a.outputs.some((o) => ITEMS[o.item]?.equip)) {
+      setModeType('count');
+      setCount(1);
+    }
+  }, [selected]);
   const [minutes, setMinutes] = useState(60);
   const mode = (): TaskMode =>
     modeType === 'count' ? { type: 'count', count } : modeType === 'time' ? { type: 'time', ms: minutes * 60000 } : { type: 'infinite' };

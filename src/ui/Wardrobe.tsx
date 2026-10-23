@@ -33,6 +33,8 @@ export function Wardrobe({ s, onClose }: { s: GameState; onClose: () => void }) 
   const cur = s.settings.skin ?? OUTFITS[0].id;
   const [pick, setPick] = useState(cur);
   const sel = OUTFITS.find((o) => o.id === pick) ?? OUTFITS[0];
+  // 兑换码外观：领过对应兑换码才能穿（用户 10-23）
+  const locked = (o: Outfit) => !!o.code && !s.redeemed?.includes(o.code);
   return (
     <div className="page wardrobe">
       <div className="sheet-head">
@@ -44,9 +46,11 @@ export function Wardrobe({ s, onClose }: { s: GameState; onClose: () => void }) 
         <div>
           <b>{sel.name}</b>{sel.id === OUTFITS[0].id && <small className="muted"> · 原皮</small>}
           <p className="muted">{sel.desc}</p>
-          <button className="primary" disabled={sel.id === cur} onClick={() => store.dispatch((g) => setSettings(g, { skin: sel.id }))}>
-            {sel.id === cur ? '穿着中' : '换上'}
+          {sel.code && <p className="gold small-note">限定外观 · 自带动态特效</p>}
+          <button className="primary" disabled={sel.id === cur || locked(sel)} onClick={() => store.dispatch((g) => setSettings(g, { skin: sel.id }))}>
+            {sel.id === cur ? '穿着中' : locked(sel) ? '需要兑换码解锁' : '换上'}
           </button>
+          {locked(sel) && <p className="muted small-note">在「更多」页输入兑换码领取</p>}
         </div>
       </div>
       <div className="wardrobe-grid">
@@ -55,6 +59,7 @@ export function Wardrobe({ s, onClose }: { s: GameState; onClose: () => void }) 
             <HeroPreview outfit={o} scale={2} />
             <span>{o.name}</span>
             {o.id === cur && <small className="gold">穿着中</small>}
+            {locked(o) && <small className="muted">🔒 未解锁</small>}
           </button>
         ))}
       </div>

@@ -187,8 +187,18 @@ export function toggleMount(prev: GameState, on = !prev.mounted): GameState {
 const CODES: Record<string, { item: string; qty: number }[]> = {
   中国人能飞: [{ item: 'mount_danmark', qty: 1 }],
 };
+/** 解锁衣橱外观的兑换码（外观本身在 game/hero.ts 的 OUTFITS，用 code 字段对上） */
+const SKIN_CODES: Record<string, string> = {
+  为爱发电: '衣橱新外观：南瓜提灯人、幽蓝南瓜、白发魔骑、红黑小丑、骸骨术士',
+};
 export function redeemCode(prev: GameState, raw: string): { state: GameState; msg: string; ok: boolean } {
   const code = raw.trim();
+  if (SKIN_CODES[code]) {
+    if (prev.redeemed?.includes(code)) return { state: prev, msg: '这个兑换码已经领过了', ok: false };
+    const s = clone(prev);
+    s.redeemed = [...(s.redeemed ?? []), code];
+    return { state: s, msg: `兑换成功：解锁${SKIN_CODES[code]}，去「更多 → 衣橱」换上`, ok: true };
+  }
   const gifts = CODES[code];
   if (!gifts) return { state: prev, msg: '兑换码无效', ok: false };
   if (prev.redeemed?.includes(code)) return { state: prev, msg: '这个兑换码已经领过了', ok: false };

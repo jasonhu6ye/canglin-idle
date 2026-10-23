@@ -49,7 +49,7 @@ main { grid-area: main; position: relative; overflow: hidden; min-height: 0; }
 .panel { padding: 6px 9px; }
 .frame { padding: 8px 10px; }
 
-.go button, .tabs3 button, .opts button, .pill, .zoom-btns button, .x, .place, .slot, .cell, .skill-card, .node-list button, .modal .primary {
+.go button, .go .btn-like, .tabs3 button, .opts button, .pill, .zoom-btns button, .x, .place, .slot, .cell, .skill-card, .node-list button, .modal .primary {
   background: linear-gradient(#4a3220, #33221a); border: 0; border-radius: 2px;
   box-shadow: 0 0 0 1px var(--edge), inset 0 1px 0 #7a5a36, inset 0 -2px 0 #1d130c;
 }
@@ -182,7 +182,7 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 
 .config { border-top: 2px solid var(--edge); box-shadow: inset 0 1px 0 var(--gold-dark); padding: 8px 12px max(12px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; flex: none; }
 .tabs3, .opts, .go { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-.tabs3 button, .opts button, .go button { flex: 1; min-height: 40px; padding: 7px 4px; }
+.tabs3 button, .opts button, .go button, .go .btn-like { flex: 1; min-height: 40px; padding: 7px 4px; }
 .opts .lbl { color: var(--muted); font-size: 11px; }
 
 /* ---- 仓库、背包 ---- */
@@ -505,9 +505,18 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .farm-grid { display: grid; gap: 2px; margin: 8px 12px 4px; padding: 4px; background: #24170e; border: 1px solid #5a3c22; border-radius: 4px; }
 .farm-grid .fp { position: relative; aspect-ratio: 1; background: #5a3c22; border-radius: 1px; overflow: hidden; }
 .farm-grid .fp.wet { background: #3a2414; }
-.farm-grid .fp b { position: absolute; left: 0; right: 0; bottom: 0; background: #5a9a34; }
-.farm-grid .fp.ripe b { background: #e8b84a; animation: fp-glow 1s ease-in-out infinite alternate; }
-@keyframes fp-glow { to { background: #fff0a0; } }
+.farm-grid .fp b { position: absolute; left: 0; bottom: 0; height: 3px; background: #7acb44; }
+.farm-grid .fp .fp-ic { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.farm-grid .fp .fp-ic img, .farm-grid .fp .fp-ic canvas { max-width: 80%; max-height: 80%; }
+.farm-grid .fp .fp-ic.young { opacity: .75; }
+.farm-grid .fp .fp-ic.half { opacity: .85; }
+.farm-grid .fp.ripe { background: #6a4a26; box-shadow: inset 0 0 0 1px #e8b84a; }
+.field-crops { list-style: none; margin: 4px 12px; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 4px; }
+.field-crops li { display: flex; gap: 6px; align-items: center; padding: 4px 6px; background: #2a1c10; border: 1px solid #4a3220; border-radius: 4px; }
+.field-crops li > span { display: flex; flex-direction: column; font-size: 13px; }
+.field-crops small { font-size: 11px; }
+.farm-grid .fp.ripe .fp-ic { animation: fp-glow 1s ease-in-out infinite alternate; }
+@keyframes fp-glow { from { filter: brightness(1); } to { filter: brightness(1.35) drop-shadow(0 0 2px #ffe680); } }
 .farm-stat { margin: 2px 12px 6px; font-size: 12px; }
 .farm-btns { display: flex; gap: 6px; margin: 6px 12px; }
 .farm-btns button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 4px; }
@@ -557,3 +566,4 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 @media (max-width: 899px) { .buff-ico { width: 27px; } .buff-ico img { width: 16px; height: 16px; } }
 .fold-h { cursor: pointer; user-select: none; }
 .soon { font-style: normal; font-size: 11px; color: #ffb070; }
+.go .btn-like { display: flex; align-items: center; justify-content: center; cursor: pointer; }
