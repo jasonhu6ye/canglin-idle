@@ -6,6 +6,19 @@ export function openItem(id: string | null) {
   listeners.forEach((f) => f(id));
 }
 
+/** 开宝箱、福袋的结果弹窗 */
+type LootListener = (r: { from: string; got: Record<string, number> } | null) => void;
+const lootListeners = new Set<LootListener>();
+export function showLoot(r: { from: string; got: Record<string, number> } | null) {
+  lootListeners.forEach((f) => f(r));
+}
+export function onShowLoot(fn: LootListener) {
+  lootListeners.add(fn);
+  return () => {
+    lootListeners.delete(fn);
+  };
+}
+
 export function onOpenItem(fn: Listener) {
   listeners.add(fn);
   return () => {

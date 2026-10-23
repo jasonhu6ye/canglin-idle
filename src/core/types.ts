@@ -10,7 +10,8 @@ export type SkillGroup = 'gather' | 'produce' | 'combat';
 
 export type CombatStyle = 'melee' | 'ranged' | 'magic';
 
-export type GearSlot = 'weapon' | 'head' | 'body' | 'feet' | 'hands' | 'neck' | 'ring';
+/** mount：坐骑栏（用户 10-23 要求先留好栏位，坐骑以后加） */
+export type GearSlot = 'weapon' | 'head' | 'body' | 'feet' | 'hands' | 'neck' | 'ring' | 'mount';
 export type ToolSlot = 'axe' | 'pickaxe' | 'sickle' | 'knife' | 'rod' | 'hoe' | 'hammer' | 'needle';
 export type EquipSlot = GearSlot | ToolSlot;
 
@@ -19,7 +20,14 @@ export type BeltSlot = 'food' | 'potion';
 export type BuffKind = 'atk' | 'str' | 'def' | 'speed' | 'xp';
 export interface Buff { kind: BuffKind; pct: number; ms: number }
 
-export type ItemCategory = 'resource' | 'material' | 'food' | 'potion' | 'ammo' | 'gear' | 'tool' | 'seed' | 'misc';
+export type ItemCategory = 'resource' | 'material' | 'food' | 'potion' | 'ammo' | 'gear' | 'tool' | 'seed' | 'loot' | 'deco' | 'misc';
+
+/** 宝箱、福袋打开后：先给一把金币，再从奖池里按权重抽 rolls 次 */
+export interface LootTable {
+  coins: [number, number];
+  rolls: number;
+  pool: { item: string; min: number; max: number; w: number }[];
+}
 
 export interface ItemDef {
   id: string;
@@ -37,6 +45,10 @@ export interface ItemDef {
   desc?: string;
   /** 弹药：ranged 用箭，magic 用符文；power 加到力量加成上 */
   ammo?: { style: 'ranged' | 'magic'; power: number };
+  /** 宝箱、福袋：可以打开 */
+  opens?: LootTable;
+  /** 战利品图标：首领战旗、首领战利品按哪个首领画 */
+  boss?: string;
   equip?: {
     slot: EquipSlot;
     /** 装备要求：skill 达到 level */

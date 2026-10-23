@@ -33,9 +33,10 @@ describe('数据闭环', () => {
       if (a.fail?.item) made.add(a.fail.item);
     }
     for (const m of Object.values(MONSTERS)) m.drops.forEach((d) => made.add(d.item));
+    for (const it of Object.values(ITEMS)) it.opens?.pool.forEach((e) => made.add(e.item));
     for (const it of Object.values(ITEMS)) {
       expect(made.has(it.id), `${it.name} 没有来源`).toBe(true);
-      const usable = used.has(it.id) || !!it.equip || !!it.heals || !!it.ammo;
+      const usable = used.has(it.id) || !!it.equip || !!it.heals || !!it.ammo || !!it.opens || it.category === 'loot' || it.category === 'deco';
       if (!['coins', 'bones', 'burnt_food'].includes(it.id) && !it.id.startsWith('enh_')) expect(usable, `${it.name} 没有用途`).toBe(true);
     }
   });
@@ -94,5 +95,14 @@ describe('怪物图鉴', () => {
     }
     const used = new Set(Object.values(ACTIONS).flatMap((a) => (a.kind === 'skill' ? a.inputs?.map((i) => i.item) ?? [] : [])));
     for (const id of ['bones', 'meat_1', 'meat_8', 'core_1', 'core_8']) expect(used.has(id), id).toBe(true);
+  });
+
+  it('宝箱、福袋奖池里的东西都存在；每个首领都有专属战利品和战旗', () => {
+    for (const it of Object.values(ITEMS)) it.opens?.pool.forEach((e) => expect(ITEMS[e.item], `${it.name} 奖池里的 ${e.item}`).toBeTruthy());
+    for (const m of Object.values(MONSTERS)) {
+      if (m.rank !== 'boss') continue;
+      expect(m.drops.some((d) => d.item === `banner_${m.id}`), `${m.name} 没有战旗`).toBe(true);
+      expect(m.drops.some((d) => d.item === `trophy_${m.id}`), `${m.name} 没有战利品`).toBe(true);
+    }
   });
 });

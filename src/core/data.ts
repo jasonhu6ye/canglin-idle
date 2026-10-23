@@ -1,5 +1,5 @@
 import type {
-  ActionDef, Buff, BuffKind, CombatStyle, Drop, EquipSlot, ItemCategory, ItemDef, ItemStack, MonsterDef, RegionId, SkillGroup, SkillId, ToolSlot,
+  ActionDef, Buff, BuffKind, CombatStyle, Drop, EquipSlot, ItemCategory, ItemDef, ItemStack, LootTable, MonsterDef, RegionId, SkillGroup, SkillId, ToolSlot,
 } from './types';
 import { FORM_FAMILY, isAnimal, SPECIES, type Family, type Species } from './bestiary';
 
@@ -342,14 +342,100 @@ for (const j of JEWELS) {
   item(`${j.gem}_amulet`, `${j.name}项链`, 'gear', 220 + j.power * 40, { equip: { slot: 'neck', skill: 'hitpoints', level: j.level, attack: 0, strength: j.power, defence: 0 } });
 }
 
+const HERB_FOR_TIER = ['green_herb', 'fire_bloom', 'moon_herb', 'silver_leaf', 'flame_heart', 'frost_lotus', 'frost_lotus', 'frost_lotus'];
+const FISH_FOR_TIER = ['raw_minnow', 'raw_trout', 'raw_cod', 'raw_eel', 'raw_ghostfish', 'raw_abyssfish', 'raw_abyssfish', 'raw_abyssfish'];
+const ENH_FOR_TIER = ['enh_basic', 'enh_basic', 'enh_mid', 'enh_mid', 'enh_mid', 'enh_high', 'enh_high', 'enh_legend'];
+
+// ---- 精英和首领的战利品（用户 10-23）：福袋、宝箱、首领宝藏能打开；首领还有专属战利品和战旗 ----
+const BAG_NAME = ['粗布福袋', '麻布福袋', '红绸福袋', '锦绣福袋', '祥云福袋', '紫金福袋', '龙鳞福袋', '天官福袋'];
+const CHEST_NAME = ['旧木宝箱', '铁皮宝箱', '铜扣宝箱', '银边宝箱', '金饰宝箱', '秘银宝箱', '龙骨宝箱', '星辉宝箱'];
+/** 每个首领掉的专属战利品，名字跟着首领走 */
+const BOSS_TROPHY: Record<string, [string, string]> = {
+  slime_king: ['史莱姆王冠核', '史莱姆王体内那颗会发光的核，软软弹弹的。'],
+  rat_king: ['鼠王金牙', '鼠王嘴里镶的金牙，不知道从哪偷来的。'],
+  copper_tortoise: ['铜甲龟壳片', '一片泛着铜绿的厚龟甲。'],
+  mushroom_queen: ['女王菌冠', '蘑菇女王头顶的伞盖，还在慢慢冒孢子。'],
+  isle_eel: ['鳗王电鳍', '摸上去还会轻轻发麻。'],
+  bandit_king: ['山贼金印', '山贼头子用来盖「借条」的金印。'],
+  sand_wyrm: ['沙虫利齿', '一排倒钩似的牙，咬住就不松口。'],
+  ape_king: ['猿王金箍', '竹海猿王戴在头上的金箍。'],
+  magma_tortoise: ['熔岩龟甲', '摸着还是烫的。'],
+  drowned_captain: ['船长罗盘', '指针永远指向海底沉船的方向。'],
+  salt_crab: ['盐晶巨钳', '整只钳子结满了盐晶。'],
+  croc_king: ['鳄王獠牙', '比手臂还长的獠牙。'],
+  scorpion_queen: ['蝎后毒针', '针尖上还挂着一滴毒液。'],
+  meteor_colossus: ['陨星之心', '陨星巨像胸口那块还在发烫的陨石。'],
+  spore_mother: ['菌母孢核', '菌母孕育孢子的核心。'],
+  tide_guardian: ['潮汐之眼', '盯着它看久了能听到浪声。'],
+  mire_hydra: ['九头蛇鳞', '九头蛇身上最硬的一片鳞。'],
+  ice_wyrm: ['冰渊寒髓', '一团永远不会化的寒冰。'],
+  treant_king: ['远古树心', '远古树王的心材，年轮数不清。'],
+  bone_dragon: ['骸龙头骨碎片', '骸骨龙额头上的一块骨片。'],
+  magma_titan: ['熔核碎片', '熔核泰坦体内的熔核碎块。'],
+  crystal_dragon: ['晶龙之鳞', '一片会折射彩光的龙鳞。'],
+  abyss_lord: ['深渊王冠', '深渊之主的王冠，冷得刺骨。'],
+  star_devourer: ['星渊之瞳', '瞳孔里像装着一整片星空。'],
+  lion_king: ['金鬃', '金鬃狮王的一绺鬃毛，在阳光下闪着金光。'],
+  python_mother: ['蛇母之卵', '一颗没孵化的巨蛇卵，壳上有花纹。'],
+  sandstorm_king: ['沙暴之翼', '沙暴之王的一片翅膜，薄得透光。'],
+  crystal_sovereign: ['主宰晶冠', '晶簇主宰头顶的晶冠。'],
+};
+{
+  const have = new Set(itemList.map((i) => i.id));
+  const pick = (pool: LootTable['pool']) => pool.filter((e) => have.has(e.item));
+  TIERS.forEach((T, t) => {
+    const n = t + 1;
+    const v = BAR_VALUE[t];
+    const seeds = CROPS.filter((c) => tierForLevel(c[2]) === t).map((c) => `seed_${c[0]}`);
+    const gear = EQUIP_TYPES.filter((e) => !e.stats.speed).map((e) => `${T.id}_${e.key}`);
+    const gearPool = (w: number) => gear.map((g) => ({ item: g, min: 1, max: 1, w: w / gear.length }));
+    item(`luckybag_${n}`, BAG_NAME[t], 'loot', v * 3, {
+      tier: t, desc: '精英和首领身上搜出来的福袋，打开能得到金币和一把同阶材料。',
+      opens: { coins: [v * 2, v * 6], rolls: 2, pool: pick([
+        { item: T.ore, min: 3, max: 8, w: 3 }, { item: `${T.wood}_log`, min: 3, max: 8, w: 3 },
+        { item: `hide_${n}`, min: 2, max: 5, w: 2 }, { item: `cotton_${n}`, min: 2, max: 5, w: 2 },
+        { item: `steak_${n}`, min: 2, max: 5, w: 2 }, { item: HERB_FOR_TIER[t], min: 1, max: 3, w: 2 },
+        { item: FISH_FOR_TIER[t], min: 1, max: 3, w: 1 },
+        ...MAT_LINE_IDS.map((l) => ({ item: `${l}_${n}`, min: 2, max: 5, w: 1 })),
+        ...seeds.map((id) => ({ item: id, min: 1, max: 3, w: 2 / Math.max(1, seeds.length) })),
+        { item: ENH_FOR_TIER[t], min: 1, max: 1, w: 0.5 }, { item: GEM_FOR_TIER[t], min: 1, max: 1, w: 0.3 },
+      ]) },
+    });
+    item(`chest_${n}`, CHEST_NAME[t], 'loot', v * 10, {
+      tier: t, desc: '精英和首领守着的宝箱，里面有锭、弹药、宝石，运气好有本阶装备。',
+      opens: { coins: [v * 6, v * 15], rolls: 3, pool: pick([
+        { item: `${T.id}_bar`, min: 2, max: 5, w: 4 }, { item: `core_${n}`, min: 1, max: 3, w: 3 },
+        { item: `${T.id}_rune`, min: 10, max: 25, w: 1.5 }, { item: `${T.id}_arrow`, min: 10, max: 25, w: 1.5 },
+        { item: `crystal_rune_${n}`, min: 5, max: 15, w: 1 }, { item: `feather_arrow_${n}`, min: 5, max: 15, w: 1 },
+        { item: GEM_FOR_TIER[t], min: 1, max: 1, w: 1.5 }, { item: ENH_FOR_TIER[t], min: 1, max: 2, w: 1.5 },
+        { item: `luckybag_${n}`, min: 1, max: 1, w: 2 }, ...gearPool(1.5),
+      ]) },
+    });
+    item(`bosschest_${n}`, `${CHEST_NAME[t].replace('宝箱', '')}首领宝藏`, 'loot', v * 30, {
+      tier: t, desc: '只有首领会掉的宝藏，开出本阶装备、宝石、强化石的机会大得多。',
+      opens: { coins: [v * 20, v * 50], rolls: 5, pool: pick([
+        { item: `${T.id}_bar`, min: 4, max: 10, w: 3 }, { item: `core_${n}`, min: 2, max: 5, w: 3 },
+        { item: GEM_FOR_TIER[t], min: 1, max: 2, w: 2.5 }, { item: ENH_FOR_TIER[t], min: 1, max: 3, w: 2.5 },
+        { item: `chest_${n}`, min: 1, max: 1, w: 1.5 }, { item: `luckybag_${n}`, min: 1, max: 2, w: 2 },
+        ...gearPool(4),
+      ]) },
+    });
+  });
+  for (const sp of SPECIES) {
+    if (sp.rank !== 'boss') continue;
+    const [tn, td] = BOSS_TROPHY[sp.id] ?? [`${sp.name}之证`, '击败首领的凭证。'];
+    item(`trophy_${sp.id}`, tn, 'loot', BAR_VALUE[sp.tier] * 20, { tier: sp.tier, boss: sp.id, desc: `${td}击败「${sp.name}」才能得到，能卖个好价钱。` });
+    item(`banner_${sp.id}`, `${sp.name}战旗`, 'deco', BAR_VALUE[sp.tier] * 50, {
+      tier: sp.tier, boss: sp.id, desc: `「${sp.name}」的专属战旗，极少掉落。装饰品，收集齐全部首领战旗是一份荣誉。`,
+    });
+  }
+}
+
 export const ITEMS: Record<string, ItemDef> = Object.fromEntries(itemList.map((i) => [i.id, i]));
 
 // ---- 怪物与生物 ----
 // 设计表在 bestiary.ts，这里按统一规则算出属性和掉落
 
-const HERB_FOR_TIER = ['green_herb', 'fire_bloom', 'moon_herb', 'silver_leaf', 'flame_heart', 'frost_lotus', 'frost_lotus', 'frost_lotus'];
-const FISH_FOR_TIER = ['raw_minnow', 'raw_trout', 'raw_cod', 'raw_eel', 'raw_ghostfish', 'raw_abyssfish', 'raw_abyssfish', 'raw_abyssfish'];
-const ENH_FOR_TIER = ['enh_basic', 'enh_basic', 'enh_mid', 'enh_mid', 'enh_mid', 'enh_high', 'enh_high', 'enh_legend'];
 const RANK_HP = { normal: 1, elite: 2.5, boss: 8 };
 const RANK_POW = { normal: 1, elite: 1.15, boss: 1.3 };
 const RANK_HIT = { normal: 1, elite: 1.25, boss: 1.5 };
@@ -387,12 +473,23 @@ function speciesDrops(sp: Species, idx: number): Drop[] {
   if (fam === 'dragon') add(T.ore, 2 * k, 0.3);
   if (fam === 'serpent' && sp.form === 'worm') add(T.ore, k, 0.25);
   // 精英和首领：宝石、本阶装备、强化石
-  if (sp.rank !== 'normal' || fam === 'dragon') add(GEM_FOR_TIER[t], 1, sp.rank === 'boss' ? 0.15 : sp.rank === 'elite' ? 0.03 : 0.01);
+  if (sp.rank !== 'normal' || fam === 'dragon') add(GEM_FOR_TIER[t], 1, sp.rank === 'boss' ? 0.25 : sp.rank === 'elite' ? 0.03 : 0.01);
   if (sp.rank !== 'normal') {
     const gear = EQUIP_TYPES.filter((e) => !e.stats.speed);
-    add(`${T.id}_${gear[idx % gear.length].key}`, 1, sp.rank === 'boss' ? 0.05 : 0.01);
+    add(`${T.id}_${gear[idx % gear.length].key}`, 1, sp.rank === 'boss' ? 0.1 : 0.01);
+    if (sp.rank === 'boss') add(`${T.id}_${gear[(idx + 7) % gear.length].key}`, 1, 0.06);
   }
-  if (sp.rank === 'boss') add(ENH_FOR_TIER[t], 1, 0.1);
+  // 福袋、宝箱、首领宝藏、首领专属战利品和战旗（用户 10-23）
+  if (sp.rank === 'normal') add(`luckybag_${n}`, 1, 0.004);
+  if (sp.rank === 'elite') { add(`luckybag_${n}`, 1, 0.12); add(`chest_${n}`, 1, 0.04); }
+  if (sp.rank === 'boss') {
+    add(ENH_FOR_TIER[t], 1, 0.2);
+    add(`luckybag_${n}`, 2, 0.5);
+    add(`chest_${n}`, 1, 0.25);
+    add(`bosschest_${n}`, 1, 0.3);
+    add(`trophy_${sp.id}`, 1, 0.35);
+    add(`banner_${sp.id}`, 1, 0.03);
+  }
   return d;
 }
 

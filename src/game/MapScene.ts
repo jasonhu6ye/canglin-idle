@@ -1276,17 +1276,17 @@ export class MapScene extends Phaser.Scene {
 
   private addBar(spr: Phaser.GameObjects.Sprite, m: MonsterDef) {
     const boss = m.rank === 'boss';
-    const w = boss ? 46 : 18;
-    const h = boss ? 4 : 2;
-    const bg = this.add.rectangle(0, 0, w + 2, h + 2, 0x1b120c).setStrokeStyle(1, boss ? 0xe8b84a : 0x6b5132).setOrigin(0.5, 1);
+    const w = boss ? 64 : 18;
+    const h = boss ? 6 : 2;
+    const bg = this.add.rectangle(0, 0, w + 2, h + 2, 0x1b120c).setStrokeStyle(boss ? 1.5 : 1, boss ? 0xe8b84a : 0x6b5132).setOrigin(0.5, 1);
     // 掉血时先掉红条，后面一截浅色残影慢慢跟上
-    const trail = this.add.rectangle(0, 0, w, h, 0xfff0c0).setOrigin(0, 1);
-    const fill = this.add.rectangle(0, 0, w, h, boss ? 0xd8402c : 0xe08a2c).setOrigin(0, 1);
+    const trail = this.add.rectangle(0, 0, w, h, boss ? 0xffb08a : 0xfff0c0).setOrigin(0, 1);
+    const fill = this.add.rectangle(0, 0, w, h, boss ? 0xe8161a : 0xe08a2c).setOrigin(0, 1);
     const bar: (typeof this.bars)[number] = { spr, m, bg, trail, fill, w, h, live: false, shown: 1 };
     if (boss) {
       // 首领：血条上方常驻名字，脚下一圈暗红光环和阴影
       bar.label = this.add.text(0, 0, `首领 · ${m.name}  Lv${m.level}`, {
-        fontFamily: FONT, fontSize: '8px', color: '#ffd86a', stroke: '#2a0808', strokeThickness: 3, resolution: 4,
+        fontFamily: FONT, fontSize: '10px', color: '#ffd86a', stroke: '#2a0808', strokeThickness: 3, resolution: 4,
       }).setOrigin(0.5, 1);
       const S = monsterFrameSize(m) * BOSS_SCALE;
       const shadow = this.add.ellipse(spr.x, spr.y, S * 0.9, S * 0.28, 0x000000, 0.35);

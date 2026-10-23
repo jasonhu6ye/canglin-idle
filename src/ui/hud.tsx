@@ -52,8 +52,8 @@ export function BossBar({ s }: { s: GameState }) {
   return (
     <div className="boss-bar">
       <div className="name"><small>首领</small>{m.name}<span>Lv{m.level}</span></div>
-      <div className="track"><i className="trail" style={{ width: `${pct}%` }} /><i className="fill" style={{ width: `${pct}%` }} /></div>
-      <div className="num">{s.combat.respawnMs > 0 ? `重新出现中… ${Math.ceil(s.combat.respawnMs / 1000)} 秒` : `${Math.ceil(hp)} / ${m.hp}`}</div>
+      <div className="track"><i className="trail" style={{ width: `${pct}%` }} /><i className="fill" style={{ width: `${pct}%` }} />
+      <div className="num">{s.combat.respawnMs > 0 ? `重新出现中… ${Math.ceil(s.combat.respawnMs / 1000)} 秒` : `${Math.ceil(hp)} / ${m.hp}`}</div></div>
     </div>
   );
 }
@@ -161,6 +161,7 @@ export function QuestCard({ s, onGo }: { s: GameState; onGo: (nodeId: string) =>
       <b className="gold">新手任务 {idx}/{QUESTS.length}</b> {questText(p.q)}
       <span className="muted"> {p.have}/{p.q.goal.n} · 奖励 {p.q.reward} 金币</span>
       {node && <button className="pill" onClick={() => onGo(node.id)}>去做</button>}
+      <div className="quest-tip">💡 {p.q.tip}</div>
     </div>
   );
 }

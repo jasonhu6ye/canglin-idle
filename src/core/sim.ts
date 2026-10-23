@@ -968,3 +968,45 @@ export function xpPerHour(s: GameState, actionId: string): number {
   const killMs = (m.hp / Math.max(avgDmg, 0.01)) * playerAttackMs(s) + m.respawnMs;
   return Math.round((m.hp * 3600000) / killMs);
 }
+
+/**
+ * 打开宝箱、福袋（用户 10-23）：背包里的随时能开，仓库里的要站在仓库旁。
+ * 金币直接进仓库；开出来的东西放回原处（背包放不下的进仓库）。返回新状态和开出了什么。
+ */
+export function openContainer(prev: GameState, id: string, from: 'bag' | 'bank', count = 1): [GameState, Record<string, number>] {
+  const table = ITEMS[id]?.opens;
+  const have = (from === 'bag' ? prev.bag[id] : prev.bank[id]) ?? 0;
+  const n = Math.min(have, Math.max(1, Math.floor(count)));
+  if (!table || n <= 0 || (from === 'bank' && !atBank(prev))) return [prev, {}];
+  const s = clone(prev);
+  const rand = () => {
+    const [r, next] = nextRandom(s.rng);
+    s.rng = next;
+    return r;
+  };
+  const roll = (lo: number, hi: number) => lo + Math.floor(rand() * (hi - lo + 1));
+  const src = from === 'bag' ? s.bag : s.bank;
+  src[id] -= n;
+  if (src[id] <= 0) delete src[id];
+  const got: Record<string, number> = {};
+  const total = table.pool.reduce((a, e) => a + e.w, 0);
+  for (let k = 0; k < n; k++) {
+    got.coins = (got.coins ?? 0) + roll(table.coins[0], table.coins[1]);
+    for (let r = 0; r < table.rolls && total > 0; r++) {
+      let x = rand() * total;
+      const e = table.pool.find((p) => (x -= p.w) < 0) ?? table.pool[table.pool.length - 1];
+      got[e.item] = (got[e.item] ?? 0) + roll(e.min, e.max);
+    }
+  }
+  for (const [item, q] of Object.entries(got)) {
+    s.seen[item] = 1;
+    if (item === 'coins' || from === 'bank') {
+      s.bank[item] = (s.bank[item] ?? 0) + q;
+      continue;
+    }
+    const fit = Math.min(q, bagRoomFor(s.bag, item));
+    if (fit > 0) s.bag[item] = (s.bag[item] ?? 0) + fit;
+    if (q > fit) s.bank[item] = (s.bank[item] ?? 0) + q - fit;
+  }
+  return [s, got];
+}

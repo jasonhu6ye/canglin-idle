@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ACTIONS, buffText, ITEMS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, type MapNode } from '../core/data';
 import {
-  atBank, atMarket, nearestBank, nearestMarket, BAG_SLOTS, BELT_CAP, beltSlotOf, eat, fromBelt, POTION_AT, toBelt, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip,
+  atBank, atMarket, nearestBank, nearestMarket, BAG_SLOTS, BELT_CAP, beltSlotOf, eat, fromBelt, POTION_AT, toBelt, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip, openContainer,
   weaponStyle,
 } from '../core/sim';
 import type { EquipSlot, GameState, ItemCategory, SkillId, Summary } from '../core/types';
@@ -13,7 +13,8 @@ import { Wardrobe } from './Wardrobe';
 import { exportSave, importSave } from '../saveCode';
 import { outfitOf } from '../game/hero';
 import { Icon, SkillIcon } from './icons';
-import { FINE_POINTER, openItem } from './itemOpen';
+import { FINE_POINTER, openItem, showLoot } from './itemOpen';
+import { openGuide } from './Guide';
 
 const GEAR_SLOTS: [EquipSlot, string][] = [
   ['head', '头部'], ['neck', '项链'], ['weapon', '武器'], ['body', '身体'], ['hands', '手部'], ['feet', '脚部'], ['ring', '戒指'],
@@ -26,7 +27,7 @@ const STYLE_NAME = { melee: '近战', ranged: '远程', magic: '魔法' };
 
 const CATEGORIES: [ItemCategory | 'all', string][] = [
   ['all', '全部'], ['resource', '资源'], ['material', '材料'], ['food', '食物'], ['potion', '药水'], ['ammo', '弹药'],
-  ['gear', '装备'], ['tool', '工具'], ['misc', '其他'],
+  ['gear', '装备'], ['tool', '工具'], ['loot', '战利品'], ['deco', '装饰'], ['misc', '其他'],
 ];
 
 /** 不在仓库旁时的提示和寻路按钮 */
@@ -64,6 +65,12 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
         </span>
       )}
       <div className="go">
+        {item.opens && (
+          <>
+            <button className="primary" disabled={from === 'bank' && !near} onClick={() => openBox(id, from, 1)}>打开</button>
+            {qty > 1 && <button disabled={from === 'bank' && !near} onClick={() => openBox(id, from, Math.min(qty, 50))}>打开 {Math.min(qty, 50)} 个</button>}
+          </>
+        )}
         {e && <button className="primary" disabled={!canEquip} onClick={() => store.dispatch((g) => equip(g, id))}>装备</button>}
         {from === 'bag' && item.heals && <button className="primary" onClick={() => store.dispatch((g) => eat(g, id))}>吃一个</button>}
         {beltSlotOf(id) && (from === 'bag' || near) && (
@@ -94,11 +101,22 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
   );
 }
 
+function openBox(id: string, from: 'bag' | 'bank', n: number) {
+  let got: Record<string, number> = {};
+  store.dispatch((g) => {
+    const [next, r] = openContainer(g, id, from, n);
+    got = r;
+    return next;
+  });
+  if (Object.keys(got).length) showLoot({ from: n > 1 ? `${ITEMS[id].name} ×${n}` : ITEMS[id].name, got });
+}
+
 /** 背包里右键物品：能穿就穿，食物药水放进补给栏，别的不动 */
 function quickUse(g: GameState, id: string) {
   const it = ITEMS[id];
   if (it?.equip) return equip(g, id);
   if (beltSlotOf(id)) return toBelt(g, id);
+  if (it?.opens) queueMicrotask(() => openBox(id, 'bag', 1));
   return g;
 }
 
@@ -174,6 +192,11 @@ export function CharacterPanel({ s }: { s: GameState }) {
       <p className="muted">
         攻击 +{b.attack} · 力量 +{b.strength} · 防御 +{b.defence} · 攻速 {((weapon?.attackMs ?? 2400) / 1000).toFixed(1)} 秒
       </p>
+      <h2>坐骑 <small className="muted">骑上坐骑走路更快</small></h2>
+      <div className="equip tools">
+        {slot('mount', '暂无坐骑')}
+      </div>
+      {!s.equipment.mount && <p className="muted">还没有坐骑。坐骑即将开放，以后得到的坐骑放在这一栏。</p>}
       <h2>补给栏 <small className="muted">各放一种，最多 {BELT_CAP} 个，不占背包</small></h2>
       <div className="equip tools">
         {(['food', 'potion'] as const).map((k) => {
@@ -310,6 +333,8 @@ export function MorePanel({ s }: { s: GameState }) {
   const got = Object.keys(s.seen).filter((id) => id !== 'coins' && ITEMS[id]).length;
   return (
     <div className="page">
+      <h2>新手指引</h2>
+      <button onClick={openGuide}>重新查看新手指引</button>
       <h2>物品图鉴 <small className="muted">已收集 {got}/{total}</small></h2>
       <div className="bag-meter"><i style={{ width: `${(got / total) * 100}%` }} /></div>
       <button className="primary" onClick={() => setCodex(true)}>打开图鉴</button>

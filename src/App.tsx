@@ -10,7 +10,8 @@ import { actionName } from './ui/format';
 import { BossBar, MapButtons, QuestCard, QueuePanel, StatusChips, TopBar } from './ui/hud';
 import { QUESTS, questText } from './core/quests';
 import { TplIcon } from './ui/icons';
-import { ItemPopup } from './ui/ItemPopup';
+import { ItemPopup, LootReveal } from './ui/ItemPopup';
+import { Guide, openGuide } from './ui/Guide';
 import { BagPanel, BankPanel, CharacterPanel, MorePanel, NodeList, OfflineModal, SkillsPanel } from './ui/panels';
 import { WorldMap } from './ui/WorldMap';
 
@@ -136,11 +137,14 @@ export function App() {
   const [help, setHelp] = useState(() => {
     // 电脑端第一次打开时自动弹一次快捷键说明
     try {
-      if (!window.matchMedia(WIDE_QUERY).matches || localStorage.getItem('canglin-help-seen')) return false;
-      localStorage.setItem('canglin-help-seen', '1');
-      return true;
+      // 第一次进游戏先看新手指引，快捷键说明等下一次再自动弹
+      return window.matchMedia(WIDE_QUERY).matches && !localStorage.getItem('canglin-help-seen') && !!localStorage.getItem('canglin-guide-seen');
     } catch { return false; }
   });
+  useEffect(() => {
+    if (!help) return;
+    try { localStorage.setItem('canglin-help-seen', '1'); } catch { /* 存不了就算了 */ }
+  }, [help]);
   // 电脑端快捷键
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -217,12 +221,17 @@ export function App() {
           <div className="item-popup-body frame shortcuts" onClick={(e) => e.stopPropagation()}>
             <h2>电脑端操作</h2>
             <table><tbody>{SHORTCUTS.map(([k, d]) => <tr key={k}><td><kbd>{k}</kbd></td><td>{d}</td></tr>)}</tbody></table>
-            <button className="primary close" onClick={() => setHelp(false)}>知道了</button>
+            <div className="go">
+              <button onClick={() => { setHelp(false); openGuide(); }}>新手指引</button>
+              <button className="primary" onClick={() => setHelp(false)}>知道了</button>
+            </div>
           </div>
         </div>
       )}
       {offline && <OfflineModal sum={offline} />}
       <ItemPopup s={s} />
+      <LootReveal />
+      <Guide />
     </div>
   );
 }

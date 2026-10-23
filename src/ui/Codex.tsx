@@ -22,6 +22,8 @@ const TYPES: { id: string; name: string; test: (it: ItemDef) => boolean }[] = [
   { id: 'tool', name: '工具', test: (it) => it.category === 'tool' },
   { id: 'ammo', name: '弹药', test: (it) => it.category === 'ammo' },
   { id: 'food', name: '食物·药水', test: (it) => it.category === 'food' || it.category === 'potion' },
+  { id: 'loot', name: '宝箱·福袋·战利品', test: (it) => it.category === 'loot' },
+  { id: 'deco', name: '首领战旗', test: (it) => it.category === 'deco' },
   { id: 'misc', name: '其他', test: () => true },
 ];
 const typeOf = (it: ItemDef) => TYPES.find((t) => t.test(it))!.id;

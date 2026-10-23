@@ -1,4 +1,4 @@
-import { actionDuration, advance, buySeed, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour } from './sim';
+import { actionDuration, advance, buySeed, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour, openContainer } from './sim';
 import { levelForXp, speedForLevel, XP_TABLE } from './xp';
 import type { GameState, SkillAction, TaskMode } from './types';
 import { ACTIONS, nodeOfAction, standOf, travelMs } from './data';
@@ -522,5 +522,17 @@ describe('漏洞排查', () => {
       expect(s.hp > 0 && Number.isFinite(s.hp)).toBe(true);
       expect(Number.isFinite(s.rng)).toBe(true);
     }
+  });
+
+  it('打开宝箱：扣掉宝箱，金币进仓库，东西进背包', () => {
+    const s0 = newGame(0, 7);
+    s0.bag = { chest_1: 3 };
+    const [s1, got] = openContainer(s0, 'chest_1', 'bag', 2);
+    expect(s1.bag.chest_1).toBe(1);
+    expect(got.coins).toBeGreaterThan(0);
+    expect(s1.bank.coins).toBe((s0.bank.coins ?? 0) + got.coins);
+    const items = Object.keys(got).filter((k) => k !== 'coins');
+    expect(items.length).toBeGreaterThan(0);
+    for (const k of items) expect((s1.bag[k] ?? 0) + (s1.bank[k] ?? 0) - (s0.bank[k] ?? 0)).toBe(got[k]);
   });
 });

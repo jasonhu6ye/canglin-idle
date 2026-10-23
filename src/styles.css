@@ -363,12 +363,33 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .rc-tip { width: 100%; font-size: 11px; }
 
 /* 首领战：屏幕上方常驻大血条 */
-.boss-bar { position: absolute; top: 44px; left: 50%; transform: translateX(-50%); width: min(460px, 70%); z-index: 4; pointer-events: none; text-align: center; }
-.boss-bar .name { color: #ffd86a; font-size: 15px; font-weight: 700; letter-spacing: 2px; text-shadow: 0 2px 0 #2a0808, 0 0 6px #000; margin-bottom: 3px; }
-.boss-bar .name small { font-size: 10px; background: #8a1a10; color: #fff0c0; padding: 1px 5px; border-radius: 2px; margin-right: 6px; vertical-align: 2px; letter-spacing: 0; }
-.boss-bar .name span { font-size: 11px; color: #f0c8a0; margin-left: 6px; letter-spacing: 0; }
-.boss-bar .track { position: relative; height: 12px; background: #1a0a08; border: 2px solid #e8b84a; box-shadow: 0 0 0 2px #2a0808, 0 0 14px rgba(220, 40, 20, 0.55); border-radius: 2px; overflow: hidden; }
+.boss-bar { position: absolute; top: 44px; left: 50%; transform: translateX(-50%); width: min(680px, 84%); z-index: 4; pointer-events: none; text-align: center; }
+.boss-bar .name { color: #ffd86a; font-size: 19px; font-weight: 700; letter-spacing: 2px; text-shadow: 0 2px 0 #2a0808, 0 0 6px #000; margin-bottom: 3px; }
+.boss-bar .name small { font-size: 12px; background: #8a1a10; color: #fff0c0; padding: 1px 5px; border-radius: 2px; margin-right: 6px; vertical-align: 2px; letter-spacing: 0; }
+.boss-bar .name span { font-size: 13px; color: #f0c8a0; margin-left: 6px; letter-spacing: 0; }
+.boss-bar .track { position: relative; height: 22px; background: #1a0606; border: 2px solid #e8b84a; box-shadow: 0 0 0 2px #2a0808, 0 0 18px rgba(230, 20, 20, 0.65); border-radius: 2px; overflow: hidden; }
 .boss-bar .track i { position: absolute; left: 0; top: 0; bottom: 0; }
-.boss-bar .track .trail { background: #fff0c0; transition: width 0.9s ease-out 0.2s; }
-.boss-bar .track .fill { background: linear-gradient(#ff6a4a, #c8241a 60%, #8a140e); transition: width 0.15s; }
-.boss-bar .num { font-size: 11px; color: #f0e0c8; text-shadow: 0 1px 0 #000; margin-top: 2px; }
+.boss-bar .track .trail { background: #ffb08a; transition: width 0.9s ease-out 0.2s; }
+.boss-bar .track .fill { background: linear-gradient(#ff4a4a, #e01418 45%, #a00c10 80%, #6a0608); transition: width 0.15s; }
+.boss-bar .num { position: absolute; inset: 0; line-height: 18px; font-size: 13px; font-weight: 700; color: #fff4e0; text-shadow: 0 1px 0 #000, 0 0 3px #000; }
+
+/* 开宝箱结果 */
+.loot-reveal { padding: 12px; }
+.loot-reveal h3 { margin: 0 0 8px; color: var(--gold, #f0c850); text-align: center; }
+.loot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px; }
+.loot-cell { display: flex; align-items: center; gap: 6px; padding: 3px 6px; background: #120b07; box-shadow: 0 0 0 1px var(--edge); border-radius: 2px; font-size: 12px; }
+.loot-cell span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.loot-cell b { color: #f0e0c8; }
+.loot-cell.rare { box-shadow: 0 0 0 1px #e8b84a, 0 0 8px rgba(232, 184, 74, 0.35); }
+.loot-cell.rare span { color: #ffd86a; }
+
+/* 新手任务提示、新手指引 */
+.quest-tip { flex-basis: 100%; font-size: 11px; color: #c8b89a; line-height: 1.45; }
+.guide { padding: 14px 16px; width: min(460px, 100%); }
+.guide h2 { margin: 4px 0 8px; color: #ffd86a; text-align: center; }
+.guide ul { margin: 0 0 10px; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; line-height: 1.55; font-size: 13px; }
+.guide .go { display: flex; gap: 6px; justify-content: center; }
+.guide .go button { min-width: 88px; }
+.guide-dots { display: flex; justify-content: center; gap: 6px; }
+.guide-dots i { width: 8px; height: 8px; border-radius: 50%; background: #4a3a2a; cursor: pointer; }
+.guide-dots i.on { background: #e8b84a; }

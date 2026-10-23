@@ -1,8 +1,9 @@
-import { CROPS, ITEMS, TIERS, tierName } from '../core/data';
+import { CROPS, ITEMS, MONSTERS, TIERS, tierName } from '../core/data';
 
 const CROP_COLOR: Record<string, [string, string]> = Object.fromEntries(CROPS.map((c) => [c[0], [c[3], c[5]]]));
 import { resIconUrl } from '../game/resArt';
 import { equipIconUrl } from '../game/equipArt';
+import { bannerIconUrl, chestIconUrl, luckyBagIconUrl, trophyIconUrl } from '../game/lootArt';
 import { openItem } from './itemOpen';
 import type { SkillId } from '../core/types';
 
@@ -911,8 +912,23 @@ function equipUrl(id: string): string | null {
   return equipIconUrl(id.slice(prefix.length + 1), it.tier);
 }
 
+/** 福袋、宝箱、首领宝藏、首领战利品和战旗 */
+function lootUrl(id: string): string | null {
+  const it = ITEMS[id];
+  if (!it || it.tier === undefined) return null;
+  if (it.boss) {
+    const m = MONSTERS[it.boss];
+    if (!m) return null;
+    return id.startsWith('banner_') ? bannerIconUrl(m.art.color, m.art.accent, m.family) : trophyIconUrl(m.art.color, m.art.accent, m.family);
+  }
+  if (id.startsWith('luckybag_')) return luckyBagIconUrl(it.tier);
+  if (id.startsWith('bosschest_')) return chestIconUrl(it.tier, true);
+  if (id.startsWith('chest_')) return chestIconUrl(it.tier, false);
+  return null;
+}
+
 function BareIcon({ item, size }: { item: string; size: number }) {
-  const res = resIconUrl(item) ?? equipUrl(item);
+  const res = resIconUrl(item) ?? equipUrl(item) ?? lootUrl(item);
   if (res) {
     const tier = ITEMS[item].tier!;
     return (
