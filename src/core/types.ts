@@ -166,6 +166,17 @@ export interface CombatState {
   pDmg?: number;
   mSwings?: number;
   mDmg?: number;
+  /** 这一只怪打到现在拿了多少经验（击杀时记进战斗日志） */
+  gain?: Partial<Record<SkillId, number>>;
+}
+
+/** 战斗日志的一条：击杀（掉落和经验）或阵亡 */
+export interface CombatLogEntry {
+  t: number;
+  kind: 'kill' | 'death';
+  monster: string;
+  xp: Partial<Record<SkillId, number>>;
+  items: Record<string, number>;
 }
 
 export interface Settings {
@@ -241,4 +252,6 @@ export interface Summary {
   taskEnds: { action: string; reason: TaskEndReason }[];
   /** 这段时间完成的新手任务（序号） */
   quests?: number[];
+  /** 战斗日志（只留最近 LOG_CAP 条） */
+  log?: CombatLogEntry[];
 }

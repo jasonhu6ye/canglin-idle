@@ -1,9 +1,10 @@
 import { useSyncExternalStore } from 'react';
 import { nodeOfAction } from './core/data';
-import { advance, migrate, newGame } from './core/sim';
-import type { GameState, Summary } from './core/types';
+import { advance, LOG_CAP, migrate, newGame } from './core/sim';
+import type { CombatLogEntry, GameState, Summary } from './core/types';
 
 const SAVE_KEY = 'canglin-idle-save-v1';
+const LOG_KEY = 'canglin-combat-log';
 const TICK_MS = 200;
 const SAVE_EVERY_MS = 5000;
 /** 离开超过这么久才弹「离线收获」 */
@@ -36,11 +37,30 @@ class Store {
   private listeners = new Set<Listener>();
   private gainListeners = new Set<GainListener>();
   private lastSave = 0;
+  /** 战斗日志：最近的击杀和阵亡，存在本地，不进存档 */
+  combatLog: CombatLogEntry[] = (() => {
+    try { return JSON.parse(localStorage.getItem(LOG_KEY) ?? '[]') as CombatLogEntry[]; } catch { return []; }
+  })();
+
+  private absorb(summary: Summary) {
+    if (!summary.log?.length) return;
+    this.combatLog = [...this.combatLog, ...summary.log].slice(-LOG_CAP);
+    this.logDirty = true;
+  }
+  private logDirty = false;
+
+  clearLog() {
+    this.combatLog = [];
+    this.logDirty = true;
+    this.save();
+    this.emit();
+  }
 
   constructor() {
     const loaded = load();
     const { state, summary } = advance(loaded, Date.now());
     this.state = state;
+    this.absorb(summary);
     if (summary.elapsedMs >= OFFLINE_POPUP_MS) this.offline = summary;
     setInterval(() => this.tick(), TICK_MS);
     document.addEventListener('visibilitychange', () => {
@@ -54,6 +74,7 @@ class Store {
   private tick(fromBackground = false) {
     const { state, summary } = advance(this.state, Date.now());
     this.state = state;
+    this.absorb(summary);
     if (fromBackground && summary.elapsedMs >= OFFLINE_POPUP_MS) this.offline = summary;
     else if (Object.keys(summary.items).length || summary.levelUps.length || summary.taskEnds.length || summary.deaths) {
       this.gainListeners.forEach((l) => l(summary));
@@ -64,7 +85,9 @@ class Store {
 
   /** 玩家操作：先结算到当前时刻再应用，避免丢进度 */
   dispatch(fn: (s: GameState) => GameState) {
-    this.state = fn(advance(this.state, Date.now()).state);
+    const { state, summary } = advance(this.state, Date.now());
+    this.absorb(summary);
+    this.state = fn(state);
     this.save();
     this.emit();
   }
@@ -99,6 +122,8 @@ class Store {
 
   reset() {
     this.state = newGame(Date.now());
+    this.combatLog = [];
+    this.logDirty = true;
     this.offline = null;
     this.save();
     this.emit();
@@ -108,6 +133,10 @@ class Store {
     this.lastSave = Date.now();
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify(this.state));
+      if (this.logDirty) {
+        localStorage.setItem(LOG_KEY, JSON.stringify(this.combatLog));
+        this.logDirty = false;
+      }
     } catch {
       // 隐私模式等情况下无法保存，游戏照常运行
     }

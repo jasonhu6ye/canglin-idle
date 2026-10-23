@@ -6,6 +6,7 @@ import {
   redeemCode, toggleMount,
 } from '../core/sim';
 import type { EquipSlot, GameState, ItemCategory, SkillId, Summary } from '../core/types';
+import { openCombatLog } from './CombatLog';
 import { XP_TABLE, levelProgress, speedForLevel, SPEED_CAP, BONUS_PER_LEVEL } from '../core/xp';
 import { store } from '../store';
 import { fmtDuration, fmtNum } from './format';
@@ -364,6 +365,8 @@ export function MorePanel({ s }: { s: GameState }) {
       <button className="primary" onClick={openGuild}>打开公会</button>
       <h2>新手指引</h2>
       <button className="primary" onClick={openGuide}>重新查看新手指引</button>
+      <h2>战斗日志 <small className="muted">每只怪的掉落和经验</small></h2>
+      <button className="primary" onClick={openCombatLog}>打开战斗日志</button>
       <h2>兑换码</h2>
       <Redeem />
       <h2>物品图鉴 <small className="muted">已收集 {got}/{total}</small></h2>

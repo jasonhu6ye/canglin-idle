@@ -80,6 +80,17 @@ describe('战斗', () => {
     expect(state.queue).toHaveLength(0);
   });
 
+  it('战斗日志记下每只怪的经验和掉落，经验合计与总数一致', () => {
+    const s = startHere(newGame(T0, 7), 'fight_rabbit', { type: 'time', ms: 10 * 60_000 });
+    const { summary } = advance(s, T0 + 10 * 60_000);
+    const kills = summary.log!.filter((e) => e.kind === 'kill');
+    expect(kills.length).toBe(summary.kills.rabbit);
+    expect(kills.every((e) => (e.xp.melee ?? 0) > 0 && Object.keys(e.items).length > 0)).toBe(true);
+    const logged = kills.reduce((n, e) => n + (e.xp.melee ?? 0), 0);
+    expect(logged).toBeLessThanOrEqual(summary.xp.melee!);
+    expect(logged).toBeGreaterThan(summary.xp.melee! * 0.9);
+  });
+
   it('阵亡后回城复活再走回去打，连死 3 次才停止', () => {
     let s = newGame(T0, 3);
     s.bank = {};

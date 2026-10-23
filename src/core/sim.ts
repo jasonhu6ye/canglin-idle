@@ -3,6 +3,7 @@ import { nextRandom } from './rng';
 import { stepQuests } from './quests';
 import { BONUS_PER_LEVEL, levelForXp, speedForLevel, XP_TABLE } from './xp';
 import type {
+  CombatLogEntry,
   BeltSlot, BuffKind, CombatAction, CombatStyle, EquipSlot, GameState, MonsterDef, SkillAction, SkillId, Summary, Task, TaskEndReason, TaskMode,
 } from './types';
 
@@ -358,6 +359,9 @@ export function combatStats(s: GameState, m: MonsterDef) {
   };
 }
 
+/** 战斗日志最多留多少条 */
+export const LOG_CAP = 200;
+
 /** 主循环：把存档推进到 now。在线每帧调用和离线补算用的是同一个函数，结果与调用的分段方式无关。 */
 export function advance(prev: GameState, now: number): { state: GameState; summary: Summary } {
   const s = clone(prev);
@@ -385,6 +389,12 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     if (qty > n) s.bank[item] = (s.bank[item] ?? 0) + qty - n;
     s.seen[item] = 1;
     sum.items[item] = (sum.items[item] ?? 0) + qty;
+  };
+
+  const log = (e: CombatLogEntry) => {
+    const l = (sum.log ??= []);
+    l.push(e);
+    if (l.length > LOG_CAP) l.shift();
   };
 
   /** 材料先用背包里的，不够再从仓库扣 */
@@ -461,6 +471,11 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
 
   const addXp = (skill: SkillId, amount: number) => {
     amount = Math.round(amount * (1 + buffPct(s, 'xp')));
+    // 打怪的经验记在这只怪头上，打死时一起写进战斗日志
+    if (s.combat && amount > 0) {
+      const g = (s.combat.gain ??= {});
+      g[skill] = (g[skill] ?? 0) + amount;
+    }
     const before = level(s, skill);
     s.xp[skill] += amount;
     sum.xp[skill] = (sum.xp[skill] ?? 0) + amount;
@@ -634,6 +649,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       s.hp = maxHp(s);
       s.stats.deaths++;
       sum.deaths++;
+      log({ t: now - dt, kind: 'death', monster: m.id, xp: {}, items: {} });
       // 阵亡：回城复活，补给后自动走回去接着打；连死 3 次没打死一只才放弃（用户 10-22 要求）
       task.deathStreak = (task.deathStreak ?? 0) + 1;
       if (task.deathStreak >= MAX_DEATH_STREAK) {
@@ -685,7 +701,14 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         if (has('thorns') && hurt(Math.floor(dmg * 0.15))) return step;
       }
       if (c.monsterHp <= 0) {
-        for (const d of m.drops) if (d.chance === undefined || rand() < d.chance) addLoot(d.item, d.qty);
+        const got: Record<string, number> = {};
+        for (const d of m.drops) {
+          if (d.chance === undefined || rand() < d.chance) {
+            addLoot(d.item, d.qty);
+            got[d.item] = (got[d.item] ?? 0) + d.qty;
+          }
+        }
+        log({ t: now - dt, kind: 'kill', monster: m.id, xp: c.gain ?? {}, items: got });
         sum.kills[m.id] = (sum.kills[m.id] ?? 0) + 1;
         s.stats.kills++;
         task.deathStreak = 0;

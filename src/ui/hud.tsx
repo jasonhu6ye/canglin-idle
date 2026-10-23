@@ -3,6 +3,7 @@ import { ACTIONS, MONSTERS, nodeOfAction, NODES, SKILLS } from '../core/data';
 import { QUESTS, questProgress, questText } from '../core/quests';
 import { actionDuration, combatLevel, isBankId, level, maxHp, removeTask, resumeWork, toggleMount, weaponStyle } from '../core/sim';
 import { wolfIconUrl } from '../game/wolfArt';
+import { openCombatLog } from './CombatLog';
 import type { BuffKind, GameState, SkillId } from '../core/types';
 import { HERO_W, outfitOf, paintHeroSheet } from '../game/hero';
 import { store } from '../store';
@@ -133,7 +134,7 @@ export function StatusChips({ s, extra }: { s: GameState; extra?: ReactNode }) {
           ))}
         </div>
       )}
-      <div className="chip dim">⚔ 击杀 {fmtNum(s.stats.kills)} · 阵亡 {s.stats.deaths}</div>
+      <button className="chip dim log-chip" title="战斗日志 (L)" onClick={openCombatLog}>⚔ 击杀 {fmtNum(s.stats.kills)} · 阵亡 {s.stats.deaths} · <u>战斗日志</u></button>
     </div>
   );
 }
