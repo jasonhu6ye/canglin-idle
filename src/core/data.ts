@@ -182,7 +182,7 @@ export const SEED_SHOP = CROPS.filter((c) => c[2] < 20).map((c) => `seed_${c[0]}
 export const SEED_PRICE = 4;
 CROPS.forEach(([id, name, lvl, , dish]) => {
   const tier = tierForLevel(lvl);
-  const where = ['家园农田', '家园农田', '南郊麦田', '南郊麦田', '东郊菜园', '东郊菜园', '西岭灵田', '西岭灵田'][tier];
+  const where = ['城镇农田', '城镇农田', '南郊麦田', '南郊麦田', '东郊菜园', '东郊菜园', '西岭灵田', '西岭灵田'][tier];
   item(`seed_${id}`, `${name}种子`, 'seed', Math.max(1, Math.round(1 + lvl * 0.6)), {
     tier, desc: `种植 ${lvl} 级可在${where}播种。${tier < 2 ? '集市种子摊有卖；' : ''}收成时大概率收回种子，${tier}阶野怪和采集时也会掉落。`,
   });
@@ -886,7 +886,7 @@ export const NODES: MapNode[] = [
   ]),
   town('dummy', '训练场', 181, 182, 'dummy', [fight('dummy', '打稻草人')]),
   // 城镇周围的四块田（用户 10-23 要求），每块种两阶作物
-  town('farm', '家园农田', 148, 198, 'farm', plantTiers(0, 1)),
+  town('farm', '城镇农田', 148, 198, 'farm', plantTiers(0, 1)),
   town('farm_south', '南郊麦田', 147, 217, 'farm', plantTiers(2, 3)),
   town('farm_east', '东郊菜园', 187, 213, 'farm', plantTiers(4, 5)),
   town('farm_west', '西岭灵田', 115, 203, 'farm', plantTiers(6, 7)),
