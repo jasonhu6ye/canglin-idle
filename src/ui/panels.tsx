@@ -356,7 +356,7 @@ export function SkillsPanel({ s, onPick }: { s: GameState; onPick: (nodeId: stri
                 <button key={k} className={`skill-card ${open === k ? 'sel' : ''}`} onClick={() => setOpen(open === k ? null : k)}>
                   <SkillIcon skill={k} size={30} />
                   <span className="sk-body">
-                    <span className="row1"><b style={{ color: SKILLS[k].color }}>{SKILLS[k].name}</b><span>Lv {lvl}</span></span>
+                    <span className="row1"><b style={{ color: SKILLS[k].color }}>{SKILLS[k].name}</b><span>{SKILLS[k].soon ? <em className="soon">即将开放</em> : `Lv ${lvl}`}</span></span>
                     <span className="bar wide"><i style={{ width: `${levelProgress(xp) * 100}%`, background: SKILLS[k].color }} /></span>
                     <small className="muted">{fmtNum(xp)} 经验 · 还差 {fmtNum(XP_TABLE[lvl + 1] - xp)}</small>
                   </span>
@@ -385,7 +385,8 @@ function SkillDetail({ s, skill, onPick }: { s: GameState; skill: SkillId; onPic
     <div className="skill-detail frame">
       <p>{info.desc}</p>
       {skill === 'enhancing' && <p className="warn">强化台暂未开放，敬请期待。</p>}
-      {info.group !== 'combat' && (
+      {info.soon && <p className="warn">{info.name}还在制作中，即将开放，敬请期待。</p>}
+      {info.group !== 'combat' && !info.soon && (
         <p className="muted">
           等级没有上限。动作速度随等级提升，前期涨得快、后期慢，最多接近 +{pct(SPEED_CAP)}；当前 +{pct(speedForLevel(lvl))}，下一级 +{pct(speedForLevel(lvl + 1))}；
           等级每高出动作要求 1 级，{info.group === 'gather' ? '双倍产出' : '不消耗材料'}几率 +{pct(BONUS_PER_LEVEL)}。

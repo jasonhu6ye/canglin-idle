@@ -556,3 +556,4 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .buff-tip { position: absolute; top: calc(100% + 4px); left: 0; width: 220px; padding: 6px 8px; display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
 @media (max-width: 899px) { .buff-ico { width: 27px; } .buff-ico img { width: 16px; height: 16px; } }
 .fold-h { cursor: pointer; user-select: none; }
+.soon { font-style: normal; font-size: 11px; color: #ffb070; }

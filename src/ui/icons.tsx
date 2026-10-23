@@ -777,6 +777,21 @@ const TPL: Record<string, string[]> = {
     '..kkkkkkkkk.',
     '............',
   ],
+  // 养殖：一只小绵羊，羊毛按技能颜色
+  sheep: [
+    '............',
+    '...bcbcb....',
+    '..bcwcbcbb..',
+    '.bcwccbbcbb.',
+    'kkbcccbbbbak',
+    'keekbbbbbbak',
+    'kewekbbbbaak',
+    'keeekbbbaak.',
+    '.kkk.kaaak..',
+    '.....ke.ke..',
+    '.....ke.ke..',
+    '.....kk.kk..',
+  ],
   bag: [
     '............',
     '....kkkk....',
@@ -889,7 +904,7 @@ export function itemIcon(id: string): [string, string] {
 
 export const SKILL_ICON: Record<SkillId, [string, string]> = {
   mining: ['pickaxe', '#c5cad2'], woodcutting: ['axe', '#c5cad2'], fishing: ['fish', '#5a9ad8'], gathering: ['herb', '#7cc456'], farming: ['hoe', '#c8a040'],
-  hunting: ['knife', '#c5cad2'], thieving: ['bag', '#8a7ab8'], cooking: ['food', '#d8a060'], smithing: ['anvil', '#8a8f99'],
+  hunting: ['knife', '#c5cad2'], husbandry: ['sheep', '#f4ecdc'], thieving: ['bag', '#8a7ab8'], cooking: ['food', '#d8a060'], smithing: ['anvil', '#8a8f99'],
   fletching: ['bow', '#c09060'], herblore: ['potion', '#4ab89a'], crafting: ['gem', '#e07ab0'], enhancing: ['stone', '#e8d04a'],
   melee: ['sword', '#c5cad2'], ranged: ['arrow', '#c08040'], magic: ['staff', '#5a7ae8'], defence: ['shield', '#7a8ab8'], hitpoints: ['heart', '#e04a5a'],
 };

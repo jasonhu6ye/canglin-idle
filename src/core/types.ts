@@ -1,6 +1,6 @@
 export type SkillId =
   // 采集
-  | 'mining' | 'woodcutting' | 'fishing' | 'gathering' | 'farming' | 'hunting' | 'thieving'
+  | 'mining' | 'woodcutting' | 'fishing' | 'gathering' | 'farming' | 'hunting' | 'thieving' | 'husbandry'
   // 生产
   | 'cooking' | 'smithing' | 'fletching' | 'herblore' | 'crafting' | 'enhancing'
   // 战斗

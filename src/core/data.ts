@@ -17,7 +17,8 @@ export const MAP_H = 8848;
  */
 export const OLD_BOX = { x: 1880, y: 1880, size: 5088 };
 
-export interface SkillInfo { name: string; color: string; group: SkillGroup; desc: string }
+/** soon：占位技能，还没有内容（养殖，用户 10-23） */
+export interface SkillInfo { name: string; color: string; group: SkillGroup; desc: string; soon?: boolean }
 
 export const SKILLS: Record<SkillId, SkillInfo> = {
   mining: { name: '挖矿', color: '#b08d57', group: 'gather', desc: '采集矿石、符文石和宝石' },
@@ -26,6 +27,7 @@ export const SKILLS: Record<SkillId, SkillInfo> = {
   gathering: { name: '采集', color: '#7cc456', group: 'gather', desc: '用镰刀采棉花和草药，偶尔捡到野生种子' },
   farming: { name: '种植', color: '#c8a040', group: 'gather', desc: '在城镇附近的田里用锄头播种、收获作物，收成时会收回种子' },
   hunting: { name: '狩猎', color: '#b0703a', group: 'gather', desc: '在野外狩猎野兽，用刮皮刀剥取兽皮' },
+  husbandry: { name: '养殖', color: '#e0a8a0', group: 'gather', desc: '在牧场饲养鸡、羊、牛等家畜，收集鸡蛋、羊毛、牛奶', soon: true },
   thieving: { name: '偷窃', color: '#8a7ab8', group: 'gather', desc: '从镇民和商队身上摸金币，失败会被晕眩' },
   cooking: { name: '烹饪', color: '#d4a03c', group: 'produce', desc: '把鱼和作物做成回血的食物' },
   smithing: { name: '锻造', color: '#c26a3a', group: 'produce', desc: '冶炼精炼锭，打造剑、长枪、匕首、板甲、工具和箭头' },
