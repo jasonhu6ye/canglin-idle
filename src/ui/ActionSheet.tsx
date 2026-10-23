@@ -2,9 +2,10 @@ import { MonsterDetail, MonsterIcon, TraitChips } from './Bestiary';
 import { useState } from 'react';
 import { ACTIONS, ITEMS, MONSTERS, NODES, REGIONS, SKILLS, tierName } from '../core/data';
 import {
-  actionDuration, bestAmmo, bestFood, combatStats, enqueue, level, MAX_QUEUE, setSettings, startNow, weaponStyle, xpPerHour,
+  actionDuration, bestAmmo, bestFood, combatStats, enqueue, level, MAX_QUEUE, nearNode, setSettings, startNow, weaponStyle, xpPerHour,
 } from '../core/sim';
 import type { ActionDef, GameState, TaskMode } from '../core/types';
+import type { MapNode } from '../core/data';
 import { store } from '../store';
 import { fmtNum, stacks } from './format';
 import { Icon, SkillIcon } from './icons';
@@ -73,7 +74,7 @@ export function ActionSheet({ s, nodeId, onClose }: { s: GameState; nodeId: stri
       </ul>
 
       {!all.length && <p className="muted pad">这里是怪物出没的地方。点地图上的怪物或生物，就能查看它的信息并开打。</p>}
-      {all.length > 0 && <TaskConfig s={s} action={selected} onDone={onClose} />}
+      {all.length > 0 && <TaskConfig s={s} action={selected} onDone={onClose} far={node.town && !nearNode(s, node) ? node : undefined} />}
     </div>
   );
 }
@@ -101,7 +102,7 @@ export function MonsterSheet({ s, actionId, onClose }: { s: GameState; actionId:
 }
 
 /** 次数/时间/无限 + 战斗设置 + 开始按钮 */
-function TaskConfig({ s, action: selected, onDone }: { s: GameState; action: string | null; onDone: () => void }) {
+function TaskConfig({ s, action: selected, onDone, far }: { s: GameState; action: string | null; onDone: () => void; far?: MapNode }) {
   const [modeType, setModeType] = useState<TaskMode['type']>('infinite');
   const [count, setCount] = useState(50);
   const [minutes, setMinutes] = useState(60);
@@ -152,8 +153,14 @@ function TaskConfig({ s, action: selected, onDone }: { s: GameState; action: str
           </div>
         </>
       )}
+      {far && (
+        <div className="go far-bank">
+          <span className="muted">要走到{far.name}旁边才能开工（排进队列的会自己走过去）</span>
+          <button onClick={() => { store.requestWalk(far.id); onDone(); }}>寻路去{far.name}</button>
+        </div>
+      )}
       <div className="go">
-        <button className="primary" disabled={!selected} onClick={() => go(true)}>立即开始</button>
+        <button className="primary" disabled={!selected || !!far} onClick={() => go(true)}>立即开始</button>
         <button disabled={!selected || queueFull} onClick={() => go(false)}>
           {queueFull ? `队列已满 ${MAX_QUEUE}/${MAX_QUEUE}` : `加入队列 ${s.queue.length}/${MAX_QUEUE}`}
         </button>

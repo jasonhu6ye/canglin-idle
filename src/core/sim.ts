@@ -1,4 +1,4 @@
-import { ACTIONS, ITEMS, MAP_W, MONSTERS, nodeOfAction, NODES, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, travelMs } from './data';
+import { ACTIONS, ITEMS, MAP_W, MONSTERS, nodeOfAction, NODES, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, travelMs, type MapNode } from './data';
 import { nextRandom } from './rng';
 import { stepQuests } from './quests';
 import { BONUS_PER_LEVEL, levelForXp, SPEED_PER_LEVEL, XP_TABLE } from './xp';
@@ -820,6 +820,12 @@ const BANK_STAND = standOf(NODES.find((n) => n.id === 'bank')!);
 export const bankStand = () => ({ ...BANK_STAND });
 export function atBank(s: GameState): boolean {
   return !s.travel && !s.walk && Math.hypot(s.loc.x - BANK_STAND.x, s.loc.y - BANK_STAND.y) <= BANK_REACH;
+}
+
+/** 城镇设施（灶台、熔炉、工坊…）也要站在旁边才能直接开工（用户 10-23 要求） */
+export function nearNode(s: GameState, node: MapNode): boolean {
+  const st = standOf(node as MapNode);
+  return !s.travel && !s.walk && Math.hypot(s.loc.x - st.x, s.loc.y - st.y) <= BANK_REACH;
 }
 
 /** 卸下装备：放进背包；背包满了，人在仓库旁才能放回仓库 */

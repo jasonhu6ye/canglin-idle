@@ -10,10 +10,10 @@ import { mix, Pix, ramp } from './pix';
  * 角度约定：0 = 朝下，π/2 = 朝前（脸朝的方向），π = 朝上，再大就是往身后。
  */
 
-export const HERO_W = 34;
-export const HERO_H = 40;
+export const HERO_W = 28;
+export const HERO_H = 30;
 /** 脚底所在的行，精灵原点放在这里 */
-export const HERO_FEET = 37;
+export const HERO_FEET = 27;
 
 /** 一套外观的配色：衣橱里每套皮肤就是一组颜色和几个开关 */
 export interface Outfit {
@@ -176,7 +176,7 @@ function rod(p: Pix, x0: number, y0: number, x1: number, y1: number, a: number, 
 
 /** 工具：从手的位置沿角度 a 伸出去 */
 function drawTool(p: Pix, tool: HeroTool, hx: number, hy: number, a: number, pose: Pose) {
-  const K = 1.3;
+  const K = 1;
   const along = (t: number) => {
     const [dx, dy] = v(a, t * K);
     return [hx + dx, hy + dy] as [number, number];
@@ -261,10 +261,10 @@ function drawTool(p: Pix, tool: HeroTool, hx: number, hy: number, a: number, pos
     }
   } else if (tool === 'staff') {
     handle(-3, 9);
-    const [ox, oy] = along(10.6);
+    const [ox, oy] = along(10.4);
     const orb = pose.glow ? ['#3a8ab0', '#6ad0f0', '#b8f0ff', '#e8fcff', '#ffffff'] : ['#1a5a7a', '#2a8aa8', '#5ad8e0', '#a8f0f0', '#ffffff'];
-    if (pose.glow) for (let i = 0; i < 8; i++) p.set(ox + Math.cos(i * 0.785) * 3.4, oy + Math.sin(i * 0.785) * 3.4, '#b8f0ff');
-    ball(p, ox, oy, 2, 2, orb);
+    if (pose.glow) for (let i = 0; i < 8; i++) p.set(ox + Math.cos(i * 0.785) * 2.8, oy + Math.sin(i * 0.785) * 2.8, '#b8f0ff');
+    ball(p, ox, oy, 1.6, 1.6, orb);
     strip(9.2, -1.4, 1.4, () => GOLD[2]);
   } else if (tool === 'rod') {
     handle(-2, 9);
@@ -277,19 +277,19 @@ function drawTool(p: Pix, tool: HeroTool, hx: number, hy: number, a: number, pos
     }
   } else if (tool === 'bow') {
     // 弓竖在手里，弓背朝前
-    const pull = (pose.draw ?? 0) * 6;
-    p.line(hx, hy - 9, hx - pull, hy, '#e8e8e8');
-    p.line(hx - pull, hy, hx, hy + 9, '#e8e8e8');
-    for (let i = -9; i <= 9; i++) {
-      const bulge = (1 - (i * i) / 81) * 3.6;
-      p.set(hx + bulge, hy + i, Math.abs(i) > 7 ? WOOD[0] : i < 0 ? WOOD[2] : WOOD[1]);
+    const pull = (pose.draw ?? 0) * 5;
+    p.line(hx, hy - 7, hx - pull, hy, '#e8e8e8');
+    p.line(hx - pull, hy, hx, hy + 7, '#e8e8e8');
+    for (let i = -7; i <= 7; i++) {
+      const bulge = (1 - (i * i) / 49) * 3;
+      p.set(hx + bulge, hy + i, Math.abs(i) > 5 ? WOOD[0] : i < 0 ? WOOD[2] : WOOD[1]);
       p.set(hx + bulge + 1, hy + i, WOOD[0]);
     }
-    p.rect(Math.round(hx + 3), Math.round(hy) - 1, 2, 3, '#e0d0a8');
+    p.rect(Math.round(hx + 2), Math.round(hy) - 1, 2, 2, '#e0d0a8');
     if (pose.draw && pose.draw > 0.2) {
-      p.line(hx - pull, hy, hx + 5, hy, WOOD[2]);
-      p.set(hx + 6, hy, STEEL[2]);
-      p.set(hx + 7, hy, STEEL[3]);
+      p.line(hx - pull, hy, hx + 4, hy, WOOD[2]);
+      p.set(hx + 5, hy, STEEL[2]);
+      p.set(hx + 6, hy, STEEL[3]);
       p.set(hx - pull - 1, hy - 1, '#e8e8e8');
       p.set(hx - pull - 1, hy + 1, '#e8e8e8');
     }
@@ -323,13 +323,13 @@ function drawHead(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose: Pos
   const wave = pose.cape ?? 0;
   const hood = !!o.hood;
   const HR = hood ? R.coat : R.hair;
-  const hx = side ? cx + 0.6 : cx;
+  const hx = side ? cx + 0.5 : cx;
   // 头发 / 兜帽的整体
   if (side) {
-    if (hood) capsule(p, cx - 4.6, cy - 2.6, cx - 7.6, cy + 0.6 + wave * 0.4, 1.6, HR, 1);
-    else capsule(p, cx - 4.2, cy + 0.6, cx - 6.6, cy + 3 + wave * 0.5, 1.3, HR, 1);
+    if (hood) capsule(p, cx - 3.8, cy - 2.2, cx - 6.2, cy + 0.4 + wave * 0.4, 1.3, HR, 1);
+    else capsule(p, cx - 3.4, cy + 0.5, cx - 5.4, cy + 2.4 + wave * 0.5, 1.1, HR, 1);
   }
-  ball(p, cx, cy - 0.4, hood ? 6.3 : 6, hood ? 6.2 : 5.8, HR);
+  ball(p, cx, cy - 0.3, hood ? 5.1 : 4.9, hood ? 5 : 4.7, HR);
   if (!hood) {
     // 几缕发丝：在头发上压一道暗线
     const strand = (x0: number, y0: number, x1: number, y1: number) => {
@@ -341,104 +341,96 @@ function drawHead(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose: Pos
         if (c && (c === HR[3] || c === HR[2])) p.set(x, y, HR[1]);
       }
     };
-    if (dir !== 'up') strand(hx + 0.5, cy - 5.4, hx - 2.4, cy - 2.4);
+    if (dir !== 'up') strand(hx + 0.5, cy - 4.4, hx - 2, cy - 2);
     else {
-      strand(hx - 1, cy - 5, hx - 1.6, cy + 4);
-      strand(hx + 2, cy - 4.4, hx + 2.4, cy + 4);
+      strand(hx - 1, cy - 4, hx - 1.4, cy + 3.4);
+      strand(hx + 1.6, cy - 3.6, hx + 2, cy + 3.4);
     }
   }
   const S = R.skin;
-  const fy = cy + 1.0;
-  const ey = Math.round(cy + 1.4);
-  const bangY = (x: number) => cy - 1.2 + (hood ? 0 : BANGS[(x - Math.round(cx) + 5 + 11) % 11] * 0.9);
-  if (dir === 'down') {
-    ball(p, hx, fy, 4.7, 4.3, faceRamp(S), 0, (x, y) => {
-      if (y + 0.5 < bangY(x)) return false;
-      const edge = Math.abs(x + 0.5 - hx);
-      return !(edge > (hood ? 3.9 : 3.6) && y < cy + (hood ? 4 : 2.6));
-    });
-    // 刘海下面一行皮肤压暗，像头发的投影
-    for (let x = Math.round(hx - 4); x <= Math.round(hx + 3); x++) {
+  const fy = cy + 0.9;
+  const ey = Math.round(cy + 1.1);
+  const bangY = (x: number) => cy - 1 + (hood ? 0 : BANGS[(x - Math.round(cx) + 5 + 11) % 11] * 0.7);
+  /** 刘海下面一行皮肤压暗，像头发的投影 */
+  const bangShadow = (x0: number, x1: number) => {
+    for (let x = Math.round(x0); x <= Math.round(x1); x++) {
       const y = Math.ceil(bangY(x) - 0.5);
       if (S.includes(p.get(x, y) ?? '')) p.set(x, y, S[1]);
     }
-    const eL = Math.round(hx - 3);
-    const eR = Math.round(hx + 2);
-    if (pose.blink) {
-      p.set(eL, ey + 1, S[0]);
-      p.set(eR, ey + 1, S[0]);
-    } else {
-      for (const x of [eL, eR]) {
+  };
+  const blush = mix(S[3], '#e05050', 0.35);
+  const lip = mix(S[1], '#7a2a2a', 0.3);
+  if (dir === 'down') {
+    ball(p, hx, fy, 3.8, 3.5, faceRamp(S), 0, (x, y) => {
+      if (y + 0.5 < bangY(x)) return false;
+      const edge = Math.abs(x + 0.5 - hx);
+      return !(edge > (hood ? 3.1 : 2.9) && y < cy + (hood ? 3 : 2));
+    });
+    bangShadow(hx - 3, hx + 2);
+    const eL = Math.round(hx - 2);
+    const eR = Math.round(hx + 1);
+    for (const x of [eL, eR]) {
+      if (pose.blink) p.set(x, ey + 1, S[0]);
+      else {
         p.set(x, ey, EYE);
         p.set(x, ey + 1, EYE);
       }
-      p.set(eL + 1, ey, '#ffffff');
-      p.set(eR + 1, ey, '#ffffff');
     }
-    p.set(eL - 1, ey + 2, mix(S[3], '#e05050', 0.35));
-    p.set(eR + 1, ey + 2, mix(S[3], '#e05050', 0.35));
-    p.set(Math.round(hx - 1), ey + 3, mix(S[1], '#7a2a2a', 0.3));
-    p.set(Math.round(hx), ey + 3, S[1]);
+    p.set(eL - 1, ey + 2, blush);
+    p.set(eR + 1, ey + 2, blush);
+    p.set(Math.round(hx - 0.5), ey + 2, lip);
   } else if (side) {
-    const fx = hx + 1.4;
-    ball(p, fx, fy, 4.5, 4.3, [S[2], S[3], S[3], S[3], S[4]], 0, (x, y) => x + 0.5 > hx - 0.2 && y + 0.5 >= bangY(x) && !(hood && x + 0.5 < hx + 1.4));
-    for (let x = Math.round(hx); x <= Math.round(fx + 4); x++) {
-      const y = Math.ceil(bangY(x) - 0.5);
-      if (S.includes(p.get(x, y) ?? '')) p.set(x, y, S[1]);
-    }
-    // 鼻子、眼睛、耳朵、嘴
-    const ex = Math.round(hx + 3);
+    const fx = hx + 1.1;
+    ball(p, fx, fy, 3.6, 3.5, [S[2], S[3], S[3], S[3], S[4]], 0, (x, y) => x + 0.5 > hx - 0.2 && y + 0.5 >= bangY(x) && !(hood && x + 0.5 < hx + 1.2));
+    bangShadow(hx, fx + 3);
+    const ex = Math.round(hx + 2.4);
     if (pose.blink) p.set(ex, ey + 1, S[0]);
     else {
       p.set(ex, ey, EYE);
       p.set(ex, ey + 1, EYE);
-      p.set(ex + 1, ey, '#ffffff');
     }
-    p.set(ex - 1, ey + 2, mix(S[3], '#e05050', 0.35));
-    p.set(ex + 1, ey + 3, mix(S[1], '#7a2a2a', 0.3));
-    if (!hood) {
-      p.set(Math.round(hx - 0.4), ey, S[1]);
-      p.set(Math.round(hx - 0.4), ey + 1, S[2]);
-    }
+    p.set(ex - 1, ey + 2, blush);
+    p.set(ex + 1, ey + 2, lip);
+    if (!hood) p.set(Math.round(hx - 0.4), ey + 1, S[1]);
   } else if (!hood) {
     // 背面：后颈露一点皮肤
-    p.set(Math.round(cx - 1), Math.round(cy + 5), S[1]);
-    p.set(Math.round(cx), Math.round(cy + 5), S[1]);
+    p.set(Math.round(cx - 1), Math.round(cy + 4.2), S[1]);
+    p.set(Math.round(cx), Math.round(cy + 4.2), S[1]);
   }
 }
 
 function drawFrame(pose: Pose, o: Outfit): Pix {
   const p = new Pix(HERO_W, HERO_H);
   const R = rampsOf(o);
-  const cx = 17;
+  const cx = 14;
   const crouch = pose.crouch ?? 0;
   const side = pose.dir === 'side';
   const up = pose.dir === 'up';
   const down = pose.dir === 'down';
   const wave = pose.cape ?? 0;
-  const ground = HERO_FEET - 1.2;
+  const ground = HERO_FEET - 0.8;
 
   // ---- 先算腿：侧面两节腿，身体高度由更低的那只脚决定 ----
-  const THIGH = 4.6;
-  const SHIN = 4.3;
+  const THIGH = 3.4;
+  const SHIN = 3.2;
   const legs = side
     ? ([
-      [(pose.legB ?? 0) + crouch * 0.1, (pose.kneeB ?? 0.1) + crouch * 0.28],
-      [(pose.legF ?? 0) + crouch * 0.18, (pose.kneeF ?? 0.1) + crouch * 0.3],
+      [(pose.legB ?? 0) + crouch * 0.1, (pose.kneeB ?? 0.1) + crouch * 0.3],
+      [(pose.legF ?? 0) + crouch * 0.18, (pose.kneeF ?? 0.1) + crouch * 0.32],
     ] as const)
     : [];
   const reachDown = (a: number, k: number) => THIGH * Math.cos(a) + SHIN * Math.cos(a - k);
   const hipY = side
     ? ground - Math.max(...legs.map(([a, k]) => reachDown(a, k)))
-    : ground - 8 + crouch + (pose.hop ?? 0);
-  const sy = hipY - 9.5 + (pose.bob ?? 0);
-  const headY = sy - 6;
+    : ground - 6 + crouch + (pose.hop ?? 0);
+  const sy = hipY - 7.4 + (pose.bob ?? 0);
+  const headY = sy - 4.6;
   const C = R.coat;
 
   // ---- 围巾尾巴（身后飘） ----
   if (side) {
-    capsule(p, cx - 2.4, sy + 0.4, cx - 7.6, sy + 2.2 + wave, 1.1, R.scarf);
-    capsule(p, cx - 2.4, sy + 1.2, cx - 6.6, sy + 4.4 + wave * 0.7, 0.9, R.scarf, 1);
+    capsule(p, cx - 2, sy + 0.3, cx - 6.2, sy + 1.8 + wave, 0.9, R.scarf);
+    capsule(p, cx - 2, sy + 1, cx - 5.4, sy + 3.6 + wave * 0.7, 0.75, R.scarf, 1);
   }
 
   // ---- 行囊（侧面背在身后） ----
@@ -452,19 +444,19 @@ function drawFrame(pose: Pose, o: Outfit): Pix {
     }
   };
   if (side) {
-    pack(cx - 7.2, sy + 1, 4.6, 7.5);
-    p.line(cx - 6.8, sy + 3.6, cx - 3, sy + 3.6, R.pack[0]);
-    p.set(cx - 5, sy + 4.6, GOLD[2]);
-    capsule(p, cx - 8, sy, cx - 3.6, sy, 1.6, R.roll);
-    p.line(cx - 6, sy - 1.4, cx - 6, sy + 1.4, R.pack[0]);
+    pack(cx - 5.9, sy + 0.8, 3.8, 6.2);
+    p.line(cx - 5.6, sy + 2.8, cx - 2.4, sy + 2.8, R.pack[0]);
+    p.set(cx - 4, sy + 3.8, GOLD[2]);
+    capsule(p, cx - 6.6, sy, cx - 3, sy, 1.35, R.roll);
+    p.line(cx - 5, sy - 1.2, cx - 5, sy + 1.2, R.pack[0]);
   }
 
   // ---- 后面的手臂 ----
-  const UPPER = 4.2;
-  const FORE = 4.3;
+  const UPPER = 3.2;
+  const FORE = 3.3;
   const sideArm = (a: number, elbow: number, reach: number, dim: number) => {
     const sx = cx + 0.3 + reach * 0.3;
-    const syy = sy + 1.4;
+    const syy = sy + 1.1;
     const [ux, uy] = v(a, UPPER);
     const ex = sx + ux;
     const eY = syy + uy;
@@ -474,9 +466,9 @@ function drawFrame(pose: Pose, o: Outfit): Pix {
     return {
       hx, hy, a: a + elbow,
       draw: () => {
-        capsule(p, sx, syy, ex, eY, 1.6, R.shirt, dim);
-        capsule(p, ex, eY, hx, hy, 1.5, C, dim);
-        ball(p, hx, hy, 1.3, 1.3, R.skin, dim);
+        capsule(p, sx, syy, ex, eY, 1.3, R.shirt, dim);
+        capsule(p, ex, eY, hx, hy, 1.2, C, dim);
+        ball(p, hx, hy, 1.05, 1.05, R.skin, dim);
       },
     };
   };
@@ -492,37 +484,36 @@ function drawFrame(pose: Pose, o: Outfit): Pix {
       const [sx, sy2] = v(a - k, SHIN);
       const ax = kx + sx;
       const ay = ky + sy2;
-      capsule(p, cx, hipY, kx, ky, 1.8, R.pants, dim);
-      capsule(p, kx, ky, ax, ay, 1.6, R.pants, dim);
+      capsule(p, cx, hipY, kx, ky, 1.5, R.pants, dim);
+      capsule(p, kx, ky, ax, ay, 1.3, R.pants, dim);
       // 靴子：靴筒加脚掌，脚尖朝前
-      const [bx, by] = v(a - k, SHIN - 2.4);
-      capsule(p, kx + bx, ky + by, ax, ay, 1.8, R.boots, dim);
-      capsule(p, ax - 0.4, ay + 0.2, ax + 2.2, ay + 0.4, 1.3, R.boots, dim);
-      p.set(kx + bx, ky + by - 0.6, R.boots[Math.max(0, 3 - dim)]);
+      const [bx, by] = v(a - k, SHIN - 1.9);
+      capsule(p, kx + bx, ky + by, ax, ay, 1.45, R.boots, dim);
+      capsule(p, ax - 0.3, ay + 0.2, ax + 1.8, ay + 0.3, 1.05, R.boots, dim);
     });
   } else {
-    const leg = (x: number, lift: number, dim: number) => {
+    const leg = (x: number, lift: number) => {
       const ay = ground - Math.max(0, lift);
-      capsule(p, x, hipY, x, ay, 1.6, R.pants, dim);
-      capsule(p, x, ay - 2.4, x, ay, 1.8, up ? R.boots.map((_, i) => R.boots[Math.max(0, i - 1)]) : R.boots, dim);
-      ball(p, x, ay + 0.4, 2, 1.2, R.boots, dim);
-      p.set(x - 1, ay - 3, R.boots[3 - dim]);
+      capsule(p, x, hipY, x, ay, 1.3, R.pants);
+      capsule(p, x, ay - 1.9, x, ay, 1.45, up ? R.boots.map((_, i) => R.boots[Math.max(0, i - 1)]) : R.boots);
+      ball(p, x, ay + 0.3, 1.6, 1, R.boots);
     };
-    leg(cx - 2.5, pose.legB ?? 0, up ? 0 : 0);
-    leg(cx + 2.5, pose.legF ?? 0, 0);
+    leg(cx - 2, pose.legB ?? 0);
+    leg(cx + 2, pose.legF ?? 0);
   }
 
   // ---- 身体：衬衣 + 敞开的皮背心 ----
-  const beltY = Math.round(sy + 6.4);
+  const beltY = Math.round(sy + 5);
+  const openAt = (k: number) => 0.8 + Math.max(0, 0.45 - k) * 1.8;
   for (let y = Math.floor(sy); y <= Math.ceil(hipY); y++) {
     const k = (y + 0.5 - sy) / (hipY + 0.6 - sy);
     if (k < 0 || k > 1) continue;
     let l: number, r: number;
     if (side) {
-      l = cx - 3.3 - (k > 0.75 ? 0.4 : 0);
-      r = cx + 3.4 - (k > 0.45 && k < 0.72 ? 0.5 : 0) + (k > 0.75 ? 0.3 : 0);
+      l = cx - 2.6 - (k > 0.75 ? 0.3 : 0);
+      r = cx + 2.8 - (k > 0.45 && k < 0.72 ? 0.4 : 0) + (k > 0.75 ? 0.2 : 0);
     } else {
-      const hw = k < 0.1 ? 4.3 : k < 0.6 ? 5.1 - k * 1.3 : 4.3 + (k - 0.6) * 1.2;
+      const hw = k < 0.1 ? 3.4 : k < 0.6 ? 4 - k : 3.4 + (k - 0.6);
       l = cx - hw;
       r = cx + hw;
     }
@@ -533,9 +524,8 @@ function drawFrame(pose: Pose, o: Outfit): Pix {
       const nx = ((px - (l + r) / 2) / ((r - l) / 2)) * 0.92;
       let pal = C;
       if (y < beltY) {
-        const open = 1.1 + Math.max(0, 0.45 - k) * 2.2;
-        if (down && Math.abs(px - cx) < open) pal = R.shirt;
-        if (side && px > r - 1.8 && k < 0.6) pal = R.shirt;
+        if (down && Math.abs(px - cx) < openAt(k)) pal = R.shirt;
+        if (side && px > r - 1.4 && k < 0.6) pal = R.shirt;
       }
       p.set(x, y, tone(pal, nx, ny));
     }
@@ -543,66 +533,69 @@ function drawFrame(pose: Pose, o: Outfit): Pix {
   if (down) {
     // 背心翻领：贴着衬衣的一列亮边
     for (let y = Math.floor(sy + 1); y < beltY; y++) {
-      const k = (y + 0.5 - sy) / (hipY - sy);
-      const open = 1.1 + Math.max(0, 0.45 - k) * 2.2;
+      const open = openAt((y + 0.5 - sy) / (hipY - sy));
       p.set(Math.floor(cx - open - 0.5), y, C[3]);
       p.set(Math.ceil(cx + open - 0.5), y, C[2]);
     }
     // 背带
-    p.line(cx - 3.5, sy + 0.5, cx - 3.5, beltY - 1, R.pack[1]);
-    p.line(cx + 3, sy + 0.5, cx + 3, beltY - 1, R.pack[0]);
+    p.line(cx - 2.6, sy + 0.5, cx - 2.6, beltY - 1, R.pack[1]);
+    p.line(cx + 2.4, sy + 0.5, cx + 2.4, beltY - 1, R.pack[0]);
   } else if (side) {
-    p.line(cx - 1.4, sy + 0.4, cx + 1.4, beltY - 0.5, R.pack[1]);
-    p.line(cx - 2.2, sy + 0.8, cx + 0.6, beltY, R.pack[0]);
+    p.line(cx - 1.1, sy + 0.3, cx + 1.1, beltY - 0.5, R.pack[1]);
+    p.line(cx - 1.8, sy + 0.6, cx + 0.4, beltY, R.pack[0]);
   }
   // 腰带、铜扣、挂包
-  const bl = cx - (side ? 3.4 : 4.6);
-  const br = cx + (side ? 3.6 : 4.6);
+  const bl = cx - (side ? 2.7 : 3.7);
+  const br = cx + (side ? 2.9 : 3.7);
   p.line(bl, beltY, br, beltY, BELT[2]);
   p.line(bl, beltY + 1, br, beltY + 1, BELT[1]);
   if (down) {
-    p.rect(cx - 1, beltY, 2, 2, GOLD[1]);
     p.set(cx - 1, beltY, GOLD[3]);
-    ball(p, cx + 3.6, beltY + 2.6, 1.7, 1.5, R.pack);
+    p.set(cx, beltY, GOLD[2]);
+    p.set(cx - 1, beltY + 1, GOLD[1]);
+    p.set(cx, beltY + 1, GOLD[1]);
+    ball(p, cx + 2.8, beltY + 2, 1.3, 1.1, R.pack);
   } else if (side) {
-    p.set(cx + 2.6, beltY, GOLD[3]);
-    p.set(cx + 2.6, beltY + 1, GOLD[1]);
-    ball(p, cx - 2.2, beltY + 2.6, 1.6, 1.5, R.pack);
+    p.set(cx + 2, beltY, GOLD[3]);
+    p.set(cx + 2, beltY + 1, GOLD[1]);
+    ball(p, cx - 1.8, beltY + 2, 1.3, 1.2, R.pack);
   }
 
   // ---- 正面 / 背面的手臂 ----
   if (!side) {
     const [l, r] = pose.armLift ?? [0, 0];
-    const arm = (x: number, lift: number, dim: number) => {
-      const top = sy + 1.4;
-      const end = sy + 8.6 - lift;
-      capsule(p, x, top, x, top + 3.6, 1.7, R.shirt, dim);
-      capsule(p, x, top + 3.6, x, end, 1.55, C, dim);
-      if (!up) ball(p, x, end + 0.6, 1.4, 1.3, R.skin, dim);
+    const arm = (x: number, lift: number) => {
+      const top = sy + 1.1;
+      const end = sy + 6.6 - lift;
+      capsule(p, x, top, x, top + 2.8, 1.35, R.shirt);
+      capsule(p, x, top + 2.8, x, end, 1.25, C);
+      if (!up) ball(p, x, end + 0.5, 1.1, 1.05, R.skin);
     };
-    arm(cx - 5.6, l, 0);
-    arm(cx + 5.6, r, 0);
+    arm(cx - 4.4, l);
+    arm(cx + 4.4, r);
   }
 
   // ---- 背面：大背包压在身上 ----
   if (up) {
-    pack(cx - 4.6, sy + 1.2, 9.2, 9);
-    for (let x = Math.floor(cx - 4.2); x <= Math.ceil(cx + 3.6); x++) p.set(x, sy + 4.6, R.pack[0]);
-    for (let x = Math.floor(cx - 4.2); x <= Math.ceil(cx + 3.6); x++) p.set(x, sy + 3.6, R.pack[3]);
-    p.rect(cx - 1, sy + 5, 2, 2, GOLD[1]);
-    p.set(cx - 1, sy + 5, GOLD[3]);
-    ball(p, cx - 3.2, sy + 8, 1.5, 1.7, R.pack, 1);
-    ball(p, cx + 3.2, sy + 8, 1.5, 1.7, R.pack, 1);
+    pack(cx - 3.7, sy + 1, 7.4, 7);
+    for (let x = Math.floor(cx - 3.4); x <= Math.ceil(cx + 2.9); x++) {
+      p.set(x, sy + 3.6, R.pack[0]);
+      p.set(x, sy + 2.8, R.pack[3]);
+    }
+    p.set(cx - 1, sy + 4, GOLD[3]);
+    p.set(cx, sy + 4, GOLD[1]);
+    ball(p, cx - 2.6, sy + 6.2, 1.2, 1.3, R.pack, 1);
+    ball(p, cx + 2.6, sy + 6.2, 1.2, 1.3, R.pack, 1);
   }
 
   // ---- 围巾绕脖子 ----
-  capsule(p, cx - (side ? 2.8 : 3.8), sy - 0.2, cx + (side ? 3.4 : 3.8), sy - 0.2, 1.5, R.scarf);
-  if (down) capsule(p, cx + 2.2, sy + 0.8, cx + 2.6 + wave * 0.25, sy + 5, 1.05, R.scarf);
+  capsule(p, cx - (side ? 2.2 : 3), sy - 0.2, cx + (side ? 2.7 : 3), sy - 0.2, 1.2, R.scarf);
+  if (down) capsule(p, cx + 1.8, sy + 0.6, cx + 2.1 + wave * 0.2, sy + 3.8, 0.85, R.scarf);
 
   // ---- 头 ----
   drawHead(p, o, R, cx, headY, pose);
 
-  if (up) capsule(p, cx - 5.4, sy - 0.2, cx + 5.4, sy - 0.2, 1.9, R.roll);
+  if (up) capsule(p, cx - 4.3, sy - 0.2, cx + 4.3, sy - 0.2, 1.5, R.roll);
 
   // ---- 前面的手臂和工具 ----
   if (side) {
@@ -692,7 +685,7 @@ export const HERO_ANIMS: HeroAnim[] = [
       const a = casting ? keys([[0, 1.6], [0.2, 3.3], [0.4, 1.9]], t) : 1.9 + (i % 2 ? 0.05 : 0);
       return {
         dir: 'side', tool: 'rod', armF: a, armB: a - 0.2, toolTurn: 0.2, legF: 0.25, legB: -0.2,
-        bobber: casting ? undefined : [33, 34 + (i % 3 === 0 ? 1 : 0)],
+        bobber: casting ? undefined : [26, 25 + (i % 3 === 0 ? 1 : 0)],
       };
     },
   },

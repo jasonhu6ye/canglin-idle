@@ -64,6 +64,21 @@ export const playerPos = { x: SPAWN.x, y: SPAWN.y };
 export const nodeForAction = nodeOfAction;
 
 /** 路线总长（格） */
+/** 离 p 最近的能走的格子（按存档估出来的位置可能落在水里或墙里） */
+function nearestWalkable(p: { x: number; y: number }) {
+  const x0 = Math.round(p.x);
+  const y0 = Math.round(p.y);
+  for (let r = 0; r <= 24; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        if (isWalkable(x0 + dx, y0 + dy)) return { x: x0 + dx, y: y0 + dy };
+      }
+    }
+  }
+  return { x: x0, y: y0 };
+}
+
 function pathLength(from: { x: number; y: number }, path: { x: number; y: number }[]) {
   let len = 0;
   let prev = from;
@@ -169,6 +184,14 @@ export class MapScene extends Phaser.Scene {
       else onWalkTo(id);
     };
     this.unsub.push(() => this.game.events.off('walkto', onWalkTo));
+    // 切到后台时浏览器会停掉画面，但存档照常按时间推进；切回来把角色摆到存档里的位置
+    let hiddenAt = 0;
+    const onVis = () => {
+      if (document.visibilityState === 'hidden') hiddenAt = Date.now();
+      else if (hiddenAt && Date.now() - hiddenAt > 1500) this.resync();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    this.unsub.push(() => document.removeEventListener('visibilitychange', onVis));
     // 切到别的标签时整个游戏被销毁，只会触发 destroy，不会触发 shutdown
     const cleanup = () => { this.unsub.forEach((u) => u()); this.unsub = []; };
     this.events.once('shutdown', cleanup);
@@ -766,8 +789,8 @@ export class MapScene extends Phaser.Scene {
   private resumeWalk() {
     const w = store.state.walk;
     if (!w) return;
-    const path = findPath(this.playerTile(), w.to);
-    if (!path) return store.dispatch((g) => setLoc(g, w.to.x, w.to.y));
+    // 找不到路就直线走过去，不能直接瞬移到终点（那样会把剩下的路程吞掉）
+    const path = findPath(this.playerTile(), w.to) ?? [w.to];
     this.manual = true;
     this.followWalk(path, w.to, pathLength(this.playerTile(), path) / (w.ms / 1000));
   }
@@ -850,6 +873,46 @@ export class MapScene extends Phaser.Scene {
       return;
     }
     this.goToTask();
+    this.recenterCameraOnly();
+  }
+
+  /** 从后台切回来：丢掉画面上没演完的走路，按存档的当前状态重新摆位、接着演 */
+  private resync() {
+    const st = store.state;
+    this.walker = undefined;
+    this.clearRoute();
+    this.stopWorking();
+    const place = (p: { x: number; y: number }) => {
+      const q = nearestWalkable(p);
+      this.player.setPosition(q.x * T + T / 2, q.y * T + T / 2);
+    };
+    const task = st.queue[0];
+    this.currentAction = task?.action;
+    this.travelTo = st.travel?.to;
+    this.wasPaused = !!st.paused;
+    this.seenDeaths = st.stats.deaths;
+    if (!task || st.paused) {
+      this.manual = !!task;
+      place(st.walk ? walkPos(st) : st.loc);
+      this.resumeWalk();
+    } else if (st.travel) {
+      const bank = st.travel.to === 'bank' ? NODES.find((n) => n.id === 'bank') : undefined;
+      const node = bank ?? nodeForAction(task.action);
+      if (node) {
+        // 存档只记剩余时间，按比例估一个路上的位置
+        const to = standTile(node);
+        const k = st.travel.total ? 1 - st.travel.ms / st.travel.total : 1;
+        place({ x: st.loc.x + (to.x - st.loc.x) * k, y: st.loc.y + (to.y - st.loc.y) * k });
+      }
+      this.goToTask(bank);
+    } else {
+      const a = ACTIONS[task.action];
+      const node = nodeForAction(task.action);
+      place((a.kind === 'combat' && trackSpot(a.monster, true)) || (node ? standTile(node) : st.loc));
+      this.manual = false;
+      this.startWorking();
+    }
+    this.player.setDepth(this.player.y + 1000);
     this.recenterCameraOnly();
   }
 
