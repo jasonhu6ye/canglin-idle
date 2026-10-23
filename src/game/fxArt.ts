@@ -80,3 +80,56 @@ export const paintHit = () => canvasOf(9, 9, (ctx) => {
   }
   px(3, 3, 0.6); px(5, 5, 0.6); px(3, 5, 0.6); px(5, 3, 0.6);
 });
+
+/**
+ * 田里的作物，四个生长阶段：0 刚冒芽、1 小苗、2 长叶、3 成熟（结出作物颜色的果实或穗）。
+ * 谷物是一丛直立的秆，蔬菜是一团叶子加果实。
+ */
+export function paintCrop(color: string, kind: 'veg' | 'grain', stage: number): HTMLCanvasElement {
+  const p = new Pix(12, 14);
+  const L = ['#2e5a1e', '#3e7a28', '#5a9a34', '#86c050'];
+  const base = 13;
+  if (stage === 0) {
+    p.set(5, base, L[1]); p.set(6, base, L[1]); p.set(5, base - 1, L[2]); p.set(4, base - 2, L[3]); p.set(7, base - 1, L[3]);
+    return p.outlineTinted().canvas();
+  }
+  if (kind === 'grain') {
+    const h = stage === 1 ? 4 : stage === 2 ? 8 : 10;
+    const stalk = stage === 3 ? ['#8a7a2a', '#b0a040', '#d8c860'] : [L[0], L[1], L[2]];
+    for (const [x, dh] of [[3, -1], [5, 0], [7, 0], [9, -2]] as const) {
+      for (let y = 0; y < h + dh; y++) p.set(x + (y > h - 3 ? (x < 6 ? -0.4 : 0.4) : 0), base - y, y % 3 === 1 ? stalk[2] : stalk[1]);
+      if (stage >= 2) p.set(x + 1, base - Math.floor(h / 2), L[2]);
+      if (stage === 3) {
+        // 穗：作物本色，上面亮一点
+        for (let k = 0; k < 3; k++) p.set(x, base - (h + dh) - k, k === 2 ? mixLight(color) : color);
+      }
+    }
+    return p.outlineTinted().canvas();
+  }
+  // 蔬菜：一团叶子
+  const r = stage === 1 ? 2 : stage === 2 ? 3.6 : 4.2;
+  const cy = base - r;
+  for (let y = Math.floor(cy - r); y <= base; y++) {
+    for (let x = 0; x < 12; x++) {
+      const dx = (x - 5.5) / (r + 0.6);
+      const dy = (y - cy) / r;
+      if (dx * dx + dy * dy > 1) continue;
+      const lit = -dx * 0.6 - dy * 0.8;
+      p.set(x, y, lit > 0.5 ? L[3] : lit > -0.1 ? L[2] : lit > -0.6 ? L[1] : L[0]);
+    }
+  }
+  if (stage === 3) {
+    // 果实：三颗作物颜色的圆点，带高光
+    for (const [x, y] of [[3, cy + 1], [7, cy - 1], [6, cy + 2]] as const) {
+      p.rect(x, y, 2, 2, color);
+      p.set(x, y, mixLight(color));
+    }
+  }
+  return p.outlineTinted().canvas();
+}
+
+const mixLight = (c: string) => {
+  const n = parseInt(c.slice(1), 16);
+  const ch = (s: number) => Math.min(255, ((n >> s) & 255) + 60);
+  return `#${[16, 8, 0].map((s) => ch(s).toString(16).padStart(2, '0')).join('')}`;
+};

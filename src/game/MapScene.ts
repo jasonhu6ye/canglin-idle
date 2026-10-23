@@ -1,19 +1,19 @@
 import Phaser from 'phaser';
-import { ACTIONS, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, DANGER, dangerLevel, nodeOfAction, travelMs, WALK_TILES_PER_SEC, type MapNode } from '../core/data';
-import { combatLevel, combatStats, leaveWork, maxHp, resumeWork, setLoc, startWalk, teleport as teleportState, walkPos } from '../core/sim';
+import { ACTIONS, CROPS, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, DANGER, dangerLevel, nodeOfAction, travelMs, WALK_TILES_PER_SEC, type MapNode } from '../core/data';
+import { actionDuration, combatLevel, combatStats, leaveWork, maxHp, resumeWork, setLoc, startWalk, teleport as teleportState, walkPos } from '../core/sim';
 import { MON_ANIMS, monsterFrameSize, paintMonsterSheet, type MonAnim } from './monsterArt';
 import { HERO_ANIMS, HERO_FEET, HERO_H, HERO_W, NPC_ANIMS, NPC_OUTFITS, outfitOf, paintHeroSheet, type HeroDir } from './hero';
 import type { MonsterDef, RegionId, Summary } from '../core/types';
 import { store } from '../store';
 import { Ambience, D_FLOAT, D_GLOW, D_LABEL, D_PARTICLE, D_SMOKE } from './ambience';
-import { paintArrow, paintHit, paintSlash } from './fxArt';
+import { paintArrow, paintCrop, paintHit, paintSlash } from './fxArt';
 import { paintBuilding, paintDot, paintGlow, paintProp, paintWindmillBlades, PROP_GLOW } from './art';
 import { DPR } from './dpr';
 import { paintResNode, resGlow, resOf, type ResKind } from './resArt';
 import { NODE_MARKER, paintSprite, SPRITE_VARIANTS, SPRITES } from './sprites';
 import { animateTileset, liquidIndex, paintTileset, T, TILESET, tileIndex, VARIANTS } from './tiles';
 import {
-  BUILDINGS, CHUNK, findPath, GROUNDS, groundIndex, hash, isWalkable, LIQUIDS, propsInChunk, regionAt, SPAWN, standTile,
+  BUILDINGS, CHUNK, FIELDS, findPath, GROUNDS, groundIndex, hash, isWalkable, LIQUIDS, propsInChunk, regionAt, SPAWN, standTile,
   WANDERERS, type PropKind,
 } from './world';
 
@@ -134,6 +134,7 @@ export class MapScene extends Phaser.Scene {
   create() {
     this.makeTextures();
     this.buildTown();
+    this.buildFields();
     for (const n of NODES) this.addNode(n);
     for (const w of WANDERERS) this.addWanderer(w.kind, w.x, w.y, w.radius);
     this.addMonsters();
@@ -344,6 +345,57 @@ export class MapScene extends Phaser.Scene {
         this.tweens.add({ targets: p, y: y - 10 - Math.random() * 14, x: p.x + (Math.random() - 0.5) * 16, alpha: 0, duration: 700 + Math.random() * 400, onComplete: () => p.destroy() });
       },
     });
+  }
+
+  // ---- 田里的作物 ----
+
+  private plots: { field: string; img: Phaser.GameObjects.Image; phase: number; crop: string; stage: number }[] = [];
+
+  private cropTex(crop: string, stage: number) {
+    const key = `crop-${crop}-${stage}`;
+    if (!this.textures.exists(key)) {
+      const c = CROPS.find((x) => x[0] === crop)!;
+      this.textures.addCanvas(key, paintCrop(c[3], c[5], stage));
+    }
+    return key;
+  }
+
+  /** 每块田的耕地上隔一格种一株：平时是这块田最低阶的作物，长势随机；在这块田种地时换成正在种的作物，跟着进度长 */
+  private buildFields() {
+    for (const f of FIELDS) {
+      const node = NODES.find((n) => n.id === f.nodeId);
+      const first = node?.actions.find((id) => id.startsWith('farm_'))?.slice(5);
+      if (!first) continue;
+      for (let y = f.y0; y <= f.y1; y++) {
+        if ((y - f.y0) % 3 === 2) continue;
+        for (let x = f.x0 + ((y - f.y0) % 3); x <= f.x1; x += 2) {
+          if (Math.abs(x - f.node.x) <= 2 && y >= f.node.y - 2 && y <= f.node.y + 2) continue;
+          const phase = hash(x, y, 77);
+          const stage = Math.floor(phase * 4);
+          const img = this.add.image(x * T + T / 2, y * T + T + 1, this.cropTex(first, stage)).setOrigin(0.5, 1).setDepth(y * T + T + 1000);
+          this.plots.push({ field: f.nodeId, img, phase, crop: first, stage });
+        }
+      }
+    }
+    this.time.addEvent({ delay: 250, loop: true, callback: () => this.growFields() });
+  }
+
+  private growFields() {
+    const st = store.state;
+    const id = this.currentAction;
+    const a = id ? ACTIONS[id] : undefined;
+    if (!a || a.kind !== 'skill' || a.skill !== 'farming' || st.paused || st.travel || this.walker) return;
+    const field = nodeForAction(id)?.id;
+    const crop = id!.slice(5);
+    const k = Math.max(0, st.progressMs) / actionDuration(st, a);
+    for (const p of this.plots) {
+      if (p.field !== field) continue;
+      const stage = Math.min(3, Math.floor(((k + p.phase) % 1) * 4));
+      if (stage === p.stage && crop === p.crop) continue;
+      p.stage = stage;
+      p.crop = crop;
+      p.img.setTexture(this.cropTex(crop, stage));
+    }
   }
 
   private smoke(x: number, y: number) {

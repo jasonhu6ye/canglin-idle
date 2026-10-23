@@ -74,7 +74,9 @@ export function migrate(raw: unknown): GameState | null {
   for (const [slot, id] of Object.entries(s.equipment ?? {})) {
     if (id && ITEMS[id]?.equip?.slot === slot) equipment[slot as EquipSlot] = id;
   }
-  const queue = (s.queue ?? []).filter((t) => ACTIONS[t.action]);
+  // 采草药的动作 id 从 farm_ 改成 gather_（10-23 采集和种植彻底分开），旧队列照着改名
+  const renamed = (id: string) => (!ACTIONS[id] && id.startsWith('farm_') && ACTIONS[`gather_${id.slice(5)}`] ? `gather_${id.slice(5)}` : id);
+  const queue = (s.queue ?? []).map((t) => ({ ...t, action: renamed(t.action) })).filter((t) => ACTIONS[t.action]);
   return {
     ...fresh,
     lastTick: s.lastTick ?? fresh.lastTick,
@@ -86,8 +88,8 @@ export function migrate(raw: unknown): GameState | null {
     bag: keep(s.bag),
     equipment,
     queue,
-    progressMs: queue[0] === s.queue?.[0] ? s.progressMs ?? 0 : 0,
-    combat: queue[0] === s.queue?.[0] ? s.combat ?? null : null,
+    progressMs: queue[0] && queue[0].action === s.queue?.[0]?.action ? s.progressMs ?? 0 : 0,
+    combat: queue[0] && queue[0].action === s.queue?.[0]?.action ? s.combat ?? null : null,
     settings: { ...fresh.settings, ...s.settings },
     regenMs: s.regenMs ?? 0,
     stats: { ...fresh.stats, ...s.stats },

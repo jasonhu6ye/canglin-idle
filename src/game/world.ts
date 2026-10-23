@@ -2,9 +2,10 @@ import { MAP_H, MAP_W, NODES, townXY, type MapNode } from '../core/data';
 import type { RegionId } from '../core/types';
 
 /*
- * 2188×2188 的世界，按区域图生成。格子太多，整张图一次算完在手机上要好几秒，所以分两层：
- * - 启动时只算粗网格（每 4×4 格一个点）：区域归属、道路走向
- * - 地面和装饰物按 32×32 的块懒加载，第一次用到哪块才算哪块（渲染、寻路都走这里）
+ * 大地图按区域图生成。格子太多（8848 地图有 7800 万格），整张图既算不完也存不下，所以分两层：
+ * - 启动时只算粗网格（每 8×8 格一个点）：区域归属、道路走向
+ * - 地面和装饰物按 32×32 的块懒加载，用到哪块才算哪块；块太多时把最久没用的丢掉，要用再算
+ * - 资源点空地、建筑、道路这些标记只存在有标记的块里
  * 全部是确定性的，同一份代码每次生成的世界都一样。
  */
 
@@ -26,7 +27,6 @@ for (const g of BLOCKED_GROUNDS) blockedG[G[g]] = 1;
 
 export const REGION_IDS: RegionId[] = ['town', 'snow', 'highland', 'coast', 'lava', 'abyss', 'swamp', 'woodland', 'giantwood'];
 
-const N = MAP_W * MAP_H;
 const idx = (x: number, y: number) => y * MAP_W + x;
 export const inMap = (x: number, y: number) => x >= 0 && y >= 0 && x < MAP_W && y < MAP_H;
 const clampX = (x: number) => Math.max(0, Math.min(MAP_W - 1, x));
@@ -93,8 +93,9 @@ function regionRaw(x: number, y: number) {
   return best;
 }
 
-/** 粗网格：每格代表 4×4 个地块 */
-const C = 4;
+/** 粗网格：每格代表 8×8 个地块 */
+const CS = 3;
+const C = 1 << CS;
 const CW = Math.ceil(MAP_W / C);
 const CH = Math.ceil(MAP_H / C);
 /** 区域图用更粗的 8×8 网格：边界本来就有扰动，看不出差别，生成快 4 倍 */
@@ -120,6 +121,8 @@ const FARMS = [
   { x0: 175, y0: 206, x1: 200, y1: 220, node: [187, 213] },
   { x0: 106, y0: 196, x1: 124, y1: 210, node: [115, 203] },
 ].map((f) => ({ x0: tx(f.x0), y0: ty(f.y0), x1: tx(f.x1), y1: ty(f.y1), local: f, node: townXY(f.node[0], f.node[1]) }));
+/** 田垄（每三行里两行是耕地，第三行是走道），给场景摆作物用 */
+export const FIELDS = FARMS.map((f, i) => ({ ...f, nodeId: ['farm', 'farm_south', 'farm_east', 'farm_west'][i] }));
 const SPAWN_GUESS = townXY(167, 175);
 /** 东边是海 */
 const coastLine = (y: number) => MAP_W - 18 + (fbm(0, y, 9, 60) - 0.5) * 24;
@@ -281,19 +284,30 @@ function pondAt(x: number, y: number): Ground | null {
   return null;
 }
 
+// ---- 分块存储 ----
+
+export const CHUNK = 32;
+const CHUNKS_X = Math.ceil(MAP_W / CHUNK);
+const CHUNKS_Y = Math.ceil(MAP_H / CHUNK);
+const chunkOf = (x: number, y: number) => (y >> 5) * CHUNKS_X + (x >> 5);
+const local = (x: number, y: number) => ((y & 31) << 5) | (x & 31);
+
 /**
- * 每格的标记位，四种合成一个字节省内存（5088 地图有 2600 万格）：
- * 资源点周围的空地、建筑、道路、挡路的摆设
+ * 固定的标记位：资源点周围的空地、建筑、道路。只有带标记的块才分配内存
  */
-const flags = new Uint8Array(N);
+const chunkFlags: (Uint8Array | undefined)[] = new Array(CHUNKS_X * CHUNKS_Y);
 const F_NEAR = 1;
 const F_BUILD = 2;
 const F_ROAD = 4;
-const F_PROP = 8;
+const flagAt = (x: number, y: number) => chunkFlags[chunkOf(x, y)]?.[local(x, y)] ?? 0;
+function addFlag(x: number, y: number, f: number) {
+  const ci = chunkOf(x, y);
+  (chunkFlags[ci] ??= new Uint8Array(CHUNK * CHUNK))[local(x, y)] |= f;
+}
 
 /** 资源点周围要清出的空地 */
 for (const n of NODES) {
-  for (let y = n.y - 2; y <= n.y + 3; y++) for (let x = n.x - 3; x <= n.x + 3; x++) if (inMap(x, y)) flags[idx(x, y)] |= F_NEAR;
+  for (let y = n.y - 2; y <= n.y + 3; y++) for (let x = n.x - 3; x <= n.x + 3; x++) if (inMap(x, y)) addFlag(x, y, F_NEAR);
 }
 
 export type BuildingKind =
@@ -315,9 +329,9 @@ export const BUILDINGS: Building[] = [
 ];
 
 for (const b of BUILDINGS) {
-  for (let y = b.y; y < b.y + b.h; y++) for (let x = b.x; x < b.x + b.w; x++) flags[idx(x, y)] |= F_BUILD;
+  for (let y = b.y; y < b.y + b.h; y++) for (let x = b.x; x < b.x + b.w; x++) addFlag(x, y, F_BUILD);
 }
-export const isBuilding = (x: number, y: number) => (flags[idx(x, y)] & F_BUILD) !== 0;
+export const isBuilding = (x: number, y: number) => (flagAt(x, y) & F_BUILD) !== 0;
 
 export const SPAWN: Pt = townXY(167, 175);
 
@@ -378,7 +392,7 @@ for (let c = 0; c < CW * CH; c++) coarseGround[c] = G[rawGround(clampX((c % CW) 
   const cost = (c: number) => costs[c];
   const dist = new Float64Array(CW * CH).fill(Infinity);
   const prev = new Int32Array(CW * CH).fill(-1);
-  const cell = (p: Pt) => (p.y >> 2) * CW + (p.x >> 2);
+  const cell = (p: Pt) => (p.y >> CS) * CW + (p.x >> CS);
   const start = cell(SPAWN);
   dist[start] = 0;
   const heap = new Heap();
@@ -410,11 +424,11 @@ for (let c = 0; c < CW * CH; c++) coarseGround[c] = G[rawGround(clampX((c % CW) 
       for (const [ox, oy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
         const qx = px + ox;
         const qy = py + oy;
-        if (inMap(qx, qy) && !(flags[idx(qx, qy)] & F_BUILD)) flags[idx(qx, qy)] |= F_ROAD;
+        if (inMap(qx, qy) && !(flagAt(qx, qy) & F_BUILD)) addFlag(qx, qy, F_ROAD);
       }
     }
   };
-  const center = (c: number): Pt => ({ x: (c % CW) * C + 1, y: Math.floor(c / CW) * C + 1 });
+  const center = (c: number): Pt => ({ x: (c % CW) * C + C / 2 - 1, y: Math.floor(c / CW) * C + C / 2 - 1 });
   for (const n of NODES) {
     if (n.town && !n.pond && n.sprite !== 'farm') continue;
     const s = standTile(n);
@@ -422,14 +436,14 @@ for (let c = 0; c < CW * CH; c++) coarseGround[c] = G[rawGround(clampX((c % CW) 
     const pts: Pt[] = [s];
     for (let c = cell(s); c !== -1; c = prev[c]) pts.push(center(c));
     let last = pts[0];
-    for (let i = 3; i < pts.length; i += 3) {
+    for (let i = 2; i < pts.length; i += 2) {
       paint(last, pts[i]);
       last = pts[i];
     }
     paint(last, pts[pts.length - 1]);
   }
 }
-export const isRoad = (x: number, y: number) => (flags[idx(x, y)] & F_ROAD) !== 0;
+export const isRoad = (x: number, y: number) => (flagAt(x, y) & F_ROAD) !== 0;
 
 /** 粗网格能不能走：中心能走，或者格子里有路（桥） */
 const coarseOpen = new Uint8Array(CW * CH);
@@ -440,7 +454,7 @@ for (let c = 0; c < CW * CH; c++) {
   for (let k = 0; k < C * C && !open; k++) {
     const x = x0 + (k % C);
     const y = y0 + ((k / C) | 0);
-    if (inMap(x, y) && (flags[idx(x, y)] & F_ROAD)) open = 1 as unknown as boolean;
+    if (inMap(x, y) && (flagAt(x, y) & F_ROAD)) open = 1 as unknown as boolean;
   }
   coarseOpen[c] = open ? 1 : 0;
 }
@@ -452,14 +466,14 @@ for (let c = 0; c < CW * CH; c++) {
   for (let k = 0; k < C * C; k++) {
     const x = x0 + (k % C);
     const y = y0 + ((k / C) | 0);
-    if (inMap(x, y) && (flags[idx(x, y)] & F_ROAD)) { coarseRoad[c] = 1; break; }
+    if (inMap(x, y) && (flagAt(x, y) & F_ROAD)) { coarseRoad[c] = 1; break; }
   }
 }
 const coarseG = new Float32Array(CW * CH);
 const coarseSeen = new Uint32Array(CW * CH);
 const coarsePrev = new Int32Array(CW * CH);
 let coarseId = 0;
-const cellOf = (p: Pt) => (clampY(p.y) >> 2) * CW + (clampX(p.x) >> 2);
+const cellOf = (p: Pt) => (clampY(p.y) >> CS) * CW + (clampX(p.x) >> CS);
 
 /** 粗网格 A*：返回从起点格到终点格的格子序列（含两端） */
 function coarsePath(from: Pt, to: Pt): number[] | null {
@@ -508,17 +522,17 @@ function coarsePath(from: Pt, to: Pt): number[] | null {
 
 /** 粗格子里离中心最近的能走的细格 */
 function walkableIn(c: number): Pt | null {
-  const cx = (c % CW) * C + 2;
-  const cy = Math.floor(c / CW) * C + 2;
+  const cx = (c % CW) * C + C / 2;
+  const cy = Math.floor(c / CW) * C + C / 2;
   // 有路就落在路上：路都是连通的，不会落到河对岸
   if (coarseRoad[c]) {
     for (let k = 0; k < C * C; k++) {
-      const x = cx - 2 + (k % C);
-      const y = cy - 2 + ((k / C) | 0);
-      if (inMap(x, y) && (flags[idx(x, y)] & F_ROAD) && isWalkable(x, y)) return { x, y };
+      const x = cx - C / 2 + (k % C);
+      const y = cy - C / 2 + ((k / C) | 0);
+      if (inMap(x, y) && (flagAt(x, y) & F_ROAD) && isWalkable(x, y)) return { x, y };
     }
   }
-  for (let r = 0; r <= 3; r++) {
+  for (let r = 0; r <= C / 2 + 1; r++) {
     for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
       if (Math.max(Math.abs(dx), Math.abs(dy)) === r && isWalkable(cx + dx, cy + dy)) return { x: cx + dx, y: cy + dy };
     }
@@ -529,11 +543,24 @@ const COARSE_DIRS: [number, number, number][] = [[1, 0, 1], [-1, 0, 1], [0, 1, 1
 
 // ---- 5. 按块懒加载的地面 ----
 
-export const CHUNK = 32;
-const CHUNKS_X = Math.ceil(MAP_W / CHUNK);
-const CHUNKS_Y = Math.ceil(MAP_H / CHUNK);
-const ground = new Uint8Array(N);
-const groundDone = new Uint8Array(CHUNKS_X * CHUNKS_Y);
+/** 每块的地面和「被装饰物挡住」标记；最多留这么多块，多了丢掉最久没用的 */
+const MAX_LOADED = 4000;
+const chunkGround: (Uint8Array | undefined)[] = new Array(CHUNKS_X * CHUNKS_Y);
+const chunkBlock: (Uint8Array | undefined)[] = new Array(CHUNKS_X * CHUNKS_Y);
+const chunkProps: (Prop[] | undefined)[] = new Array(CHUNKS_X * CHUNKS_Y);
+const lastUse = new Uint32Array(CHUNKS_X * CHUNKS_Y);
+const loaded: number[] = [];
+let useClock = 0;
+
+function evict() {
+  // 一次丢掉一半最久没用的，避免每加载一块都排序
+  loaded.sort((a, b) => lastUse[a] - lastUse[b]);
+  for (const ci of loaded.splice(0, loaded.length >> 1)) {
+    chunkGround[ci] = undefined;
+    chunkBlock[ci] = undefined;
+    chunkProps[ci] = undefined;
+  }
+}
 
 function groundFor(x: number, y: number): Ground {
   const r = REGION_IDS[regionIdx(x, y)];
@@ -543,8 +570,8 @@ function groundFor(x: number, y: number): Ground {
     const jr = REGION_IDS[regionIdx(x + Math.round((hash(x, y, 41) - 0.5) * 6), y + Math.round((hash(x, y, 42) - 0.5) * 6))];
     if (jr !== r) g = feature(x, y, r) ?? baseGround(x, y, jr);
   }
-  const i = idx(x, y);
-  if ((flags[i] & F_NEAR) && blockedG[G[g]]) {
+  const fl = flagAt(x, y);
+  if ((fl & F_NEAR) && blockedG[G[g]]) {
     const pondNode = PONDS.some((p) => Math.abs(p.n.x - x) <= 3 && y < p.n.y && y >= p.n.y - 2);
     if (!pondNode) g = inPlaza(x, y) ? 'cobble' : baseGround(x, y, r);
   }
@@ -553,35 +580,38 @@ function groundFor(x: number, y: number): Ground {
       g = (y - F.y0) % 3 === 2 ? 'grass' : 'farm';
     }
   }
-  if ((flags[i] & F_ROAD) && g !== 'cobble' && g !== 'ocean') {
+  if ((fl & F_ROAD) && g !== 'cobble') {
     if (blockedG[G[g]]) return g === 'cliff' ? 'gravel' : 'bridge';
     return r === 'snow' ? 'roadsnow' : r === 'coast' ? 'roadsand' : r === 'lava' || r === 'abyss' || r === 'highland' ? 'roaddark' : 'road';
   }
   return g;
 }
 
-function ensureGround(ci: number) {
-  if (groundDone[ci]) return;
-  groundDone[ci] = 1;
+function ensureGround(ci: number): Uint8Array {
+  lastUse[ci] = ++useClock;
+  const have = chunkGround[ci];
+  if (have) return have;
+  if (loaded.length >= MAX_LOADED) evict();
+  loaded.push(ci);
+  const out = new Uint8Array(CHUNK * CHUNK);
   const x0 = (ci % CHUNKS_X) * CHUNK;
   const y0 = Math.floor(ci / CHUNKS_X) * CHUNK;
   for (let y = y0; y < Math.min(MAP_H, y0 + CHUNK); y++) {
-    for (let x = x0; x < Math.min(MAP_W, x0 + CHUNK); x++) ground[idx(x, y)] = G[groundFor(x, y)];
+    for (let x = x0; x < Math.min(MAP_W, x0 + CHUNK); x++) out[local(x, y)] = G[groundFor(x, y)];
   }
+  return (chunkGround[ci] = out);
 }
-const chunkOf = (x: number, y: number) => Math.floor(y / CHUNK) * CHUNKS_X + Math.floor(x / CHUNK);
 
 export function groundIndex(x: number, y: number) {
-  ensureGround(chunkOf(x, y));
-  return ground[idx(x, y)];
+  return ensureGround(chunkOf(x, y))[local(x, y)];
 }
 export const groundAt = (x: number, y: number): Ground => GROUNDS[groundIndex(x, y)];
 
 /** 世界地图缩略图：不触发分块生成，直接按规则算颜色用的地面 */
 export function overviewGround(x: number, y: number): Ground {
-  const i = idx(x, y);
-  if ((flags[i] & F_BUILD)) return 'cliff';
-  if ((flags[i] & F_ROAD)) return 'road';
+  const fl = flagAt(x, y);
+  if (fl & F_BUILD) return 'cliff';
+  if (fl & F_ROAD) return 'road';
   return rawGround(x, y);
 }
 
@@ -666,24 +696,25 @@ const EDGE_WALL: Record<RegionId, PropKind> = {
   swamp: 'deadtree', woodland: 'pine', giantwood: 'redwood',
 };
 
-const propsDone = new Uint8Array(CHUNKS_X * CHUNKS_Y);
-const chunkProps: Prop[][] = Array.from({ length: CHUNKS_X * CHUNKS_Y }, () => []);
-
-function ensureProps(ci: number) {
-  if (propsDone[ci]) return;
-  propsDone[ci] = 1;
-  ensureGround(ci);
+/** 算出这块的装饰物，顺便记下哪些格子被挡住 */
+function ensureProps(ci: number): Uint8Array {
+  const ground = ensureGround(ci);
+  const have = chunkBlock[ci];
+  if (have) return have;
+  const block = new Uint8Array(CHUNK * CHUNK);
+  const out: Prop[] = [];
   const x0 = (ci % CHUNKS_X) * CHUNK;
   const y0 = Math.floor(ci / CHUNKS_X) * CHUNK;
-  const out = chunkProps[ci];
+  const fl = chunkFlags[ci];
   for (let y = y0; y < Math.min(MAP_H, y0 + CHUNK); y++) {
     for (let x = x0; x < Math.min(MAP_W, x0 + CHUNK); x++) {
-      const i = idx(x, y);
-      if ((flags[i] & F_BUILD) || (flags[i] & F_ROAD)) continue;
-      let k: PropKind | null | undefined = TOWN_PROPS.get(i);
+      const li = local(x, y);
+      const f = fl?.[li] ?? 0;
+      if ((f & F_BUILD) || (f & F_ROAD)) continue;
+      let k: PropKind | null | undefined = TOWN_PROPS.get(idx(x, y));
       if (!k) {
-        if ((flags[i] & F_NEAR) || blockedG[ground[i]] || FARMS.some((F) => x >= F.x0 && x <= F.x1 && y >= F.y0 && y <= F.y1)) continue;
-        const g = GROUNDS[ground[i]];
+        if ((f & F_NEAR) || blockedG[ground[li]] || FARMS.some((F) => x >= F.x0 && x <= F.x1 && y >= F.y0 && y <= F.y1)) continue;
+        const g = GROUNDS[ground[li]];
         if (g === 'cobble' || (Math.abs(x - SPAWN.x) < 4 && Math.abs(y - SPAWN.y) < 4)) continue;
         const r = REGION_IDS[regionIdx(x, y)];
         const edge = x < 2 || y < 2 || y >= MAP_H - 2;
@@ -691,25 +722,28 @@ function ensureProps(ci: number) {
       }
       if (!k) continue;
       out.push({ kind: k, x, y });
-      if (BLOCKING.has(k)) flags[i] |= F_PROP;
+      if (BLOCKING.has(k)) block[li] = 1;
     }
   }
+  chunkProps[ci] = out;
+  return (chunkBlock[ci] = block);
 }
 
 export function propsInChunk(cx: number, cy: number): Prop[] {
   if (cx < 0 || cy < 0 || cx >= CHUNKS_X || cy >= CHUNKS_Y) return [];
   const ci = cy * CHUNKS_X + cx;
   ensureProps(ci);
-  return chunkProps[ci];
+  return chunkProps[ci]!;
 }
 
 // ---- 行走与寻路 ----
 
 export function isWalkable(x: number, y: number) {
   if (!inMap(x, y)) return false;
-  ensureProps(chunkOf(x, y));
-  const i = idx(x, y);
-  return !blockedG[ground[i]] && !(flags[i] & F_BUILD) && !(flags[i] & F_PROP);
+  const ci = chunkOf(x, y);
+  const block = ensureProps(ci);
+  const li = local(x, y);
+  return !blockedG[chunkGround[ci]![li]] && !block[li] && !((chunkFlags[ci]?.[li] ?? 0) & F_BUILD);
 }
 
 const DIRS: [number, number, number][] = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.414], [1, -1, 1.414], [-1, 1, 1.414], [-1, -1, 1.414]];

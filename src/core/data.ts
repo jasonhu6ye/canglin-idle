@@ -258,7 +258,7 @@ export const EQUIP_TYPES: EquipType[] = [
   // 工具
   TL('axe', '斧头', 'axe', 'woodcutting', 'smithing', [['bar', 1], ['plank', 1]], 1),
   TL('pickaxe', '镐子', 'pickaxe', 'mining', 'smithing', [['bar', 1], ['plank', 1]], 1),
-  TL('sickle', '镰刀', 'sickle', 'farming', 'smithing', [['bar', 1], ['plank', 1]], 1),
+  TL('sickle', '镰刀', 'sickle', 'gathering', 'smithing', [['bar', 1], ['plank', 1]], 1),
   TL('knife', '刮皮刀', 'knife', 'hunting', 'smithing', [['bar', 1], ['plank', 1]], 1),
   TL('hoe', '锄头', 'hoe', 'farming', 'smithing', [['bar', 1], ['plank', 1]], 2),
   TL('hammer', '锻造锤', 'hammer', 'smithing', 'smithing', [['bar', 2], ['plank', 1]], 2),
@@ -442,7 +442,7 @@ const fishAt = (fish: string, suffix = '') => {
 };
 const herb = (id: string, suffix = '') => {
   const h = HERBS.find((x) => x[0] === id)!;
-  return gather(`farm_${id}${suffix}`, `采集${h[1]}`, 'gathering', h[2], [one(id), { item: id, qty: 1, chance: 0.2 }, wildSeed(tierForLevel(h[2]), h[2])], { tool: 'sickle' });
+  return gather(`gather_${id}${suffix}`, `采集${h[1]}`, 'gathering', h[2], [one(id), { item: id, qty: 1, chance: 0.2 }, wildSeed(tierForLevel(h[2]), h[2])], { tool: 'sickle' });
 };
 /** 采集时 3% 捡到同阶的野生种子 */
 function wildSeed(tier: number, salt: number): Drop {
@@ -682,7 +682,7 @@ export const NODES: MapNode[] = [
   ]),
   town('dummy', '训练场', 181, 182, 'dummy', [fight('dummy', '打稻草人')]),
   // 城镇周围的四块田（用户 10-23 要求），每块种两阶作物
-  town('farm', '家园农田', 148, 198, 'farm', [...plantTiers(0, 1), herb('green_herb'), cotton(0)]),
+  town('farm', '家园农田', 148, 198, 'farm', plantTiers(0, 1)),
   town('farm_south', '南郊麦田', 147, 217, 'farm', plantTiers(2, 3)),
   town('farm_east', '东郊菜园', 187, 213, 'farm', plantTiers(4, 5)),
   town('farm_west', '西岭灵田', 115, 203, 'farm', plantTiers(6, 7)),
