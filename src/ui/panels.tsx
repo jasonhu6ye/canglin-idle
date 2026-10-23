@@ -13,6 +13,7 @@ import { Wardrobe } from './Wardrobe';
 import { exportSave, importSave } from '../saveCode';
 import { outfitOf } from '../game/hero';
 import { Icon, SkillIcon } from './icons';
+import { FINE_POINTER, openItem } from './itemOpen';
 
 const GEAR_SLOTS: [EquipSlot, string][] = [
   ['head', '头部'], ['neck', '项链'], ['weapon', '武器'], ['body', '身体'], ['hands', '手部'], ['feet', '脚部'], ['ring', '戒指'],
@@ -93,7 +94,15 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
   );
 }
 
-function ItemGrid({ items, sel, onSel, empty = 0, split = false }: { items: [string, number][]; sel: string | null; onSel: (id: string) => void; empty?: number; split?: boolean }) {
+/** 背包里右键物品：能穿就穿，食物药水放进补给栏，别的不动 */
+function quickUse(g: GameState, id: string) {
+  const it = ITEMS[id];
+  if (it?.equip) return equip(g, id);
+  if (beltSlotOf(id)) return toBelt(g, id);
+  return g;
+}
+
+function ItemGrid({ items, sel, onSel, onAct, empty = 0, split = false }: { items: [string, number][]; sel: string | null; onSel: (id: string) => void; onAct?: (id: string) => void; empty?: number; split?: boolean }) {
   // 背包按格子拆开：每格最多放一叠（物品 100 个，装备 1 件），多出来的占下一格
   const cells: [string, number, number][] = split
     ? items.flatMap(([id, n]) => {
@@ -104,7 +113,9 @@ function ItemGrid({ items, sel, onSel, empty = 0, split = false }: { items: [str
   return (
     <div className="grid">
       {cells.map(([id, n, i]) => (
-        <button key={`${id}#${i}`} className={`cell ${sel === id ? 'sel' : ''}`} onClick={() => onSel(id)} title={ITEMS[id].name}>
+        <button key={`${id}#${i}`} className={`cell ${sel === id ? 'sel' : ''}`} title={ITEMS[id].name}
+          onClick={() => { onSel(id); if (FINE_POINTER) openItem(id); }}
+          onContextMenu={(e) => { e.preventDefault(); onSel(id); onAct?.(id); }}>
           <Icon item={id} info={false} />
           <span className="qty">{fmtNum(n)}</span>
           <span className="nm">{ITEMS[id].name}</span>
@@ -132,7 +143,8 @@ export function BankPanel({ s }: { s: GameState }) {
           return <button key={c} className={`pill ${cat === c ? 'on' : ''}`} onClick={() => setCat(c)}>{name} {n}</button>;
         })}
       </div>
-      <ItemGrid items={items} sel={sel} onSel={setSel} />
+      <ItemGrid items={items} sel={sel} onSel={setSel}
+        onAct={(id) => atBank(s) && store.dispatch((g) => toBag(g, id, g.bank[id] ?? 0))} />
       {!all.length && <p className="muted">仓库是空的。采集、制作和打怪得到的东西都会放进这里，容量不限。</p>}
       {sel && <ItemDetail s={s} id={sel} from="bank" />}
     </div>
@@ -146,7 +158,9 @@ export function CharacterPanel({ s }: { s: GameState }) {
   const slot = (slotId: EquipSlot, name: string) => {
     const id = s.equipment[slotId];
     return (
-      <button key={slotId} className={`slot ${id ? 'full' : ''}`} onClick={() => id && store.dispatch((g) => unequip(g, slotId))} title={id ? '点击卸下' : ''}>
+      <button key={slotId} className={`slot ${id ? 'full' : ''}`} title={id ? (FINE_POINTER ? '左键看详情，右键卸下' : '点击卸下') : ''}
+        onClick={() => id && (FINE_POINTER ? openItem(id) : store.dispatch((g) => unequip(g, slotId)))}
+        onContextMenu={(e) => { e.preventDefault(); if (id) store.dispatch((g) => unequip(g, slotId)); }}>
         {id ? <Icon item={id} size={28} info={false} /> : <span className="empty" />}
         <small>{id ? ITEMS[id].name : name}</small>
       </button>
@@ -165,7 +179,9 @@ export function CharacterPanel({ s }: { s: GameState }) {
         {(['food', 'potion'] as const).map((k) => {
           const b = s.belt?.[k];
           return (
-            <button key={k} className={`slot ${b ? 'full' : ''}`} onClick={() => b && store.dispatch((g) => fromBelt(g, k))} title={b ? '点击取下放回背包' : ''}>
+            <button key={k} className={`slot ${b ? 'full' : ''}`} title={b ? (FINE_POINTER ? '左键看详情，右键取下' : '点击取下放回背包') : ''}
+              onClick={() => b && (FINE_POINTER ? openItem(b.id) : store.dispatch((g) => fromBelt(g, k)))}
+              onContextMenu={(e) => { e.preventDefault(); if (b) store.dispatch((g) => fromBelt(g, k)); }}>
               {b ? <Icon item={b.id} size={28} info={false} /> : <span className="empty" />}
               <small>{b ? `${ITEMS[b.id].name} ×${b.qty}` : k === 'food' ? '食物栏' : '药水栏'}</small>
             </button>
@@ -190,7 +206,7 @@ export function BagPanel({ s }: { s: GameState }) {
     <div className="page">
       <h2>背包 <small className="muted">{used}/{BAG_SLOTS} 格 · 物品每格 {BAG_STACK} 个，装备每件一格</small></h2>
       <div className="bag-meter"><i style={{ width: `${(used / BAG_SLOTS) * 100}%` }} /></div>
-      <ItemGrid items={items} sel={sel} onSel={setSel} empty={Math.max(0, BAG_SLOTS - used)} split />
+      <ItemGrid items={items} sel={sel} onSel={setSel} onAct={(id) => store.dispatch((g) => quickUse(g, id))} empty={Math.max(0, BAG_SLOTS - used)} split />
       {sel && <ItemDetail s={s} id={sel} from="bag" />}
       {items.length > 0 && <button className="primary" disabled={!atBank(s)} onClick={() => store.dispatch(depositLoot)}>全部存入仓库（保留食物和弹药）</button>}
       {items.length > 0 && !atBank(s) && <FarFromBank />}

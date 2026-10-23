@@ -37,6 +37,8 @@ function spawnSpot(n: MapNode, i: number, total: number) {
   return { x: Math.round(n.x + Math.cos(ang) * ring), y: Math.round(n.y + 2 + Math.sin(ang) * ring * 0.6) };
 }
 
+/** 首领在地图上额外放大 */
+const BOSS_SCALE = 1.35;
 const exactTrack = (id: string) => MONSTERS[id].rank === 'boss' || store.state.bestiary?.[id] !== undefined;
 
 /** 追踪：Boss 给准确的刷新点，其他怪只给附近一个大概位置 */
@@ -107,7 +109,10 @@ export class MapScene extends Phaser.Scene {
   private foe?: Phaser.GameObjects.Sprite;
   /** 精英和 Boss 头顶的血条（用户 10-22 要求） */
   private monSprites: Phaser.GameObjects.Sprite[] = [];
-  private bars: { spr: Phaser.GameObjects.Sprite; m: MonsterDef; bg: Phaser.GameObjects.Rectangle; trail: Phaser.GameObjects.Rectangle; fill: Phaser.GameObjects.Rectangle; w: number; live: boolean; shown: number }[] = [];
+  private bars: {
+    spr: Phaser.GameObjects.Sprite; m: MonsterDef; bg: Phaser.GameObjects.Rectangle; trail: Phaser.GameObjects.Rectangle; fill: Phaser.GameObjects.Rectangle;
+    w: number; h: number; live: boolean; shown: number; label?: Phaser.GameObjects.Text; aura?: Phaser.GameObjects.GameObject[];
+  }[] = [];
   /** 上一帧的战斗状态，用来判断怪物刚出手、刚挨打、刚死 */
   private foeSeen?: { hp: number; timer: number; respawn: number; p: number; m: number };
   private workTween?: Phaser.Tweens.Tween;
@@ -473,7 +478,57 @@ export class MapScene extends Phaser.Scene {
     this.glows = this.glows.filter((g) => g.img.active);
   }
 
+  /** 电脑端：WASD / 方向键走路（用户 10-23 要求优化电脑端操作） */
+  private keys?: Record<string, Phaser.Input.Keyboard.Key>;
+  private nextKeyStep = 0;
+  private stepKeys(time: number) {
+    if (!this.keys) {
+      if (!this.input.keyboard) return;
+      this.keys = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT', false) as Record<string, Phaser.Input.Keyboard.Key>;
+    }
+    const k = this.keys;
+    const tag = (document.activeElement?.tagName ?? '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea') return;
+    const dx = (k.D.isDown || k.RIGHT.isDown ? 1 : 0) - (k.A.isDown || k.LEFT.isDown ? 1 : 0);
+    const dy = (k.S.isDown || k.DOWN.isDown ? 1 : 0) - (k.W.isDown || k.UP.isDown ? 1 : 0);
+    if (!dx && !dy) return;
+    if (time < this.nextKeyStep) return;
+    this.nextKeyStep = time + 280;
+    store.tracking = null;
+    const p = this.playerTile();
+    for (const r of [4, 3, 2, 1]) {
+      if (isWalkable(p.x + dx * r, p.y + dy * r)) { this.moveTo(p.x + dx * r, p.y + dy * r, false); return; }
+    }
+  }
+
+  private holdStart = 0;
+  private holdWalked = false;
+  private nextHoldStep = 0;
+  /** 按住鼠标：每隔一会儿朝光标的方向再走几格，镜头跟着角色，光标不动就一直往那边走 */
+  private stepHold(time: number) {
+    const p = this.input.activePointer;
+    if (!this.holdStart || !p.isDown || this.input.pointer2?.isDown || time - this.holdStart < 300 || time < this.nextHoldStep) return;
+    this.nextHoldStep = time + 260;
+    this.holdWalked = true;
+    if (!this.following) this.recenterCameraOnly();
+    const wp = this.cameras.main.getWorldPoint(p.x, p.y);
+    const me = this.playerTile();
+    const tx = Math.floor(wp.x / T);
+    const ty = Math.floor(wp.y / T);
+    const d = Math.hypot(tx - me.x, ty - me.y);
+    if (d < 1) return;
+    store.tracking = null;
+    const k = Math.min(1, 5 / d);
+    for (const f of [1, 0.6, 0.3]) {
+      const x = Math.round(me.x + (tx - me.x) * k * f);
+      const y = Math.round(me.y + (ty - me.y) * k * f);
+      if (isWalkable(x, y)) { this.moveTo(x, y, false); return; }
+    }
+  }
+
   update(time: number, delta: number) {
+    this.stepKeys(time);
+    this.stepHold(time);
     this.stepWalker(delta);
     this.syncFoe();
     this.updateBars();
@@ -663,6 +718,8 @@ export class MapScene extends Phaser.Scene {
     const S = monsterFrameSize(m);
     // 原点放在脚底那一行
     const spr = this.add.sprite(x, y, key, 'idle-0').setOrigin(0.5, (S - 3) / S);
+    // 首领再放大一圈，更有压迫感（用户 10-23）
+    if (m.rank === 'boss') spr.setScale(BOSS_SCALE);
     // 点怪物弹出它的信息页
     spr.setInteractive({ useHandCursor: true }).setData('monster', `fight_${m.id}`);
     this.monSprites = this.monSprites.filter((x) => x.active);
@@ -806,12 +863,18 @@ export class MapScene extends Phaser.Scene {
     cam.startFollow(this.player, false, 0.12, 0.12);
 
     this.input.addPointer(1);
+    this.input.mouse?.disableContextMenu();
     let pinchStart = 0;
     let zoomStart = 1;
     let gesture = false; // 本次触摸是否拖动或双指缩放过，若是则抬手时不算点击
 
-    this.input.on('pointerdown', () => {
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
+      // 电脑端右键走路（按住一直走），左键只选目标；手机端点地面走、按住一直走（用户 10-23）
+      const walkPress = p.wasTouch ? !over.length : p.button === 2;
+      this.holdStart = walkPress ? this.time.now : 0;
+      this.holdWalked = false;
       if (!this.input.pointer1.isDown || !this.input.pointer2.isDown) return;
+      this.holdStart = 0;
       gesture = true;
       pinchStart = Phaser.Math.Distance.BetweenPoints(this.input.pointer1.position, this.input.pointer2.position);
       zoomStart = cam.zoom;
@@ -826,6 +889,8 @@ export class MapScene extends Phaser.Scene {
         return;
       }
       if (!p.isDown || p.getDistance() < DRAG_THRESHOLD * DPR) return;
+      if (this.holdWalked || (!p.wasTouch && p.rightButtonDown())) return;
+      this.holdStart = 0;
       gesture = true;
       if (this.following) {
         cam.stopFollow();
@@ -836,17 +901,28 @@ export class MapScene extends Phaser.Scene {
     });
 
     this.input.on('pointerup', (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
-      const tapped = !gesture && p.getDistance() < DRAG_THRESHOLD * DPR;
+      const held = this.holdWalked;
+      this.holdStart = 0;
+      this.holdWalked = false;
+      const tapped = !gesture && !held && p.getDistance() < DRAG_THRESHOLD * DPR;
       if (!this.input.pointer1.isDown && !this.input.pointer2.isDown) {
         gesture = false;
         pinchStart = 0;
       }
       if (!tapped) return;
+      const mouse = !p.wasTouch;
+      if (mouse && p.button === 2) {
+        store.tracking = null;
+        const wp = cam.getWorldPoint(p.x, p.y);
+        this.moveTo(Math.floor(wp.x / T), Math.floor(wp.y / T));
+        return;
+      }
       const node = over.map((o) => (o.getData('monster') ?? o.getData('node')) as string | undefined).find(Boolean);
       if (node) {
         this.game.events.emit(NODE_CLICK, node);
         return;
       }
+      if (mouse) return; // 电脑端左键点空地不走路
       store.tracking = null;
       const wp = cam.getWorldPoint(p.x, p.y);
       this.moveTo(Math.floor(wp.x / T), Math.floor(wp.y / T));
@@ -906,9 +982,9 @@ export class MapScene extends Phaser.Scene {
   }
 
   /** 点地面：角色走过去。任务照常在后台进行，只是不再播放干活动画 */
-  private moveTo(tx: number, ty: number) {
+  private moveTo(tx: number, ty: number, marker = true) {
     const path = findPath(this.playerTile(), { x: tx, y: ty });
-    this.showMarker(tx, ty, !!path);
+    if (marker) this.showMarker(tx, ty, !!path);
     if (!path) return;
     this.manual = true;
     this.stopWorking();
@@ -1199,12 +1275,28 @@ export class MapScene extends Phaser.Scene {
   }
 
   private addBar(spr: Phaser.GameObjects.Sprite, m: MonsterDef) {
-    const w = m.rank === 'boss' ? 26 : 18;
-    const bg = this.add.rectangle(0, 0, w + 2, 4, 0x1b120c).setStrokeStyle(1, m.rank === 'boss' ? 0xe8b84a : 0x6b5132).setOrigin(0.5, 1);
+    const boss = m.rank === 'boss';
+    const w = boss ? 46 : 18;
+    const h = boss ? 4 : 2;
+    const bg = this.add.rectangle(0, 0, w + 2, h + 2, 0x1b120c).setStrokeStyle(1, boss ? 0xe8b84a : 0x6b5132).setOrigin(0.5, 1);
     // 掉血时先掉红条，后面一截浅色残影慢慢跟上
-    const trail = this.add.rectangle(0, 0, w, 2, 0xfff0c0).setOrigin(0, 1);
-    const fill = this.add.rectangle(0, 0, w, 2, m.rank === 'boss' ? 0xd8402c : 0xe08a2c).setOrigin(0, 1);
-    this.bars.push({ spr, m, bg, trail, fill, w, live: false, shown: 1 });
+    const trail = this.add.rectangle(0, 0, w, h, 0xfff0c0).setOrigin(0, 1);
+    const fill = this.add.rectangle(0, 0, w, h, boss ? 0xd8402c : 0xe08a2c).setOrigin(0, 1);
+    const bar: (typeof this.bars)[number] = { spr, m, bg, trail, fill, w, h, live: false, shown: 1 };
+    if (boss) {
+      // 首领：血条上方常驻名字，脚下一圈暗红光环和阴影
+      bar.label = this.add.text(0, 0, `首领 · ${m.name}  Lv${m.level}`, {
+        fontFamily: FONT, fontSize: '8px', color: '#ffd86a', stroke: '#2a0808', strokeThickness: 3, resolution: 4,
+      }).setOrigin(0.5, 1);
+      const S = monsterFrameSize(m) * BOSS_SCALE;
+      const shadow = this.add.ellipse(spr.x, spr.y, S * 0.9, S * 0.28, 0x000000, 0.35);
+      const ring = this.add.ellipse(spr.x, spr.y, S * 1.1, S * 0.36).setStrokeStyle(1.5, 0xff4a2a, 0.8);
+      const glow = this.add.image(spr.x, spr.y - S * 0.3, 'glow').setTint(0xc02010).setBlendMode(Phaser.BlendModes.ADD).setScale((S * 1.6) / 64).setAlpha(0.45);
+      this.tweens.add({ targets: ring, scaleX: 1.15, scaleY: 1.15, alpha: 0.35, yoyo: true, repeat: -1, duration: 900, ease: 'Sine.inOut' });
+      this.tweens.add({ targets: glow, alpha: 0.2, yoyo: true, repeat: -1, duration: 1300, ease: 'Sine.inOut' });
+      bar.aura = [shadow, ring, glow];
+    }
+    this.bars.push(bar);
   }
 
   /** 血条跟着怪走；正在打的那只按战斗里的血量显示 */
@@ -1226,7 +1318,7 @@ export class MapScene extends Phaser.Scene {
     if (!target) { this.trackArrow?.setVisible(false); return; }
     this.trackArrow ??= this.add.text(0, 0, '▼', { fontFamily: FONT, fontSize: '10px', color: '#ffd84a', stroke: '#000', strokeThickness: 2, resolution: 4 }).setOrigin(0.5, 1);
     const S = monsterFrameSize(MONSTERS[id!]);
-    this.trackArrow.setVisible(true).setPosition(target.x, target.y - (S - 3) + 2 + Math.sin(time / 180) * 2).setDepth(D_LABEL);
+    this.trackArrow.setVisible(true).setPosition(target.x, target.y - (S - 3) * target.scaleY - 8 + Math.sin(time / 180) * 2).setDepth(D_LABEL);
   }
 
   private updateBars() {
@@ -1236,16 +1328,28 @@ export class MapScene extends Phaser.Scene {
         b.bg.destroy();
         b.trail.destroy();
         b.fill.destroy();
+        b.label?.destroy();
+        b.aura?.forEach((o) => o.destroy());
         return false;
       }
-      const S = monsterFrameSize(b.m);
-      const top = b.spr.y - (S - 3) + 6;
-      const depth = b.spr.depth + 1;
+      const S = monsterFrameSize(b.m) * b.spr.scaleY;
+      const top = b.spr.y - (S - 3 * b.spr.scaleY) + 6;
+      // 首领的血条和名字压在所有东西上面，远处也看得清
+      const depth = b.label ? D_LABEL - 1 : b.spr.depth + 1;
       b.bg.setPosition(b.spr.x, top).setDepth(depth).setAlpha(b.spr.alpha);
       const ratio = b.live && c ? (c.respawnMs > 0 ? 0 : Math.max(0, c.monsterHp / b.m.hp)) : 1;
       b.fill.setPosition(b.spr.x - b.w / 2, top - 1).setDepth(depth).setAlpha(b.spr.alpha).setScale(ratio, 1);
       b.shown = ratio >= b.shown ? ratio : Math.max(ratio, b.shown - this.game.loop.delta / 900);
       b.trail.setPosition(b.spr.x - b.w / 2, top - 1).setDepth(depth).setAlpha(b.spr.alpha * 0.85).setScale(b.shown, 1);
+      b.label?.setPosition(b.spr.x, top - b.h - 3).setDepth(depth).setAlpha(b.spr.alpha);
+      if (b.aura) {
+        const [shadow, ring, glow] = b.aura as [Phaser.GameObjects.Ellipse, Phaser.GameObjects.Ellipse, Phaser.GameObjects.Image];
+        shadow.setPosition(b.spr.x, b.spr.y).setDepth(b.spr.depth - 2).setAlpha(0.35 * b.spr.alpha);
+        ring.setPosition(b.spr.x, b.spr.y).setDepth(b.spr.depth - 1);
+        glow.setPosition(b.spr.x, b.spr.y - S * 0.3).setDepth(D_GLOW);
+        ring.setVisible(b.spr.alpha > 0.1);
+        glow.setVisible(b.spr.alpha > 0.1);
+      }
       return true;
     });
   }
@@ -1395,7 +1499,7 @@ export class MapScene extends Phaser.Scene {
     if (!a || this.manual) return;
     if (a.kind === 'combat') {
       const m = MONSTERS[a.monster];
-      const gap = Math.max(14, monsterFrameSize(m) * 0.55);
+      const gap = Math.max(14, monsterFrameSize(m) * (m.rank === 'boss' ? BOSS_SCALE : 1) * 0.55);
       this.foe = this.monSprite(m, this.player.x + gap, this.player.y + 7).setFlipX(true);
       this.foe.setDepth(this.foe.y + 1000);
       this.foeSeen = undefined;

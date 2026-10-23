@@ -12,3 +12,6 @@ export function onOpenItem(fn: Listener) {
     listeners.delete(fn);
   };
 }
+
+/** 电脑端（有鼠标）：左键看物品详情，右键直接用（用户 10-23） */
+export const FINE_POINTER = typeof matchMedia !== 'undefined' && matchMedia('(hover: hover) and (pointer: fine)').matches;

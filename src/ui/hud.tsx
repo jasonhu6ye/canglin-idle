@@ -41,6 +41,23 @@ export function TopBar({ s }: { s: GameState }) {
   );
 }
 
+/** 打首领时屏幕上方常驻的大血条，名字写在血条上面（用户 10-23 要求） */
+export function BossBar({ s }: { s: GameState }) {
+  const a = s.queue[0] ? ACTIONS[s.queue[0].action] : undefined;
+  if (a?.kind !== 'combat' || !s.combat || s.travel || s.walk) return null;
+  const m = MONSTERS[a.monster];
+  if (m.rank !== 'boss') return null;
+  const hp = s.combat.respawnMs > 0 ? 0 : Math.max(0, s.combat.monsterHp);
+  const pct = (hp / m.hp) * 100;
+  return (
+    <div className="boss-bar">
+      <div className="name"><small>首领</small>{m.name}<span>Lv{m.level}</span></div>
+      <div className="track"><i className="trail" style={{ width: `${pct}%` }} /><i className="fill" style={{ width: `${pct}%` }} /></div>
+      <div className="num">{s.combat.respawnMs > 0 ? `重新出现中… ${Math.ceil(s.combat.respawnMs / 1000)} 秒` : `${Math.ceil(hp)} / ${m.hp}`}</div>
+    </div>
+  );
+}
+
 export function QueuePanel({ s }: { s: GameState }) {
   if (!s.queue.length) {
     return <div className="panel queue idle">空闲中——点地图上的地点选个任务</div>;

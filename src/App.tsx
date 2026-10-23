@@ -4,9 +4,10 @@ import type { RegionId, Summary, TaskEndReason } from './core/types';
 import { BOSS_BANNER, REGION_CHANGE } from './game/MapScene';
 import { store, useGame, useOffline } from './store';
 import { ActionSheet, MonsterSheet } from './ui/ActionSheet';
-import { GameCanvas, onGameEvent } from './ui/GameCanvas';
+import { emitToGame, GameCanvas, onGameEvent } from './ui/GameCanvas';
+import { openItem } from './ui/itemOpen';
 import { actionName } from './ui/format';
-import { MapButtons, QuestCard, QueuePanel, StatusChips, TopBar } from './ui/hud';
+import { BossBar, MapButtons, QuestCard, QueuePanel, StatusChips, TopBar } from './ui/hud';
 import { QUESTS, questText } from './core/quests';
 import { TplIcon } from './ui/icons';
 import { ItemPopup } from './ui/ItemPopup';
@@ -14,6 +15,12 @@ import { BagPanel, BankPanel, CharacterPanel, MorePanel, NodeList, OfflineModal,
 import { WorldMap } from './ui/WorldMap';
 
 type Tab = 'game' | 'char' | 'bag' | 'bank' | 'skills' | 'more';
+/** 电脑端快捷键说明（用户 10-23 要求优化电脑端操作） */
+const SHORTCUTS: [string, string][] = [
+  ['WASD / 方向键', '走路'], ['鼠标右键', '点地面走过去，按住一直朝光标走'], ['鼠标左键', '点地点、怪物查看信息或攻击；拖动移动镜头'], ['滚轮 / + -', '缩放地图'],
+  ['空格', '镜头回到角色'], ['M', '世界地图'], ['Tab', '打开 / 关闭背包'], ['左键物品图标', '查看物品详情'], ['右键物品', '背包里穿上或放进补给栏，身上的卸下，仓库的取到背包'], ['1 - 6', '切换右侧面板'], ['Esc', '关闭当前页面'], ['?', '显示 / 隐藏这份说明'],
+];
+
 const TABS: { id: Tab; icon: [string, string]; label: string }[] = [
   { id: 'game', icon: ['sword', '#c5cad2'], label: '游戏' },
   { id: 'char', icon: ['helm', '#c5cad2'], label: '角色' },
@@ -126,6 +133,39 @@ export function App() {
     setNode(id);
   }, []);
 
+  const [help, setHelp] = useState(() => {
+    // 电脑端第一次打开时自动弹一次快捷键说明
+    try {
+      if (!window.matchMedia(WIDE_QUERY).matches || localStorage.getItem('canglin-help-seen')) return false;
+      localStorage.setItem('canglin-help-seen', '1');
+      return true;
+    } catch { return false; }
+  });
+  // 电脑端快捷键
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || e.ctrlKey || e.metaKey || e.altKey) return;
+      const k = e.key;
+      if (k >= '1' && k <= '6') {
+        setTab(TABS[+k - 1].id); setNode(null); setMonster(null); setWorldMap(false);
+      } else if (k === 'm' || k === 'M') setWorldMap((v) => !v);
+      else if (k === 'Tab') {
+        e.preventDefault();
+        setTab((t) => (t === 'bag' ? 'game' : 'bag')); setNode(null); setMonster(null); setWorldMap(false);
+      }
+      else if (k === 'Escape') {
+        openItem(null); setHelp(false); setWorldMap(false); setMonster(null); setNode(null);
+      } else if (k === '+' || k === '=') emitToGame('zoom', 0.5);
+      else if (k === '-' || k === '_') emitToGame('zoom', -0.5);
+      else if (k === ' ') { e.preventDefault(); emitToGame('recenter'); }
+      else if (k === '?' || k === '/') setHelp((v) => !v);
+      else return;
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   // 面板里点了「寻路去仓库」之类：回到游戏画面
   useEffect(() => store.subscribe(() => {
     if (store.pendingWalk) { setTab('game'); setNode(null); setMonster(null); setWorldMap(false); }
@@ -153,6 +193,7 @@ export function App() {
           <StatusChips s={s} extra={<QuestCard s={s} onGo={openNode} />} />
           <MapButtons onWorldMap={() => setWorldMap(true)} />
         </div>
+        <BossBar s={s} />
         {banner && <div key={banner.key} className="region-banner">{REGIONS[banner.region].name}</div>}
         {boss && <div key={`b${boss.key}`} className="boss-banner"><small>首领</small>{boss.name}</div>}
         <div className="toasts">
@@ -161,13 +202,25 @@ export function App() {
       </main>
       {side && <aside className={`side ${worldMap ? 'wide-map' : ''}`}>{side}</aside>}
       <nav className="tabbar">
-        {TABS.map((t) => (
-          <button key={t.id} className={tab === t.id && !worldMap ? 'on' : ''} onClick={() => { setTab(t.id); setNode(null); setMonster(null); setWorldMap(false); }}>
+        {TABS.map((t, i) => (
+          <button key={t.id} className={tab === t.id && !worldMap ? 'on' : ''} title={`${t.label}（快捷键 ${i + 1}）`}
+            onClick={() => { setTab(t.id); setNode(null); setMonster(null); setWorldMap(false); }}>
             <TplIcon tpl={t.icon[0]} tint={t.icon[1]} size={22} />
-            {t.label}
+            <span>{t.label}</span>
+            {wide && <kbd>{i + 1}</kbd>}
           </button>
         ))}
+        {wide && <button className="help-btn" title="快捷键说明（?）" onClick={() => setHelp((v) => !v)}>?</button>}
       </nav>
+      {help && (
+        <div className="item-popup" onClick={() => setHelp(false)}>
+          <div className="item-popup-body frame shortcuts" onClick={(e) => e.stopPropagation()}>
+            <h2>电脑端操作</h2>
+            <table><tbody>{SHORTCUTS.map(([k, d]) => <tr key={k}><td><kbd>{k}</kbd></td><td>{d}</td></tr>)}</tbody></table>
+            <button className="primary close" onClick={() => setHelp(false)}>知道了</button>
+          </div>
+        </div>
+      )}
       {offline && <OfflineModal sum={offline} />}
       <ItemPopup s={s} />
     </div>
