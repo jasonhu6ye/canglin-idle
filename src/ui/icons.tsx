@@ -2,6 +2,7 @@ import { CROPS, ITEMS, TIERS, tierName } from '../core/data';
 
 const CROP_COLOR: Record<string, [string, string]> = Object.fromEntries(CROPS.map((c) => [c[0], [c[3], c[5]]]));
 import { resIconUrl } from '../game/resArt';
+import { openItem } from './itemOpen';
 import type { SkillId } from '../core/types';
 
 /*
@@ -886,8 +887,18 @@ export const SKILL_ICON: Record<SkillId, [string, string]> = {
   melee: ['sword', '#c5cad2'], ranged: ['arrow', '#c08040'], magic: ['staff', '#5a7ae8'], defence: ['shield', '#7a8ab8'], hitpoints: ['heart', '#e04a5a'],
 };
 
-/** 物品图标；分阶资源右下角标 T1-T8 */
-export function Icon({ item, size = 32 }: { item: string; size?: number }) {
+/** 物品图标；分阶资源右下角标 T1-T8。默认点一下弹出物品详情（用户 10-23），放在按钮里另有用途的传 info={false} */
+export function Icon({ item, size = 32, info = true }: { item: string; size?: number; info?: boolean }) {
+  const icon = <BareIcon item={item} size={size} />;
+  if (!info || !ITEMS[item]) return icon;
+  return (
+    <span className="icon-info" role="button" title={ITEMS[item].name} onClick={(e) => { e.stopPropagation(); e.preventDefault(); openItem(item); }}>
+      {icon}
+    </span>
+  );
+}
+
+function BareIcon({ item, size }: { item: string; size: number }) {
   const res = resIconUrl(item);
   if (res) {
     const tier = ITEMS[item].tier!;

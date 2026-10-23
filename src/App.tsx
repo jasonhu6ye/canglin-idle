@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { ACTIONS, NODES, REGIONS, SKILLS } from './core/data';
 import type { RegionId, Summary, TaskEndReason } from './core/types';
-import { REGION_CHANGE } from './game/MapScene';
+import { BOSS_BANNER, REGION_CHANGE } from './game/MapScene';
 import { store, useGame, useOffline } from './store';
 import { ActionSheet, MonsterSheet } from './ui/ActionSheet';
 import { GameCanvas, onGameEvent } from './ui/GameCanvas';
@@ -9,6 +9,7 @@ import { actionName } from './ui/format';
 import { MapButtons, QuestCard, QueuePanel, StatusChips, TopBar } from './ui/hud';
 import { QUESTS, questText } from './core/quests';
 import { TplIcon } from './ui/icons';
+import { ItemPopup } from './ui/ItemPopup';
 import { BagPanel, BankPanel, CharacterPanel, MorePanel, NodeList, OfflineModal, SkillsPanel } from './ui/panels';
 import { WorldMap } from './ui/WorldMap';
 
@@ -65,6 +66,22 @@ function useRegion() {
   return { region, banner };
 }
 
+/** 开打首领：屏幕中间压一条红色横幅 */
+function useBossBanner() {
+  const [boss, setBoss] = useState<{ key: number; name: string } | null>(null);
+  useEffect(() => {
+    let key = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const off = onGameEvent(BOSS_BANNER, (name: string) => {
+      setBoss({ key: ++key, name });
+      clearTimeout(timer);
+      timer = setTimeout(() => setBoss(null), 2800);
+    });
+    return () => { off(); clearTimeout(timer); };
+  }, []);
+  return boss;
+}
+
 const WIDE_QUERY = '(min-width: 900px)';
 
 /** 宽屏（电脑、平板横屏）时右侧常驻面板，手机上面板盖在地图上 */
@@ -89,6 +106,7 @@ export function App() {
   const [monster, setMonster] = useState<string | null>(null);
   const toasts = useToasts();
   const { region, banner } = useRegion();
+  const boss = useBossBanner();
   const openNode = useCallback((id: string) => {
     setWorldMap(false);
     setMonster(null);
@@ -136,6 +154,7 @@ export function App() {
           <MapButtons onWorldMap={() => setWorldMap(true)} />
         </div>
         {banner && <div key={banner.key} className="region-banner">{REGIONS[banner.region].name}</div>}
+        {boss && <div key={`b${boss.key}`} className="boss-banner"><small>首领</small>{boss.name}</div>}
         <div className="toasts">
           {toasts.map((t) => <div key={t.id} className={`toast ${t.gold ? 'gold' : ''}`}>{t.text}</div>)}
         </div>
@@ -150,6 +169,7 @@ export function App() {
         ))}
       </nav>
       {offline && <OfflineModal sum={offline} />}
+      <ItemPopup s={s} />
     </div>
   );
 }

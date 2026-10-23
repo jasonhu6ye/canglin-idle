@@ -1,10 +1,12 @@
 import Phaser from 'phaser';
 import { ACTIONS, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, DANGER, dangerLevel, nodeOfAction, travelMs, WALK_TILES_PER_SEC, type MapNode } from '../core/data';
-import { combatLevel, leaveWork, resumeWork, setLoc, startWalk, teleport as teleportState, walkPos } from '../core/sim';
+import { combatLevel, combatStats, leaveWork, maxHp, resumeWork, setLoc, startWalk, teleport as teleportState, walkPos } from '../core/sim';
 import { MON_ANIMS, monsterFrameSize, paintMonsterSheet, type MonAnim } from './monsterArt';
 import { HERO_ANIMS, HERO_FEET, HERO_H, HERO_W, NPC_ANIMS, NPC_OUTFITS, outfitOf, paintHeroSheet, type HeroDir } from './hero';
 import type { MonsterDef, RegionId, Summary } from '../core/types';
 import { store } from '../store';
+import { Ambience, D_FLOAT, D_GLOW, D_LABEL, D_PARTICLE, D_SMOKE } from './ambience';
+import { paintArrow, paintHit, paintSlash } from './fxArt';
 import { paintBuilding, paintDot, paintGlow, paintProp, paintWindmillBlades, PROP_GLOW } from './art';
 import { DPR } from './dpr';
 import { paintResNode, resGlow, resOf, type ResKind } from './resArt';
@@ -57,6 +59,8 @@ function trackSpot(monsterId: string, exact = exactTrack(monsterId)): { x: numbe
   return null;
 }
 export const REGION_CHANGE = 'region-change';
+/** 开打首领时在屏幕上打出名字 */
+export const BOSS_BANNER = 'boss-banner';
 
 /** 角色当前所在格子，世界地图要用 */
 export const playerPos = { x: SPAWN.x, y: SPAWN.y };
@@ -102,9 +106,9 @@ export class MapScene extends Phaser.Scene {
   private foe?: Phaser.GameObjects.Sprite;
   /** 精英和 Boss 头顶的血条（用户 10-22 要求） */
   private monSprites: Phaser.GameObjects.Sprite[] = [];
-  private bars: { spr: Phaser.GameObjects.Sprite; m: MonsterDef; bg: Phaser.GameObjects.Rectangle; fill: Phaser.GameObjects.Rectangle; w: number; live: boolean }[] = [];
+  private bars: { spr: Phaser.GameObjects.Sprite; m: MonsterDef; bg: Phaser.GameObjects.Rectangle; trail: Phaser.GameObjects.Rectangle; fill: Phaser.GameObjects.Rectangle; w: number; live: boolean; shown: number }[] = [];
   /** 上一帧的战斗状态，用来判断怪物刚出手、刚挨打、刚死 */
-  private foeSeen?: { hp: number; timer: number; respawn: number };
+  private foeSeen?: { hp: number; timer: number; respawn: number; p: number; m: number };
   private workTween?: Phaser.Tweens.Tween;
   private marker?: Phaser.GameObjects.Graphics;
   private currentAction?: string;
@@ -121,6 +125,7 @@ export class MapScene extends Phaser.Scene {
   private nodeLabels: { node: MapNode; text: Phaser.GameObjects.Text }[] = [];
   private lastCombatLevel = -1;
   private frame = 0;
+  private amb!: Ambience;
 
   constructor() {
     super('map');
@@ -134,7 +139,10 @@ export class MapScene extends Phaser.Scene {
     this.addMonsters();
 
     const task = store.state.queue[0];
-    const start = store.state.walk ? walkPos(store.state) : store.state.loc ?? SPAWN;
+    // 地图改版后旧存档的位置可能落在水里或新盖的房子里：挪到最近能站的格子
+    const saved = store.state.walk ? walkPos(store.state) : store.state.loc ?? SPAWN;
+    const start = nearestWalkable(saved);
+    if (!store.state.walk && (start.x !== saved.x || start.y !== saved.y)) store.dispatch((g) => setLoc(g, start.x, start.y));
     this.player = this.add.container(start.x * T + T / 2, start.y * T + T / 2);
     const ring = this.add.ellipse(0, 6, 14, 6).setStrokeStyle(1, 0xe8b84a).setFillStyle(0xe8b84a, 0.25);
     this.playerBody = this.add.sprite(0, 7, 'hero').setOrigin(0.5, HERO_FEET / HERO_H);
@@ -144,6 +152,7 @@ export class MapScene extends Phaser.Scene {
     this.tweens.add({ targets: ring, alpha: 0.4, yoyo: true, repeat: -1, duration: 700 });
 
     this.setupCamera();
+    this.amb = new Ambience(this);
     this.currentAction = task?.action;
     this.travelTo = store.state.travel?.to;
     if (task && store.state.paused) this.manual = true;
@@ -193,7 +202,7 @@ export class MapScene extends Phaser.Scene {
     document.addEventListener('visibilitychange', onVis);
     this.unsub.push(() => document.removeEventListener('visibilitychange', onVis));
     // 切到别的标签时整个游戏被销毁，只会触发 destroy，不会触发 shutdown
-    const cleanup = () => { this.unsub.forEach((u) => u()); this.unsub = []; };
+    const cleanup = () => { this.unsub.forEach((u) => u()); this.unsub = []; this.amb.destroy(); };
     this.events.once('shutdown', cleanup);
     this.events.once('destroy', cleanup);
 
@@ -262,6 +271,9 @@ export class MapScene extends Phaser.Scene {
       ['p-mote', 1, '#a8d070'], ['p-dust', 1, '#f0dca0'], ['p-leaf', 2, '#6aa040'], ['p-smoke', 3, '#b0aaa4'], ['p-spark', 1, '#cfe8ff'],
     ];
     for (const [k, size, c] of dots) this.textures.addCanvas(k, paintDot(size, c));
+    this.textures.addCanvas('fx-slash', paintSlash());
+    this.textures.addCanvas('fx-arrow', paintArrow());
+    this.textures.addCanvas('fx-hit', paintHit());
     this.tilesetCanvas = document.createElement('canvas');
     paintTileset(this.tilesetCanvas);
     this.tilesetTex = this.textures.addCanvas('tiles', this.tilesetCanvas)!;
@@ -328,7 +340,7 @@ export class MapScene extends Phaser.Scene {
     this.addGlow(x, y, 0xff8a2a, 34).base = 0.8;
     this.time.addEvent({
       delay: 380, loop: true, callback: () => {
-        const p = this.add.image(x + (Math.random() - 0.5) * 14, y + 4, 'p-ember').setDepth(9000);
+        const p = this.add.image(x + (Math.random() - 0.5) * 14, y + 4, 'p-ember').setDepth(D_PARTICLE);
         this.tweens.add({ targets: p, y: y - 10 - Math.random() * 14, x: p.x + (Math.random() - 0.5) * 16, alpha: 0, duration: 700 + Math.random() * 400, onComplete: () => p.destroy() });
       },
     });
@@ -337,7 +349,7 @@ export class MapScene extends Phaser.Scene {
   private smoke(x: number, y: number) {
     this.time.addEvent({
       delay: 700, loop: true, callback: () => {
-        const p = this.add.image(x + (Math.random() - 0.5) * 3, y, 'p-smoke').setDepth(8000).setAlpha(0.7);
+        const p = this.add.image(x + (Math.random() - 0.5) * 3, y, 'p-smoke').setDepth(D_SMOKE).setAlpha(0.7);
         this.tweens.add({ targets: p, y: y - 26, x: p.x + 8, alpha: 0, scale: 2.2, duration: 2600, onComplete: () => p.destroy() });
       },
     });
@@ -346,14 +358,14 @@ export class MapScene extends Phaser.Scene {
   private sparkle(x: number, y: number, r: number) {
     this.time.addEvent({
       delay: 260, loop: true, callback: () => {
-        const p = this.add.image(x + (Math.random() - 0.5) * r * 2, y + (Math.random() - 0.5) * r, 'p-spark').setDepth(8000);
+        const p = this.add.image(x + (Math.random() - 0.5) * r * 2, y + (Math.random() - 0.5) * r, 'p-spark').setDepth(D_SMOKE);
         this.tweens.add({ targets: p, y: p.y - 6, alpha: 0, duration: 700, onComplete: () => p.destroy() });
       },
     });
   }
 
   private addGlow(x: number, y: number, color: number, r: number) {
-    const img = this.add.image(x, y, 'glow').setTint(color).setBlendMode(Phaser.BlendModes.ADD).setDepth(7000).setScale((r * 2) / 64);
+    const img = this.add.image(x, y, 'glow').setTint(color).setBlendMode(Phaser.BlendModes.ADD).setDepth(D_GLOW).setScale((r * 2) / 64);
     const g = { img, phase: Math.random() * 6, base: 0.55 };
     this.glows.push(g);
     return g;
@@ -414,7 +426,10 @@ export class MapScene extends Phaser.Scene {
     this.updateBars();
     this.updateTracking(time);
     this.updateChunks();
-    for (const g of this.glows) g.img.setAlpha(g.base + Math.sin(time / 380 + g.phase) * 0.12 + (hash(Math.floor(time / 90), g.phase * 100) - 0.5) * 0.08);
+    this.amb.update(time, delta, this.region, { x: this.player.x, y: this.player.y, walking: !!this.walker });
+    // 天黑后灯火更亮
+    const lit = 1 + this.amb.dark * 0.7;
+    for (const g of this.glows) g.img.setAlpha((g.base + Math.sin(time / 380 + g.phase) * 0.12 + (hash(Math.floor(time / 90), g.phase * 100) - 0.5) * 0.08) * lit);
     this.updateParticles();
     playerPos.x = Math.floor(this.player.x / T);
     playerPos.y = Math.floor(this.player.y / T);
@@ -434,7 +449,7 @@ export class MapScene extends Phaser.Scene {
     const kind = AMBIENT[this.region];
     const v = this.cameras.main.worldView;
     if (kind && this.particles.length < (kind === 'snow' ? 70 : 34) && Math.random() < 0.5) {
-      const img = this.add.image(v.x + Math.random() * v.width, v.y + Math.random() * v.height, `p-${kind}`).setDepth(9000);
+      const img = this.add.image(v.x + Math.random() * v.width, v.y + Math.random() * v.height, `p-${kind}`).setDepth(D_PARTICLE);
       if (kind === 'firefly' || kind === 'ember' || kind === 'spore') img.setBlendMode(Phaser.BlendModes.ADD);
       const max = 2000 + Math.random() * 3000;
       const p: Particle = { img, vx: 0, vy: 0, life: 0, max, kind };
@@ -529,13 +544,13 @@ export class MapScene extends Phaser.Scene {
         fontFamily: FONT, fontSize: '7px', color: '#fff3c4', backgroundColor: '#1b120ccc', padding: { x: 3, y: 1 }, resolution: 4, align: 'center',
       })
       .setOrigin(0.5, 1)
-      .setDepth(8500);
+      .setDepth(D_LABEL);
     this.nodeLabels.push({ node: n, text });
     // 特色地点：头顶再标一个大字地名，远远就能看到
     if (n.site) {
       this.add.text(cx, cy - 34, `「${n.name}」`, {
         fontFamily: FONT, fontSize: '13px', color: '#ffd86a', stroke: '#1b120c', strokeThickness: 4, resolution: 4,
-      }).setOrigin(0.5, 1).setDepth(8600);
+      }).setOrigin(0.5, 1).setDepth(D_LABEL);
     }
     // 纯打怪的点位不弹页面：点它附近的怪物才弹（用户 10-22 要求）
     if (n.town || n.actions.some((id) => ACTIONS[id].kind !== 'combat')) {
@@ -818,7 +833,7 @@ export class MapScene extends Phaser.Scene {
     this.player.setPosition(s.x * T + T / 2, s.y * T + T / 2).setDepth(s.y * T + T / 2 + 1000);
     this.cameras.main.centerOn(this.player.x, this.player.y);
     this.recenterCameraOnly();
-    const flash = this.add.image(this.player.x, this.player.y, 'glow').setTint(0x9ad8ff).setBlendMode(Phaser.BlendModes.ADD).setDepth(9500).setScale(0.2);
+    const flash = this.add.image(this.player.x, this.player.y, 'glow').setTint(0x9ad8ff).setBlendMode(Phaser.BlendModes.ADD).setDepth(D_FLOAT).setScale(0.2);
     this.tweens.add({ targets: flash, scale: 1.6, alpha: 0, duration: 600, onComplete: () => flash.destroy() });
     this.manual = nodeForAction(this.currentAction) !== n;
     // 传送到别处等于离开了工作地点；传回工作地点就接着干
@@ -1122,8 +1137,10 @@ export class MapScene extends Phaser.Scene {
   private addBar(spr: Phaser.GameObjects.Sprite, m: MonsterDef) {
     const w = m.rank === 'boss' ? 26 : 18;
     const bg = this.add.rectangle(0, 0, w + 2, 4, 0x1b120c).setStrokeStyle(1, m.rank === 'boss' ? 0xe8b84a : 0x6b5132).setOrigin(0.5, 1);
+    // 掉血时先掉红条，后面一截浅色残影慢慢跟上
+    const trail = this.add.rectangle(0, 0, w, 2, 0xfff0c0).setOrigin(0, 1);
     const fill = this.add.rectangle(0, 0, w, 2, m.rank === 'boss' ? 0xd8402c : 0xe08a2c).setOrigin(0, 1);
-    this.bars.push({ spr, m, bg, fill, w, live: false });
+    this.bars.push({ spr, m, bg, trail, fill, w, live: false, shown: 1 });
   }
 
   /** 血条跟着怪走；正在打的那只按战斗里的血量显示 */
@@ -1145,7 +1162,7 @@ export class MapScene extends Phaser.Scene {
     if (!target) { this.trackArrow?.setVisible(false); return; }
     this.trackArrow ??= this.add.text(0, 0, '▼', { fontFamily: FONT, fontSize: '10px', color: '#ffd84a', stroke: '#000', strokeThickness: 2, resolution: 4 }).setOrigin(0.5, 1);
     const S = monsterFrameSize(MONSTERS[id!]);
-    this.trackArrow.setVisible(true).setPosition(target.x, target.y - (S - 3) + 2 + Math.sin(time / 180) * 2).setDepth(9000);
+    this.trackArrow.setVisible(true).setPosition(target.x, target.y - (S - 3) + 2 + Math.sin(time / 180) * 2).setDepth(D_LABEL);
   }
 
   private updateBars() {
@@ -1153,6 +1170,7 @@ export class MapScene extends Phaser.Scene {
     this.bars = this.bars.filter((b) => {
       if (!b.spr.active) {
         b.bg.destroy();
+        b.trail.destroy();
         b.fill.destroy();
         return false;
       }
@@ -1162,6 +1180,8 @@ export class MapScene extends Phaser.Scene {
       b.bg.setPosition(b.spr.x, top).setDepth(depth).setAlpha(b.spr.alpha);
       const ratio = b.live && c ? (c.respawnMs > 0 ? 0 : Math.max(0, c.monsterHp / b.m.hp)) : 1;
       b.fill.setPosition(b.spr.x - b.w / 2, top - 1).setDepth(depth).setAlpha(b.spr.alpha).setScale(ratio, 1);
+      b.shown = ratio >= b.shown ? ratio : Math.max(ratio, b.shown - this.game.loop.delta / 900);
+      b.trail.setPosition(b.spr.x - b.w / 2, top - 1).setDepth(depth).setAlpha(b.spr.alpha * 0.85).setScale(b.shown, 1);
       return true;
     });
   }
@@ -1174,10 +1194,13 @@ export class MapScene extends Phaser.Scene {
     if (!foe || !c || a?.kind !== 'combat') return;
     const m = MONSTERS[a.monster];
     const prev = this.foeSeen;
-    this.foeSeen = { hp: c.monsterHp, timer: c.monsterTimerMs, respawn: c.respawnMs };
+    this.foeSeen = { hp: c.monsterHp, timer: c.monsterTimerMs, respawn: c.respawnMs, p: c.pSwings ?? 0, m: c.mSwings ?? 0 };
     if (!prev) return;
+    if (this.foeSeen.p > prev.p) this.playerSwingFx(foe, m, c.pDmg ?? -1);
+    if (this.foeSeen.m > prev.m) this.monsterSwingFx(c.mDmg ?? -1);
     if (c.respawnMs > 0 && prev.respawn <= 0) {
       this.playMon(foe, m, 'death');
+      this.deathPuff(foe);
     } else if (c.respawnMs <= 0 && prev.respawn > 0) {
       foe.setAlpha(0);
       this.playMon(foe, m, 'idle');
@@ -1185,6 +1208,89 @@ export class MapScene extends Phaser.Scene {
     } else if (c.respawnMs <= 0) {
       if (c.monsterTimerMs > prev.timer + 200) this.playMon(foe, m, 'attack', true);
       else if (c.monsterHp < prev.hp) this.playMon(foe, m, 'hurt', true);
+    }
+  }
+
+  // ---- 战斗特效 ----
+
+  /** 主角出手：按武器放刀光 / 箭 / 法球，打到之后再闪白、击退、飘数字 */
+  private playerSwingFx(foe: Phaser.GameObjects.Sprite, m: MonsterDef, dmg: number) {
+    const w = store.state.equipment.weapon ?? '';
+    const key = w.slice(w.indexOf('_') + 1);
+    const S = monsterFrameSize(m);
+    const tx = foe.x;
+    const ty = foe.y - S * 0.35;
+    // 数字飘在怪物右上方，不和主角头顶的名字叠在一起
+    const nx = foe.x + 5;
+    const ny = foe.y - S * 0.55;
+    const land = () => {
+      if (!foe.active) return;
+      if (dmg < 0) return this.popText(nx, ny, '未命中', '#b8b8c0', 7);
+      this.hitFlash(foe, 1);
+      const spark = this.add.image(tx + (Math.random() - 0.5) * 6, ty + (Math.random() - 0.5) * 6, 'fx-hit').setDepth(D_FLOAT - 1).setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({ targets: spark, scale: 1.8, alpha: 0, angle: 45, duration: 220, onComplete: () => spark.destroy() });
+      const heavy = dmg >= Math.max(3, combatStats(store.state, m).playerMaxHit * 0.85);
+      this.popText(nx, ny, heavy ? `${dmg}!` : `${dmg}`, heavy ? '#ffb030' : '#ffffff', heavy ? 10 : 8);
+      if (heavy) this.cameras.main.shake(90, 0.002);
+    };
+    const from = { x: this.player.x + 6, y: this.player.y - 4 };
+    if (['shortbow', 'longbow', 'crossbow'].includes(key)) {
+      const a = this.add.image(from.x, from.y, 'fx-arrow').setDepth(D_FLOAT - 2).setRotation(Math.atan2(ty - from.y, tx - from.x));
+      this.tweens.add({ targets: a, x: tx - 3, y: ty, duration: 160, onComplete: () => { a.destroy(); land(); } });
+    } else if (key === 'staff') {
+      const orb = this.add.image(from.x, from.y - 4, 'glow').setTint(0x7ac8ff).setBlendMode(Phaser.BlendModes.ADD).setDepth(D_FLOAT - 2).setScale(0.18);
+      this.tweens.add({
+        targets: orb, x: tx, y: ty, duration: 260, ease: 'Quad.easeIn',
+        onUpdate: () => {
+          if (Math.random() < 0.5) return;
+          const p = this.add.image(orb.x, orb.y, 'p-spark').setDepth(D_FLOAT - 3).setBlendMode(Phaser.BlendModes.ADD);
+          this.tweens.add({ targets: p, alpha: 0, y: p.y + 3, duration: 300, onComplete: () => p.destroy() });
+        },
+        onComplete: () => { orb.destroy(); land(); },
+      });
+    } else {
+      const sl = this.add.image(tx - 2, ty, 'fx-slash').setDepth(D_FLOAT - 2).setAngle(-30 + Math.random() * 60).setBlendMode(Phaser.BlendModes.ADD);
+      if (key === 'spear' || key === 'dagger') sl.setScale(0.7, 0.45);
+      this.tweens.add({ targets: sl, alpha: 0, scale: sl.scaleX * 1.3, duration: 200, onComplete: () => sl.destroy() });
+      this.time.delayedCall(60, land);
+    }
+  }
+
+  /** 怪物出手：打中主角就闪红、往后一顿、飘红字；没打中飘「闪避」 */
+  private monsterSwingFx(dmg: number) {
+    const x = this.player.x;
+    const y = this.player.y - 22;
+    if (dmg < 0) return this.popText(x - 4, y, '闪避', '#9ad8ff', 7);
+    if (dmg === 0) return;
+    this.hitFlash(this.playerBody, -1, 0xff5040);
+    this.popText(x - 4, y, `-${dmg}`, '#ff5a4a', 8);
+    if (store.state.hp < maxHp(store.state) * 0.25) this.cameras.main.flash(120, 120, 0, 0);
+  }
+
+  /** 受击：整张图闪一下纯色，并往后退两像素再弹回 */
+  private hitFlash(spr: Phaser.GameObjects.Sprite, dir: number, color = 0xffffff) {
+    spr.setTintFill(color);
+    this.time.delayedCall(70, () => spr.active && spr.clearTint());
+    const x0 = spr.getData('x0') ?? spr.x;
+    spr.setData('x0', x0);
+    this.tweens.add({ targets: spr, x: x0 + dir * 2, duration: 50, yoyo: true, onComplete: () => spr.active && spr.setX(x0) });
+  }
+
+  /** 弹跳的伤害数字：先往上蹦，再落一点淡出 */
+  private popText(x: number, y: number, text: string, color: string, size: number) {
+    const t = this.add.text(x + (Math.random() - 0.5) * 4, y, text, {
+      fontFamily: FONT, fontSize: `${size}px`, fontStyle: 'bold', color, stroke: '#000', strokeThickness: 2, resolution: 4,
+    }).setOrigin(0.5).setDepth(D_FLOAT).setScale(0.6);
+    this.tweens.add({ targets: t, scale: 1, y: y - 10, duration: 180, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: t, y: y - 16, alpha: 0, delay: 500, duration: 450, onComplete: () => t.destroy() });
+  }
+
+  /** 怪物倒下：一圈烟尘 */
+  private deathPuff(foe: Phaser.GameObjects.Sprite) {
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const p = this.add.image(foe.x, foe.y - 2, 'p-smoke').setDepth(D_FLOAT - 3).setAlpha(0.7).setScale(0.6);
+      this.tweens.add({ targets: p, x: foe.x + Math.cos(a) * 12, y: foe.y - 2 + Math.sin(a) * 5, alpha: 0, scale: 1.3, duration: 500, onComplete: () => p.destroy() });
     }
   }
 
@@ -1231,6 +1337,10 @@ export class MapScene extends Phaser.Scene {
       this.foeSeen = undefined;
       const bar = this.bars.find((b) => b.spr === this.foe);
       if (bar) bar.live = true;
+      if (m.rank === 'boss') {
+        this.game.events.emit(BOSS_BANNER, m.name);
+        this.cameras.main.shake(300, 0.004);
+      }
     }
     // 干活时侧身朝右（怪物也站在右边）
     this.facing = 'side';
@@ -1245,7 +1355,7 @@ export class MapScene extends Phaser.Scene {
         fontFamily: FONT, fontSize: big ? '10px' : '7px', color, stroke: '#000', strokeThickness: 2, resolution: 4,
       })
       .setOrigin(0.5)
-      .setDepth(9600);
+      .setDepth(D_FLOAT);
     this.tweens.add({ targets: t, y: t.y - 16, alpha: 0, duration: big ? 2200 : 1200, onComplete: () => t.destroy() });
   }
 

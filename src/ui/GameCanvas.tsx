@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { store } from '../store';
 import { useEffect, useRef } from 'react';
 import { DPR } from '../game/dpr';
-import { MapScene, NODE_CLICK, REGION_CHANGE } from '../game/MapScene';
+import { BOSS_BANNER, MapScene, NODE_CLICK, REGION_CHANGE } from '../game/MapScene';
 
 let game: Phaser.Game | null = null;
 
@@ -46,6 +46,7 @@ export function GameCanvas({ onNodeClick }: { onNodeClick: (nodeId: string) => v
     if (location.search.includes("debug")) Object.assign(window, { __game: game, __store: store });
     const g = game;
     g.events.on(REGION_CHANGE, relay(REGION_CHANGE));
+    g.events.on(BOSS_BANNER, relay(BOSS_BANNER));
     const ro = new ResizeObserver(() => {
       const s = size();
       g.scale.resize(s.w, s.h);

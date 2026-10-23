@@ -433,3 +433,53 @@ describe('种植', () => {
     expect(buySeed(g, 'seed_lingzhi', 1)).toBe(g);
   });
 });
+
+describe('漏洞排查', () => {
+  it('系统时间往回调不会再结算一次离线收益', () => {
+    const log = (ACTIONS.chop_plain as SkillAction).outputs[0].item;
+    let s = startHere(newGame(T0), 'chop_plain', { type: 'infinite' });
+    s = advance(s, T0 + HOUR).state;
+    const logs = owned(s, log) ?? 0;
+    expect(logs).toBeGreaterThan(0);
+    // 往回调一小时：什么都不发生，时间也不倒退
+    const back = advance(s, T0).state;
+    expect(back.lastTick).toBe(s.lastTick);
+    // 再调回原来的时间：没有多出来的收益
+    expect(owned(advance(back, T0 + HOUR).state, log) ?? 0).toBe(logs);
+  });
+
+  it('随机乱点一通：仓库背包不会出现负数、小数或 NaN，血量不越界', () => {
+    const ids = Object.keys(ACTIONS);
+    let seed = 12345;
+    const r = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+    let s = newGame(T0);
+    let now = T0;
+    for (let i = 0; i < 400; i++) {
+      const k = r();
+      const anyItem = Object.keys({ ...s.bank, ...s.bag })[Math.floor(r() * 20)] ?? 'coins';
+      if (k < 0.2) s = startNow(s, ids[Math.floor(r() * ids.length)], { type: 'infinite' });
+      else if (k < 0.3) s = setLoc(s, marketStand().x, marketStand().y);
+      else if (k < 0.4) s = setLoc(s, bankStand().x, bankStand().y);
+      else if (k < 0.5) s = sell(s, anyItem, Math.floor(r() * 50) - 5);
+      else if (k < 0.55) s = buySeed(s, 'seed_potato', Math.floor(r() * 5) - 1);
+      else if (k < 0.6) s = toBag(s, anyItem, Math.floor(r() * 300));
+      else if (k < 0.65) s = toBank(s, anyItem, Math.floor(r() * 300));
+      else if (k < 0.7) s = equip(s, anyItem);
+      else if (k < 0.72) s = unequip(s, 'weapon');
+      else if (k < 0.75) s = toBelt(s, anyItem);
+      else if (k < 0.78) s = eat(s, anyItem);
+      else if (k < 0.8) s = leaveWork(s);
+      else if (k < 0.82) s = resumeWork(s);
+      else if (k < 0.85) s = depositLoot(s);
+      else {
+        now += Math.floor(r() * 20 * 60_000);
+        s = advance(s, now).state;
+      }
+      for (const rec of [s.bank, s.bag]) {
+        for (const [id, q] of Object.entries(rec)) expect(Number.isInteger(q) && q > 0, `${i} ${id}=${q}`).toBe(true);
+      }
+      expect(s.hp > 0 && Number.isFinite(s.hp)).toBe(true);
+      expect(Number.isFinite(s.rng)).toBe(true);
+    }
+  });
+});

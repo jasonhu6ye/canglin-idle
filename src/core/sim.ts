@@ -99,7 +99,8 @@ export function migrate(raw: unknown): GameState | null {
     bestiary: s.bestiary ?? {},
     quest: s.quest ?? { i: 0, n: 0 },
     buffs: s.buffs ?? {},
-    belt: s.belt ?? {},
+    // 栏位里的东西改过名或删掉了就丢掉，免得界面读不到物品
+    belt: Object.fromEntries(Object.entries(s.belt ?? {}).filter(([slot, b]) => b && ITEMS[b.id] && beltSlotOf(b.id) === slot && b.qty > 0)),
     // 旧存档：现在拥有的东西都算获得过
     seen: {
       ...(s.seen ?? Object.fromEntries(
@@ -309,7 +310,13 @@ export function combatStats(s: GameState, m: MonsterDef) {
 export function advance(prev: GameState, now: number): { state: GameState; summary: Summary } {
   const s = clone(prev);
   const sum = emptySummary();
-  let dt = Math.min(Math.max(0, now - s.lastTick), OFFLINE_CAP_MS);
+  // 系统时间被往回调：不结算也不把时间往回记，否则来回改时间能反复白拿离线收益。
+  // 存档时间比现在晚一天以上就当是坏数据，直接从现在算起
+  if (now < s.lastTick) {
+    if (s.lastTick - now > OFFLINE_CAP_MS) s.lastTick = now;
+    return { state: s, summary: sum };
+  }
+  let dt = Math.min(now - s.lastTick, OFFLINE_CAP_MS);
   s.lastTick = now;
   sum.elapsedMs = dt;
 
@@ -604,9 +611,12 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         sum.ammoUsed++;
       }
       c.playerTimerMs += playerAttackMs(s);
+      c.pSwings = (c.pSwings ?? 0) + 1;
+      c.pDmg = -1;
       if (rand() < st.playerHit) {
         const dmg = Math.min(c.monsterHp, 1 + Math.floor(rand() * st.playerMaxHit));
         c.monsterHp -= dmg;
+        c.pDmg = dmg;
         addXp(st.style, dmg);
         addXp('defence', dmg / 3);
         addXp('hitpoints', dmg / 3);
@@ -620,18 +630,21 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         task.deathStreak = 0;
         s.bestiary = { ...s.bestiary, [m.id]: (s.bestiary?.[m.id] ?? 0) + 1 };
         task.done++;
-        s.combat = { monsterHp: m.hp, playerTimerMs: playerAttackMs(s), monsterTimerMs: m.attackMs, respawnMs: m.respawnMs ?? RESPAWN_MS };
+        s.combat = { monsterHp: m.hp, playerTimerMs: playerAttackMs(s), monsterTimerMs: m.attackMs, respawnMs: m.respawnMs ?? RESPAWN_MS, pSwings: c.pSwings, pDmg: c.pDmg, mSwings: c.mSwings };
         return step;
       }
     }
     if (c.monsterTimerMs <= 0) {
       c.monsterTimerMs += m.attackMs;
       if (has('regen')) c.monsterHp = Math.min(m.hp, c.monsterHp + Math.ceil(m.hp * 0.03));
+      c.mSwings = (c.mSwings ?? 0) + 1;
+      c.mDmg = -1;
       if (st.monsterMaxHit > 0 && rand() < st.monsterHit) {
         const rage = has('berserk') && c.monsterHp < m.hp / 2 ? 1.5 : 1;
         let dmg = 1 + Math.floor(rand() * st.monsterMaxHit * rage);
         if (has('venom')) dmg += Math.ceil(m.level / 8);
         if (has('lifesteal')) c.monsterHp = Math.min(m.hp, c.monsterHp + Math.ceil(dmg / 2));
+        c.mDmg = dmg;
         hurt(dmg);
       }
     }
@@ -886,8 +899,8 @@ export function atMarket(s: GameState): boolean {
 
 export function sell(prev: GameState, item: string, qty: number): GameState {
   const have = prev.bank[item] ?? 0;
-  const n = Math.min(have, qty);
-  if (item === 'coins' || n <= 0 || !atMarket(prev)) return prev;
+  const n = Math.floor(Math.min(have, qty));
+  if (item === 'coins' || !ITEMS[item] || n <= 0 || !atMarket(prev)) return prev;
   const s = clone(prev);
   s.bank[item] = have - n;
   if (s.bank[item] <= 0) delete s.bank[item];
@@ -898,7 +911,7 @@ export function sell(prev: GameState, item: string, qty: number): GameState {
 /** 集市种子摊：花仓库里的金币买种子，买到的直接进仓库（种田会从仓库扣种子） */
 export function buySeed(prev: GameState, item: string, qty: number): GameState {
   const cost = ITEMS[item]?.value * SEED_PRICE * qty;
-  if (!SEED_SHOP.includes(item) || qty <= 0 || !atMarket(prev) || (prev.bank.coins ?? 0) < cost) return prev;
+  if (!SEED_SHOP.includes(item) || !Number.isInteger(qty) || qty <= 0 || !atMarket(prev) || (prev.bank.coins ?? 0) < cost) return prev;
   const s = clone(prev);
   s.bank.coins -= cost;
   s.bank[item] = (s.bank[item] ?? 0) + qty;

@@ -105,7 +105,7 @@ function ItemGrid({ items, sel, onSel, empty = 0, split = false }: { items: [str
     <div className="grid">
       {cells.map(([id, n, i]) => (
         <button key={`${id}#${i}`} className={`cell ${sel === id ? 'sel' : ''}`} onClick={() => onSel(id)} title={ITEMS[id].name}>
-          <Icon item={id} />
+          <Icon item={id} info={false} />
           <span className="qty">{fmtNum(n)}</span>
           <span className="nm">{ITEMS[id].name}</span>
         </button>
@@ -147,7 +147,7 @@ export function CharacterPanel({ s }: { s: GameState }) {
     const id = s.equipment[slotId];
     return (
       <button key={slotId} className={`slot ${id ? 'full' : ''}`} onClick={() => id && store.dispatch((g) => unequip(g, slotId))} title={id ? '点击卸下' : ''}>
-        {id ? <Icon item={id} size={28} /> : <span className="empty" />}
+        {id ? <Icon item={id} size={28} info={false} /> : <span className="empty" />}
         <small>{id ? ITEMS[id].name : name}</small>
       </button>
     );
@@ -166,7 +166,7 @@ export function CharacterPanel({ s }: { s: GameState }) {
           const b = s.belt?.[k];
           return (
             <button key={k} className={`slot ${b ? 'full' : ''}`} onClick={() => b && store.dispatch((g) => fromBelt(g, k))} title={b ? '点击取下放回背包' : ''}>
-              {b ? <Icon item={b.id} size={28} /> : <span className="empty" />}
+              {b ? <Icon item={b.id} size={28} info={false} /> : <span className="empty" />}
               <small>{b ? `${ITEMS[b.id].name} ×${b.qty}` : k === 'food' ? '食物栏' : '药水栏'}</small>
             </button>
           );

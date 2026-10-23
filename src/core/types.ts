@@ -145,6 +145,11 @@ export interface CombatState {
   playerTimerMs: number;
   monsterTimerMs: number;
   respawnMs: number;
+  /** 出手次数和最近一次伤害（-1 = 没打中），只给画面做飘字用 */
+  pSwings?: number;
+  pDmg?: number;
+  mSwings?: number;
+  mDmg?: number;
 }
 
 export interface Settings {

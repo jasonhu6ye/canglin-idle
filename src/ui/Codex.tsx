@@ -104,7 +104,7 @@ export function Codex({ s, onClose }: { s: GameState; onClose: () => void }) {
           const known = !!s.seen[it.id];
           return (
             <button key={it.id} className={`cell ${known ? '' : 'unknown'} ${sel === it.id ? 'sel' : ''}`} onClick={() => setSel(it.id)}>
-              <Icon item={it.id} />
+              <Icon item={it.id} info={false} />
               <span className="nm">{known ? it.name : '？？？'}</span>
             </button>
           );
@@ -117,9 +117,9 @@ export function Codex({ s, onClose }: { s: GameState; onClose: () => void }) {
   );
 }
 
-function CodexDetail({ s, id }: { s: GameState; id: string }) {
+export function CodexDetail({ s, id, reveal = false }: { s: GameState; id: string; reveal?: boolean }) {
   const it = ITEMS[id];
-  const known = !!s.seen[id];
+  const known = reveal || !!s.seen[id];
   const type = TYPES.find((t) => t.id === typeOf(it))!.name;
   if (!known) {
     return (

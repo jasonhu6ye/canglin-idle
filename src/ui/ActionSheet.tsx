@@ -4,7 +4,7 @@ import { ACTIONS, ITEMS, MONSTERS, NODES, REGIONS, SEED_PRICE, SEED_SHOP, SKILLS
 import {
   actionDuration, atMarket, bestAmmo, bestFood, buySeed, combatStats, enqueue, level, MAX_QUEUE, nearNode, setSettings, startNow, weaponStyle, xpPerHour,
 } from '../core/sim';
-import type { ActionDef, GameState, TaskMode } from '../core/types';
+import type { ActionDef, GameState, SkillAction, TaskMode } from '../core/types';
 import type { MapNode } from '../core/data';
 import { store } from '../store';
 import { fmtNum, stacks } from './format';
@@ -42,7 +42,7 @@ export function ActionSheet({ s, nodeId, onClose }: { s: GameState; nodeId: stri
         {shown.map((id) => {
           const a = ACTIONS[id];
           const lock = isLocked(s, a);
-          const icon = a.kind === 'skill' ? (a.outputs[0] && a.outputs[0].item !== 'coins' ? <Icon item={a.outputs[0].item} size={30} /> : <SkillIcon skill={a.skill} size={30} />) : <MonsterIcon m={MONSTERS[a.monster]} size={34} />;
+          const icon = a.kind === 'skill' ? (a.outputs[0] && a.outputs[0].item !== 'coins' ? <Icon item={a.outputs[0].item} size={30} info={false} /> : <SkillIcon skill={a.skill} size={30} />) : <MonsterIcon m={MONSTERS[a.monster]} size={34} />;
           return (
             <li key={id} className={`${selected === id ? 'sel' : ''} ${lock ? 'locked' : ''}`} onClick={() => !lock && setSelected(id)}>
               <span className="act-icon">{icon}</span>
@@ -66,6 +66,7 @@ export function ActionSheet({ s, nodeId, onClose }: { s: GameState; nodeId: stri
                   )}
                 </span>
                 {selected === id && a.kind === 'combat' && <CombatInfo s={s} monster={a.monster} />}
+                {selected === id && a.kind === 'skill' && <Recipe s={s} a={a} />}
               </span>
             </li>
           );
@@ -77,6 +78,27 @@ export function ActionSheet({ s, nodeId, onClose }: { s: GameState; nodeId: stri
       {!all.length && <p className="muted pad">这里是怪物出没的地方。点地图上的怪物或生物，就能查看它的信息并开打。</p>}
       {all.length > 0 && <TaskConfig s={s} action={selected} onDone={onClose} far={node.town && !nearNode(s, node) ? node : undefined} />}
     </div>
+  );
+}
+
+/** 选中的配方：材料和产物都画成图标，点图标看物品详情 */
+function Recipe({ s, a }: { s: GameState; a: SkillAction }) {
+  const cell = (st: { item: string; qty: number; chance?: number }, need: boolean) => (
+    <span key={st.item} className="rc-cell">
+      <Icon item={st.item} size={24} />
+      <small>
+        ×{st.qty}{st.chance !== undefined && ` ${Math.round(st.chance * 1000) / 10}%`}
+        {need && <i className={(s.bank[st.item] ?? 0) >= st.qty ? '' : 'warn'}> / {fmtNum(s.bank[st.item] ?? 0)}</i>}
+      </small>
+    </span>
+  );
+  return (
+    <span className="recipe">
+      {a.inputs?.map((st) => cell(st, true))}
+      {a.inputs && <b className="rc-arrow">→</b>}
+      {a.outputs.map((st) => cell(st, false))}
+      <small className="muted rc-tip">点图标看物品详情</small>
+    </span>
   );
 }
 

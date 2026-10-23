@@ -15,10 +15,17 @@ type GainListener = (summary: Summary) => void;
 function load(): GameState {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
-    const s = raw && migrate(JSON.parse(raw));
+    let s: GameState | null = null;
+    try {
+      s = raw ? migrate(JSON.parse(raw)) : null;
+    } catch {
+      s = null;
+    }
     if (s) return s;
+    // 读不出来的旧存档先另存一份再开新档，不直接覆盖掉
+    if (raw) localStorage.setItem(`${SAVE_KEY}-broken-${Date.now()}`, raw);
   } catch {
-    // 存档损坏或无法访问 localStorage 时开新档
+    // 无法访问 localStorage（隐私模式等）时开新档
   }
   return newGame(Date.now());
 }
