@@ -1197,7 +1197,8 @@ export class MapScene extends Phaser.Scene {
     const bySkill: Partial<Record<string, string>> = {
       mining: 'work-mine', woodcutting: 'work-chop', fishing: 'work-fish', hunting: 'work-skin', thieving: 'work-steal',
     };
-    if (a.skill === 'farming') return a.tool === 'sickle' ? 'work-gather' : 'work-farm';
+    if (a.skill === 'gathering') return 'work-gather';
+    if (a.skill === 'farming') return 'work-farm';
     return bySkill[a.skill] ?? 'work-craft';
   }
 

@@ -109,8 +109,13 @@ const tx = (x: number) => x + T0.x;
 const ty = (y: number) => y + T0.y;
 export const PLAZA = { x0: tx(145), y0: ty(148), x1: tx(190), y1: ty(189) };
 const inPlaza = (x: number, y: number) => x >= PLAZA.x0 && x <= PLAZA.x1 && y >= PLAZA.y0 && y <= PLAZA.y1;
-const FARM = { x0: tx(134), y0: ty(191), x1: tx(160), y1: ty(206) };
-const FARM_NODE = townXY(148, 198);
+/** 城镇周围的四块田：田垄范围和中间留空给地点标记的位置 */
+const FARMS = [
+  { x0: 134, y0: 191, x1: 160, y1: 206, node: [148, 198] },
+  { x0: 134, y0: 211, x1: 160, y1: 223, node: [147, 217] },
+  { x0: 175, y0: 206, x1: 200, y1: 220, node: [187, 213] },
+  { x0: 106, y0: 196, x1: 124, y1: 210, node: [115, 203] },
+].map((f) => ({ x0: tx(f.x0), y0: ty(f.y0), x1: tx(f.x1), y1: ty(f.y1), local: f, node: townXY(f.node[0], f.node[1]) }));
 const SPAWN_GUESS = townXY(167, 175);
 /** 东边是海 */
 const coastLine = (y: number) => MAP_W - 18 + (fbm(0, y, 9, 60) - 0.5) * 24;
@@ -342,7 +347,7 @@ for (let c = 0; c < CW * CH; c++) coarseGround[c] = G[rawGround(clampX((c % CW) 
   };
   const center = (c: number): Pt => ({ x: (c % CW) * C + 1, y: Math.floor(c / CW) * C + 1 });
   for (const n of NODES) {
-    if (n.town && !n.pond && n.id !== 'farm') continue;
+    if (n.town && !n.pond && n.sprite !== 'farm') continue;
     const s = standTile(n);
     // 粗网格上的折线每隔几个点取一个再连直线，路就不是一格一格的台阶了
     const pts: Pt[] = [s];
@@ -474,8 +479,10 @@ function groundFor(x: number, y: number): Ground {
     const pondNode = PONDS.some((p) => Math.abs(p.n.x - x) <= 3 && y < p.n.y && y >= p.n.y - 2);
     if (!pondNode) g = inPlaza(x, y) ? 'cobble' : baseGround(x, y, r);
   }
-  if (x >= FARM.x0 && x <= FARM.x1 && y >= FARM.y0 && y <= FARM.y1 && !(Math.abs(x - FARM_NODE.x) <= 2 && y >= FARM_NODE.y - 2 && y <= FARM_NODE.y + 2)) {
-    g = (y - FARM.y0) % 3 === 2 ? 'grass' : 'farm';
+  for (const F of FARMS) {
+    if (x >= F.x0 && x <= F.x1 && y >= F.y0 && y <= F.y1 && !(Math.abs(x - F.node.x) <= 2 && y >= F.node.y - 2 && y <= F.node.y + 2)) {
+      g = (y - F.y0) % 3 === 2 ? 'grass' : 'farm';
+    }
   }
   if (road[i] && g !== 'cobble' && g !== 'ocean') {
     if (blockedG[G[g]]) return g === 'cliff' ? 'gravel' : 'bridge';
@@ -536,7 +543,10 @@ const TOWN_PROPS_LOCAL: [PropKind, number, number][] = [
   ['hay', 131, 199], ['hay', 132, 199], ['scarecrow', 142, 194], ['scarecrow', 156, 203],
 ];
 for (let x = 177; x <= 188; x++) TOWN_PROPS_LOCAL.push(['fence', x, 187]);
-for (let x = 133; x <= 161; x++) TOWN_PROPS_LOCAL.push(['fence', x, 190], ['fence', x, 207]);
+// 每块田上下两排篱笆
+for (const { local: f } of FARMS) {
+  for (let x = f.x0 - 1; x <= f.x1 + 1; x++) TOWN_PROPS_LOCAL.push(['fence', x, f.y0 - 1], ['fence', x, f.y1 + 1]);
+}
 const TOWN_PROPS = new Map<number, PropKind>();
 for (const [k, x, y] of TOWN_PROPS_LOCAL) TOWN_PROPS.set(idx(tx(x), ty(y)), k);
 
@@ -604,7 +614,7 @@ function ensureProps(ci: number) {
       if (building[i] || road[i]) continue;
       let k: PropKind | null | undefined = TOWN_PROPS.get(i);
       if (!k) {
-        if (NEAR_NODE[i] || blockedG[ground[i]]) continue;
+        if (NEAR_NODE[i] || blockedG[ground[i]] || FARMS.some((F) => x >= F.x0 && x <= F.x1 && y >= F.y0 && y <= F.y1)) continue;
         const g = GROUNDS[ground[i]];
         if (g === 'cobble' || (Math.abs(x - SPAWN.x) < 4 && Math.abs(y - SPAWN.y) < 4)) continue;
         const r = REGION_IDS[regionIdx(x, y)];

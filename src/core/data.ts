@@ -18,7 +18,8 @@ export const SKILLS: Record<SkillId, SkillInfo> = {
   mining: { name: '挖矿', color: '#b08d57', group: 'gather', desc: '采集矿石、符文石和宝石' },
   woodcutting: { name: '伐木', color: '#6a9a4a', group: 'gather', desc: '砍伐各地的树木' },
   fishing: { name: '钓鱼', color: '#4f86b8', group: 'gather', desc: '在湖泊、海岸和熔池钓鱼' },
-  farming: { name: '种植', color: '#8fbf4a', group: 'gather', desc: '用锄头种作物，用镰刀采棉花和草药' },
+  gathering: { name: '采集', color: '#7cc456', group: 'gather', desc: '用镰刀采棉花和草药，偶尔捡到野生种子' },
+  farming: { name: '种植', color: '#c8a040', group: 'gather', desc: '在城镇附近的田里用锄头播种、收获作物，收成时会收回种子' },
   hunting: { name: '狩猎', color: '#b0703a', group: 'gather', desc: '在野外狩猎野兽，用刮皮刀剥取兽皮' },
   thieving: { name: '偷窃', color: '#8a7ab8', group: 'gather', desc: '从镇民和商队身上摸金币，失败会被晕眩' },
   cooking: { name: '烹饪', color: '#d4a03c', group: 'produce', desc: '把鱼和作物做成回血的食物' },
@@ -133,10 +134,48 @@ for (const [id, name, lvl, heals] of FISH) {
 item('burnt_food', '烧焦的食物', 'misc', 0);
 
 // 作物与草药
-item('potato', '土豆', 'resource', 2);
-item('wheat', '小麦', 'resource', 3);
+item('potato', '土豆', 'resource', 2, { tier: 0, desc: '种植收获的作物，烤一下就能吃。' });
+item('wheat', '小麦', 'resource', 3, { tier: 0, desc: '种植收获的作物，两份能烤成面包。' });
+const ITEMS_EARLY = new Set(['potato', 'wheat']);
 item('baked_potato', '烤土豆', 'food', 4, { heals: 25 });
 item('bread', '面包', 'food', 10, { heals: 50 });
+/**
+ * 作物（用户 10-23 要求：种植和采集分开，种子几十种）。每阶 4 种，共 32 种。
+ * [id, 名字, 种植等级, 颜色, 料理名, 形状]
+ * 种子来源：集市种子摊（T1-T2）、收成时收回、1% 变异出下一种作物的种子、
+ * 同阶野怪掉落、采集草药棉花时捡到、偷农夫/小贩。
+ */
+export const CROPS: [string, string, number, string, string, 'veg' | 'grain'][] = [
+  ['potato', '土豆', 1, '#b08a50', '', 'veg'], ['wheat', '小麦', 3, '#e0c050', '', 'grain'],
+  ['carrot', '胡萝卜', 5, '#f08a2a', '蜜汁胡萝卜', 'veg'], ['cabbage', '卷心菜', 7, '#8ad060', '卷心菜汤', 'veg'],
+  ['onion', '洋葱', 10, '#d8b0d0', '酥炸洋葱圈', 'veg'], ['corn', '玉米', 12, '#f0d040', '黄油烤玉米', 'grain'],
+  ['tomato', '番茄', 15, '#e04a3a', '番茄浓汤', 'veg'], ['pea', '豌豆', 17, '#6ac04a', '奶香豌豆泥', 'veg'],
+  ['pumpkin', '南瓜', 20, '#f0902a', '南瓜派', 'veg'], ['pepper', '甜椒', 23, '#e0c030', '烤甜椒', 'veg'],
+  ['eggplant', '茄子', 25, '#7a4ab0', '红烧茄子', 'veg'], ['strawberry', '草莓', 27, '#f04a6a', '草莓挞', 'veg'],
+  ['garlic', '大蒜', 30, '#f0ece0', '蒜香面包', 'veg'], ['beet', '甜菜', 33, '#a02a5a', '甜菜汤', 'veg'],
+  ['watermelon', '西瓜', 35, '#4aa04a', '西瓜冰沙', 'veg'], ['chili', '辣椒', 37, '#e0302a', '麻辣小炒', 'veg'],
+  ['rice', '稻米', 40, '#f4f0e0', '香米饭团', 'grain'], ['melon', '香瓜', 44, '#c8e070', '香瓜沙拉', 'veg'],
+  ['grape', '葡萄', 48, '#8a4ac0', '葡萄干糕', 'veg'], ['asparagus', '芦笋', 51, '#7ab04a', '黄油芦笋', 'grain'],
+  ['snow_yam', '雪莲薯', 55, '#e8f0ff', '雪莲薯泥', 'veg'], ['gold_wheat', '金穗麦', 59, '#ffd040', '金麦面包', 'grain'],
+  ['fire_pepper', '火焰椒', 63, '#ff6a1a', '火焰椒酱烤肉', 'veg'], ['moon_melon', '月光瓜', 66, '#c8d8ff', '月光瓜羹', 'veg'],
+  ['star_berry', '星光莓', 70, '#9ab0ff', '星光莓果酱', 'veg'], ['dragon_cress', '龙须菜', 76, '#3ac08a', '清炒龙须菜', 'grain'],
+  ['frost_kale', '霜晶菜', 82, '#8ae0f0', '霜晶菜卷', 'veg'], ['blood_corn', '血玉米', 88, '#c0203a', '血玉米浓汤', 'grain'],
+  ['lingzhi', '灵芝', 95, '#a0402a', '灵芝炖汤', 'veg'], ['immortal_peach', '仙桃', 100, '#ffb0c0', '仙桃蜜饯', 'veg'],
+  ['phoenix_fruit', '凤凰果', 105, '#ff8a3a', '凤凰果挞', 'veg'], ['world_fruit', '世界树果', 110, '#f0ffb0', '世界树果羹', 'veg'],
+];
+/** 集市种子摊卖的种子（T1-T2） */
+export const SEED_SHOP = CROPS.filter((c) => c[2] < 20).map((c) => `seed_${c[0]}`);
+/** 种子在集市的售价 = 价值 × 4 */
+export const SEED_PRICE = 4;
+CROPS.forEach(([id, name, lvl, , dish]) => {
+  const tier = tierForLevel(lvl);
+  const where = ['家园农田', '家园农田', '南郊麦田', '南郊麦田', '东郊菜园', '东郊菜园', '西岭灵田', '西岭灵田'][tier];
+  item(`seed_${id}`, `${name}种子`, 'seed', Math.max(1, Math.round(1 + lvl * 0.6)), {
+    tier, desc: `种植 ${lvl} 级可在${where}播种。${tier < 2 ? '集市种子摊有卖；' : ''}收成时大概率收回种子，${tier}阶野怪和采集时也会掉落。`,
+  });
+  if (!ITEMS_EARLY.has(id)) item(id, name, 'resource', Math.round(2 + lvl * 0.8), { tier, desc: `种植收获的作物。两个能做成${dish}。` });
+  if (dish) item(`meal_${id}`, dish, 'food', Math.round(5 + lvl * 1.6), { tier, heals: Math.round(28 + lvl * 4.4), desc: `用${name}做的家常菜，只回复生命。` });
+});
 const HERBS: [string, string, number, number][] = [
   // [id, 名字, 采集等级, 药水回复]
   ['green_herb', '绿叶草', 1, 80], ['fire_bloom', '火绒花', 2, 110], ['moon_herb', '月露草', 18, 170],
@@ -334,6 +373,13 @@ const monsterList: MonsterDef[] = SPECIES.map((sp, idx) => {
     art: { color: sp.color, accent: sp.accent },
   };
 });
+// 野怪掉同阶的种子：普通 2%、精英 6%、Boss 25% 一次 3 颗
+monsterList.forEach((m, i) => {
+  const pool = CROPS.filter((c) => tierForLevel(c[2]) === m.tier);
+  if (!pool.length) return;
+  const boss = m.rank === 'boss';
+  m.drops.push({ item: `seed_${pool[i % pool.length][0]}`, qty: boss ? 3 : 1, chance: boss ? 0.25 : m.rank === 'elite' ? 0.06 : 0.02 });
+});
 monsterList.push({
   id: 'dummy', name: '稻草人', level: 1, tier: 0, rank: 'normal', family: 'plant', form: 'mandrake', region: 'town', traits: ['passive'], kind: 'monster',
   hp: 30, attack: 0, defence: 0, maxHit: 0, attackMs: 3000, respawnMs: 1500, drops: [], art: { color: '#d8b060', accent: '#8a5a3a' },
@@ -387,7 +433,7 @@ const mine = (t: number, suffix = '') =>
 const chop = (t: number, suffix = '') =>
   gather(`chop_${TIERS[t].wood}${suffix}`, TIERS[t].woodName, 'woodcutting', TIERS[t].level, [one(`${TIERS[t].wood}_log`)]);
 const cotton = (t: number, suffix = '') =>
-  gather(`cotton_${t + 1}${suffix}`, '棉花', 'farming', TIERS[t].level, [one(`cotton_${t + 1}`), { item: `cotton_${t + 1}`, qty: 1, chance: 0.2 }], { tool: 'sickle' });
+  gather(`cotton_${t + 1}${suffix}`, '棉花', 'gathering', TIERS[t].level, [one(`cotton_${t + 1}`), { item: `cotton_${t + 1}`, qty: 1, chance: 0.2 }, wildSeed(t, t)], { tool: 'sickle' });
 const hunt = (t: number, suffix = '') =>
   gather(`hunt_${t + 1}${suffix}`, '兽皮', 'hunting', TIERS[t].level, [one(`hide_${t + 1}`), { item: 'bones', qty: 1, chance: 0.3 }]);
 const fishAt = (fish: string, suffix = '') => {
@@ -396,8 +442,27 @@ const fishAt = (fish: string, suffix = '') => {
 };
 const herb = (id: string, suffix = '') => {
   const h = HERBS.find((x) => x[0] === id)!;
-  return gather(`farm_${id}${suffix}`, `采集${h[1]}`, 'farming', h[2], [one(id), { item: id, qty: 1, chance: 0.2 }], { tool: 'sickle' });
+  return gather(`farm_${id}${suffix}`, `采集${h[1]}`, 'gathering', h[2], [one(id), { item: id, qty: 1, chance: 0.2 }, wildSeed(tierForLevel(h[2]), h[2])], { tool: 'sickle' });
 };
+/** 采集时 3% 捡到同阶的野生种子 */
+function wildSeed(tier: number, salt: number): Drop {
+  const pool = CROPS.filter((c) => tierForLevel(c[2]) === tier);
+  return { item: `seed_${pool[salt % pool.length][0]}`, qty: 1, chance: 0.03 };
+}
+/** 种田：消耗 1 颗种子，收 2-3 个作物；80% 收回种子、25% 多收一颗、1% 变异出下一种作物的种子 */
+const plant = (i: number) => {
+  const [id, name, lvl] = CROPS[i];
+  const next = CROPS[i + 1];
+  const aid = gather(`farm_${id}`, `种${name}`, 'farming', lvl, [
+    one(id, 2), { item: id, qty: 1, chance: 0.3 },
+    { item: `seed_${id}`, qty: 1, chance: 0.8 }, { item: `seed_${id}`, qty: 1, chance: 0.25 },
+    ...(next ? [{ item: `seed_${next[0]}`, qty: 1, chance: 0.01 }] : []),
+  ], { tool: 'hoe' });
+  const a = actionList[actionList.length - 1];
+  if (a.kind === 'skill') a.inputs = [one(`seed_${id}`)];
+  return aid;
+};
+const plantTiers = (...tiers: number[]) => CROPS.map((c, i) => [c, i] as const).filter(([c]) => tiers.includes(tierForLevel(c[2]))).map(([, i]) => plant(i));
 const steal = (id: string, name: string, level: number, coins: number, extra: Drop[] = []) =>
   gather(`steal_${id}`, name, 'thieving', level, [one('coins', coins), ...extra], {
     ms: 2500 + level * 15, fail: { chance: 0.5, noFailLevel: level + 30, stunMs: 4000 },
@@ -443,6 +508,7 @@ for (const [fish, name, lvl] of FISH) {
 }
 make('cook_potato', '烤土豆', 'cooking', 1, [one('potato')], [one('baked_potato')]);
 make('cook_bread', '烤面包', 'cooking', 8, [one('wheat', 2)], [one('bread')]);
+for (const [id, , lvl, , dish] of CROPS) if (dish) make(`cook_meal_${id}`, dish, 'cooking', lvl, [one(id, 2)], [one(`meal_${id}`)]);
 // 烹饪失败统一得到烧焦的食物
 for (const a of actionList) if (a.kind === 'skill' && a.fail && a.skill === 'cooking') a.fail.item = 'burnt_food';
 
@@ -601,19 +667,18 @@ export const NODES: MapNode[] = [
   town('apothecary', '药剂铺', 177, 170, 'potion', filterIds('brew_')),
   town('enhancer', '强化台', 185, 170, 'enhance', filterIds('enhance_')),
   town('market', '集市', 155, 182, 'market', [
-    steal('farmer', '偷农夫', 1, 3, [{ item: 'potato', qty: 2, chance: 0.3 }]),
-    steal('vendor', '偷小贩', 10, 9, [{ item: 'cotton_1', qty: 2, chance: 0.2 }]),
+    steal('farmer', '偷农夫', 1, 3, [{ item: 'potato', qty: 2, chance: 0.3 }, { item: 'seed_potato', qty: 2, chance: 0.2 }, { item: 'seed_carrot', qty: 1, chance: 0.08 }]),
+    steal('vendor', '偷小贩', 10, 9, [{ item: 'cotton_1', qty: 2, chance: 0.2 }, { item: 'seed_onion', qty: 1, chance: 0.08 }, { item: 'seed_tomato', qty: 1, chance: 0.05 }]),
     steal('guard', '偷守卫', 25, 22, [{ item: 'iron_bar', qty: 1, chance: 0.1 }]),
     steal('merchant', '偷富商', 40, 45, [{ item: 'sapphire', qty: 1, chance: 0.02 }]),
     steal('noble', '偷贵族', 55, 80, [{ item: 'runic_bar', qty: 1, chance: 0.05 }]),
   ]),
   town('dummy', '训练场', 181, 182, 'dummy', [fight('dummy', '打稻草人')]),
-  town('farm', '家园农田', 148, 198, 'farm', [
-    gather('farm_potato', '种土豆', 'farming', 1, [one('potato', 2)]),
-    herb('green_herb'),
-    gather('farm_wheat', '种小麦', 'farming', 5, [one('wheat', 2)]),
-    cotton(0),
-  ]),
+  // 城镇周围的四块田（用户 10-23 要求），每块种两阶作物
+  town('farm', '家园农田', 148, 198, 'farm', [...plantTiers(0, 1), herb('green_herb'), cotton(0)]),
+  town('farm_south', '南郊麦田', 147, 217, 'farm', plantTiers(2, 3)),
+  town('farm_east', '东郊菜园', 187, 213, 'farm', plantTiers(4, 5)),
+  town('farm_west', '西岭灵田', 115, 203, 'farm', plantTiers(6, 7)),
   { ...wild('town_lake', '镜湖码头', 0.37, 0.65, 'town', 'fish', [fishAt('minnow'), fishAt('loach'), fishAt('crucian'), fishAt('trout', '_lake')], true), town: true },
 
   // 巨木森林

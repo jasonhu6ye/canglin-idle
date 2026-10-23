@@ -1,5 +1,5 @@
-import { actionDuration, advance, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour } from './sim';
-import { levelForXp, XP_TABLE } from './xp';
+import { actionDuration, advance, buySeed, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour } from './sim';
+import { levelForXp, speedForLevel, XP_TABLE } from './xp';
 import type { GameState, SkillAction, TaskMode } from './types';
 import { ACTIONS, nodeOfAction, standOf, travelMs } from './data';
 
@@ -36,7 +36,7 @@ describe('采集', () => {
     // 等级加速让它比 1200 次多一点；背包满了还要回仓库一趟
     expect(summary.items.stone).toBe(owned(state, 'stone'));
     expect(owned(state, 'stone')).toBeGreaterThan(1150);
-    expect(owned(state, 'stone')).toBeLessThan(1400);
+    expect(owned(state, 'stone')).toBeLessThan(1500);
     expect(state.queue).toHaveLength(1);
   });
 
@@ -100,7 +100,8 @@ describe('战斗', () => {
     const s = startHere(g, 'fight_rabbit', { type: 'infinite' });
     const { summary } = advance(s, T0 + HOUR);
     const est = xpPerHour(s, 'fight_rabbit');
-    expect(summary.xp.melee! / est).toBeGreaterThan(0.6);
+    // 掉落多了一种（种子），背包会早一点满、多跑一趟仓库
+    expect(summary.xp.melee! / est).toBeGreaterThan(0.5);
     expect(summary.xp.melee! / est).toBeLessThan(1.6);
   });
 });
@@ -229,14 +230,21 @@ describe('背包与战斗方式', () => {
     expect(summary.taskEnds[0].reason).toBe('noAmmo');
   });
 
+  it('等级加速前快后慢', () => {
+    expect(speedForLevel(10)).toBeCloseTo(0.082, 2);
+    expect(speedForLevel(100)).toBeCloseTo(0.5, 1);
+    expect(speedForLevel(500)).toBeLessThan(0.7);
+    expect(speedForLevel(20) - speedForLevel(10)).toBeGreaterThan(speedForLevel(110) - speedForLevel(100));
+  });
+
   it('工具和等级都加快动作', () => {
     const s = newGame(T0, 1);
     const a = ACTIONS.mine_stone as SkillAction;
     const base = actionDuration(s, a);
     s.equipment.pickaxe = 'wood_pickaxe';
-    expect(actionDuration(s, a)).toBe(Math.round(a.durationMs / (1 + 0.04 + 0.005)));
+    expect(actionDuration(s, a)).toBe(Math.round(a.durationMs / (1 + 0.04 + speedForLevel(1))));
     s.xp.mining = XP_TABLE[140];
-    expect(actionDuration(s, a)).toBe(Math.round(a.durationMs / (1 + 0.04 + 0.7)));
+    expect(actionDuration(s, a)).toBe(Math.round(a.durationMs / (1 + 0.04 + speedForLevel(140))));
     expect(actionDuration(s, a)).toBeLessThan(base);
   });
 
@@ -394,5 +402,34 @@ describe('料理与栏位', () => {
     const { state, summary } = advance(s, T0 + 10 * 60_000);
     expect(summary.foodEaten).toBeGreaterThan(0);
     expect(state.belt?.food?.qty ?? 0).toBe(50 - summary.foodEaten);
+  });
+});
+
+describe('种植', () => {
+  it('种田消耗种子、收作物，种子大多能收回', () => {
+    const s = startHere(newGame(T0, 3), 'farm_potato', { type: 'infinite' });
+    expect(s.bank.seed_potato).toBe(10);
+    const { state, summary } = advance(s, T0 + 10 * 60000);
+    expect(summary.items.potato).toBeGreaterThan(20);
+    expect(summary.xp.farming).toBeGreaterThan(0);
+    expect(summary.xp.gathering).toBeUndefined();
+  });
+
+  it('没有种子就种不了', () => {
+    const g = newGame(T0, 3);
+    delete g.bank.seed_potato;
+    const s = startHere(g, 'farm_potato', { type: 'infinite' });
+    const { summary } = advance(s, T0 + 60000);
+    expect(summary.items.potato).toBeUndefined();
+  });
+
+  it('集市才能买种子，金币从仓库扣', () => {
+    const g = newGame(T0, 3);
+    expect(buySeed(g, 'seed_carrot', 1)).toBe(g);
+    g.loc = marketStand();
+    const s = buySeed(g, 'seed_carrot', 1);
+    expect(s.bank.seed_carrot).toBe(1);
+    expect(s.bank.coins).toBeLessThan(g.bank.coins);
+    expect(buySeed(g, 'seed_lingzhi', 1)).toBe(g);
   });
 });

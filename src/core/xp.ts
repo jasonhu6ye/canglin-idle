@@ -36,7 +36,13 @@ export function levelProgress(xp: number): number {
   return (xp - start) / (XP_TABLE[lvl + 1] - start);
 }
 
-/** 每级收益：非战斗技能每级加快 0.5% 的动作速度 */
-export const SPEED_PER_LEVEL = 0.005;
+/**
+ * 等级带来的动作速度加成：前快后慢的曲线（用户 10-23 选定），无限接近 70%。
+ * 10 级约 +8%，50 级约 +33%，100 级约 +50%，140 级约 +58%。
+ * 强化成功率不用这条曲线：用户要求线性小幅加成，避免高级装备太容易强化。
+ */
+export const SPEED_CAP = 0.7;
+const SPEED_SCALE = 80;
+export const speedForLevel = (lvl: number) => SPEED_CAP * (1 - Math.exp(-lvl / SPEED_SCALE));
 /** 等级每高出动作要求 1 级：采集类 +0.2% 双倍产出，生产类 +0.2% 不消耗材料 */
 export const BONUS_PER_LEVEL = 0.002;

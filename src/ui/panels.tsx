@@ -5,7 +5,7 @@ import {
   weaponStyle,
 } from '../core/sim';
 import type { EquipSlot, GameState, ItemCategory, SkillId, Summary } from '../core/types';
-import { XP_TABLE, levelProgress, SPEED_PER_LEVEL, BONUS_PER_LEVEL } from '../core/xp';
+import { XP_TABLE, levelProgress, speedForLevel, SPEED_CAP, BONUS_PER_LEVEL } from '../core/xp';
 import { store } from '../store';
 import { fmtDuration, fmtNum } from './format';
 import { Codex } from './Codex';
@@ -18,7 +18,7 @@ const GEAR_SLOTS: [EquipSlot, string][] = [
   ['head', '头部'], ['neck', '项链'], ['weapon', '武器'], ['body', '身体'], ['hands', '手部'], ['feet', '脚部'], ['ring', '戒指'],
 ];
 const TOOL_SLOTS: [EquipSlot, string, SkillId][] = [
-  ['axe', '斧头', 'woodcutting'], ['pickaxe', '镐子', 'mining'], ['sickle', '镰刀', 'farming'], ['knife', '刮皮刀', 'hunting'],
+  ['axe', '斧头', 'woodcutting'], ['pickaxe', '镐子', 'mining'], ['sickle', '镰刀', 'gathering'], ['knife', '刮皮刀', 'hunting'],
   ['rod', '鱼竿', 'fishing'], ['hoe', '锄头', 'farming'], ['hammer', '锻造锤', 'smithing'], ['needle', '缝纫针', 'crafting'],
 ];
 const STYLE_NAME = { melee: '近战', ranged: '远程', magic: '魔法' };
@@ -260,7 +260,7 @@ function SkillDetail({ s, skill, onPick }: { s: GameState; skill: SkillId; onPic
       <p>{info.desc}</p>
       {info.group !== 'combat' && (
         <p className="muted">
-          等级没有上限。每级动作速度 +{pct(SPEED_PER_LEVEL)}，当前 +{pct(lvl * SPEED_PER_LEVEL)}；
+          等级没有上限。动作速度随等级提升，前期涨得快、后期慢，最多接近 +{pct(SPEED_CAP)}；当前 +{pct(speedForLevel(lvl))}，下一级 +{pct(speedForLevel(lvl + 1))}；
           等级每高出动作要求 1 级，{info.group === 'gather' ? '双倍产出' : '不消耗材料'}几率 +{pct(BONUS_PER_LEVEL)}。
         </p>
       )}

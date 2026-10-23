@@ -1,8 +1,8 @@
 import { MonsterDetail, MonsterIcon, TraitChips } from './Bestiary';
 import { useState } from 'react';
-import { ACTIONS, ITEMS, MONSTERS, NODES, REGIONS, SKILLS, tierName } from '../core/data';
+import { ACTIONS, ITEMS, MONSTERS, NODES, REGIONS, SEED_PRICE, SEED_SHOP, SKILLS, tierName } from '../core/data';
 import {
-  actionDuration, bestAmmo, bestFood, combatStats, enqueue, level, MAX_QUEUE, nearNode, setSettings, startNow, weaponStyle, xpPerHour,
+  actionDuration, atMarket, bestAmmo, bestFood, buySeed, combatStats, enqueue, level, MAX_QUEUE, nearNode, setSettings, startNow, weaponStyle, xpPerHour,
 } from '../core/sim';
 import type { ActionDef, GameState, TaskMode } from '../core/types';
 import type { MapNode } from '../core/data';
@@ -73,8 +73,34 @@ export function ActionSheet({ s, nodeId, onClose }: { s: GameState; nodeId: stri
         {hidden > 0 && <li className="more" onClick={() => setShowAll(true)}>还有 {hidden} 项更高等级的，点击展开</li>}
       </ul>
 
+      {node.id === 'market' && <SeedShop s={s} />}
       {!all.length && <p className="muted pad">这里是怪物出没的地方。点地图上的怪物或生物，就能查看它的信息并开打。</p>}
       {all.length > 0 && <TaskConfig s={s} action={selected} onDone={onClose} far={node.town && !nearNode(s, node) ? node : undefined} />}
+    </div>
+  );
+}
+
+/** 集市的种子摊：T1-T2 种子，金币从仓库扣、种子进仓库 */
+function SeedShop({ s }: { s: GameState }) {
+  const here = atMarket(s);
+  const coins = s.bank.coins ?? 0;
+  return (
+    <div className="seed-shop">
+      <h3>种子摊 <small className="muted">金币 {fmtNum(coins)}{!here && ' · 要走到集市旁边才能买'}</small></h3>
+      <ul>
+        {SEED_SHOP.map((id) => {
+          const price = ITEMS[id].value * SEED_PRICE;
+          return (
+            <li key={id}>
+              <Icon item={id} size={26} />
+              <span className="grow">{ITEMS[id].name}<small className="muted"> 单价 {price} · 仓库有 {fmtNum(s.bank[id] ?? 0)}</small></span>
+              {[1, 10].map((n) => (
+                <button key={n} disabled={!here || coins < price * n} onClick={() => store.dispatch((g) => buySeed(g, id, n))}>买 {n}</button>
+              ))}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

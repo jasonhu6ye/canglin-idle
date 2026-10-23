@@ -1,7 +1,7 @@
-import { ACTIONS, ITEMS, MAP_W, MONSTERS, nodeOfAction, NODES, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, travelMs, type MapNode } from './data';
+import { ACTIONS, ITEMS, MAP_W, MONSTERS, nodeOfAction, NODES, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, travelMs, type MapNode } from './data';
 import { nextRandom } from './rng';
 import { stepQuests } from './quests';
-import { BONUS_PER_LEVEL, levelForXp, SPEED_PER_LEVEL, XP_TABLE } from './xp';
+import { BONUS_PER_LEVEL, levelForXp, speedForLevel, XP_TABLE } from './xp';
 import type {
   BeltSlot, BuffKind, CombatAction, CombatStyle, EquipSlot, GameState, MonsterDef, SkillAction, SkillId, Summary, Task, TaskEndReason, TaskMode,
 } from './types';
@@ -33,7 +33,7 @@ export function newGame(now: number, seed = Math.floor(Math.random() * 2 ** 31))
     rng: seed,
     xp,
     hp: 100,
-    bank: { coins: 50, minnow: 10 },
+    bank: { coins: 50, minnow: 10, seed_potato: 10 },
     bag: {},
     equipment: { weapon: 'wood_sword' },
     queue: [],
@@ -45,7 +45,7 @@ export function newGame(now: number, seed = Math.floor(Math.random() * 2 ** 31))
     loc: { ...SPAWN_TILE },
     mapSize: MAP_W,
     travel: null,
-    seen: { minnow: 1, wood_sword: 1 },
+    seen: { minnow: 1, wood_sword: 1, seed_potato: 1 },
   };
 }
 
@@ -78,9 +78,11 @@ export function migrate(raw: unknown): GameState | null {
   return {
     ...fresh,
     lastTick: s.lastTick ?? fresh.lastTick,
-    xp: { ...fresh.xp, ...s.xp },
+    // 采集从种植里拆出来（10-23）：旧存档的种植经验两边都保留
+    xp: { ...fresh.xp, ...s.xp, gathering: s.xp?.gathering ?? s.xp?.farming ?? 0 },
     hp: s.hp ?? fresh.hp,
-    bank: keep(s.bank),
+    // 种植改成要种子：旧存档送 10 颗土豆种子
+    bank: s.seen?.seed_potato ? keep(s.bank) : { ...keep(s.bank), seed_potato: (s.bank?.seed_potato ?? 0) + 10 },
     bag: keep(s.bag),
     equipment,
     queue,
@@ -99,9 +101,12 @@ export function migrate(raw: unknown): GameState | null {
     buffs: s.buffs ?? {},
     belt: s.belt ?? {},
     // 旧存档：现在拥有的东西都算获得过
-    seen: s.seen ?? Object.fromEntries(
-      [...Object.keys(keep(s.bank)), ...Object.keys(keep(s.bag)), ...Object.values(equipment)].filter((id) => id && ITEMS[id]).map((id) => [id, 1 as const]),
-    ),
+    seen: {
+      ...(s.seen ?? Object.fromEntries(
+        [...Object.keys(keep(s.bank)), ...Object.keys(keep(s.bag)), ...Object.values(equipment)].filter((id) => id && ITEMS[id]).map((id) => [id, 1 as const]),
+      )),
+      seed_potato: 1,
+    },
   };
 }
 
@@ -134,7 +139,7 @@ export function playerBonuses(s: GameState, style = weaponStyle(s)) {
 }
 
 export const TOOL_FOR: Partial<Record<SkillId, EquipSlot>> = {
-  mining: 'pickaxe', woodcutting: 'axe', fishing: 'rod', farming: 'hoe', hunting: 'knife', smithing: 'hammer', crafting: 'needle',
+  mining: 'pickaxe', woodcutting: 'axe', fishing: 'rod', gathering: 'sickle', farming: 'hoe', hunting: 'knife', smithing: 'hammer', crafting: 'needle',
 };
 
 /** 某个工具栏位当前的速度加成 */
@@ -146,8 +151,8 @@ export function toolSpeed(s: GameState, skill: SkillId, tool?: EquipSlot) {
 }
 
 /** 工具加速后的单次耗时 */
-/** 等级加速：非战斗技能每级 +0.5% 动作速度，没有上限 */
-export const levelSpeed = (s: GameState, skill: SkillId) => level(s, skill) * SPEED_PER_LEVEL;
+/** 等级加速：非战斗技能，前快后慢，见 speedForLevel */
+export const levelSpeed = (s: GameState, skill: SkillId) => speedForLevel(level(s, skill));
 /** 等级高出动作要求的部分：采集类是双倍产出几率，生产类是不消耗材料几率 */
 export const levelBonus = (s: GameState, a: SkillAction) => Math.max(0, level(s, a.skill) - a.level) * BONUS_PER_LEVEL;
 
@@ -887,6 +892,17 @@ export function sell(prev: GameState, item: string, qty: number): GameState {
   s.bank[item] = have - n;
   if (s.bank[item] <= 0) delete s.bank[item];
   s.bank.coins = (s.bank.coins ?? 0) + n * ITEMS[item].value;
+  return s;
+}
+
+/** 集市种子摊：花仓库里的金币买种子，买到的直接进仓库（种田会从仓库扣种子） */
+export function buySeed(prev: GameState, item: string, qty: number): GameState {
+  const cost = ITEMS[item]?.value * SEED_PRICE * qty;
+  if (!SEED_SHOP.includes(item) || qty <= 0 || !atMarket(prev) || (prev.bank.coins ?? 0) < cost) return prev;
+  const s = clone(prev);
+  s.bank.coins -= cost;
+  s.bank[item] = (s.bank[item] ?? 0) + qty;
+  s.seen[item] = 1;
   return s;
 }
 

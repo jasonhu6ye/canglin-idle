@@ -1,4 +1,6 @@
-import { ITEMS, TIERS, tierName } from '../core/data';
+import { CROPS, ITEMS, TIERS, tierName } from '../core/data';
+
+const CROP_COLOR: Record<string, [string, string]> = Object.fromEntries(CROPS.map((c) => [c[0], [c[3], c[5]]]));
 import { resIconUrl } from '../game/resArt';
 import type { SkillId } from '../core/types';
 
@@ -122,6 +124,36 @@ const TPL: Record<string, string[]> = {
     'kbbbabbbbaak',
     '.kbbbbbbaak.',
     '..kaaaaaak..',
+    '...kkkkkk...',
+    '............',
+  ],
+  // 种子袋：麻布小袋，袋口露出几颗种子（种子颜色 = 作物颜色）
+  seed: [
+    '............',
+    '....kkkk....',
+    '...kcbcbk...',
+    '....kOOk....',
+    '...koooOk...',
+    '..koooooOk..',
+    '.kooooooOOk.',
+    '.koowooooOk.',
+    '.kooooooOOk.',
+    '..kOOOOOOk..',
+    '...kkkkkk...',
+    '............',
+  ],
+  // 圆滚滚的蔬菜瓜果，顶上两片叶子
+  veg: [
+    '.....kk.....',
+    '...kklLkk...',
+    '..klLkkLlk..',
+    '...kkbbkk...',
+    '..kcccbbbk..',
+    '.kcwccbbbak.',
+    '.kccbbbbbak.',
+    '.kcbbbbbaak.',
+    '.kbbbbbaaak.',
+    '..kbbbaaak..',
     '...kkkkkk...',
     '............',
   ],
@@ -798,7 +830,7 @@ const CLOTH_TINT = ['#d8d4cc', '#f4e6c0', '#fcd4dc', '#d4e8fc', '#f0faff', '#f8d
 const SPECIFIC: Record<string, [string, string]> = {
   coins: ['coins', '#f0c850'], bones: ['bones', '#ffffff'], burnt_food: ['food', '#3a2a22'], shaft: ['shaft', '#9a6a3a'],
   sapphire: ['gem', '#3a6ae0'], ruby: ['gem', '#e03a4a'], diamond: ['gem', '#e8f8ff'],
-  potato: ['food', '#b08a50'], baked_potato: ['food', '#c8803a'], bread: ['food', '#d8a060'], wheat: ['herb', '#e0c050'],
+  potato: ['veg', '#b08a50'], baked_potato: ['food', '#c8803a'], bread: ['food', '#d8a060'], wheat: ['herb', '#e0c050'],
   green_herb: ['herb', '#6ac04a'], fire_bloom: ['herb', '#f07a3a'], moon_herb: ['herb', '#c0d0ff'],
   silver_leaf: ['herb', '#d0d8d8'], flame_heart: ['herb', '#ff4a2a'], frost_lotus: ['herb', '#8ad8ff'],
   enh_basic: ['stone', '#8ad8ff'], enh_mid: ['stone', '#7ac04a'], enh_high: ['stone', '#e0a040'], enh_legend: ['stone', '#e04ae0'],
@@ -820,6 +852,8 @@ export function itemIcon(id: string): [string, string] {
   const tier = it?.tier ?? 0;
   const prefix = id.split('_')[0];
   if (id.startsWith('raw_')) return ['fish', '#8aa0b8'];
+  if (id.startsWith('seed_')) return ['seed', CROP_COLOR[id.slice(5)]?.[0] ?? '#c8a040'];
+  if (CROP_COLOR[id]) return [CROP_COLOR[id][1] === 'grain' ? 'herb' : 'veg', CROP_COLOR[id][0]];
   // 兽肉、魔核按阶级换颜色
   if (id.startsWith('meat_')) return ['meat', ['#d06a6a', '#c85a5a', '#b84a5a', '#a84050', '#c05080', '#9a3a70', '#7a3a8a', '#d0a040'][tier]];
   if (id.startsWith('steak_')) return ['meat', ['#a8643a', '#a05a30', '#985030', '#904828', '#8a4a40', '#7a3a30', '#6a3a40', '#b07a2a'][tier]];
@@ -846,7 +880,7 @@ export function itemIcon(id: string): [string, string] {
 }
 
 export const SKILL_ICON: Record<SkillId, [string, string]> = {
-  mining: ['pickaxe', '#c5cad2'], woodcutting: ['axe', '#c5cad2'], fishing: ['fish', '#5a9ad8'], farming: ['herb', '#7cc456'],
+  mining: ['pickaxe', '#c5cad2'], woodcutting: ['axe', '#c5cad2'], fishing: ['fish', '#5a9ad8'], gathering: ['herb', '#7cc456'], farming: ['hoe', '#c8a040'],
   hunting: ['knife', '#c5cad2'], thieving: ['bag', '#8a7ab8'], cooking: ['food', '#d8a060'], smithing: ['anvil', '#8a8f99'],
   fletching: ['bow', '#c09060'], herblore: ['potion', '#4ab89a'], crafting: ['gem', '#e07ab0'], enhancing: ['stone', '#e8d04a'],
   melee: ['sword', '#c5cad2'], ranged: ['arrow', '#c08040'], magic: ['staff', '#5a7ae8'], defence: ['shield', '#7a8ab8'], hitpoints: ['heart', '#e04a5a'],
