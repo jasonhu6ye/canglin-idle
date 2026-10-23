@@ -614,7 +614,7 @@ describe('坐骑和兑换码', () => {
     expect(s.equipment.mount).toBe('mount_danmark');
     const walk = moveSpeed(s);
     s = toggleMount(s);
-    expect(moveSpeed(s)).toBe(walk * 2);
+    expect(moveSpeed(s)).toBeCloseTo(walk * 2.6);
     s = unequip(s, 'mount');
     expect(s.mounted).toBe(false);
     expect(moveSpeed(s)).toBe(walk);

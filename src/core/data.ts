@@ -346,8 +346,8 @@ for (const j of JEWELS) {
 
 /** 坐骑：测试服兑换码「中国人能飞」领取（用户 10-23 要求，名字用户改为 Chinese can fly） */
 item('mount_danmark', 'Chinese can fly', 'gear', 0, {
-  desc: '黑毛银鬃的巨狼，红眼，身上有旧伤疤。骑乘时移动速度 +100%。在「更多」页输入兑换码获得。',
-  equip: { slot: 'mount', skill: 'hitpoints', level: 1, attack: 0, strength: 0, defence: 0, move: 1 },
+  desc: '黑毛银鬃的巨狼，红眼，身上有旧伤疤。骑乘时移动速度 +160%。在「更多」页输入兑换码获得。',
+  equip: { slot: 'mount', skill: 'hitpoints', level: 1, attack: 0, strength: 0, defence: 0, move: 1.6 },
 });
 
 const HERB_FOR_TIER = ['green_herb', 'fire_bloom', 'moon_herb', 'silver_leaf', 'flame_heart', 'frost_lotus', 'frost_lotus', 'frost_lotus'];
