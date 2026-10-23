@@ -446,24 +446,36 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .redeem-input { flex: 1; min-width: 0; padding: 8px; font-size: 16px; background: #1d130c; color: var(--gold); border: 0; border-radius: 2px; box-shadow: 0 0 0 1px var(--edge); }
 .redeem .good { color: #8ee08a; }
 
-/* ---- 战斗日志 ---- */
+/* ---- 日志：左下角小窗，固定高度、翻页 ---- */
 .log-chip { border: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; pointer-events: auto; }
 .log-chip u { color: var(--gold); text-decoration: none; }
-.combat-log { width: min(460px, 100%); max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); }
-.combat-log .row1 { display: flex; justify-content: space-between; align-items: center; }
-.combat-log .x { width: 28px; height: 28px; color: var(--gold); }
-.log-total { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; padding: 6px 8px; background: #120b07; box-shadow: 0 0 0 1px var(--edge); border-radius: 2px; }
-.log-total .loot { margin: 2px 0 0; width: 100%; }
-.combat-log .tabs3 { display: flex; gap: 4px; margin: 6px 0 2px; }
-.combat-log .tabs3 button { flex: 1; padding: 6px; color: var(--text, #e8dcc8); }
-.log-list { list-style: none; margin: 0; padding: 0 2px 0 0; overflow-y: auto; flex: 1; min-height: 120px; display: flex; flex-direction: column; gap: 3px; }
-.log-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; padding: 4px 6px; font-size: 12px; background: rgba(0, 0, 0, 0.22); border-left: 2px solid var(--edge); }
+.log-dock { display: flex; flex-direction: column; padding: 6px 8px; gap: 4px; font-size: 12px; }
+.log-head { display: flex; align-items: center; gap: 6px; }
+.log-tabs { display: flex; gap: 3px; flex: 1; min-width: 0; }
+.log-tabs button, .log-subtabs button, .log-pager button, .log-head .fold, .log-foot button {
+  background: linear-gradient(#4a3220, #33221a); border: 0; border-radius: 2px; color: var(--text, #e8dcc8); font-size: 11px; padding: 3px 6px;
+  box-shadow: 0 0 0 1px var(--edge), inset 0 1px 0 #7a5a36;
+}
+.log-tabs button { flex: 1; white-space: nowrap; padding: 3px 2px; }
+.log-head .fold { color: var(--gold); white-space: nowrap; }
+.log-subtabs { display: flex; gap: 3px; }
+.log-subtabs button { flex: 1; }
+.log-body { height: 168px; display: flex; flex-direction: column; overflow: hidden; }
+.log-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; flex: 1; overflow: hidden; }
+.log-list li { display: flex; align-items: center; gap: 6px; padding: 2px 5px; height: 22px; background: rgba(0, 0, 0, 0.25); border-left: 2px solid var(--edge); white-space: nowrap; overflow: hidden; }
 .log-list li.death { border-left-color: #c84040; color: #ff9a8a; }
-.log-list time { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
-.log-list .log-xp { display: inline-flex; gap: 8px; font-size: 11px; }
-.log-list .loot { margin: 0; width: 100%; }
-.log-list .loot span { font-size: 11px; padding: 1px 5px; }
-.log-clear { padding: 6px; color: var(--muted); }
 .log-list li.work { border-left-color: #4a8a4a; }
 .log-list li.fail { border-left-color: #8a6a3a; }
-.combat-log .tabs3 button { font-size: 12px; padding: 6px 2px; }
+.log-list time { color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; flex: none; }
+.log-what { flex: none; max-width: 42%; overflow: hidden; text-overflow: ellipsis; }
+.log-gain { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; font-size: 11px; }
+.log-item { display: inline-flex; align-items: center; gap: 1px; }
+.log-list.stats li b { margin-left: auto; font-weight: normal; color: #f0e0c8; }
+.log-list.stats li small { flex: none; }
+.log-list.stats .log-what { max-width: none; flex: 1; }
+.log-foot { margin: 0; font-size: 11px; height: 20px; display: flex; align-items: center; gap: 4px; }
+.log-foot .link { background: none; box-shadow: none; color: var(--muted); padding: 0; text-decoration: underline; }
+.log-foot .danger { padding: 2px 8px; }
+.log-pager { display: flex; align-items: center; gap: 4px; }
+.log-pager span { flex: 1; text-align: center; color: var(--muted); font-variant-numeric: tabular-nums; }
+.log-pager button:disabled { opacity: 0.35; }

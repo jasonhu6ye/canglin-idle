@@ -153,8 +153,18 @@ export function App() {
     setNode(id);
   }, []);
 
-  const [combatLog, setCombatLog] = useState(false);
-  useEffect(() => onOpenCombatLog(() => setCombatLog(true)), []);
+  // 日志小窗：展开 / 收起记在本地（用户 10-23）
+  const [combatLog, setCombatLogRaw] = useState(() => {
+    try { return localStorage.getItem('canglin-log-open') === '1'; } catch { return false; }
+  });
+  const setCombatLog = useCallback((v: boolean | ((x: boolean) => boolean)) => {
+    setCombatLogRaw((x) => {
+      const next = typeof v === 'function' ? v(x) : v;
+      try { localStorage.setItem('canglin-log-open', next ? '1' : '0'); } catch { /* 存不了就算了 */ }
+      return next;
+    });
+  }, []);
+  useEffect(() => onOpenCombatLog(() => { setCombatLog(true); if (!ui.current.wide) setTab('game'); }), []);
   const [help, setHelp] = useState(() => {
     // 电脑端第一次打开时自动弹一次快捷键说明
     try {
@@ -225,7 +235,7 @@ export function App() {
         <div className={`region-tint ${region}`} />
         <div className="hud">
           <QueuePanel s={s} />
-          <StatusChips s={s} extra={<QuestCard s={s} onGo={openNode} />} />
+          <StatusChips s={s} extra={<QuestCard s={s} onGo={openNode} />} log={combatLog ? <CombatLog onClose={() => setCombatLog(false)} /> : null} />
           <MapButtons s={s} onWorldMap={() => setWorldMap(true)} />
         </div>
         <BossBar s={s} />
@@ -267,7 +277,6 @@ export function App() {
       {offline && <OfflineModal sum={offline} />}
       <ItemPopup s={s} />
       <LootReveal />
-      {combatLog && <CombatLog onClose={() => setCombatLog(false)} />}
       <Guide />
       <UpdateBanner />
     </div>

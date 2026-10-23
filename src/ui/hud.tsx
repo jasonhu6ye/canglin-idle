@@ -80,7 +80,7 @@ export function QueuePanel({ s }: { s: GameState }) {
   );
 }
 
-export function StatusChips({ s, extra }: { s: GameState; extra?: ReactNode }) {
+export function StatusChips({ s, extra, log }: { s: GameState; extra?: ReactNode; log?: ReactNode }) {
   const task = s.queue[0];
   const a = task && ACTIONS[task.action];
   let body = null;
@@ -134,7 +134,7 @@ export function StatusChips({ s, extra }: { s: GameState; extra?: ReactNode }) {
           ))}
         </div>
       )}
-      <button className="chip dim log-chip" title="日志 (L)" onClick={openCombatLog}>⚔ 击杀 {fmtNum(s.stats.kills)} · 阵亡 {s.stats.deaths} · <u>日志</u></button>
+      {log || <button className="chip dim log-chip" title="日志 (L)" onClick={openCombatLog}>⚔ 击杀 {fmtNum(s.stats.kills)} · 阵亡 {s.stats.deaths} · <u>展开日志 ▸</u></button>}
     </div>
   );
 }
