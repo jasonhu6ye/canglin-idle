@@ -5,7 +5,7 @@ import { pickSeed, plotGrowth, plotPhase, tendPlot } from '../core/farm';
 import { paintWaystone } from './waystoneArt';
 import { MON_ANIMS, monsterFrameSize, paintMonsterSheet, type MonAnim } from './monsterArt';
 import { paintWolfSheet, wolfSaddle, WOLF_ANIMS, WOLF_FEET, WOLF_H, WOLF_W } from './wolfArt';
-import { HERO_ANIMS, HERO_FEET, HERO_H, HERO_W, NPC_ANIMS, NPC_OUTFITS, outfitOf, paintHeroSheet, type HeroDir } from './hero';
+import { HERO_ANIMS, HERO_FEET, HERO_H, HERO_RES, HERO_W, NPC_ANIMS, NPC_OUTFITS, outfitOf, paintHeroSheet, type HeroDir } from './hero';
 import type { MonsterDef, RegionId, Summary } from '../core/types';
 import { store } from '../store';
 import { Ambience, D_FLOAT, D_GLOW, D_LABEL, D_PARTICLE, D_SMOKE } from './ambience';
@@ -161,7 +161,8 @@ export class MapScene extends Phaser.Scene {
     if (!store.state.walk && (start.x !== saved.x || start.y !== saved.y)) store.dispatch((g) => setLoc(g, start.x, start.y));
     this.player = this.add.container(start.x * T + T / 2, start.y * T + T / 2);
     const ring = this.add.ellipse(0, 6, 14, 6).setStrokeStyle(1, 0xe8b84a).setFillStyle(0xe8b84a, 0.25);
-    this.playerBody = this.add.sprite(0, 7, 'hero').setOrigin(0.5, HERO_FEET / HERO_H);
+    // 主角精灵表按两倍精度画（限定外观更细），这里缩回原大小
+    this.playerBody = this.add.sprite(0, 7, 'hero').setOrigin(0.5, HERO_FEET / HERO_H).setScale(1 / HERO_RES);
     this.playerBody.play('idle-down');
     const name = this.add.text(0, 7 - HERO_FEET + 1, '[苍岭] 你', { fontFamily: FONT, fontSize: '7px', color: '#ffffff', stroke: '#000', strokeThickness: 2, resolution: 4 }).setOrigin(0.5);
     this.wolfBack = this.add.sprite(0, 7, 'mount-wolf').setOrigin(0.5, WOLF_FEET / WOLF_H).setVisible(false);
@@ -259,7 +260,7 @@ export class MapScene extends Phaser.Scene {
     const skin = store.state.settings.skin;
     if (skin === this.heroSkin) return;
     this.heroSkin = skin;
-    paintHeroSheet(outfitOf(skin), this.heroCanvas);
+    paintHeroSheet(outfitOf(skin), this.heroCanvas, HERO_ANIMS, HERO_RES);
     this.heroTex.refresh();
   }
 
@@ -269,10 +270,10 @@ export class MapScene extends Phaser.Scene {
     this.textures.addCanvas('glow', paintGlow());
     // 主角多帧动画
     this.heroSkin = store.state.settings.skin;
-    const hero = paintHeroSheet(outfitOf(this.heroSkin));
+    const hero = paintHeroSheet(outfitOf(this.heroSkin), undefined, HERO_ANIMS, HERO_RES);
     this.heroCanvas = hero.canvas;
     const tex = this.heroTex = this.textures.addCanvas('hero', hero.canvas)!;
-    for (const f of hero.frames) tex.add(f.name, 0, f.x, f.y, HERO_W, HERO_H);
+    for (const f of hero.frames) tex.add(f.name, 0, f.x, f.y, HERO_W * HERO_RES, HERO_H * HERO_RES);
     for (const a of HERO_ANIMS) {
       if (this.anims.exists(a.key)) continue;
       this.anims.create({
