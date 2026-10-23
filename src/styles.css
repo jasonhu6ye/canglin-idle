@@ -242,10 +242,14 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .wm-legend { display: flex; gap: 10px; flex-wrap: wrap; padding: 6px 12px; font-size: 11px; color: var(--muted); border-top: 2px solid var(--edge); flex: none; }
 .wm-legend i { display: inline-block; width: 8px; height: 8px; margin-right: 4px; transform: rotate(45deg); }
 .wm-legend i.me { background: #ff2fa0; border: 1px solid #fff; border-radius: 50%; transform: none; }
-.wm-legend i.stone-mark { background: #6ad8f0; transform: none; width: 6px; height: 10px; clip-path: polygon(50% 0, 100% 25%, 100% 100%, 0 100%, 0 25%); }
-.wm-node.stone i { width: 8px; height: 13px; transform: none; background: #6a6672; clip-path: polygon(50% 0, 100% 25%, 100% 100%, 0 100%, 0 25%); box-shadow: none; }
-.wm-node.stone.lit i { background: #6ad8f0; filter: drop-shadow(0 0 3px #6ad8f0); }
-.wm-node.stone span { color: #c8f4ff; }
+.wm-legend i.stone-mark { background: #00e5ff; transform: none; width: 7px; height: 11px; clip-path: polygon(50% 0, 100% 25%, 100% 100%, 0 100%, 0 25%); }
+/* 传送石碑：高对比（用户 10-23 嫌颜色浅）：亮青色 + 黑白双描边；未激活是橙色 */
+.wm-node.stone { z-index: 2; }
+.wm-node.stone i { width: 11px; height: 17px; transform: none; background: #ff9a2a; box-shadow: none; clip-path: polygon(50% 0, 100% 25%, 100% 100%, 0 100%, 0 25%);
+  filter: drop-shadow(1px 0 0 #fff) drop-shadow(-1px 0 0 #fff) drop-shadow(0 1px 0 #fff) drop-shadow(0 -1px 0 #fff) drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000); }
+.wm-node.stone.lit i { background: #00e5ff; filter: drop-shadow(1px 0 0 #fff) drop-shadow(-1px 0 0 #fff) drop-shadow(0 1px 0 #fff) drop-shadow(0 -1px 0 #fff) drop-shadow(0 0 1px #000) drop-shadow(0 0 4px #00e5ff); }
+.wm-node.stone span { color: #fff; font-weight: bold; background: #0a1a2ccc; border: 1px solid #00e5ff; padding: 0 4px; border-radius: 2px; text-shadow: none; }
+.wm-node.stone:not(.lit) span { border-color: #ff9a2a; }
 .wm-filter { padding: 6px 10px; flex: none; overflow-x: auto; flex-wrap: nowrap; }
 .wm-filter .pill { flex: none; }
 .wm-card { position: absolute; left: 10px; right: 10px; bottom: 44px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 0 0 2px var(--edge), inset 0 0 0 1px var(--gold), 0 6px 16px rgba(0, 0, 0, 0.6); }
@@ -539,3 +543,4 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .news-body { max-height: 60vh; overflow-y: auto; }
 .news-body h3 { margin: 10px 0 4px; font-size: 14px; }
 .news-body ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.6; }
+.wm-legend i.stone-mark.off { background: #ff9a2a; }

@@ -194,7 +194,8 @@ export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: ()
       </div>
       <div className="wm-legend">
         {DANGER.map((d) => <span key={d.name}><i style={{ background: d.color }} />{d.name}</span>)}
-        <span><i className="stone-mark" />传送石碑</span>
+        <span><i className="stone-mark" />石碑（已激活）</span>
+        <span><i className="stone-mark off" />石碑（未激活）</span>
         <span><i className="me" />你</span>
         {FINE_POINTER && <span className="wm-hint">滚轮缩放 · 按住左键拖动</span>}
       </div>
