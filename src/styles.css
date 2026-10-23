@@ -580,3 +580,12 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .off-now { margin: 8px 0; }
 .save-compare table { width: 100%; border-collapse: collapse; margin: 8px 0; }
 .save-compare td, .save-compare th { padding: 4px 6px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.08); }
+
+/* 施肥、洒水器 */
+.farm-gear { margin: 6px 12px; display: grid; gap: 6px; font-size: 12px; }
+.farm-gear p { margin: 0; }
+.farm-gear .row-fert { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.farm-gear .row-fert > span:first-child { min-width: 3em; color: #c8b088; }
+.farm-gear .rain-note { margin: 0; color: #8ad0ff; }
+.fp .fp-fert { position: absolute; right: 1px; top: 1px; width: 5px; height: 5px; border-radius: 50%; background: #a0783a; }
+.fp .fp-fert.f2 { background: #a06ae0; }

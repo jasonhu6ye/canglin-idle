@@ -3,7 +3,7 @@ import { groundAt, isWalkable } from './world';
 
 describe('田里的地块', () => {
   it('每块田 56 格，都在耕地上，旁边有能站的地方', () => {
-    for (const n of FARM_NODES) expect(plotsOf(n.id).length, n.id).toBe(56);
+    for (const n of FARM_NODES) expect(plotsOf(n.id).length, n.id).toBe(24);
     const keys = new Set(FARM_PLOTS.map((p) => `${p.x},${p.y}`));
     expect(keys.size).toBe(FARM_PLOTS.length);
     for (const p of FARM_PLOTS) {

@@ -1,7 +1,7 @@
-import { ACTIONS, CROP_DEFS, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAP_W, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, planRoute, travelMs, type MapNode } from './data';
+import { ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAP_W, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, planRoute, travelMs, type MapNode } from './data';
 import { nextRandom } from './rng';
 import { stepQuests } from './quests';
-import { stepAutoFarm } from './farm';
+import { stepAutoFarm, stepRain } from './farm';
 import { isRaining, RAIN_FISH } from './weather';
 import { BONUS_PER_LEVEL, levelForXp, speedForLevel, XP_TABLE } from './xp';
 import type {
@@ -95,7 +95,7 @@ export function migrate(raw: unknown): GameState | null {
     xp: { ...fresh.xp, ...s.xp, gathering: s.xp?.gathering ?? s.xp?.farming ?? 0 },
     hp: s.hp ?? fresh.hp,
     // 种植改成要种子：旧存档送 10 颗土豆种子
-    bank: s.seen?.seed_potato ? keep(s.bank) : { ...keep(s.bank), seed_potato: (s.bank?.seed_potato ?? 0) + 10 },
+    bank: farmRefund(s.farm, s.seen?.seed_potato ? keep(s.bank) : { ...keep(s.bank), seed_potato: (s.bank?.seed_potato ?? 0) + 10 }),
     bag: keep(s.bag),
     equipment,
     queue,
@@ -114,6 +114,7 @@ export function migrate(raw: unknown): GameState | null {
     buffs: s.buffs ?? {},
     mounted: !!s.mounted && !!equipment.mount,
     redeemed: s.redeemed ?? [],
+    sprinklers: (s.sprinklers ?? []).filter((id) => FARM_NODES.some((n) => n.id === id)),
     waystones: [...new Set([WAYSTONE_HOME, ...(s.waystones ?? []).filter((id) => WAYSTONES.some((n) => n.id === id))])],
     // 地块里种的作物改过名或删掉了就清掉
     farm: Object.fromEntries(Object.entries(s.farm ?? {}).filter(([id, p]) => PLOT_BY_ID[id] && p && CROP_DEFS[p.crop])),
@@ -127,6 +128,16 @@ export function migrate(raw: unknown): GameState | null {
       seed_potato: 1,
     },
   };
+}
+
+/** 田从 56 格减到 24 格（用户 10-23）：去掉的格子里种着的作物，按一次收成放进仓库（2 个作物 + 1 颗种子） */
+function farmRefund(farm: GameState['farm'], bank: Record<string, number>): Record<string, number> {
+  for (const [id, p] of Object.entries(farm ?? {})) {
+    if (PLOT_BY_ID[id] || !p || !CROP_DEFS[p.crop]) continue;
+    bank[p.crop] = (bank[p.crop] ?? 0) + 2;
+    bank[`seed_${p.crop}`] = (bank[`seed_${p.crop}`] ?? 0) + 1;
+  }
+  return bank;
 }
 
 export function emptySummary(): Summary {
@@ -831,6 +842,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       if (isFinished(task)) endTask('complete');
     }
   }
+  stepRain(s, from, now);
   stepAutoFarm(s, sum, from, now);
   // 走到（或寻路到）石碑旁边就激活
   if (!s.travel && !s.walk) {

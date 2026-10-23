@@ -2,7 +2,8 @@ import { actionDuration, advance, buySeed, eat, toBelt, sell, marketStand, start
 import { levelForXp, speedForLevel, XP_TABLE } from './xp';
 import type { GameState, SkillAction, TaskMode } from './types';
 import { ACTIONS, CROP_DEFS, FARM_NODES, nodeOfAction, plotsOf, standOf, travelMs, WATER_SPEEDUP } from './data';
-import { fieldCounts, harvestAll, plantAll, tendPlot, waterAll } from './farm';
+import { fieldCounts, harvestAll, installSprinkler, plantAll, stepRain, tendPlot, waterAll } from './farm';
+import { isRaining } from './weather';
 
 /** 测试默认已经站在任务地点、补给也带好了，不算走路时间 */
 function startHere(s: GameState, action: string, mode: TaskMode) {
@@ -485,6 +486,50 @@ describe('种植', () => {
     state.bank.seed_lingzhi = 1;
     const other = plotsOf('farm')[1].id;
     expect(tendPlot(state, other, 'carrot', T0).state.farm?.[other]).toBeUndefined();
+  });
+
+  it('每块田 24 格；去掉的格子里种着的作物读档时退回仓库', () => {
+    expect(plotsOf('farm').length).toBe(24);
+    const g = newGame(T0, 3) as GameState;
+    g.farm = { 'farm:0': { crop: 'potato', at: T0, ripe: T0 + 1 } };
+    const m = migrate(JSON.parse(JSON.stringify(g)))!;
+    expect(m.farm?.['farm:0']).toBeUndefined();
+    expect(m.bank.potato).toBe(2);
+  });
+
+  it('施肥长得快、用掉肥料；高级肥料多收 1 个', () => {
+    const s = atFarm(newGame(T0, 3));
+    s.bank.fert_basic = 1;
+    s.bank.fert_rich = 1;
+    s.bank.seed_potato = 3;
+    s.settings.farmFert = { farm: 'fert_rich' };
+    const plain = plantAll({ ...s, settings: { ...s.settings, farmFert: {} } }, 'farm', 'potato', T0).state;
+    const r = plantAll(s, 'farm', 'potato', T0).state;
+    const ids = plotsOf('farm').map((p) => p.id).filter((id) => r.farm?.[id]);
+    const fed = ids.find((id) => r.farm![id].fert === 2)!;
+    expect(r.bank.fert_rich).toBeUndefined();
+    expect(r.farm![fed].ripe - T0).toBeLessThan(plain.farm![fed].ripe - T0);
+    const one = (st: GameState, id: string) => tendPlot(st, id, undefined, T0 + 1e9).summary.items.potato ?? 0;
+    // 同一格同一时刻种下，收获随机数一样，只差肥料那 1 个
+    expect(one(r, fed) - one(plain, fed)).toBe(1);
+  });
+
+  it('洒水器：装上后新种的自动浇水，已经种着的也浇一遍', () => {
+    const s = atFarm(newGame(T0, 3));
+    s.bank.sprinkler = 1;
+    let r = plantAll(s, 'farm', 'potato', T0).state;
+    r = installSprinkler(r, 'farm', T0).state;
+    expect(r.sprinklers).toEqual(['farm']);
+    expect(r.bank.sprinkler).toBeUndefined();
+    expect(Object.values(r.farm!).every((p) => p.water)).toBe(true);
+  });
+
+  it('下雨自动浇水', () => {
+    let t = T0;
+    while (!isRaining(FARM_NODES[0].region, t)) t += 8 * 60_000;
+    const s = plantAll(atFarm(newGame(t, 3)), 'farm', 'potato', t).state;
+    stepRain(s, t, t + 1000);
+    expect(Object.values(s.farm!).every((p) => p.water)).toBe(true);
   });
 
   it('浇水长得快，熟了收获拿作物、经验和日志；没熟收不了', () => {

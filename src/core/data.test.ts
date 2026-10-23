@@ -44,6 +44,8 @@ describe('数据闭环', () => {
       c.outputs.forEach((o) => made.add(o.item));
       used.add(`seed_${c.id}`);
     }
+    // 肥料种地时用、洒水器装在田里
+    for (const id of ['fert_basic', 'fert_rich', 'sprinkler']) used.add(id);
     for (const it of Object.values(ITEMS)) {
       expect(made.has(it.id), `${it.name} 没有来源`).toBe(true);
       const usable = used.has(it.id) || !!it.equip || !!it.heals || !!it.ammo || !!it.opens || it.category === 'loot' || it.category === 'deco';

@@ -131,6 +131,36 @@ const TPL: Record<string, string[]> = {
     '...kkkkkk...',
     '............',
   ],
+  // 肥料袋：鼓鼓的麻袋，袋口冒出一片嫩芽，袋身染色
+  fert: [
+    '.....lL.....',
+    '....lLl.....',
+    '...kkLkk....',
+    '..kOooOOk...',
+    '..kkkkkkk...',
+    '.kccccccbk..',
+    'kcccwccbbak.',
+    'kccccccbbak.',
+    'kcbbbbbbaak.',
+    'kbbbbbbaaak.',
+    '.kaaaaaaak..',
+    '..kkkkkkk...',
+  ],
+  // 洒水器：金属转头喷出水花
+  sprinkler: [
+    '.w..w..w....',
+    '..w.w.w.....',
+    'w..www..w...',
+    '...kkkk.....',
+    '..kchhbk....',
+    '...kbak.....',
+    '....kk......',
+    '....ka......',
+    '....ka......',
+    '...kbak.....',
+    '..kHHHHk....',
+    '..kkkkkk....',
+  ],
   // 种子袋：麻布小袋，袋口露出几颗种子（种子颜色 = 作物颜色）
   seed: [
     '............',
@@ -849,6 +879,7 @@ const CLOTH_TINT = ['#d8d4cc', '#f4e6c0', '#fcd4dc', '#d4e8fc', '#f0faff', '#f8d
 const SPECIFIC: Record<string, [string, string]> = {
   coins: ['coins', '#f0c850'], bones: ['bones', '#ffffff'], burnt_food: ['food', '#3a2a22'], shaft: ['shaft', '#9a6a3a'],
   sapphire: ['gem', '#3a6ae0'], ruby: ['gem', '#e03a4a'], diamond: ['gem', '#e8f8ff'],
+  fert_basic: ['fert', '#8a6a3a'], fert_rich: ['fert', '#6a4a8a'], sprinkler: ['sprinkler', '#5a9ad0'],
   potato: ['veg', '#b08a50'], baked_potato: ['food', '#c8803a'], bread: ['food', '#d8a060'], wheat: ['herb', '#e0c050'],
   green_herb: ['herb', '#6ac04a'], fire_bloom: ['herb', '#f07a3a'], moon_herb: ['herb', '#c0d0ff'],
   silver_leaf: ['herb', '#d0d8d8'], flame_heart: ['herb', '#ff4a2a'], frost_lotus: ['herb', '#8ad8ff'],

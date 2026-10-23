@@ -199,6 +199,8 @@ export interface Settings {
   farmSeed?: Record<string, string>;
   /** 种田：哪些田开了自动补种（熟了自动收、再种同一种，离线也照样） */
   autoFarm?: Record<string, boolean>;
+  /** 种田：每块田种下时施哪种肥料（fert_basic / fert_rich），不选就不施 */
+  farmFert?: Record<string, string>;
 }
 
 /** 一格地：种下的作物、种下的时刻、成熟的时刻；浇过水成熟得早 */
@@ -207,6 +209,8 @@ export interface Plot {
   at: number;
   ripe: number;
   water?: boolean;
+  /** 施了肥：1 普通肥料、2 高级肥料 */
+  fert?: 1 | 2;
 }
 
 export interface GameState {
@@ -258,6 +262,8 @@ export interface GameState {
   /** 田里种着的地块（地块 id → 作物），空地不存 */
   farm?: Record<string, Plot>;
   /** 最近一次任务停下的原因（顶部提示条用，排新任务或点掉就清空） */
+  /** 装了洒水器的田 */
+  sprinklers?: string[];
   lastStop?: { action: string; reason: TaskEndReason; mode: TaskMode; item?: string; at: number } | null;
 }
 

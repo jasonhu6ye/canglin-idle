@@ -191,6 +191,10 @@ CROPS.forEach(([id, name, lvl, , dish]) => {
   if (!ITEMS_EARLY.has(id)) item(id, name, 'resource', Math.round(2 + lvl * 0.8), { tier, desc: `种植收获的作物。两个能做成${dish}。` });
   if (dish) item(`meal_${id}`, dish, 'food', Math.round(5 + lvl * 1.6), { tier, heals: Math.round(28 + lvl * 4.4), desc: `用${name}做的家常菜，只回复生命。` });
 });
+// 农耕（用户 10-23 要求增加农耕玩法）：肥料、洒水器（品质用户说暂时不做）
+item('fert_basic', '普通肥料', 'misc', 6, { desc: '在工坊用草药和小鱼沤成。田地面板选了施肥后，每种一格用掉 1 份：作物长得快 20%。' });
+item('fert_rich', '高级肥料', 'misc', 40, { desc: '普通肥料加魔核调成。每种一格用掉 1 份：长得快 35%，收获时多收 1 个作物。' });
+item('sprinkler', '洒水器', 'misc', 120, { desc: '在铁匠铺打造。站在田里装上后，这块田新种下的作物自动浇好水（自动补种、离线也算）。一块田装一个，装上就不会坏。' });
 const HERBS: [string, string, number, number][] = [
   // [id, 名字, 采集等级, 药水回复]
   ['green_herb', '绿叶草', 1, 80], ['fire_bloom', '火绒花', 2, 110], ['moon_herb', '月露草', 18, 170],
@@ -623,7 +627,7 @@ function wildSeed(tier: number, salt: number): Drop {
  * 地块制种田（用户 10-23 改成星露谷那样一格一格地种，取消排队种地）：
  * 种一格耗 1 颗种子，按现实时间长大（离线也长），浇过水快 25%；
  * 收获 2-3 个作物，80% 收回种子、25% 多收一颗、1% 变异出下一种作物的种子。
- * 一整块田（56 格）种满时每小时经验和原来排队种地差不多，但种下后可以去干别的。
+ * 一整块田种满时每小时经验和原来排队种地差不多，但种下后可以去干别的。
  */
 export interface CropDef { id: string; name: string; level: number; tier: number; xp: number; outputs: Drop[]; growMs: number }
 export const CROP_DEFS: Record<string, CropDef> = {};
@@ -631,7 +635,8 @@ CROPS.forEach(([id, name, lvl], i) => {
   const next = CROPS[i + 1];
   CROP_DEFS[id] = {
     id, name, level: lvl, tier: tierForLevel(lvl),
-    xp: Math.round(xpFor(lvl) * tierTime(lvl) * 2),
+    // 田从 56 格减到 24 格（10-23），每格经验相应提高，种满一块田每小时经验不变
+    xp: Math.round(xpFor(lvl) * tierTime(lvl) * 2 * 56 / 24),
     growMs: Math.round(6 * 60_000 * tierTime(lvl)),
     outputs: [
       one(id, 2), { item: id, qty: 1, chance: 0.3 },
@@ -685,6 +690,9 @@ for (const [fish, name, lvl] of FISH) {
     inputs: [one(`raw_${fish}`)], outputs: [one(fish)], fail: { chance: 0.4, noFailLevel: lvl + 20 },
   });
 }
+make('craft_fert_basic', '普通肥料', 'farming', 5, [one('green_herb', 2), one('raw_minnow')], [one('fert_basic', 3)]);
+make('craft_fert_rich', '高级肥料', 'farming', 30, [one('fert_basic', 3), one('core_2')], [one('fert_rich', 2)]);
+make('smith_sprinkler', '洒水器', 'smithing', 20, [one('tin_bar', 4), one('plank_2', 2)], [one('sprinkler')]);
 make('cook_potato', '烤土豆', 'cooking', 1, [one('potato')], [one('baked_potato')]);
 make('cook_bread', '烤面包', 'cooking', 8, [one('wheat', 2)], [one('bread')]);
 for (const [id, , lvl, , dish] of CROPS) if (dish) make(`cook_meal_${id}`, dish, 'cooking', lvl, [one(id, 2)], [one(`meal_${id}`)]);
@@ -1099,7 +1107,8 @@ export const FARM_RECTS = [
   { x0: 106, y0: 196, x1: 124, y1: 210, node: [115, 203], id: 'farm_west' },
 ];
 export const isFarmRow = (r: { y0: number }, localY: number) => (localY - r.y0) % 3 !== 2;
-/** 田里能种的地块：牌子上下各一垄（两行耕地），牌子左右各 7 格，每块田 56 格 */
+/** 田里能种的地块：牌子上下各一垄（两行耕地），牌子左右各 3 格，每块田 24 格（用户 10-23 从 56 格减到 24 格） */
+export const FARM_COLS = 3;
 export interface FarmPlot { id: string; field: string; x: number; y: number }
 export const FARM_NODES = NODES.filter((n) => n.farm);
 export const FARM_PLOTS: FarmPlot[] = FARM_RECTS.flatMap((r) => {
@@ -1110,10 +1119,13 @@ export const FARM_PLOTS: FarmPlot[] = FARM_RECTS.flatMap((r) => {
   const above = pairs.filter((y) => y + 1 < ny).pop()!;
   const below = pairs.find((y) => y > ny)!;
   const out: FarmPlot[] = [];
+  // 编号沿用原来 56 格时的顺序（跳过的列也占号），留下的格子编号不变，种着的作物原地不动
+  let k = 0;
   for (const y of [above, above + 1, below, below + 1]) {
     for (let x = nx - 9; x <= nx + 9; x++) {
       if (Math.abs(x - nx) <= 2 || x < r.x0 || x > r.x1) continue;
-      out.push({ id: `${r.id}:${out.length}`, field: r.id, ...townXY(x, y) });
+      const id = `${r.id}:${k++}`;
+      if (Math.abs(x - nx) <= 2 + FARM_COLS) out.push({ id, field: r.id, ...townXY(x, y) });
     }
   }
   return out;

@@ -520,8 +520,49 @@ export class MapScene extends Phaser.Scene {
     this.time.addEvent({ delay: 250, loop: true, callback: () => this.tickPlotInfo() });
   }
 
+  /** 装了洒水器的田：牌子旁边立一个洒水器，隔一会儿喷一圈水花 */
+  private sprinklerSprites = new Map<string, Phaser.GameObjects.Image>();
+  private sprinklerTex() {
+    if (this.textures.exists('sprinkler')) return 'sprinkler';
+    const c = document.createElement('canvas');
+    c.width = 8;
+    c.height = 14;
+    const g = c.getContext('2d')!;
+    const px = (x: number, y: number, w: number, h: number, col: string) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
+    px(3, 4, 2, 9, '#4a5058');
+    px(3, 4, 1, 9, '#8a96a2');
+    px(1, 2, 6, 3, '#2a3038');
+    px(2, 2, 4, 2, '#7ab0d8');
+    px(1, 12, 6, 2, '#3a3e44');
+    this.textures.addCanvas('sprinkler', c);
+    return 'sprinkler';
+  }
+  private syncSprinklers() {
+    for (const id of store.state.sprinklers ?? []) {
+      if (this.sprinklerSprites.has(id)) continue;
+      const f = FIELDS.find((x) => x.nodeId === id);
+      if (!f) continue;
+      const x = (f.node.x + 2) * T + T / 2;
+      const y = (f.node.y - 1) * T + T;
+      const spr = this.add.image(x, y, this.sprinklerTex()).setOrigin(0.5, 1).setDepth(y + 1000);
+      this.sprinklerSprites.set(id, spr);
+      // 水花：几颗水珠往外抛
+      this.time.addEvent({
+        delay: 1600, loop: true, callback: () => {
+          if (!spr.active) return;
+          for (let i = 0; i < 6; i++) {
+            const a = (i / 6) * Math.PI * 2 + Math.random() * 0.5;
+            const d = this.add.rectangle(x, y - 12, 1.5, 1.5, 0xaee0ff).setDepth(y + 1001).setAlpha(0.9);
+            this.tweens.add({ targets: d, x: x + Math.cos(a) * 26, y: y - 4 + Math.sin(a) * 12, alpha: 0, duration: 900, ease: 'Quad.easeOut', onComplete: () => d.destroy() });
+          }
+        },
+      });
+    }
+  }
+
   /** 按存档把每格地换成对应的图：空地 / 长到第几阶段 / 熟了闪光 */
   private growFields() {
+    this.syncSprinklers();
     const now = Date.now();
     const farm = store.state.farm ?? {};
     const blink = Math.floor(now / 500) % 2 === 0;

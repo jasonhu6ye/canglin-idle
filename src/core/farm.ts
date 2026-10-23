@@ -1,4 +1,5 @@
 import { CROP_DEFS, cropsOfField, FARM_NODES, ITEMS, PLOT_BY_ID, plotsOf, WATER_SPEEDUP } from './data';
+import { isRaining } from './weather';
 import { stepQuests } from './quests';
 import { nextRandom } from './rng';
 import { bagRoomFor, buffPct, emptySummary, level, LOG_CAP, levelSpeed, toolSpeed } from './sim';
@@ -19,8 +20,15 @@ export function nearField(s: GameState, field: string): boolean {
 }
 
 /** 种下到成熟要多久：锄头和种植等级都能加快 */
-export const growMs = (s: GameState, crop: string) =>
-  Math.round(CROP_DEFS[crop].growMs / (1 + toolSpeed(s, 'farming') + levelSpeed(s, 'farming')));
+export const growMs = (s: GameState, crop: string, fert = 0) =>
+  Math.round(CROP_DEFS[crop].growMs / (1 + toolSpeed(s, 'farming') + levelSpeed(s, 'farming') + (fert ? FERT_SPEEDUP[fert] : 0)));
+
+/** 施肥长得快多少：普通 20%、高级 35% */
+export const FERT_SPEEDUP = [0, 0.2, 0.35];
+export const FERTS = ['fert_basic', 'fert_rich'] as const;
+const count = (s: GameState, id: string) => (s.bag[id] ?? 0) + (s.bank[id] ?? 0);
+export const fertCount = count;
+
 
 export const seedOf = (crop: string) => `seed_${crop}`;
 export const seedCount = (s: GameState, crop: string) => (s.bag[seedOf(crop)] ?? 0) + (s.bank[seedOf(crop)] ?? 0);
@@ -60,8 +68,9 @@ function hash(str: string) {
   return h | 0;
 }
 
-function useSeed(s: GameState, crop: string): boolean {
-  const id = seedOf(crop);
+const useSeed = (s: GameState, crop: string) => useOne(s, seedOf(crop));
+
+function useOne(s: GameState, id: string): boolean {
   for (const box of [s.bag, s.bank]) {
     if ((box[id] ?? 0) > 0) {
       box[id]--;
@@ -74,8 +83,42 @@ function useSeed(s: GameState, crop: string): boolean {
 
 function plantAt(s: GameState, plotId: string, crop: string, t: number): boolean {
   if ((s.farm ??= {})[plotId] || !useSeed(s, crop)) return false;
-  s.farm[plotId] = { crop, at: t, ripe: t + growMs(s, crop) };
+  const field = PLOT_BY_ID[plotId]?.field;
+  // 选了肥料、手上还有就施一份
+  const want = field ? s.settings.farmFert?.[field] : undefined;
+  const fert = want && useOne(s, want) ? (want === 'fert_rich' ? 2 : 1) : 0;
+  const p: Plot = { crop, at: t, ripe: t + growMs(s, crop, fert), ...(fert ? { fert: fert as 1 | 2 } : {}) };
+  s.farm[plotId] = p;
+  // 装了洒水器的田，种下就浇好水
+  if (field && s.sprinklers?.includes(field)) waterAt(s, plotId, t);
   return true;
+}
+
+/** 站在田里装洒水器：用掉一个，这块田以后新种的都自动浇水 */
+export function installSprinkler(prev: GameState, field: string, now: number): FarmResult {
+  return run(prev, (s) => {
+    if (!nearField(s, field) || s.sprinklers?.includes(field) || !useOne(s, 'sprinkler')) return;
+    s.sprinklers = [...(s.sprinklers ?? []), field];
+    // 已经种着的也顺手浇一遍
+    for (const p of plotsOf(field)) waterAt(s, p.id, now);
+  });
+}
+
+/**
+ * 下雨自动浇水（用户 10-23）：天气按 8 分钟一段，这次结算经过的每段雨里，
+ * 田里还没熟、没浇过的作物都算浇过水（按那段雨开始的时刻算）
+ */
+const RAIN_SEG = 8 * 60 * 1000;
+export function stepRain(s: GameState, from: number, now: number) {
+  if (!s.farm || !Object.keys(s.farm).length) return;
+  const region = FARM_NODES[0]?.region;
+  if (!region) return;
+  const start = Math.max(from, now - 24 * 3600_000);
+  for (let seg = Math.floor(start / RAIN_SEG) * RAIN_SEG; seg < now; seg += RAIN_SEG) {
+    if (!isRaining(region, seg)) continue;
+    const t = Math.max(seg, start);
+    for (const [id, p] of Object.entries(s.farm)) if (p.at <= Math.min(now, seg + RAIN_SEG)) waterAt(s, id, Math.max(t, p.at));
+  }
 }
 
 /**
@@ -107,6 +150,8 @@ function harvestAt(s: GameState, sum: Summary, plotId: string, t: number, toBank
   for (const o of c.outputs) if (o.chance === undefined || rand() < o.chance) add(o.item, o.qty);
   const bonus = Math.max(0, level(s, 'farming') - c.level) * BONUS_PER_LEVEL;
   if (rand() < bonus) c.outputs.forEach((o) => o.chance === undefined && add(o.item, o.qty));
+  // 高级肥料：多收 1 个
+  if (p.fert === 2) add(c.id, 1);
   const xp = Math.round(c.xp * (1 + buffPct(s, 'xp')));
   const before = level(s, 'farming');
   s.xp.farming += xp;
