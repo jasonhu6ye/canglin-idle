@@ -34,6 +34,8 @@ export interface Outfit {
   roll: string;
   /** 兜帽代替头发 */
   hood?: boolean;
+  /** 镇上的村民：不背行囊 */
+  npc?: boolean;
 }
 
 export const OUTFITS: Outfit[] = [
@@ -73,6 +75,45 @@ export const OUTFITS: Outfit[] = [
     pack: ['#6a6a74', '#9a9aa4', '#c8c8d0'], roll: '#2a4088',
   },
 ];
+const SKIN = ['#c8946a', '#f2c9a0'];
+/** 镇上走动的村民，用和主角同一套画法，只换配色、不背行囊 */
+export const NPC_OUTFITS: Record<string, Outfit> = {
+  villager: {
+    id: 'npc-villager', name: '村民', desc: '', npc: true,
+    skin: SKIN, hair: ['#1e1612', '#3a2a20', '#5a4232'],
+    coat: ['#6a2a1e', '#9a3e2a', '#c05a3a', '#e07a52'], shirt: ['#b8a888', '#e8dcc0'],
+    pants: ['#3a2e22', '#54432f'], boots: ['#2a1a10', '#4a3020'], scarf: ['#8a6a1a', '#c8a03a'],
+    pack: ['#4a3a22', '#6e5a34', '#8e7a48'], roll: '#8a6a1a',
+  },
+  villager2: {
+    id: 'npc-villager2', name: '村民', desc: '', npc: true,
+    skin: ['#d8a882', '#f8dcc0'], hair: ['#a8803a', '#d0a850', '#f0d080'],
+    coat: ['#1e3a6a', '#2a5a90', '#3a7ac0', '#6aa0e0'], shirt: ['#c8c8c8', '#f4f4f0'],
+    pants: ['#3a3a44', '#565662'], boots: ['#3a2a1a', '#6a4a2a'], scarf: ['#a89060', '#e8d0a0'],
+    pack: ['#4a3a22', '#6e5a34', '#8e7a48'], roll: '#2a5a90',
+  },
+  villager3: {
+    id: 'npc-villager3', name: '村民', desc: '', npc: true,
+    skin: ['#a8704a', '#d8a078'], hair: ['#5a2414', '#8a3a1e', '#b05a2a'],
+    coat: ['#23401e', '#3a6a32', '#5aa04a', '#80c068'], shirt: ['#a89878', '#d8c8a0'],
+    pants: ['#3a2e22', '#54432f'], boots: ['#2a1a10', '#4a3020'], scarf: ['#4a3020', '#7a5030'],
+    pack: ['#4a3a22', '#6e5a34', '#8e7a48'], roll: '#5aa04a',
+  },
+  guard: {
+    id: 'npc-guard', name: '卫兵', desc: '', npc: true,
+    skin: SKIN, hair: ['#4a5058', '#8a9098', '#c8ced6'],
+    coat: ['#3e444c', '#62666e', '#8a8f99', '#c0c6ce'], shirt: ['#2a3a6a', '#3a4a7a'],
+    pants: ['#2a2a34', '#3e3e4a'], boots: ['#2a1a10', '#4a3020'], scarf: ['#2a3a6a', '#4a5a9a'],
+    pack: ['#2a3a6a', '#3a4a7a', '#5a6a9a'], roll: '#3a4a7a',
+  },
+  merchant: {
+    id: 'npc-merchant', name: '商人', desc: '', npc: true,
+    skin: SKIN, hair: ['#5a5a5a', '#8a8a8a', '#c0c0c0'],
+    coat: ['#3a1458', '#5a2080', '#8a3ab0', '#b070d8'], shirt: ['#b8a888', '#e8dcc0'],
+    pants: ['#3a2e22', '#54432f'], boots: ['#2a1a10', '#4a3020'], scarf: ['#b08a2a', '#f0c84a'],
+    pack: ['#6a4a1a', '#9a6a2a', '#c8903a'], roll: '#8a3ab0',
+  },
+};
 export const outfitOf = (id?: string) => OUTFITS.find((o) => o.id === id) ?? OUTFITS[0];
 const GOLD = ['#8a5a1a', '#c8902a', '#f0c050', '#fff0a0'];
 const EYE = '#20141c';
@@ -443,7 +484,7 @@ function drawFrame(pose: Pose, o: Outfit): Pix {
       }
     }
   };
-  if (side) {
+  if (side && !o.npc) {
     pack(cx - 5.9, sy + 0.8, 3.8, 6.2);
     p.line(cx - 5.6, sy + 2.8, cx - 2.4, sy + 2.8, R.pack[0]);
     p.set(cx - 4, sy + 3.8, GOLD[2]);
@@ -538,9 +579,11 @@ function drawFrame(pose: Pose, o: Outfit): Pix {
       p.set(Math.ceil(cx + open - 0.5), y, C[2]);
     }
     // 背带
-    p.line(cx - 2.6, sy + 0.5, cx - 2.6, beltY - 1, R.pack[1]);
-    p.line(cx + 2.4, sy + 0.5, cx + 2.4, beltY - 1, R.pack[0]);
-  } else if (side) {
+    if (!o.npc) {
+      p.line(cx - 2.6, sy + 0.5, cx - 2.6, beltY - 1, R.pack[1]);
+      p.line(cx + 2.4, sy + 0.5, cx + 2.4, beltY - 1, R.pack[0]);
+    }
+  } else if (side && !o.npc) {
     p.line(cx - 1.1, sy + 0.3, cx + 1.1, beltY - 0.5, R.pack[1]);
     p.line(cx - 1.8, sy + 0.6, cx + 0.4, beltY, R.pack[0]);
   }
@@ -576,7 +619,7 @@ function drawFrame(pose: Pose, o: Outfit): Pix {
   }
 
   // ---- 背面：大背包压在身上 ----
-  if (up) {
+  if (up && !o.npc) {
     pack(cx - 3.7, sy + 1, 7.4, 7);
     for (let x = Math.floor(cx - 3.4); x <= Math.ceil(cx + 2.9); x++) {
       p.set(x, sy + 3.6, R.pack[0]);
@@ -595,7 +638,7 @@ function drawFrame(pose: Pose, o: Outfit): Pix {
   // ---- 头 ----
   drawHead(p, o, R, cx, headY, pose);
 
-  if (up) capsule(p, cx - 4.3, sy - 0.2, cx + 4.3, sy - 0.2, 1.5, R.roll);
+  if (up && !o.npc) capsule(p, cx - 4.3, sy - 0.2, cx + 4.3, sy - 0.2, 1.5, R.roll);
 
   // ---- 前面的手臂和工具 ----
   if (side) {
@@ -719,8 +762,11 @@ export const HERO_ANIMS: HeroAnim[] = [
 ];
 
 /** 生成整张精灵表；frames 里是每帧在表上的位置 */
-export function paintHeroSheet(outfit: Outfit = OUTFITS[0], canvas = document.createElement('canvas')) {
-  const total = HERO_ANIMS.reduce((n, a) => n + a.frames, 0);
+/** 村民只要走路和待机 */
+export const NPC_ANIMS = HERO_ANIMS.filter((a) => a.key.startsWith('walk-') || a.key.startsWith('idle-'));
+
+export function paintHeroSheet(outfit: Outfit = OUTFITS[0], canvas = document.createElement('canvas'), anims = HERO_ANIMS) {
+  const total = anims.reduce((n, a) => n + a.frames, 0);
   const cols = 16;
   const rows = Math.ceil(total / cols);
   canvas.width = cols * HERO_W;
@@ -728,7 +774,7 @@ export function paintHeroSheet(outfit: Outfit = OUTFITS[0], canvas = document.cr
   const ctx = canvas.getContext('2d')!;
   const frames: { name: string; x: number; y: number }[] = [];
   let k = 0;
-  for (const a of HERO_ANIMS) {
+  for (const a of anims) {
     for (let i = 0; i < a.frames; i++) {
       const x = (k % cols) * HERO_W;
       const y = Math.floor(k / cols) * HERO_H;

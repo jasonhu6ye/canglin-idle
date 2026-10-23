@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { ACTIONS, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, DANGER, dangerLevel, nodeOfAction, travelMs, WALK_TILES_PER_SEC, type MapNode } from '../core/data';
 import { combatLevel, leaveWork, resumeWork, setLoc, startWalk, teleport as teleportState, walkPos } from '../core/sim';
 import { MON_ANIMS, monsterFrameSize, paintMonsterSheet, type MonAnim } from './monsterArt';
-import { HERO_ANIMS, HERO_FEET, HERO_H, HERO_W, outfitOf, paintHeroSheet, type HeroDir } from './hero';
+import { HERO_ANIMS, HERO_FEET, HERO_H, HERO_W, NPC_ANIMS, NPC_OUTFITS, outfitOf, paintHeroSheet, type HeroDir } from './hero';
 import type { MonsterDef, RegionId, Summary } from '../core/types';
 import { store } from '../store';
 import { paintBuilding, paintDot, paintGlow, paintProp, paintWindmillBlades, PROP_GLOW } from './art';
@@ -241,6 +241,20 @@ export class MapScene extends Phaser.Scene {
         key: a.key, frameRate: a.rate, repeat: -1,
         frames: Array.from({ length: a.frames }, (_, i) => ({ key: 'hero', frame: `${a.key}-${i}` })),
       });
+    }
+    // 村民：和主角同样大小、同样画法
+    for (const [kind, o] of Object.entries(NPC_OUTFITS)) {
+      const key = `npc-${kind}`;
+      if (this.textures.exists(key)) continue;
+      const sheet = paintHeroSheet(o, undefined, NPC_ANIMS);
+      const t = this.textures.addCanvas(key, sheet.canvas)!;
+      for (const f of sheet.frames) t.add(f.name, 0, f.x, f.y, HERO_W, HERO_H);
+      for (const an of NPC_ANIMS) {
+        this.anims.create({
+          key: `${key}:${an.key}`, frameRate: an.rate * 0.8, repeat: -1,
+          frames: Array.from({ length: an.frames }, (_, i) => ({ key, frame: `${an.key}-${i}` })),
+        });
+      }
     }
     this.textures.addCanvas('windmill-blades', paintWindmillBlades());
     const dots: [string, number, string][] = [
@@ -630,6 +644,7 @@ export class MapScene extends Phaser.Scene {
 
   /** 在中心附近随机游荡的小怪或村民 */
   private addWanderer(key: string, x: number, y: number, radius: number) {
+    if (NPC_OUTFITS[key]) return this.addVillager(key, x, y, radius);
     const img = this.add.image(x * T + T / 2, y * T + T / 2, key).setDepth(y * T + 1000);
     let i = 0;
     const wander = () => {
@@ -645,6 +660,38 @@ export class MapScene extends Phaser.Scene {
     };
     wander();
     return img;
+  }
+
+  /** 镇上的人：走路时按方向播走路动画，停下来播待机 */
+  private addVillager(kind: string, x: number, y: number, radius: number) {
+    const key = `npc-${kind}`;
+    const spr = this.add.sprite(x * T + T / 2, y * T + T / 2 + 7, key).setOrigin(0.5, HERO_FEET / HERO_H).setDepth(y * T + 1000);
+    spr.play(`${key}:idle-down`);
+    let i = 0;
+    const wander = () => {
+      i++;
+      const nx = (x + (hash(i, x, y) * 2 - 1) * radius) * T + T / 2;
+      const ny = (y + (hash(y, i, x) * 2 - 1) * radius) * T + T / 2 + 7;
+      const dx = nx - spr.x;
+      const dy = ny - spr.y;
+      const dir = Math.abs(dx) > Math.abs(dy) ? 'side' : dy > 0 ? 'down' : 'up';
+      this.tweens.add({
+        targets: spr, x: nx, y: ny, delay: 800 + hash(x, i) * 3000,
+        // 村民走得比主角慢一点：每秒 2 格
+        duration: Math.max(400, (Math.hypot(dx, dy) / T / 2) * 1000),
+        onStart: () => {
+          spr.setFlipX(dir === 'side' && dx < 0);
+          spr.play(`${key}:walk-${dir}`, true);
+        },
+        onUpdate: () => spr.setDepth(spr.y + 1000),
+        onComplete: () => {
+          spr.play(`${key}:idle-${dir}`, true);
+          wander();
+        },
+      });
+    };
+    wander();
+    return spr;
   }
 
   // ---- 镜头与输入 ----
