@@ -170,11 +170,13 @@ export interface CombatState {
   gain?: Partial<Record<SkillId, number>>;
 }
 
-/** 战斗日志的一条：击杀（掉落和经验）或阵亡 */
+/** 日志的一条：击杀（掉落和经验）、阵亡、采集制作完成一次（fail = 失手） */
 export interface CombatLogEntry {
   t: number;
-  kind: 'kill' | 'death';
-  monster: string;
+  kind: 'kill' | 'death' | 'skill' | 'fail';
+  /** 战斗记怪物 id，采集制作记动作 id */
+  monster?: string;
+  action?: string;
   xp: Partial<Record<SkillId, number>>;
   items: Record<string, number>;
 }

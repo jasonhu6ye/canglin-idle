@@ -47,9 +47,12 @@ export function GameCanvas({ onNodeClick }: { onNodeClick: (nodeId: string) => v
     const g = game;
     g.events.on(REGION_CHANGE, relay(REGION_CHANGE));
     g.events.on(BOSS_BANNER, relay(BOSS_BANNER));
+    // 画布改尺寸会被浏览器清空，下一帧才重画，展开/收起面板时就会闪一下：改完当场重画一帧（用户 10-23）
     const ro = new ResizeObserver(() => {
       const s = size();
+      if (s.w === g.scale.width && s.h === g.scale.height) return;
       g.scale.resize(s.w, s.h);
+      if (g.isBooted && g.isRunning) g.step(performance.now(), 0);
     });
     ro.observe(el);
     return () => {

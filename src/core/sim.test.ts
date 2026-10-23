@@ -40,6 +40,15 @@ describe('采集', () => {
     expect(state.queue).toHaveLength(1);
   });
 
+  it('采集每完成一次都记进日志', () => {
+    const s = startHere(newGame(T0, 1), 'mine_stone', { type: 'infinite' });
+    const { summary } = advance(s, T0 + 60_000);
+    const work = summary.log!.filter((e) => e.kind === 'skill' && e.action === 'mine_stone');
+    expect(work.length).toBeGreaterThan(10);
+    expect(work.reduce((n, e) => n + (e.items.stone ?? 0), 0)).toBe(summary.items.stone);
+    expect(work.every((e) => (e.xp.mining ?? 0) > 0)).toBe(true);
+  });
+
   it('数量模式完成后自动进入下一个队列', () => {
     let s = startHere(newGame(T0, 1), 'mine_stone', { type: 'count', count: 10 });
     s = enqueue(s, 'chop_plain', { type: 'count', count: 5 });

@@ -365,8 +365,8 @@ export function MorePanel({ s }: { s: GameState }) {
       <button className="primary" onClick={openGuild}>打开公会</button>
       <h2>新手指引</h2>
       <button className="primary" onClick={openGuide}>重新查看新手指引</button>
-      <h2>战斗日志 <small className="muted">每只怪的掉落和经验</small></h2>
-      <button className="primary" onClick={openCombatLog}>打开战斗日志</button>
+      <h2>日志 <small className="muted">战斗掉落、采集制作的产出和经验</small></h2>
+      <button className="primary" onClick={openCombatLog}>打开日志</button>
       <h2>兑换码</h2>
       <Redeem />
       <h2>物品图鉴 <small className="muted">已收集 {got}/{total}</small></h2>

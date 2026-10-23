@@ -360,7 +360,7 @@ export function combatStats(s: GameState, m: MonsterDef) {
 }
 
 /** 战斗日志最多留多少条 */
-export const LOG_CAP = 200;
+export const LOG_CAP = 300;
 
 /** 主循环：把存档推进到 now。在线每帧调用和离线补算用的是同一个函数，结果与调用的分段方式无关。 */
 export function advance(prev: GameState, now: number): { state: GameState; summary: Summary } {
@@ -389,7 +389,10 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     if (qty > n) s.bank[item] = (s.bank[item] ?? 0) + qty - n;
     s.seen[item] = 1;
     sum.items[item] = (sum.items[item] ?? 0) + qty;
+    if (tally) tally.items[item] = (tally.items[item] ?? 0) + qty;
   };
+  /** 正在记日志的这一次动作拿到了什么 */
+  let tally: { items: Record<string, number>; xp: Partial<Record<SkillId, number>> } | null = null;
 
   const log = (e: CombatLogEntry) => {
     const l = (sum.log ??= []);
@@ -471,6 +474,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
 
   const addXp = (skill: SkillId, amount: number) => {
     amount = Math.round(amount * (1 + buffPct(s, 'xp')));
+    if (tally) tally.xp[skill] = (tally.xp[skill] ?? 0) + amount;
     // 打怪的经验记在这只怪头上，打死时一起写进战斗日志
     if (s.combat && amount > 0) {
       const g = (s.combat.gain ??= {});
@@ -618,14 +622,18 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       const failChance = a.fail
         ? Math.max(0, a.fail.chance * (a.fail.noFailLevel - level(s, a.skill)) / (a.fail.noFailLevel - a.level))
         : 0;
-      if (a.fail && rand() < failChance) {
-        if (a.fail.item) addLoot(a.fail.item, 1);
-        if (a.fail.stunMs) s.progressMs = -a.fail.stunMs;
+      tally = { items: {}, xp: {} };
+      const failed = !!a.fail && rand() < failChance;
+      if (failed) {
+        if (a.fail!.item) addLoot(a.fail!.item, 1);
+        if (a.fail!.stunMs) s.progressMs = -a.fail!.stunMs;
       } else {
         for (const o of a.outputs) if (o.chance === undefined || rand() < o.chance) addLoot(o.item, o.qty);
         if (gatherer && rand() < bonus) a.outputs.forEach((o) => o.chance === undefined && addLoot(o.item, o.qty));
         addXp(a.skill, a.xp);
       }
+      log({ t: now - dt, kind: failed ? 'fail' : 'skill', action: a.id, xp: tally.xp, items: tally.items });
+      tally = null;
       task.done++;
     }
     return step;

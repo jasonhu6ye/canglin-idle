@@ -134,7 +134,7 @@ export function StatusChips({ s, extra }: { s: GameState; extra?: ReactNode }) {
           ))}
         </div>
       )}
-      <button className="chip dim log-chip" title="战斗日志 (L)" onClick={openCombatLog}>⚔ 击杀 {fmtNum(s.stats.kills)} · 阵亡 {s.stats.deaths} · <u>战斗日志</u></button>
+      <button className="chip dim log-chip" title="日志 (L)" onClick={openCombatLog}>⚔ 击杀 {fmtNum(s.stats.kills)} · 阵亡 {s.stats.deaths} · <u>日志</u></button>
     </div>
   );
 }

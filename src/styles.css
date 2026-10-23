@@ -464,3 +464,6 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .log-list .loot { margin: 0; width: 100%; }
 .log-list .loot span { font-size: 11px; padding: 1px 5px; }
 .log-clear { padding: 6px; color: var(--muted); }
+.log-list li.work { border-left-color: #4a8a4a; }
+.log-list li.fail { border-left-color: #8a6a3a; }
+.combat-log .tabs3 button { font-size: 12px; padding: 6px 2px; }
