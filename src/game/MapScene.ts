@@ -1,3 +1,4 @@
+import { leaveHome } from '../core/home';
 import Phaser from 'phaser';
 import { ACTIONS, CROP_DEFS, CROPS, cropsOfField, FARM_PLOTS, PLOT_BY_ID, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, DANGER, dangerLevel, nodeOfAction, nodesOfAction, planRoute, standOf, STONE_JUMP_MS, WAYSTONES, travelMs, WALK_TILES_PER_SEC, type MapNode, type Route } from '../core/data';
 import { unlockWaystone, useWaystone, WAYSTONE_REACH, actionDuration, combatLevel, combatStats, isBankId, leaveWork, maxHp, moveSpeed, resumeWork, setLoc, startWalk, teleport as teleportState, walkPos } from '../core/sim';
@@ -189,11 +190,15 @@ export class MapScene extends Phaser.Scene {
     this.syncStones();
     this.unsub.push(store.subscribe(() => {
       // 进了家园岛屿：切到岛屿场景（这边睡着，存档照常推进）
+      if (this.toIsland) return;
       if (store.state.home?.inside && this.scene.isActive()) {
+        this.toIsland = true;
         this.walker = undefined;
         this.scene.switch('island');
         return;
       }
+      // 人在岛上（这边睡着）：等回来 wake 时再统一同步，免得寻路请求被吃掉
+      if (!this.scene.isActive()) return;
       this.syncStones();
       this.syncSkin();
       this.takeWalk();
@@ -202,17 +207,33 @@ export class MapScene extends Phaser.Scene {
     }));
     this.unsub.push(store.onGain((s) => this.showGain(s)));
     // 从岛上回来：人站在城里的传送门前
-    this.events.on('wake', () => this.resync());
-    if (store.state.home?.inside) this.time.delayedCall(0, () => this.scene.switch('island'));
-    const onStone = (id: string) => this.stoneJump(id);
+    this.events.on('wake', () => {
+      this.toIsland = false;
+      this.resync();
+      this.syncStones();
+      this.syncSkin();
+      this.takeWalk();
+      this.updateLabels();
+    });
+    if (store.state.home?.inside) {
+      this.toIsland = true;
+      this.time.delayedCall(0, () => this.scene.switch('island'));
+    }
+    // 人在家园岛屿上点了石碑、传送、寻路：先出岛，等大地图醒了再做
+    const awake = <A extends unknown[]>(fn: (...a: A) => void) => (...a: A) => {
+      if (this.scene.isActive() && !this.toIsland) return fn(...a);
+      if (store.state.home?.inside) store.dispatch(leaveHome);
+      this.events.once('wake', () => fn(...a));
+    };
+    const onStone = awake((id: string) => this.stoneJump(id));
     this.game.events.on('waystone', onStone);
     this.unsub.push(() => this.game.events.off('waystone', onStone));
     this.time.addEvent({ delay: 300, loop: true, callback: () => this.checkStones() });
-    const onTeleport = (id: string) => this.teleport(id);
+    const onTeleport = awake((id: string) => this.teleport(id));
     this.game.events.on('teleport', onTeleport);
     this.unsub.push(() => this.game.events.off('teleport', onTeleport));
     // 世界地图上的「寻路前往」
-    const onWalkTo = (id: string) => {
+    const onWalkTo = awake((id: string) => {
       const n = NODES.find((x) => x.id === id);
       if (!n) return;
       // 寻路去的就是当前工作的地点：等于继续工作
@@ -242,7 +263,7 @@ export class MapScene extends Phaser.Scene {
       }
       this.moveTo(dest.x, dest.y);
       if (opens && this.walker && this.walker !== old) this.arrive = onArrive;
-    };
+    });
     this.game.events.on('walkto', onWalkTo);
     this.takeWalk = () => {
       const id = store.pendingWalk;
@@ -283,6 +304,8 @@ export class MapScene extends Phaser.Scene {
 
   /** 处理界面发来的寻路请求（create 里赋值） */
   private takeWalk = () => {};
+  /** 已经在切去家园岛屿的路上（同一帧只能切一次） */
+  private toIsland = false;
   private heroSkin?: string;
   private heroCanvas!: HTMLCanvasElement;
   private heroTex!: Phaser.Textures.CanvasTexture;
@@ -1376,8 +1399,8 @@ export class MapScene extends Phaser.Scene {
     });
 
     this.input.on('wheel', (_p: unknown, _o: unknown, _dx: number, dy: number) => this.zoomBy(dy > 0 ? -0.25 : 0.25));
-    const onZoom = (d: number) => this.zoomBy(d);
-    const onRecenter = () => this.recenter();
+    const onZoom = (d: number) => { if (this.scene.isActive()) this.zoomBy(d); };
+    const onRecenter = () => { if (this.scene.isActive()) this.recenter(); };
     this.game.events.on('zoom', onZoom);
     this.game.events.on('recenter', onRecenter);
     this.unsub.push(() => {

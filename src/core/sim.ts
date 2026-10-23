@@ -1037,7 +1037,7 @@ const nearest = (list: MapNode[], loc: { x: number; y: number }) => {
 };
 export const nearestBank = (loc: { x: number; y: number }) => nearest(BANKS, loc);
 export const nearestMarket = (loc: { x: number; y: number }) => nearest(MARKETS, loc);
-const within = (s: GameState, list: MapNode[]) => !s.travel && !s.walk && list.some((n) => {
+const within = (s: GameState, list: MapNode[]) => !s.travel && !s.walk && !s.home?.inside && list.some((n) => {
   const st = standOf(n);
   return Math.hypot(s.loc.x - st.x, s.loc.y - st.y) <= BANK_REACH;
 });
@@ -1052,7 +1052,8 @@ export const marketStand = () => standOf(MARKETS[0]);
 /** 城镇设施（灶台、熔炉、工坊…）也要站在旁边才能直接开工（用户 10-23 要求） */
 export function nearNode(s: GameState, node: MapNode): boolean {
   const st = standOf(node as MapNode);
-  return !s.travel && !s.walk && Math.hypot(s.loc.x - st.x, s.loc.y - st.y) <= BANK_REACH;
+  // 人在家园岛屿上：城里的东西都够不着（岛上的制作台另算）
+  return !s.travel && !s.walk && !s.home?.inside && Math.hypot(s.loc.x - st.x, s.loc.y - st.y) <= BANK_REACH;
 }
 
 /** 卸下装备：放进背包；背包满了，人在仓库旁才能放回仓库 */

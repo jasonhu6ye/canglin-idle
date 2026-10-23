@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { canPlace, enterHome, HOME_SPAWN, homeCan, homeChest, leaveHome, migrateHome, placeBuild, removeAt, upgradeHome, atPortal } from './home';
 import { NODES, standOf } from './data';
-import { atBank, newGame } from './sim';
+import { atBank, atMarket, nearNode, newGame } from './sim';
 import type { GameState } from './types';
 
 const portal = NODES.find((n) => n.id === 'portal_home')!;
@@ -74,5 +74,19 @@ describe('家园岛屿', () => {
   it('读档清掉不存在的东西', () => {
     const h = migrateHome({ lv: 9, floors: { '1,1': 'nope', '2,2': 'path' }, things: [{ id: 'nope', x: 1, y: 1 }, { id: 'bed', x: 3, y: 3 }], inside: true, from: 'bad' });
     expect(h).toEqual({ lv: 2, floors: { '2,2': 'path' }, things: [{ id: 'bed', x: 3, y: 3 }], inside: true });
+  });
+
+  it('人在岛上够不着城里的仓库、集市、建筑；进岛落脚的格子不能盖', () => {
+    const s = onIsland();
+    const bank = NODES.find((n) => n.opens === 'bank')!;
+    const market = NODES.find((n) => n.id === 'market')!;
+    const kitchen = NODES.find((n) => n.id === 'kitchen')!;
+    for (const n of [bank, market, kitchen]) {
+      const here = { ...s, loc: standOf(n) };
+      expect(nearNode(here, n)).toBe(false);
+      expect(nearNode({ ...here, home: { ...here.home!, inside: false } }, n)).toBe(true);
+    }
+    expect(atMarket({ ...s, loc: standOf(market) })).toBe(false);
+    expect(canPlace(s, 'wall_wood', HOME_SPAWN.x, HOME_SPAWN.y)).toBe('传送门旁边要留出来');
   });
 });

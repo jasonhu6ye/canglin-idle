@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
-import { WALK_TILES_PER_SEC } from '../core/data';
+import { NODES, WALK_TILES_PER_SEC } from '../core/data';
 import {
-  buildDef, canPlace, HOME_PORTAL, HOME_SPAWN, homeSize, ISLAND, ISLAND_C, islandGround, leaveHome, placeBuild, removeAt, thingGrid,
+  buildDef, canPlace, homeCan, HOME_PORTAL, HOME_SPAWN, homeSize, ISLAND, ISLAND_C, islandGround, leaveHome, placeBuild, removeAt, thingGrid,
 } from '../core/home';
 import type { HomeThing } from '../core/types';
 import { gameHour } from '../core/weather';
@@ -62,6 +62,11 @@ export class IslandScene extends Phaser.Scene {
   private keys?: Record<string, Phaser.Input.Keyboard.Key>;
   private following = true;
   private unsub: (() => void)[] = [];
+  private leaving = false;
+  /** 正在岛上制作台干的活；玩家自己走开了就不再自动走回去，换了活才重新走 */
+  private workFor?: string;
+  private workManual = false;
+  private workSpot?: { x: number; y: number; faceLeft: boolean } | null;
 
   create() {
     this.cameras.main.setBackgroundColor('#1a4a6a');
@@ -92,6 +97,8 @@ export class IslandScene extends Phaser.Scene {
   }
 
   private arrive() {
+    this.leaving = false;
+    this.workFor = undefined;
     this.walker = undefined;
     this.player.setPosition(HOME_SPAWN.x * T + T / 2, HOME_SPAWN.y * T + T / 2);
     this.facing = 'down';
@@ -102,9 +109,13 @@ export class IslandScene extends Phaser.Scene {
 
   /** 存档变了：出岛了就切回大地图；扩建了重画地面；摆的东西变了重画 */
   private onStore() {
+    // 睡着（人在城里）时什么都不做：在这里 switch 会把大地图场景整个重启，画面卡死
+    if (!this.scene.isActive() || this.leaving) return;
     const h = store.state.home;
     if (!h?.inside) {
       this.setTool(null);
+      // 同一帧里存档可能连着变好几次，只能切一次（第二次会把大地图重启）
+      this.leaving = true;
       this.scene.switch('map');
       return;
     }
@@ -217,6 +228,7 @@ export class IslandScene extends Phaser.Scene {
     this.objs.forEach((o) => o.destroy());
     this.objs = [];
     this.lamps = [];
+    this.workSpot = undefined;
     const h = store.state.home;
     if (!h) return;
     for (const [key, id] of Object.entries(h.floors)) {
@@ -307,7 +319,11 @@ export class IslandScene extends Phaser.Scene {
       if (store.state !== before) this.redraw(true);
       return;
     }
-    const why = canPlace(store.state, t.id, x, y);
+    let why = canPlace(store.state, t.id, x, y);
+    const d = buildDef(t.id);
+    const px = Math.floor(this.player.x / T);
+    const py = Math.floor(this.player.y / T);
+    if (!why && d && !d.walk && !d.floor && px >= x && px < x + d.w && py >= y && py < y + d.h) why = '你站在这里，先走开';
     if (why) {
       if (this.painted.size === 1) this.game.events.emit(HOME_MSG, why);
       return;
@@ -391,6 +407,7 @@ export class IslandScene extends Phaser.Scene {
       // 右键：退出建造；没在建造就走路
       if (!p.wasTouch && p.button === 2) {
         if (this.tool) { this.game.events.emit(HOME_TOOL, null); return; }
+        this.workManual = true;
         this.walkTo(this.tileAt(p));
         return;
       }
@@ -403,11 +420,12 @@ export class IslandScene extends Phaser.Scene {
         this.game.events.emit(HOME_CLICK, home);
         return;
       }
+      this.workManual = true;
       this.walkTo(this.tileAt(p));
     });
     this.input.on('wheel', (_p: unknown, _o: unknown, _dx: number, dy: number) =>
       cam.setZoom(Phaser.Math.Clamp(cam.zoom + (dy > 0 ? -0.25 : 0.25) * DPR, minZoom(), 5 * DPR)));
-    const onZoom = (d: number) => cam.setZoom(Phaser.Math.Clamp(cam.zoom + d * DPR, minZoom(), 5 * DPR));
+    const onZoom = (d: number) => { if (this.scene.isActive()) cam.setZoom(Phaser.Math.Clamp(cam.zoom + d * DPR, minZoom(), 5 * DPR)); };
     const onRecenter = () => this.recenter();
     this.game.events.on('zoom', onZoom);
     this.game.events.on('recenter', onRecenter);
@@ -512,9 +530,59 @@ export class IslandScene extends Phaser.Scene {
   private walkTo(to: { x: number; y: number }) {
     const from = { x: Math.floor(this.player.x / T), y: Math.floor(this.player.y / T) };
     const path = this.findPath(from, to);
-    if (!path) return;
+    if (!path) return false;
     this.walker = { pts: path.map((p) => ({ x: p.x * T + T / 2, y: p.y * T + T / 2 })), i: 0 };
     if (!this.following) this.recenter();
+    return true;
+  }
+
+  /** 干这个活的制作台旁边站人的格子（离人最近的那台；左右两侧优先，面朝它） */
+  private findWorkSpot(action: string) {
+    const g = this.blockedGrid();
+    const free = (x: number, y: number) => x >= 0 && y >= 0 && x < ISLAND && y < ISLAND && !g[y * ISLAND + x];
+    const px = this.player.x / T;
+    const py = this.player.y / T;
+    let best: { x: number; y: number; faceLeft: boolean } | null = null;
+    let bestD = Infinity;
+    for (const t of store.state.home?.things ?? []) {
+      const d = buildDef(t.id);
+      if (!d?.station || !NODES.find((n) => n.id === d.station)?.actions.includes(action)) continue;
+      const row = t.y + d.h - 1;
+      const cands = [
+        { x: t.x - 1, y: row, faceLeft: false }, { x: t.x + d.w, y: row, faceLeft: true },
+        ...Array.from({ length: d.w }, (_, i) => ({ x: t.x + i, y: t.y + d.h, faceLeft: t.x + i >= t.x + d.w / 2 })),
+      ];
+      for (const c of cands) {
+        if (!free(c.x, c.y)) continue;
+        const dist = Math.hypot(c.x + 0.5 - px, c.y + 0.5 - py);
+        if (dist < bestD) { bestD = dist; best = c; }
+      }
+    }
+    return best;
+  }
+
+  /** 岛上制作台有活干：走过去，到了就播敲打动画 */
+  private autoWork() {
+    const st = store.state;
+    const task = st.queue[0];
+    const action = task && !st.paused && !st.travel && homeCan(st, task.action) ? task.action : undefined;
+    if (action !== this.workFor) {
+      this.workFor = action;
+      this.workManual = false;
+      this.workSpot = undefined;
+      if (!action && !this.walker) this.anim('idle');
+    }
+    if (!action || this.workManual || this.walker || this.tool) return;
+    if (this.workSpot === undefined) this.workSpot = this.findWorkSpot(action);
+    const spot = this.workSpot;
+    if (!spot) return;
+    if (Math.floor(this.player.x / T) !== spot.x || Math.floor(this.player.y / T) !== spot.y) {
+      if (!this.walkTo(spot)) this.workManual = true;
+      return;
+    }
+    this.facing = 'side';
+    this.body.setFlipX(spot.faceLeft);
+    this.body.play('work-craft', true);
   }
 
   private anim(kind: 'walk' | 'idle') {
@@ -530,6 +598,7 @@ export class IslandScene extends Phaser.Scene {
       if (dx || dy) {
         const tx = Math.floor(this.player.x / T) + dx;
         const ty = Math.floor(this.player.y / T) + dy;
+        this.workManual = true;
         if (!this.walker || this.walker.i >= this.walker.pts.length - 1) this.walkTo({ x: tx, y: ty });
       }
     }
@@ -556,6 +625,7 @@ export class IslandScene extends Phaser.Scene {
       }
       if (w.i >= w.pts.length) { this.walker = undefined; this.anim('idle'); }
     }
+    this.autoWork();
     // 昼夜：和大地图同一个钟，晚上灯亮起来
     const dark = darkness(gameHour());
     this.night.setFillStyle(0x0a1430, dark * 0.5);

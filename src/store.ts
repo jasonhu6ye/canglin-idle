@@ -1,3 +1,4 @@
+import { leaveHome } from './core/home';
 import { useSyncExternalStore } from 'react';
 import { nodeOfAction } from './core/data';
 import { advance, LOG_CAP, migrate, newGame } from './core/sim';
@@ -114,6 +115,8 @@ class Store {
   /** 正在追踪的怪物 id：地图上给它头顶加个箭头 */
   tracking: string | null = null;
   requestWalk(nodeId: string, track: string | null = null) {
+    // 在家园岛屿上点了城里的地点：先出岛再走
+    if (this.state.home?.inside) this.dispatch(leaveHome);
     this.pendingWalk = nodeId;
     this.tracking = track;
     this.emit();

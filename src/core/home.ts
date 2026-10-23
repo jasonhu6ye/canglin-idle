@@ -164,8 +164,9 @@ export function thingGrid(home: GameState['home']): Map<string, number> {
   return m;
 }
 
+/** 传送门一圈，加上门前进岛落脚的那几格，都不许盖东西（不然一进岛就被围住） */
 const inPortal = (x: number, y: number) =>
-  x >= HOME_PORTAL.x - 1 && x < HOME_PORTAL.x + HOME_PORTAL.w + 1 && y >= HOME_PORTAL.y - 1 && y < HOME_PORTAL.y + HOME_PORTAL.h + 1;
+  x >= HOME_PORTAL.x - 1 && x < HOME_PORTAL.x + HOME_PORTAL.w + 1 && y >= HOME_PORTAL.y - 1 && y <= HOME_SPAWN.y;
 
 const have = (s: GameState, item: string) => (s.bag[item] ?? 0) + (s.bank[item] ?? 0);
 export const affordable = (s: GameState, cost: ItemStack[]) => cost.every((i) => have(s, i.item) >= i.qty);
