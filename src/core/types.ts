@@ -257,6 +257,8 @@ export interface GameState {
   waystones?: string[];
   /** 田里种着的地块（地块 id → 作物），空地不存 */
   farm?: Record<string, Plot>;
+  /** 最近一次任务停下的原因（顶部提示条用，排新任务或点掉就清空） */
+  lastStop?: { action: string; reason: TaskEndReason; mode: TaskMode; item?: string; at: number } | null;
 }
 
 export type TaskEndReason = 'complete' | 'noInput' | 'death' | 'level' | 'noAmmo';

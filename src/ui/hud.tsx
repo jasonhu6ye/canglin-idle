@@ -1,10 +1,12 @@
 import { useState, type ReactNode } from 'react';
-import { ACTIONS, MONSTERS, nodeOfAction, NODES, SKILLS } from '../core/data';
+import { ACTIONS, ITEMS, MONSTERS, nodeOfAction, NODES, SKILLS } from '../core/data';
 import { QUESTS, questProgress, questText } from '../core/quests';
-import { actionDuration, combatLevel, rainBonus, isBankId, level, maxHp, removeTask, resumeWork, toggleMount, weaponStyle } from '../core/sim';
+import { actionDuration, combatLevel, dismissStop, enqueue, rainBonus, isBankId, level, maxHp, removeTask, resumeWork, toggleMount, weaponStyle } from '../core/sim';
+import { jumpTo, producerOf } from './ActionSheet';
+import { openNodeSheet } from './itemOpen';
 import { wolfIconUrl } from '../game/wolfArt';
 import { openCombatLog } from './CombatLog';
-import type { GameState, SkillId } from '../core/types';
+import type { GameState, SkillId, TaskEndReason } from '../core/types';
 import { HERO_W, outfitOf, paintHeroSheet } from '../game/hero';
 import { store } from '../store';
 import { emitToGame } from './GameCanvas';
@@ -80,6 +82,37 @@ export function QueuePanel({ s }: { s: GameState }) {
   );
 }
 
+/** 任务停下的原因，用一句玩家看得懂的话说（顶部提示条和离线总结共用） */
+export function stopText(reason: TaskEndReason, action: string, item?: string): string {
+  const a = ACTIONS[action];
+  const name = actionName(action);
+  switch (reason) {
+    case 'noInput': return `${name}停了：材料不够${item && ITEMS[item] ? `，缺${ITEMS[item].name}` : ''}（背包和仓库都没有了）`;
+    case 'level': return `${name}停了：${a?.kind === 'skill' ? `${SKILLS[a.skill].name}要 ${a.level} 级` : '等级不够'}`;
+    case 'death': return `${name}停了：连续阵亡 3 次。换更好的装备、食物栏放上食物，或者换只弱一点的怪`;
+    case 'noAmmo': return `${name}停了：弹药用完了，背包和仓库都没有`;
+    default: return `${name}做完了，队列空了，角色在发呆`;
+  }
+}
+
+/** 顶部提示条：任务为什么停了，附一个能直接补救的按钮（用户 10-23） */
+function StopChip({ s }: { s: GameState }) {
+  const st = s.lastStop;
+  if (!st || !ACTIONS[st.action]) return null;
+  const src = st.reason === 'noInput' && st.item ? producerOf(s, st.item) : undefined;
+  const node = nodeOfAction(st.action, s.loc);
+  const again = () => store.dispatch((g) => enqueue(g, st.action, st.mode));
+  return (
+    <div className={`chip stop-chip ${st.reason === 'complete' ? '' : 'bad'}`}>
+      <b>{st.reason === 'complete' ? '空闲' : '停了'}</b> · {stopText(st.reason, st.action, st.item)}
+      {src && <button className="pill on" onClick={() => jumpTo(src.action, src.node)}>去做{ITEMS[st.item!].name} ›</button>}
+      {(st.reason === 'complete' || st.reason === 'death') && <button className="pill on" onClick={again}>{st.reason === 'complete' ? '再来一轮' : '再试一次'}</button>}
+      {node && st.reason !== 'noInput' && <button className="pill" onClick={() => openNodeSheet(node.id)}>换个任务</button>}
+      <button className="pill" title="关掉提示" onClick={() => store.dispatch(dismissStop)}>×</button>
+    </div>
+  );
+}
+
 export function StatusChips({ s, extra, log }: { s: GameState; extra?: ReactNode; log?: ReactNode }) {
   const task = s.queue[0];
   const a = task && ACTIONS[task.action];
@@ -127,6 +160,7 @@ export function StatusChips({ s, extra, log }: { s: GameState; extra?: ReactNode
   return (
     <div className="chips">
       {extra}
+      {(!task || s.lastStop?.reason !== 'complete') && <StopChip s={s} />}
       {body && <div className="chip">{body}</div>}
       {log || <button className="chip dim log-chip" title="日志 (L)" onClick={openCombatLog}>⚔ 击杀 {fmtNum(s.stats.kills)} · 阵亡 {s.stats.deaths} · <u>展开日志 ▸</u></button>}
     </div>

@@ -511,9 +511,11 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     if (after > before) sum.levelUps.push({ skill, level: after });
   };
 
-  const endTask = (reason: TaskEndReason) => {
+  const endTask = (reason: TaskEndReason, item?: string) => {
     const task = s.queue.shift()!;
     sum.taskEnds.push({ action: task.action, reason });
+    // 做完了且后面没任务、或者中途卡住：记下来，顶部提示为什么停了
+    if (reason !== 'complete' || !s.queue.length) s.lastStop = { action: task.action, reason, mode: task.mode, at: now, ...(item && { item }) };
     s.progressMs = 0;
     s.combat = null;
     s.travel = null;
@@ -632,7 +634,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   const stepSkill = (task: Task, a: SkillAction, budget: number): number => {
     if (s.progressMs === 0) {
       if (level(s, a.skill) < a.level) return endTask('level'), 0;
-      if (a.inputs && !a.inputs.every((i) => haveItem(i.item) >= i.qty)) return endTask('noInput'), 0;
+      if (a.inputs && !a.inputs.every((i) => haveItem(i.item) >= i.qty)) return endTask('noInput', a.inputs.find((i) => haveItem(i.item) < i.qty)!.item), 0;
     }
     // 进度为负表示偷窃失败后的晕眩，先走完晕眩停在 0，再做下一次的条件检查
     const duration = actionDuration(s, a, now - dt);
@@ -963,6 +965,7 @@ export function enqueue(prev: GameState, action: string, mode: TaskMode): GameSt
   if (prev.queue.length >= MAX_QUEUE) return prev;
   const s = clone(prev);
   s.queue.push({ action, mode, done: 0, elapsedMs: 0 });
+  s.lastStop = null;
   return s;
 }
 
@@ -1154,4 +1157,9 @@ export function openContainer(prev: GameState, id: string, from: 'bag' | 'bank',
     if (q > fit) s.bank[item] = (s.bank[item] ?? 0) + q - fit;
   }
   return [s, got];
+}
+
+/** 点掉顶部的「任务停了」提示 */
+export function dismissStop(prev: GameState): GameState {
+  return prev.lastStop ? { ...prev, lastStop: null } : prev;
 }

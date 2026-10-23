@@ -176,7 +176,7 @@ function Recipe({ s, a }: { s: GameState; a: SkillAction }) {
  * 某样材料去哪做（用户 10-23：城镇制作不用来回找）：
  * 产出它的动作里，先挑等级够的、再挑等级最低的；地点挑离角色最近的那一处
  */
-function producerOf(s: GameState, item: string): { action: string; node: string } | undefined {
+export function producerOf(s: GameState, item: string): { action: string; node: string } | undefined {
   const all = Object.values(ACTIONS).filter((x): x is SkillAction => x.kind === 'skill' && x.outputs.some((o) => o.item === item && o.chance === undefined));
   if (!all.length) return undefined;
   const best = all.sort((x, y) => Number(level(s, y.skill) >= y.level) - Number(level(s, x.skill) >= x.level) || x.level - y.level)[0];
@@ -185,7 +185,7 @@ function producerOf(s: GameState, item: string): { action: string; node: string 
 }
 
 /** 跳到那个配方：打开它所在地点的页面并选中；人不在旁边就用页面里的「寻路」，走到了会自动再打开并选中 */
-function jumpTo(action: string, node: string) {
+export function jumpTo(action: string, node: string) {
   store.focusAction = action;
   openNodeSheet(node);
 }

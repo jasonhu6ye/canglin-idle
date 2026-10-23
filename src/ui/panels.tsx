@@ -19,6 +19,8 @@ import { Icon, SkillIcon } from './icons';
 import { FINE_POINTER, openItem, showLoot } from './itemOpen';
 import { openGuide } from './Guide';
 import { openNews } from './News';
+import { stopText } from './hud';
+import { actionName } from './format';
 import { openGuild } from './Guild';
 
 const GEAR_SLOTS: [EquipSlot, string][] = [
@@ -517,10 +519,13 @@ function SaveBackup({ s }: { s: GameState }) {
       setMsg('复制失败，请长按文本框手动全选复制');
     }
   };
+  // 先解出来给玩家对比两边，确认了才覆盖，防止拿旧档盖掉新档（用户 10-23）
+  const [pending, setPending] = useState<GameState | null>(null);
   const doImport = async (text = code) => {
     const next = await importSave(text);
     if (!next) return setMsg(importError || '存档码不对，请检查是否复制完整');
-    store.replace(next);
+    setMsg('');
+    setPending(next);
   };
   // 存档文件：电脑下载后用 AirDrop / 微信传到手机，再选文件导入，不用复制长串（用户 10-23）
   const download = async () => {
@@ -537,7 +542,6 @@ function SaveBackup({ s }: { s: GameState }) {
   };
   const fromFile = async (f?: File) => {
     if (!f) return;
-    if (!confirm('用这个存档文件覆盖当前存档？')) return;
     await doImport(await f.text());
   };
   return (
@@ -567,6 +571,43 @@ function SaveBackup({ s }: { s: GameState }) {
         </>
       )}
       {msg && <p className="warn">{msg}</p>}
+      {pending && <SaveCompare cur={s} next={pending} onCancel={() => setPending(null)} onOk={() => { setPending(null); store.replace(pending); }} />}
+    </div>
+  );
+}
+
+const totalLevel = (g: GameState) => (Object.keys(g.xp) as SkillId[]).reduce((n, k) => n + level(g, k), 0);
+const totalXp = (g: GameState) => Object.values(g.xp).reduce((a, b) => a + b, 0);
+const fmtTime = (t: number) => { const d = new Date(t); return `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+
+/** 导入前对比：当前存档和要导入的存档并排，导入的更旧就红字提醒 */
+function SaveCompare({ cur, next, onOk, onCancel }: { cur: GameState; next: GameState; onOk: () => void; onCancel: () => void }) {
+  const rows: [string, (g: GameState) => string | number][] = [
+    ['总等级', totalLevel],
+    ['战斗等级', (g) => combatLevel(g)],
+    ['仓库金币', (g) => fmtNum(g.bank.coins ?? 0)],
+    ['击杀', (g) => fmtNum(g.stats.kills)],
+    ['总经验', (g) => fmtNum(totalXp(g))],
+    ['存档时间', (g) => (g === cur ? '现在' : fmtTime(g.lastTick))],
+  ];
+  // 当前存档的时间总是「现在」，没法比新旧，所以按进度（总经验、总等级）比
+  const older = totalXp(next) < totalXp(cur);
+  const lower = totalLevel(next) < totalLevel(cur);
+  return (
+    <div className="modal-bg" onClick={onCancel}>
+      <div className="modal frame save-compare" onClick={(e) => e.stopPropagation()}>
+        <h2>确认导入存档</h2>
+        <table>
+          <thead><tr><th /><th>当前存档</th><th>要导入的</th></tr></thead>
+          <tbody>{rows.map(([k, f]) => <tr key={k}><td className="muted">{k}</td><td>{f(cur)}</td><td>{f(next)}</td></tr>)}</tbody>
+        </table>
+        {(older || lower) && <p className="warn">要导入的存档{older ? '进度比现在的少' : ''}{older && lower ? '，' : ''}{lower ? '总等级更低' : ''}。确定要用它覆盖吗？覆盖后当前进度就没了。</p>}
+        {!older && !lower && <p className="muted">要导入的存档进度更多，可以放心覆盖。</p>}
+        <div className="go">
+          <button onClick={onCancel}>取消</button>
+          <button className={older || lower ? 'danger' : 'primary'} onClick={onOk}>覆盖当前存档</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -582,6 +623,9 @@ export function OfflineModal({ sum }: { sum: Summary }) {
   const xp = Object.entries(sum.xp) as [SkillId, number][];
   const items = Object.entries(sum.items).filter(([id, q]) => q !== 0 && ITEMS[id]);
   const kills = Object.values(sum.kills).reduce((a, b) => a + b, 0);
+  const st = store.state;
+  // 中途卡住的都列出来；正常做完的只在最后队列空了时提一句
+  const ends = sum.taskEnds.filter((t, i) => t.reason !== 'complete' || (i === sum.taskEnds.length - 1 && !st.queue.length));
   return (
     <div className="modal-bg">
       <div className="modal frame">
@@ -596,6 +640,14 @@ export function OfflineModal({ sum }: { sum: Summary }) {
         )}
         {kills > 0 && <p>击败 {kills} 只怪物{sum.foodEaten > 0 && `，吃掉 ${sum.foodEaten} 份食物`}{sum.ammoUsed > 0 && `，用掉 ${sum.ammoUsed} 发弹药`}</p>}
         {sum.deaths > 0 && <p className="warn">阵亡 {sum.deaths} 次{sum.taskEnds.some((t) => t.reason === 'death') ? '，连续阵亡太多次，战斗已停止' : '，每次都回城复活后走回去接着打'}</p>}
+        {sum.bankTrips > 0 && <p className="muted">背包满了回仓库存东西 {sum.bankTrips} 次</p>}
+        {sum.quests && sum.quests.length > 0 && <p className="gold">完成新手任务 {sum.quests.length} 个</p>}
+        {ends.length > 0 && (
+          <div className="off-ends">
+            {ends.map((t, i) => <p key={i} className={t.reason === 'complete' ? 'muted' : 'warn'}>⚠ {stopText(t.reason, t.action, t.reason === 'noInput' && st.lastStop?.action === t.action ? st.lastStop.item : undefined)}</p>)}
+          </div>
+        )}
+        <p className="off-now">现在：{st.queue[0] ? `${st.paused ? '已暂停 · ' : ''}${actionName(st.queue[0].action)}${st.queue.length > 1 ? `，后面还排着 ${st.queue.length - 1} 个任务` : ''}` : '没有任务，角色在发呆'}</p>
         <div className="loot">
           {items.map(([id, q]) => (
             <span key={id} className={q < 0 ? 'neg' : ''}><Icon item={id} size={18} /> {ITEMS[id].name} {q > 0 ? '+' : ''}{fmtNum(q)}</span>

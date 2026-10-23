@@ -13,7 +13,8 @@ export interface QuestDef {
     | { kind: 'gain'; item: string; n: number }
     | { kind: 'level'; skill: SkillId; n: number }
     | { kind: 'kills'; n: number }
-    | { kind: 'equip'; item: string; n: 1 };
+    | { kind: 'equip'; item: string; n: 1 }
+    | { kind: 'stones'; n: number };
 }
 
 export const QUESTS: QuestDef[] = [
@@ -55,6 +56,13 @@ export const QUESTS: QuestDef[] = [
     tip: '战斗经验会同时提升攻击方式、防御和生命。卡关了就回去练级、换更好的装备。' },
   { hint: 'fight_rabbit', reward: 300, goal: { kind: 'kills', n: 30 },
     tip: '按 M 打开世界地图，可以看到所有地点和首领。首领血条在屏幕顶部，打赢有机会掉专属战旗。' },
+  // 往后只能在末尾加，插在中间会让老存档的任务进度错位
+  { hint: 'stone_woodland', reward: 200, goal: { kind: 'stones', n: 2 },
+    tip: '野外每个区域都有一座传说石碑，走近就会点亮。站在石碑旁能传到别的石碑；自动寻路走远路时也会顺路传送，石碑点得越多走得越快。' },
+  { hint: 'mine_copper', reward: 300, goal: { kind: 'level', skill: 'mining', n: 20 },
+    tip: '任务停下时（材料不够、连续阵亡、队列做完）屏幕上会出现红色提示条，点里面的按钮可以直接去补材料或再来一轮。' },
+  { hint: 'stone_town2', reward: 400, goal: { kind: 'stones', n: 3 },
+    tip: '西边草原上有第二座城「落霞城」，有仓库、集市和全套生产建筑，仓库和主城是同一份。到那里点亮城里的石碑，以后就能来回传送。' },
 ];
 
 const equipped = (s: GameState, item: string) => Object.values(s.equipment).includes(item);
@@ -64,7 +72,17 @@ export function questText(q: QuestDef): string {
   if (g.kind === 'gain') return `获得 ${g.n} 个${ITEMS[g.item].name}`;
   if (g.kind === 'level') return `${SKILLS[g.skill].name}升到 ${g.n} 级`;
   if (g.kind === 'equip') return `装备${ITEMS[g.item].name}`;
+  if (g.kind === 'stones') return `点亮 ${g.n} 座传说石碑（含主城）`;
   return `击败 ${g.n} 只怪物或生物`;
+}
+
+/** 看存档状态就知道进度的目标（等级、装备、石碑）；累计型的返回 undefined */
+function stateGoal(s: GameState, q: QuestDef): number | undefined {
+  const g = q.goal;
+  if (g.kind === 'level') return level(s, g.skill);
+  if (g.kind === 'equip') return +equipped(s, g.item);
+  if (g.kind === 'stones') return s.waystones?.length ?? 1;
+  return undefined;
 }
 
 /** 当前任务的进度（0..n） */
@@ -72,7 +90,7 @@ export function questProgress(s: GameState): { q: QuestDef; have: number } | nul
   const st = s.quest ?? { i: 0, n: 0 };
   const q = QUESTS[st.i];
   if (!q) return null;
-  const have = q.goal.kind === 'level' ? level(s, q.goal.skill) : q.goal.kind === 'equip' ? +equipped(s, q.goal.item) : st.n;
+  const have = stateGoal(s, q) ?? st.n;
   return { q, have: Math.min(have, q.goal.n) };
 }
 
@@ -86,7 +104,7 @@ export function stepQuests(s: GameState, sum: Summary): QuestDef[] {
     const g = q.goal;
     if (g.kind === 'gain') s.quest.n += Math.max(0, sum.items[g.item] ?? 0);
     else if (g.kind === 'kills') s.quest.n += Object.values(sum.kills).reduce((a, b) => a + b, 0);
-    const have = g.kind === 'level' ? level(s, g.skill) : g.kind === 'equip' ? +equipped(s, g.item) : s.quest.n;
+    const have = stateGoal(s, q) ?? s.quest.n;
     if (have < g.n) break;
     s.bank.coins = (s.bank.coins ?? 0) + q.reward;
     done.push(q);
