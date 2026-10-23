@@ -59,14 +59,22 @@ describe('装备体系', () => {
 });
 
 describe('怪物图鉴', () => {
-  it('192 种，每阶 24 种（17 普通 5 精英 2 首领），id 不重复，特性都有定义', () => {
-    expect(SPECIES).toHaveLength(192);
-    expect(new Set(SPECIES.map((s) => s.id)).size).toBe(192);
+  it('原 192 种 + 新地点 20 种生物和 8 个首领，id 不重复，特性都有定义', () => {
+    const base = SPECIES.filter((s) => !s.home);
+    const fresh = SPECIES.filter((s) => s.home);
+    expect(base).toHaveLength(192);
+    expect(fresh.filter((s) => s.rank !== 'boss')).toHaveLength(20);
+    expect(fresh.filter((s) => s.rank === 'boss')).toHaveLength(8);
+    expect(new Set(SPECIES.map((s) => s.id)).size).toBe(SPECIES.length);
     for (let t = 0; t < 8; t++) {
-      const tier = SPECIES.filter((s) => s.tier === t);
+      const tier = base.filter((s) => s.tier === t);
       expect(tier).toHaveLength(24);
       expect(tier.filter((s) => s.rank === 'elite')).toHaveLength(5);
       expect(tier.filter((s) => s.rank === 'boss')).toHaveLength(2);
+    }
+    // 每处新地点都有自己的首领
+    for (const n of NODES.filter((x) => x.site)) {
+      expect(fresh.some((s) => s.home === n.id && s.rank === 'boss'), n.name).toBe(true);
     }
     for (const s of SPECIES) for (const tr of s.traits) expect(TRAITS[tr], `${s.id} ${tr}`).toBeDefined();
   });

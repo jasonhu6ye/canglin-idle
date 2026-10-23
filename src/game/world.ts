@@ -97,9 +97,13 @@ function regionRaw(x: number, y: number) {
 const C = 4;
 const CW = Math.ceil(MAP_W / C);
 const CH = Math.ceil(MAP_H / C);
-const coarseRegion = new Uint8Array(CW * CH);
-for (let cy = 0; cy < CH; cy++) for (let cx = 0; cx < CW; cx++) coarseRegion[cy * CW + cx] = regionRaw(cx * C + 2, cy * C + 2);
-const regionIdx = (x: number, y: number) => coarseRegion[(clampY(y) >> 2) * CW + (clampX(x) >> 2)];
+/** 区域图用更粗的 8×8 网格：边界本来就有扰动，看不出差别，生成快 4 倍 */
+const RC = 8;
+const RW = Math.ceil(MAP_W / RC);
+const RH = Math.ceil(MAP_H / RC);
+const coarseRegion = new Uint8Array(RW * RH);
+for (let cy = 0; cy < RH; cy++) for (let cx = 0; cx < RW; cx++) coarseRegion[cy * RW + cx] = regionRaw(cx * RC + 4, cy * RC + 4);
+const regionIdx = (x: number, y: number) => coarseRegion[(clampY(y) >> 3) * RW + (clampX(x) >> 3)];
 export const regionAt = (x: number, y: number): RegionId => REGION_IDS[regionIdx(Math.round(x), Math.round(y))];
 
 // ---- 2. 地面规则 ----
@@ -154,7 +158,64 @@ const RIVER: Partial<Record<RegionId, Ground>> = {
   town: 'water', woodland: 'water', giantwood: 'water', coast: 'water', highland: 'water',
   snow: 'ice', swamp: 'swampwater', lava: 'lava', abyss: 'chasm',
 };
+/** 特色地点的地貌（用户 10-23 要求新地貌）：以地点为圆心、半径 r 的一片，中心留空地 */
+const SITES = NODES.filter((n) => n.site).map((n) => ({ x: n.x, y: n.y, ...n.site! }));
+function siteGround(x: number, y: number): Ground | null | undefined {
+  for (const S of SITES) {
+    const dx = x - S.x;
+    const dy = y - S.y;
+    if (Math.abs(dx) > S.r || Math.abs(dy) > S.r) continue;
+    // 边缘用噪声抖一抖，不是正圆
+    const d = Math.hypot(dx, dy) / S.r + (fbm(x, y, 300, 30) - 0.5) * (S.kind === 'crater' ? 0.06 : 0.25);
+    if (d > 1) continue;
+    if (d < 0.1) return null;
+    const n = fbm(x, y, 301, 18);
+    // 东西、南北各一条十字通道，保证从外面能走到中心
+    const lane = Math.abs(dx) < 2 || Math.abs(dy) < 2;
+    switch (S.kind) {
+      case 'islands': // 千岛湖：大湖里散着小岛，湖边沙滩
+        if (lane) return 'beach';
+        return n > 0.5 - d * 0.12 ? 'water' : n > 0.46 - d * 0.12 ? 'beach' : 'meadow';
+      case 'bamboo': // 雾隐竹海：暗草地，林间小水洼
+        return !lane && fbm(x, y, 311, 9) > 0.7 ? 'water' : n > 0.55 ? 'moss' : 'darkgrass';
+      case 'saltflat': { // 盐晶荒原：白色盐壳，龟裂纹，零星盐水池
+        if (!lane && n > 0.74) return 'water';
+        return Math.abs(fbm(x, y, 321, 12) - 0.5) < 0.025 ? 'sand' : 'beach';
+      }
+      case 'crater': { // 碎星陨坑：一圈环形山，四个缺口，坑底焦土和发光苔
+        if (d > 0.62 && d < 0.74) return lane ? 'gravel' : 'cliff';
+        if (d >= 0.74) return 'gravel';
+        return d < 0.3 ? 'glowmoss' : n > 0.6 ? 'basalt' : 'ash';
+      }
+      case 'fungal': // 菌丝深谷：发光苔藓和普通苔藓交错，沼水洼
+        if (!lane && n > 0.76) return 'swampwater';
+        return fbm(x, y, 331, 10) > 0.5 ? 'glowmoss' : 'moss';
+      case 'glacier': { // 冰川裂谷：大片冰面，一道道冰裂缝，裂缝上隔一段有冰桥
+        const crack = Math.abs(fbm(x, y, 341, 26) - 0.5) < 0.018;
+        if (crack && !lane && fbm(x, y, 342, 14) < 0.62) return 'chasm';
+        return n > 0.45 ? 'ice' : 'snow';
+      }
+      case 'obsidian': { // 黑曜火山群：玄武岩，熔岩小河，几座小火山口
+        const river = Math.abs(fbm(x, y, 351, 30) - 0.5) < 0.02;
+        if (river && !lane && fbm(x, y, 352, 14) < 0.65) return 'lava';
+        const cone = fbm(x, y, 353, 16);
+        if (cone > 0.78) return 'lava';
+        if (cone > 0.72) return 'cliff';
+        return n > 0.55 ? 'basalt' : 'ash';
+      }
+      case 'starabyss': { // 星渊祭坛：深渊地面上一圈圈发光的环，外圈有裂口
+        const ring = (d * 6) % 1;
+        if (!lane && d > 0.5 && n > 0.72) return 'chasm';
+        return ring < 0.14 ? 'glowmoss' : 'abyss';
+      }
+    }
+  }
+  return undefined;
+}
+
 function landform(x: number, y: number, r: RegionId): Ground | null {
+  const sg = siteGround(x, y);
+  if (sg !== undefined) return sg;
   if (r === 'town' && Math.hypot(x - SPAWN_GUESS.x, y - SPAWN_GUESS.y) < 70) return null;
   // 河：大尺度噪声的等值线，宽度随位置起伏
   const rv = fbm(x, y, 51, 170);
@@ -220,10 +281,19 @@ function pondAt(x: number, y: number): Ground | null {
   return null;
 }
 
+/**
+ * 每格的标记位，四种合成一个字节省内存（5088 地图有 2600 万格）：
+ * 资源点周围的空地、建筑、道路、挡路的摆设
+ */
+const flags = new Uint8Array(N);
+const F_NEAR = 1;
+const F_BUILD = 2;
+const F_ROAD = 4;
+const F_PROP = 8;
+
 /** 资源点周围要清出的空地 */
-const NEAR_NODE = new Uint8Array(N);
 for (const n of NODES) {
-  for (let y = n.y - 2; y <= n.y + 3; y++) for (let x = n.x - 3; x <= n.x + 3; x++) if (inMap(x, y)) NEAR_NODE[idx(x, y)] = 1;
+  for (let y = n.y - 2; y <= n.y + 3; y++) for (let x = n.x - 3; x <= n.x + 3; x++) if (inMap(x, y)) flags[idx(x, y)] |= F_NEAR;
 }
 
 export type BuildingKind =
@@ -243,11 +313,10 @@ export const BUILDINGS: Building[] = [
   B('house2', 178, 137, 5, 4), B('windmill', 163, 193, 3, 4), B('barn', 127, 194, 5, 4), B('well', 140, 186, 1, 1),
 ];
 
-const building = new Uint8Array(N);
 for (const b of BUILDINGS) {
-  for (let y = b.y; y < b.y + b.h; y++) for (let x = b.x; x < b.x + b.w; x++) building[idx(x, y)] = 1;
+  for (let y = b.y; y < b.y + b.h; y++) for (let x = b.x; x < b.x + b.w; x++) flags[idx(x, y)] |= F_BUILD;
 }
-export const isBuilding = (x: number, y: number) => building[idx(x, y)] === 1;
+export const isBuilding = (x: number, y: number) => (flags[idx(x, y)] & F_BUILD) !== 0;
 
 export const SPAWN: Pt = townXY(167, 175);
 
@@ -294,19 +363,18 @@ class Heap {
   }
 }
 
-const road = new Uint8Array(N);
 /** 粗网格每格中心的原始地面，修路和大范围寻路共用 */
 const coarseGround = new Uint8Array(CW * CH);
 for (let c = 0; c < CW * CH; c++) coarseGround[c] = G[rawGround(clampX((c % CW) * C + 2), clampY(Math.floor(c / CW) * C + 2))];
 {
-  const cost = (c: number) => {
-    const x = (c % CW) * C + 2;
-    const y = Math.floor(c / CW) * C + 2;
+  // 每格代价先算好：Dijkstra 每格会被四个邻居各问一次，现算噪声太慢
+  const costs = new Float32Array(CW * CH);
+  for (let c = 0; c < CW * CH; c++) {
     const g = GROUNDS[coarseGround[c]];
-    if (g === 'ocean') return Infinity;
-    if (g === 'cobble') return 0.6;
-    return (blockedG[G[g]] ? 14 : 1) + fbm(x, y, 61, 40) * 1.6;
-  };
+    costs[c] = g === 'ocean' ? Infinity : g === 'cobble' ? 0.6
+      : (blockedG[G[g]] ? 14 : 1) + vnoise(((c % CW) * C + 2) / 40, (Math.floor(c / CW) * C + 2) / 40, 61) * 1.6;
+  }
+  const cost = (c: number) => costs[c];
   const dist = new Float64Array(CW * CH).fill(Infinity);
   const prev = new Int32Array(CW * CH).fill(-1);
   const cell = (p: Pt) => (p.y >> 2) * CW + (p.x >> 2);
@@ -341,7 +409,7 @@ for (let c = 0; c < CW * CH; c++) coarseGround[c] = G[rawGround(clampX((c % CW) 
       for (const [ox, oy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
         const qx = px + ox;
         const qy = py + oy;
-        if (inMap(qx, qy) && !building[idx(qx, qy)]) road[idx(qx, qy)] = 1;
+        if (inMap(qx, qy) && !(flags[idx(qx, qy)] & F_BUILD)) flags[idx(qx, qy)] |= F_ROAD;
       }
     }
   };
@@ -360,7 +428,7 @@ for (let c = 0; c < CW * CH; c++) coarseGround[c] = G[rawGround(clampX((c % CW) 
     paint(last, pts[pts.length - 1]);
   }
 }
-export const isRoad = (x: number, y: number) => road[idx(x, y)] === 1;
+export const isRoad = (x: number, y: number) => (flags[idx(x, y)] & F_ROAD) !== 0;
 
 /** 粗网格能不能走：中心能走，或者格子里有路（桥） */
 const coarseOpen = new Uint8Array(CW * CH);
@@ -371,7 +439,7 @@ for (let c = 0; c < CW * CH; c++) {
   for (let k = 0; k < C * C && !open; k++) {
     const x = x0 + (k % C);
     const y = y0 + ((k / C) | 0);
-    if (inMap(x, y) && road[idx(x, y)]) open = 1 as unknown as boolean;
+    if (inMap(x, y) && (flags[idx(x, y)] & F_ROAD)) open = 1 as unknown as boolean;
   }
   coarseOpen[c] = open ? 1 : 0;
 }
@@ -383,7 +451,7 @@ for (let c = 0; c < CW * CH; c++) {
   for (let k = 0; k < C * C; k++) {
     const x = x0 + (k % C);
     const y = y0 + ((k / C) | 0);
-    if (inMap(x, y) && road[idx(x, y)]) { coarseRoad[c] = 1; break; }
+    if (inMap(x, y) && (flags[idx(x, y)] & F_ROAD)) { coarseRoad[c] = 1; break; }
   }
 }
 const coarseG = new Float32Array(CW * CH);
@@ -446,7 +514,7 @@ function walkableIn(c: number): Pt | null {
     for (let k = 0; k < C * C; k++) {
       const x = cx - 2 + (k % C);
       const y = cy - 2 + ((k / C) | 0);
-      if (inMap(x, y) && road[idx(x, y)] && isWalkable(x, y)) return { x, y };
+      if (inMap(x, y) && (flags[idx(x, y)] & F_ROAD) && isWalkable(x, y)) return { x, y };
     }
   }
   for (let r = 0; r <= 3; r++) {
@@ -475,7 +543,7 @@ function groundFor(x: number, y: number): Ground {
     if (jr !== r) g = feature(x, y, r) ?? baseGround(x, y, jr);
   }
   const i = idx(x, y);
-  if (NEAR_NODE[i] && blockedG[G[g]]) {
+  if ((flags[i] & F_NEAR) && blockedG[G[g]]) {
     const pondNode = PONDS.some((p) => Math.abs(p.n.x - x) <= 3 && y < p.n.y && y >= p.n.y - 2);
     if (!pondNode) g = inPlaza(x, y) ? 'cobble' : baseGround(x, y, r);
   }
@@ -484,7 +552,7 @@ function groundFor(x: number, y: number): Ground {
       g = (y - F.y0) % 3 === 2 ? 'grass' : 'farm';
     }
   }
-  if (road[i] && g !== 'cobble' && g !== 'ocean') {
+  if ((flags[i] & F_ROAD) && g !== 'cobble' && g !== 'ocean') {
     if (blockedG[G[g]]) return g === 'cliff' ? 'gravel' : 'bridge';
     return r === 'snow' ? 'roadsnow' : r === 'coast' ? 'roadsand' : r === 'lava' || r === 'abyss' || r === 'highland' ? 'roaddark' : 'road';
   }
@@ -511,8 +579,8 @@ export const groundAt = (x: number, y: number): Ground => GROUNDS[groundIndex(x,
 /** 世界地图缩略图：不触发分块生成，直接按规则算颜色用的地面 */
 export function overviewGround(x: number, y: number): Ground {
   const i = idx(x, y);
-  if (building[i]) return 'cliff';
-  if (road[i]) return 'road';
+  if ((flags[i] & F_BUILD)) return 'cliff';
+  if ((flags[i] & F_ROAD)) return 'road';
   return rawGround(x, y);
 }
 
@@ -599,7 +667,6 @@ const EDGE_WALL: Record<RegionId, PropKind> = {
 
 const propsDone = new Uint8Array(CHUNKS_X * CHUNKS_Y);
 const chunkProps: Prop[][] = Array.from({ length: CHUNKS_X * CHUNKS_Y }, () => []);
-const propBlock = new Uint8Array(N);
 
 function ensureProps(ci: number) {
   if (propsDone[ci]) return;
@@ -611,10 +678,10 @@ function ensureProps(ci: number) {
   for (let y = y0; y < Math.min(MAP_H, y0 + CHUNK); y++) {
     for (let x = x0; x < Math.min(MAP_W, x0 + CHUNK); x++) {
       const i = idx(x, y);
-      if (building[i] || road[i]) continue;
+      if ((flags[i] & F_BUILD) || (flags[i] & F_ROAD)) continue;
       let k: PropKind | null | undefined = TOWN_PROPS.get(i);
       if (!k) {
-        if (NEAR_NODE[i] || blockedG[ground[i]] || FARMS.some((F) => x >= F.x0 && x <= F.x1 && y >= F.y0 && y <= F.y1)) continue;
+        if ((flags[i] & F_NEAR) || blockedG[ground[i]] || FARMS.some((F) => x >= F.x0 && x <= F.x1 && y >= F.y0 && y <= F.y1)) continue;
         const g = GROUNDS[ground[i]];
         if (g === 'cobble' || (Math.abs(x - SPAWN.x) < 4 && Math.abs(y - SPAWN.y) < 4)) continue;
         const r = REGION_IDS[regionIdx(x, y)];
@@ -623,7 +690,7 @@ function ensureProps(ci: number) {
       }
       if (!k) continue;
       out.push({ kind: k, x, y });
-      if (BLOCKING.has(k)) propBlock[i] = 1;
+      if (BLOCKING.has(k)) flags[i] |= F_PROP;
     }
   }
 }
@@ -641,17 +708,15 @@ export function isWalkable(x: number, y: number) {
   if (!inMap(x, y)) return false;
   ensureProps(chunkOf(x, y));
   const i = idx(x, y);
-  return !blockedG[ground[i]] && !building[i] && !propBlock[i];
+  return !blockedG[ground[i]] && !(flags[i] & F_BUILD) && !(flags[i] & F_PROP);
 }
 
 const DIRS: [number, number, number][] = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.414], [1, -1, 1.414], [-1, 1, 1.414], [-1, -1, 1.414]];
-const gBuf = new Float32Array(N);
-const prevBuf = new Int32Array(N);
-const seenBuf = new Uint32Array(N);
-let searchId = 0;
+/** 单次细寻路最多展开的格子数：大地图上不能整图搜索，远路靠粗网格走廊分段 */
+const MAX_NODES = 400_000;
 
 /** A* 寻路（8 方向，斜走不切墙角）；终点不可走或走不到返回 null。返回值不含起点。 */
-export function findPath(from: Pt, to: Pt, maxNodes = Math.round(N * 0.7)): Pt[] | null {
+export function findPath(from: Pt, to: Pt, maxNodes = MAX_NODES): Pt[] | null {
   if (!isWalkable(to.x, to.y) || !inMap(from.x, from.y)) return null;
   const far = Math.max(Math.abs(from.x - to.x), Math.abs(from.y - to.y)) > 48;
   // 远路：先在粗网格上找走廊，再沿走廊一段一段细找；绕湖绕河也很快
@@ -687,7 +752,9 @@ export function findPath(from: Pt, to: Pt, maxNodes = Math.round(N * 0.7)): Pt[]
 }
 
 function astar(from: Pt, to: Pt, maxNodes: number): Pt[] | null {
-  const id = ++searchId;
+  // 只记搜过的格子（不再给整张地图开数组，5088 地图那样要 300MB）
+  const gBuf = new Map<number, number>();
+  const prevBuf = new Map<number, number>();
   const start = idx(from.x, from.y);
   const goal = idx(to.x, to.y);
   const h = (i: number) => {
@@ -695,16 +762,15 @@ function astar(from: Pt, to: Pt, maxNodes: number): Pt[] | null {
     const dy = Math.abs(((i / MAP_W) | 0) - to.y);
     return (Math.max(dx, dy) + 0.414 * Math.min(dx, dy)) * 1.1;
   };
-  seenBuf[start] = id;
-  gBuf[start] = 0;
-  prevBuf[start] = -1;
+  gBuf.set(start, 0);
+  prevBuf.set(start, -1);
   const open = new Heap();
   open.push(start, h(start));
   let expanded = 0;
   while (open.size) {
     const [cur, f] = open.pop();
     if (cur === goal) break;
-    const g0 = gBuf[cur];
+    const g0 = gBuf.get(cur)!;
     if (f - h(cur) > g0 + 1e-3) continue;
     if (++expanded > maxNodes) return null;
     const x = cur % MAP_W;
@@ -716,16 +782,16 @@ function astar(from: Pt, to: Pt, maxNodes: number): Pt[] | null {
       if (dx && dy && (!isWalkable(x + dx, y) || !isWalkable(x, y + dy))) continue;
       const j = idx(nx, ny);
       const ng = g0 + c;
-      if (seenBuf[j] === id && gBuf[j] <= ng + 1e-3) continue;
-      seenBuf[j] = id;
-      gBuf[j] = ng;
-      prevBuf[j] = cur;
+      const old = gBuf.get(j);
+      if (old !== undefined && old <= ng + 1e-3) continue;
+      gBuf.set(j, ng);
+      prevBuf.set(j, cur);
       open.push(j, ng + h(j));
     }
   }
-  if (seenBuf[goal] !== id) return null;
+  if (!gBuf.has(goal)) return null;
   const path: Pt[] = [];
-  for (let k = goal; k !== start; k = prevBuf[k]) path.push({ x: k % MAP_W, y: (k / MAP_W) | 0 });
+  for (let k = goal; k !== start; k = prevBuf.get(k)!) path.push({ x: k % MAP_W, y: (k / MAP_W) | 0 });
   return path.reverse();
 }
 

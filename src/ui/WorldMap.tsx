@@ -84,7 +84,8 @@ export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: ()
               <button key={n.id} className={`wm-node ${sel === n.id ? 'sel' : ''}`} style={{ left: `${(n.x / MAP_W) * 100}%`, top: `${(n.y / MAP_H) * 100}%` }}
                 onClick={() => setSel(n.id)}>
                 <i style={{ background: DANGER[d].color }} />
-                {zoom > 1 && <span>{name}</span>}
+                {/* 特色地点一直标名字 */}
+                {(zoom > 1 || n.site) && <span className={n.site ? 'site' : ''}>{name}</span>}
               </button>
             );
           })}

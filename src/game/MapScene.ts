@@ -519,6 +519,12 @@ export class MapScene extends Phaser.Scene {
       .setOrigin(0.5, 1)
       .setDepth(8500);
     this.nodeLabels.push({ node: n, text });
+    // 特色地点：头顶再标一个大字地名，远远就能看到
+    if (n.site) {
+      this.add.text(cx, cy - 34, `「${n.name}」`, {
+        fontFamily: FONT, fontSize: '13px', color: '#ffd86a', stroke: '#1b120c', strokeThickness: 4, resolution: 4,
+      }).setOrigin(0.5, 1).setDepth(8600);
+    }
     // 纯打怪的点位不弹页面：点它附近的怪物才弹（用户 10-22 要求）
     if (n.town || n.actions.some((id) => ACTIONS[id].kind !== 'combat')) {
       this.add.zone(cx, cy, T * 2.5, T * 2.5).setInteractive({ useHandCursor: true }).setData('node', n.id);

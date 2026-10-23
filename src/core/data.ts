@@ -9,8 +9,8 @@ import { FORM_FAMILY, isAnimal, SPECIES, type Family, type Species } from './bes
  */
 
 /** 世界大小：1080 → 1480 → 2188（用户 10-22 嫌挤，两次要求扩大） */
-export const MAP_W = 2188;
-export const MAP_H = 2188;
+export const MAP_W = 5088;
+export const MAP_H = 5088;
 
 export interface SkillInfo { name: string; color: string; group: SkillGroup; desc: string }
 
@@ -639,7 +639,10 @@ export interface MapNode {
   pond?: boolean;
   /** 打开仓库而不是任务列表 */
   opens?: 'bank';
+  /** 5088 大地图新增的特色地点：自带一片地貌、专属生物和首领，地图上标大字地名（用户 10-23） */
+  site?: { kind: SiteKind; r: number };
 }
+export type SiteKind = 'islands' | 'bamboo' | 'saltflat' | 'crater' | 'fungal' | 'glacier' | 'obsidian' | 'starabyss';
 
 const at = (u: number, v: number) => ({ x: Math.round(u * (MAP_W - 1)), y: Math.round(v * (MAP_H - 1)) });
 
@@ -648,6 +651,8 @@ const wild = (id: string, name: string, u: number, v: number, region: RegionId, 
   const lvls = actions.map((a) => actionList.find((x) => x.id === a)!.level);
   return { id, name, ...at(u, v), region, lv: [Math.min(...lvls), Math.max(...lvls)], sprite, actions, pond };
 };
+
+const site = (n: MapNode, kind: SiteKind, r: number): MapNode => ({ ...n, site: { kind, r } });
 
 /** 镇中心：原来 1080 地图上的 (518, 529)，按比例放到新地图 */
 export const TOWN_CENTER = { x: Math.round((518 * MAP_W) / 1080), y: Math.round((529 * MAP_H) / 1080) };
@@ -748,6 +753,16 @@ export const NODES: MapNode[] = [
   // 冰封雪原
   wild('tundra_pines', '冻原松林', 0.31, 0.05, 'snow', 'tree', [chop(2, '_tundra'), hunt(3)]),
   wild('ice_cavern', '冰晶洞窟', 0.60, 0.05, 'snow', 'ore', [mine(4, '_cavern'), hunt(5, '_cavern')]),
+
+  // ---- 5088 大地图新增的特色地点（用户 10-23）：每处一片新地貌、2-4 种专属生物和一个首领 ----
+  site(wild('isles', '千岛湖', 0.40, 0.66, 'town', 'boss', [fishAt('crucian', '_isles'), fishAt('bighead', '_isles')]), 'islands', 120),
+  site(wild('bamboo', '雾隐竹海', 0.07, 0.64, 'woodland', 'boss', [chop(2, '_bamboo'), herb('fire_bloom', '_bamboo')]), 'bamboo', 110),
+  site(wild('saltflat', '盐晶荒原', 0.85, 0.43, 'coast', 'boss', [mine(3, '_salt'), cotton(3, '_salt')]), 'saltflat', 120),
+  site(wild('crater', '碎星陨坑', 0.84, 0.27, 'highland', 'boss', [mine(4, '_meteor')]), 'crater', 100),
+  site(wild('fungal', '菌丝深谷', 0.14, 0.12, 'giantwood', 'boss', [herb('moon_herb', '_fungal'), cotton(4, '_fungal')]), 'fungal', 110),
+  site(wild('glacier', '冰川裂谷', 0.47, 0.15, 'snow', 'boss', [mine(5, '_glacier'), hunt(5, '_glacier')]), 'glacier', 120),
+  site(wild('obsidian', '黑曜火山群', 0.88, 0.80, 'lava', 'boss', [mine(6, '_obsidian'), hunt(6, '_obsidian')]), 'obsidian', 120),
+  site(wild('starabyss', '星渊祭坛', 0.47, 0.80, 'abyss', 'boss', [mine(7, '_star'), cotton(7, '_star')]), 'starabyss', 110),
 ];
 
 /**
@@ -758,7 +773,13 @@ export const NODES: MapNode[] = [
   const load = new Map<MapNode, number>();
   const mid = (n: MapNode) => (n.lv[0] + n.lv[1]) / 2;
   for (const sp of SPECIES) {
-    const pool = NODES.filter((n) => !n.town && n.region === sp.region);
+    // 新地点的专属生物住在自己的地点；老生物不往新地点分，原来的分布不变
+    const home = sp.home && NODES.find((n) => n.id === sp.home);
+    if (home) {
+      home.actions.push(fight(sp.id));
+      continue;
+    }
+    const pool = NODES.filter((n) => !n.town && !n.site && n.region === sp.region);
     const best = pool.reduce((a, b) => {
       const cost = (n: MapNode) => Math.abs(mid(n) - sp.level) + (load.get(n) ?? 0) * 6;
       return cost(b) < cost(a) ? b : a;

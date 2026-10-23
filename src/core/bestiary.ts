@@ -1,5 +1,5 @@
 /*
- * 怪物与生物图鉴：192 种，T1-T8 每阶 24 种（17 普通、5 精英、2 首领）。
+ * 怪物与生物图鉴：原 192 种（T1-T8 每阶 24 种），10-23 又加了 28 种（见 NEW_SPECIES）。
  * 这里只放设计表（名字、等级、区域、外形、特性、配色），
  * 属性、掉落和刷新点在 data.ts 里按统一规则算出来。
  */
@@ -84,10 +84,12 @@ export interface Species {
   /** 主色、点缀色 */
   color: string;
   accent: string;
+  /** 专属地点（新地点的生物只在那里出现） */
+  home?: string;
 }
 
 // [id, 名字, 等级, 区域, 外形, 级别 n/e/b, 特性（空格分隔）, 主色, 点缀色]
-type Row = [string, string, number, RegionId, Form, 'n' | 'e' | 'b', string, string, string];
+type Row = [string, string, number, RegionId, Form, 'n' | 'e' | 'b', string, string, string, string?];
 
 const T1: Row[] = [
   ['hen', '走地鸡', 1, 'town', 'hen', 'n', 'passive', '#f0ece0', '#d84030'],
@@ -305,11 +307,61 @@ const T8: Row[] = [
   ['abyss_lord', '深渊之主', 125, 'abyss', 'ghost', 'b', 'lifesteal berserk tough resist_melee', '#4a2a80', '#ff40ff'],
 ];
 
+/**
+ * 5088 大地图新增（用户 10-23）：8 处特色地点，20 种新生物 + 8 个新首领，最后一列是专属地点。
+ * 属性和掉落按统一规则从等级、级别、外形、特性算出来（见 data.ts）。
+ */
+const NEW_SPECIES: Row[][] = [
+  [],
+  [
+    ['isle_turtle', '千岛巨龟', 13, 'town', 'turtle', 'n', 'passive armored tough', '#5a8a6a', '#c8e0a0', 'isles'],
+    ['lake_otter', '湖畔水獭', 15, 'town', 'fox', 'n', 'swift evasive', '#7a5a3a', '#e8d0b0', 'isles'],
+    ['wave_croc', '浪涛鳄', 19, 'town', 'croc', 'e', 'armored fierce', '#3a6a5a', '#e0e090', 'isles'],
+    ['isle_eel', '千岛湖鳗王', 22, 'town', 'eel', 'b', 'tough lifesteal regen', '#2a5a7a', '#80f0ff', 'isles'],
+  ],
+  [
+    ['bamboo_viper', '竹叶青', 24, 'woodland', 'snake', 'n', 'venom swift', '#4ac04a', '#f0e060', 'bamboo'],
+    ['mist_mantis', '雾林螳螂', 27, 'woodland', 'mantis', 'n', 'evasive fierce', '#8ab08a', '#f0f0e0', 'bamboo'],
+    ['bamboo_bear', '竹林熊', 30, 'woodland', 'bear', 'e', 'tough berserk', '#e8e8e8', '#2a2a2a', 'bamboo'],
+    ['ape_king', '竹海猿王', 34, 'woodland', 'troll', 'b', 'fierce berserk swift', '#6a5a3a', '#e0c060', 'bamboo'],
+  ],
+  [
+    ['salt_scorpion', '盐地毒蝎', 32, 'coast', 'scorpion', 'n', 'venom armored', '#e8e0d0', '#a0c0e0', 'saltflat'],
+    ['crystal_lizard', '晶壳蜥', 36, 'coast', 'lizard', 'n', 'armored resist_ranged', '#c0e0f0', '#ffffff', 'saltflat'],
+    ['salt_worm', '盐漠沙虫', 40, 'coast', 'worm', 'e', 'tough thorns', '#d8c8a8', '#ff8060', 'saltflat'],
+    ['salt_crab', '盐晶巨蟹', 45, 'coast', 'crab', 'b', 'armored resist_melee tough', '#f0f0ff', '#80c0ff', 'saltflat'],
+  ],
+  [
+    ['star_slime', '星屑史莱姆', 44, 'highland', 'slime', 'n', 'regen resist_magic', '#4a4a8a', '#f0e080', 'crater'],
+    ['crater_gargoyle', '陨坑石像鬼', 50, 'highland', 'gargoyle', 'e', 'armored swift', '#5a5a6a', '#ff9040', 'crater'],
+    ['meteor_colossus', '陨星巨像', 58, 'highland', 'golem', 'b', 'armored tough thorns slow', '#3a3448', '#ffb040', 'crater'],
+    ['spore_bat', '孢子蝠', 45, 'giantwood', 'bat', 'n', 'swift venom', '#6a5a7a', '#a0ff80', 'fungal'],
+    ['glow_shroom', '荧光菇人', 47, 'giantwood', 'mushroom', 'n', 'regen weak_melee', '#4a8a9a', '#a0ffe0', 'fungal'],
+    ['rotroot_treant', '腐根树人', 52, 'giantwood', 'treant', 'e', 'tough venom', '#4a3a2a', '#a0e060', 'fungal'],
+    ['spore_mother', '菌母', 56, 'giantwood', 'mushroom', 'b', 'regen venom tough', '#8a3a8a', '#80ffc0', 'fungal'],
+  ],
+  [
+    ['rift_wolf', '冰裂狼', 58, 'snow', 'wolf', 'n', 'pack fierce', '#d0e8f8', '#4a7ab0', 'glacier'],
+    ['rift_mammoth', '冰川猛犸', 66, 'snow', 'mammoth', 'e', 'tough armored slow', '#8aa8c0', '#ffffff', 'glacier'],
+    ['ice_wyrm', '冰渊巨蠕', 72, 'snow', 'worm', 'b', 'tough armored berserk', '#a0d8f0', '#2a4a8a', 'glacier'],
+  ],
+  [
+    ['obsidian_scorpion', '黑曜蝎', 80, 'lava', 'scorpion', 'n', 'armored venom', '#1a1418', '#ff5030', 'obsidian'],
+    ['flame_wyvern', '炎翼飞龙', 88, 'lava', 'wyvern', 'e', 'fierce swift resist_magic', '#8a2a10', '#ffc040', 'obsidian'],
+    ['magma_titan', '熔核泰坦', 98, 'lava', 'golem', 'b', 'armored thorns tough fierce', '#2a1a18', '#ff6020', 'obsidian'],
+  ],
+  [
+    ['star_eye', '星渊魔眼', 105, 'abyss', 'eye', 'n', 'evasive lifesteal resist_ranged', '#1a1040', '#f0e0ff', 'starabyss'],
+    ['void_knight', '虚空骑士', 112, 'abyss', 'knight', 'e', 'armored fierce lifesteal', '#2a2050', '#b080ff', 'starabyss'],
+    ['star_devourer', '星渊吞噬者', 130, 'abyss', 'eye', 'b', 'lifesteal berserk tough resist_magic', '#100828', '#ffe080', 'starabyss'],
+  ],
+];
+
 const RANK: Record<string, Rank> = { n: 'normal', e: 'elite', b: 'boss' };
 
-export const SPECIES: Species[] = [T1, T2, T3, T4, T5, T6, T7, T8].flatMap((rows, tier) =>
-  rows.map(([id, name, level, region, form, rank, traits, color, accent]) => ({
-    id, name, tier, level, region, form, rank: RANK[rank], traits: traits.split(' ').filter(Boolean) as TraitId[], color, accent,
+export const SPECIES: Species[] = [T1, T2, T3, T4, T5, T6, T7, T8].map((rows, t) => [...rows, ...NEW_SPECIES[t]]).flatMap((rows, tier) =>
+  rows.map(([id, name, level, region, form, rank, traits, color, accent, home]) => ({
+    id, name, tier, level, region, form, rank: RANK[rank], traits: traits.split(' ').filter(Boolean) as TraitId[], color, accent, home,
   })),
 );
 
