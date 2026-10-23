@@ -405,3 +405,11 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 /* 制作页面的分类、阶级筛选 */
 .sheet .filter-row { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 10px 0; }
 .sheet .filter-row .pill { padding: 3px 8px; font-size: 12px; min-height: 26px; }
+
+/* 地点列表：区域标签 + 两列 */
+.node-page .region-tabs { gap: 4px; }
+.node-page .region-tabs .pill { padding: 3px 9px; font-size: 12px; min-height: 26px; }
+.node-list.grid2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; }
+.node-list.grid2 li { margin: 0; }
+.node-list.grid2 button { height: 100%; }
+.node-list button.cave { opacity: 0.6; }

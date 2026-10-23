@@ -179,7 +179,7 @@ export function App() {
   if (worldMap) side = <WorldMap s={s} onClose={() => setWorldMap(false)} onOpenNode={openNode} />;
   else if (tab === 'game' && monster) side = <MonsterSheet s={s} actionId={monster} onClose={() => setMonster(null)} />;
   else if (tab === 'game' && node) side = <ActionSheet s={s} nodeId={node} onClose={() => setNode(null)} />;
-  else if (tab === 'game' && wide) side = <NodeList onPick={openNode} />;
+  else if (tab === 'game' && wide) side = <NodeList s={s} onPick={openNode} />;
   else if (tab === 'char') side = <CharacterPanel s={s} />;
   else if (tab === 'bag') side = <BagPanel s={s} />;
   else if (tab === 'bank') side = <BankPanel s={s} />;

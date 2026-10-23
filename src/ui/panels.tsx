@@ -453,37 +453,58 @@ export function OfflineModal({ sum }: { sum: Summary }) {
 }
 
 /** 宽屏右侧的地点列表，按区域分组 */
-export function NodeList({ onPick }: { onPick: (id: string) => void }) {
-  const regions = Object.keys(REGIONS) as (keyof typeof REGIONS)[];
+/** 地点列表（电脑端右侧）：按区域分组成标签，点一个只看那一组，不用一直往下滚（用户 10-23） */
+type NodeGroup = { id: string; name: string; nodes: MapNode[] };
+const NODE_GROUPS: NodeGroup[] = (() => {
+  const groups: NodeGroup[] = [
+    { id: 'town1', name: '主城', nodes: NODES.filter((n) => n.town && n.region === 'town') },
+    { id: 'town2', name: '落霞城', nodes: NODES.filter((n) => n.town && n.region !== 'town') },
+  ];
+  for (const r of Object.keys(REGIONS) as (keyof typeof REGIONS)[]) {
+    const nodes = NODES.filter((n) => !n.town && n.region === r);
+    if (nodes.length) groups.push({ id: r, name: r === 'town' ? '城郊' : REGIONS[r].name, nodes });
+  }
+  return groups;
+})();
+const groupOfNode = (id: string) => NODE_GROUPS.find((g) => g.nodes.some((n) => n.id === id))?.id ?? 'town1';
+
+export function NodeList({ s, onPick }: { s: GameState; onPick: (id: string) => void }) {
+  // 默认打开角色所在的那一组
+  const [group, setGroup] = useState(() => {
+    const near = NODES.reduce((a, b) => (Math.hypot(b.x - s.loc.x, b.y - s.loc.y) < Math.hypot(a.x - s.loc.x, a.y - s.loc.y) ? b : a));
+    return groupOfNode(near.id);
+  });
+  const g = NODE_GROUPS.find((x) => x.id === group) ?? NODE_GROUPS[0];
   return (
-    <div className="page">
+    <div className="page node-page">
       <h2>地点</h2>
-      <p className="muted">点地图上的地点或下面的列表选择任务；点空地让角色走过去；右下角 ▦ 打开世界地图，可以寻路前往各个地点。</p>
-      {regions.map((r) => {
-        const nodes = NODES.filter((n) => n.region === r);
-        if (!nodes.length) return null;
-        return (
-          <section key={r}>
-            <h3>{REGIONS[r].name}</h3>
-            <ul className="node-list">
-              {nodes.map((n) => {
-                const kinds = [...new Set(n.actions.map((id) => {
-                  const a = ACTIONS[id];
-                  return a.kind === 'skill' ? SKILLS[a.skill].name : '战斗';
-                }))];
-                return (
-                  <li key={n.id}>
-                    <button onClick={() => onPick(n.id)}>
-                      <span className="row1"><b>{n.name}</b>{!n.town && <small className="muted">Lv{n.lv[0]}{n.lv[1] !== n.lv[0] && `-${n.lv[1]}`}</small>}</span>
-                      <small className="muted">{n.opens === 'bank' ? '打开仓库' : `${kinds.join(' · ')} · ${n.actions.length} 项`}</small>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        );
-      })}
+      <div className="chips-row region-tabs">
+        {NODE_GROUPS.map((x) => (
+          <button key={x.id} className={`pill ${x.id === g.id ? 'on' : ''}`} onClick={() => setGroup(x.id)}>{x.name}</button>
+        ))}
+      </div>
+      <ul className="node-list grid2">
+        {g.nodes.map((n) => {
+          const kinds = [...new Set(n.actions.map((id) => {
+            const a = ACTIONS[id];
+            return a.kind === 'skill' ? SKILLS[a.skill].name : '战斗';
+          }))];
+          return (
+            <li key={n.id}>
+              <button onClick={() => onPick(n.id)} className={n.cave ? 'cave' : ''}>
+                <span className="row1">
+                  <b>{n.name.replace('落霞城·', '')}</b>
+                  {!n.town && !n.cave && <small className="muted">Lv{n.lv[0]}{n.lv[1] !== n.lv[0] && `-${n.lv[1]}`}</small>}
+                </span>
+                <small className="muted">
+                  {n.cave ? '大型洞窟 · 未开放' : n.opens === 'bank' ? '打开仓库' : `${kinds.join(' · ')} · ${n.actions.length} 项`}
+                </small>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="muted">点地图上的地点或列表选择任务；点空地让角色走过去；右下角 ▦ 打开世界地图，可以寻路前往各个地点。</p>
     </div>
   );
 }
