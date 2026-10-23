@@ -664,7 +664,7 @@ export const SPRITE_VARIANTS: Record<string, { base: string; swap: Record<string
 };
 
 export const NODE_MARKER: Record<string, string> = {
-  ore: 'ore', tree: 'tree', fish: 'fishspot', herb: 'herb', camp: 'camp', boss: 'boss', anvil: 'anvil',
+  ore: 'ore', tree: 'tree', fish: 'fishspot', herb: 'herb', camp: 'camp', boss: 'boss', anvil: 'anvil', furnace: 'fire',
   stove: 'fire', bench: 'workbench', bowyer: 'bowrack', potion: 'cauldron', enhance: 'pedestal',
   market: 'sign', farm: 'herb', bank: 'chest', dummy: 'scarecrow',
 };

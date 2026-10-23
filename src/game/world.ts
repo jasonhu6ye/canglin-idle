@@ -111,7 +111,7 @@ export const regionAt = (x: number, y: number): RegionId => REGION_IDS[regionIdx
 const T0 = townXY(0, 0);
 const tx = (x: number) => x + T0.x;
 const ty = (y: number) => y + T0.y;
-export const PLAZA = { x0: tx(145), y0: ty(148), x1: tx(190), y1: ty(189) };
+export const PLAZA = { x0: tx(145), y0: ty(148), x1: tx(195), y1: ty(189) };
 const inPlaza = (x: number, y: number) => x >= PLAZA.x0 && x <= PLAZA.x1 && y >= PLAZA.y0 && y <= PLAZA.y1;
 /** 城镇周围的四块田：田垄范围和中间留空给地点标记的位置 */
 const FARMS = [
@@ -298,13 +298,14 @@ for (const n of NODES) {
 
 export type BuildingKind =
   | 'bank' | 'hall' | 'smithy' | 'inn' | 'workshop' | 'bowyer' | 'apothecary' | 'tower'
-  | 'house' | 'house2' | 'house3' | 'stall' | 'windmill' | 'fountain' | 'barn' | 'well';
+  | 'house' | 'house2' | 'house3' | 'stall' | 'windmill' | 'fountain' | 'barn' | 'well' | 'furnace';
 export interface Building { kind: BuildingKind; x: number; y: number; w: number; h: number }
 
 const B = (kind: BuildingKind, x: number, y: number, w: number, h: number): Building => ({ kind, x: tx(x), y: ty(y), w, h });
 export const BUILDINGS: Building[] = [
   B('bank', 148, 153, 6, 5), B('hall', 158, 150, 9, 7), B('smithy', 171, 153, 7, 5), B('inn', 181, 153, 6, 5),
   B('workshop', 148, 165, 6, 5), B('bowyer', 157, 166, 5, 4), B('apothecary', 174, 165, 6, 5), B('tower', 184, 164, 3, 6),
+  B('furnace', 188, 153, 5, 4),
   B('fountain', 165, 168, 4, 4), B('stall', 149, 178, 3, 2), B('stall', 153, 178, 3, 2), B('stall', 157, 178, 3, 2),
   B('house', 162, 177, 5, 4), B('house2', 169, 177, 5, 4),
   // 镇外的民居和农舍

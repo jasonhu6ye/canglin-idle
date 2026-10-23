@@ -620,7 +620,7 @@ const filterIds = (prefix: string) => actionList.filter((a) => a.id.startsWith(p
 // ---- 地图点位 ----
 
 export type NodeSprite =
-  | 'ore' | 'tree' | 'fish' | 'herb' | 'camp' | 'boss' | 'anvil' | 'stove' | 'bench' | 'bowyer' | 'potion' | 'enhance'
+  | 'ore' | 'tree' | 'fish' | 'herb' | 'camp' | 'boss' | 'anvil' | 'furnace' | 'stove' | 'bench' | 'bowyer' | 'potion' | 'enhance'
   | 'market' | 'farm' | 'bank' | 'dummy';
 
 export interface MapNode {
@@ -665,7 +665,9 @@ const town = (id: string, name: string, x: number, y: number, sprite: NodeSprite
 export const NODES: MapNode[] = [
   // 城镇：坐标与 world.ts 里的建筑对齐（建筑门口下方一格）
   town('bank', '仓库', 151, 158, 'bank', [], { opens: 'bank' }),
-  town('smithy', '铁匠铺', 174, 158, 'anvil', filterIds('smelt_').concat(filterIds('smith_'))),
+  town('smithy', '铁匠铺', 174, 158, 'anvil', filterIds('smith_')),
+  // 熔炉：炼锭单独一座建筑（用户 10-23），铁匠铺只管打造
+  town('furnace', '熔炉', 190, 157, 'furnace', filterIds('smelt_')),
   town('kitchen', '灶台', 184, 158, 'stove', filterIds('cook_')),
   town('workshop', '工坊', 151, 170, 'bench', filterIds('tan_').concat(filterIds('weave_'), filterIds('craft_'))),
   town('bowyer', '制弓台', 159, 170, 'bowyer', filterIds('plank_').concat(filterIds('fletch_'))),

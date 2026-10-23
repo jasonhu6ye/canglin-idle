@@ -24,7 +24,7 @@ export const setSpeedMultiplier = (m: number) => {
 
 const DRAG_THRESHOLD = 8;
 const FONT = '"PingFang SC","Microsoft YaHei",sans-serif';
-const CHIMNEY: Record<string, boolean> = { hall: true, smithy: true, inn: true, house: true, house3: true };
+const CHIMNEY: Record<string, boolean> = { furnace: true, hall: true, smithy: true, inn: true, house: true, house3: true };
 
 export const NODE_CLICK = 'node-click';
 
@@ -318,7 +318,19 @@ export class MapScene extends Phaser.Scene {
       if (b.kind === 'fountain') this.sparkle(bx, by - 26, 18);
       if (b.kind === 'tower') this.addGlow(bx, by - img.height + 12, 0xa070ff, 30);
       if (b.kind === 'smithy') this.addGlow(bx - 26, by - 10, 0xff7a2a, 26);
+      if (b.kind === 'furnace') this.furnaceFx(bx + 1, by - 13);
       if (CHIMNEY[b.kind]) this.smoke(bx - img.width / 2 + img.width - 11, by - img.height + 2);
+    });
+  }
+
+  /** 熔炉口：一闪一闪的火光，偶尔蹦火星 */
+  private furnaceFx(x: number, y: number) {
+    this.addGlow(x, y, 0xff8a2a, 34).base = 0.8;
+    this.time.addEvent({
+      delay: 380, loop: true, callback: () => {
+        const p = this.add.image(x + (Math.random() - 0.5) * 14, y + 4, 'p-ember').setDepth(9000);
+        this.tweens.add({ targets: p, y: y - 10 - Math.random() * 14, x: p.x + (Math.random() - 0.5) * 16, alpha: 0, duration: 700 + Math.random() * 400, onComplete: () => p.destroy() });
+      },
     });
   }
 

@@ -1,5 +1,5 @@
 import { hash, type BuildingKind, type PropKind } from './world';
-import { Pix } from './pix';
+import { Pix, mix, phash } from './pix';
 
 /*
  * 程序画的像素装饰物和建筑：先在一个颜色数组上画形状，最后统一描一圈深色描边，
@@ -553,6 +553,92 @@ function barn() {
   return p;
 }
 
+/** 熔炉：砖砌窑身 + 发光炉口 + 高烟囱，左边棚下堆煤，右边码着锭（用户 10-23 要求单独一座炼锭建筑） */
+function furnace(wTiles: number, hTiles: number) {
+  const W = wTiles * 16;
+  const H = hTiles * 16 + 18;
+  const p = new Pix(W + 2, H);
+  const bottom = H - 2;
+  const cx = W / 2 + 1;
+  const BRICK = ['#4a2e26', '#6e4232', '#8a5640', '#a8704e'];
+  const STONE = ['#3e3a36', '#5a5650', '#7a766e', '#9a968c'];
+  // 烟囱（右上，和 MapScene 的冒烟位置对齐）
+  for (let y = 0; y < bottom - 20; y++) {
+    for (let x = W - 14; x < W - 6; x++) {
+      const lx = x - (W - 14);
+      const brick = (y % 4 === 3) || ((lx + (Math.floor(y / 4) % 2) * 2) % 4 === 0);
+      p.set(x, y, lx === 0 ? STONE[3] : lx === 7 ? STONE[0] : brick ? STONE[1] : STONE[2]);
+    }
+  }
+  p.rect(W - 15, 0, 10, 3, STONE[0]);
+  p.rect(W - 15, 0, 10, 1, STONE[3]);
+  // 窑身：下宽上窄的梯形，顶部圆拱
+  const top = 18;
+  const baseHalf = W * 0.36;
+  const topHalf = W * 0.22;
+  for (let y = top; y < bottom; y++) {
+    const t = (y - top) / (bottom - top);
+    let half = topHalf + (baseHalf - topHalf) * t;
+    if (y < top + 8) half *= Math.sqrt(1 - ((top + 8 - y) / 9) ** 2);
+    for (let x = Math.round(cx - half); x <= Math.round(cx + half); x++) {
+      const lx = x - (cx - half);
+      const s = lx / (half * 2);
+      const row = Math.floor((y - top) / 4);
+      const mortar = (y - top) % 4 === 3 || (Math.round(x + (row % 2) * 3) % 6 === 0);
+      const shade = s < 0.18 ? 3 : s > 0.8 ? 0 : 2;
+      p.set(x, y, mortar ? BRICK[Math.max(0, shade - 2)] : BRICK[shade === 2 && phash(x, y, 77) < 0.25 ? 1 : shade]);
+    }
+  }
+  // 窑顶的铁箍
+  p.rect(Math.round(cx - topHalf - 2), top + 9, Math.round(topHalf * 2 + 5), 2, '#3a3a40');
+  p.rect(Math.round(cx - topHalf - 2), top + 9, Math.round(topHalf * 2 + 5), 1, '#7a7a88');
+  // 炉口：拱形，里面从白热到橙红
+  const mw = 20;
+  const mh = 18;
+  const my = bottom - mh - 2;
+  for (let j = -2; j < mh + 2; j++) {
+    for (let i = -2; i < mw + 2; i++) {
+      const dx = (i - mw / 2 + 0.5) / (mw / 2 + 2);
+      const arch = j < 6 ? (j + 2) / 8 : 1;
+      if (Math.abs(dx) > Math.sqrt(Math.max(0, 1 - (1 - arch) ** 2)) + 0.02) continue;
+      p.set(cx - mw / 2 + i, my + j, STONE[j < 0 || i < 0 || i >= mw ? 3 : 1]);
+    }
+  }
+  for (let j = 0; j < mh; j++) {
+    for (let i = 0; i < mw; i++) {
+      const dx = (i - mw / 2 + 0.5) / (mw / 2);
+      const arch = j < 6 ? j / 6 : 1;
+      if (Math.abs(dx) > Math.sqrt(Math.max(0, 1 - (1 - arch) ** 2))) continue;
+      const heat = 1 - Math.abs(dx) * 0.6 - (1 - j / mh) * 0.5 + (phash(i, j, 91) - 0.5) * 0.25;
+      p.set(cx - mw / 2 + i, my + j, heat > 0.7 ? '#fff4b0' : heat > 0.5 ? '#ffc840' : heat > 0.3 ? '#ff8a2a' : heat > 0.12 ? '#d04a1e' : '#6a1e14');
+    }
+  }
+  // 炉口下的炭火和铁炉门
+  for (let i = 0; i < mw; i += 3) p.rect(cx - mw / 2 + i, bottom - 4, 2, 2, phash(i, 3, 5) < 0.5 ? '#2a1a14' : '#ff6a20');
+  p.rect(cx - mw / 2 - 4, bottom - 2, mw + 8, 2, STONE[0]);
+  p.rect(cx + mw / 2 + 2, my + 4, 3, mh - 4, '#3a3a40');
+  p.rect(cx + mw / 2 + 2, my + 4, 1, mh - 4, '#7a7a88');
+  // 左边的棚子 + 煤堆
+  p.rect(3, bottom - 22, 2, 22, '#5a3a22');
+  drawRoof(p, 0, bottom - 30, 22, 8, ROOF_BROWN);
+  p.blob(12, bottom - 4, 8, 4, ['#121014', '#24202a', '#3a3440', '#5a5468'], 31);
+  // 右边码锭：三层金属锭
+  const bars = ['#c87a4a', '#b8bcc4', '#8a8f99'];
+  for (let k = 0; k < 3; k++) {
+    for (let i = 0; i < 3 - k; i++) {
+      const x = W - 20 + i * 6 + k * 3;
+      const y = bottom - 3 - k * 3;
+      p.rect(x, y, 5, 3, bars[k]);
+      p.rect(x, y, 5, 1, mix(bars[k], '#ffffff', 0.5));
+      p.rect(x, y + 2, 5, 1, mix(bars[k], '#000000', 0.35));
+    }
+  }
+  // 门口的铁砧小件：坩埚
+  p.blob(W - 5, bottom - 14, 3.5, 3, ['#2a2a30', '#4a4a52', '#6a6a74', '#9a9aa8'], 33);
+  p.rect(W - 7, bottom - 16, 5, 1, '#ffb030');
+  return p.outline();
+}
+
 function well() {
   const p = new Pix(20, 30);
   p.blob(9.5, 23, 9, 5, ['#5a564e', '#7a766e', '#9a968c', '#b8b4a8'], 41);
@@ -581,6 +667,7 @@ export function paintBuilding(kind: BuildingKind, w: number, h: number, seed = 0
     case 'fountain': return fountain().canvas();
     case 'barn': return barn().canvas();
     case 'well': return well().canvas();
+    case 'furnace': return furnace(w, h).canvas();
   }
 }
 
