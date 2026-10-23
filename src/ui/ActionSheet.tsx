@@ -272,6 +272,19 @@ function TaskConfig({ s, action: selected, onDone, far }: { s: GameState; action
           {COUNTS.map((c) => <button key={c} className={count === c ? 'on' : ''} onClick={() => setCount(c)}>{c}</button>)}
         </div>
       )}
+      {modeType === 'count' && (
+        // 自定义数量（用户 10-23）：直接输入要做几次
+        <label className={`custom-count ${COUNTS.includes(count) ? '' : 'on'}`}>
+          <span>自定义</span>
+          <input type="number" inputMode="numeric" min={1} max={99999} placeholder="输入次数"
+            value={COUNTS.includes(count) ? '' : count}
+            onChange={(e) => {
+              const n = Math.floor(Number(e.target.value));
+              if (n >= 1) setCount(Math.min(99999, n));
+            }} />
+          <span className="muted">次</span>
+        </label>
+      )}
       {modeType === 'time' && (
         <div className="opts">
           {TIMES.map((m) => <button key={m} className={minutes === m ? 'on' : ''} onClick={() => setMinutes(m)}>{m >= 60 ? `${m / 60}小时` : `${m}分`}</button>)}

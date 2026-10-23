@@ -567,3 +567,6 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .fold-h { cursor: pointer; user-select: none; }
 .soon { font-style: normal; font-size: 11px; color: #ffb070; }
 .go .btn-like { display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.custom-count { display: flex; align-items: center; gap: 6px; margin: 4px 2px 2px; font-size: 13px; white-space: nowrap; }
+.custom-count input { flex: 1; min-width: 0; min-height: 34px; padding: 4px 8px; font: inherit; font-size: 16px; color: #fff3c4; background: #1b120c; border: 1px solid var(--edge); border-radius: 2px; }
+.custom-count.on input { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
