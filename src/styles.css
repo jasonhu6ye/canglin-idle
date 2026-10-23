@@ -103,7 +103,7 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .map-buttons .mount-btn img { image-rendering: pixelated; margin-top: -4px; }
 .map-buttons .mount-btn small { font-size: 9px; line-height: 1; margin-top: -3px; }
 
-.toasts { position: absolute; top: 8px; right: 8px; display: flex; flex-direction: column; gap: 6px; align-items: flex-end; pointer-events: none; }
+.toasts { position: absolute; top: 96px; right: 8px; display: flex; flex-direction: column; gap: 6px; align-items: flex-end; pointer-events: none; }
 .toast { padding: 4px 9px; font-size: 12px; animation: pop 0.25s ease-out; }
 .toast.gold { color: var(--gold); box-shadow: 0 0 0 2px var(--edge), inset 0 0 0 1px var(--gold), 0 0 12px rgba(232, 184, 74, 0.4); }
 @keyframes pop { from { transform: translateY(-6px); opacity: 0; } }
@@ -479,3 +479,11 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .log-pager { display: flex; align-items: center; gap: 4px; }
 .log-pager span { flex: 1; text-align: center; color: var(--muted); font-variant-numeric: tabular-nums; }
 .log-pager button:disabled { opacity: 0.35; }
+
+/* ---- 右上角昼夜时钟（像素画圆盘 + 木牌） ---- */
+.day-clock { position: absolute; top: 6px; right: 8px; z-index: 3; display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: auto; }
+.day-clock canvas { width: 72px; height: 72px; image-rendering: pixelated; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.55)); }
+.day-clock-label { background: var(--grain); box-shadow: var(--frame); border-radius: 2px; padding: 1px 6px; font-size: 11px; color: #e8dcc8; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
+.day-clock-label b { color: var(--gold); font-variant-numeric: tabular-nums; font-weight: normal; }
+.rain-dot { display: inline-block; width: 4px; height: 6px; background: #7ab8ff; border-radius: 50% 50% 50% 50% / 30% 30% 70% 70%; box-shadow: 0 0 0 1px #0e0805; }
+@media (max-width: 899px) { .day-clock canvas { width: 54px; height: 54px; } .toasts { top: 82px; } }
