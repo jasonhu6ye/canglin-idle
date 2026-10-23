@@ -432,3 +432,6 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .guild .ghost { opacity: 0.55; }
 .guild-perks { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
 .guild-perks > div { padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+
+.update-banner { position: fixed; left: 50%; top: 8px; transform: translateX(-50%); z-index: 30; padding: 8px 16px; font-size: 14px; font-weight: 700;
+  color: #2a1a08; background: linear-gradient(#ffe08a, #e8b84a); border: 2px solid #8a5a10; border-radius: 3px; box-shadow: 0 2px 10px rgba(0,0,0,0.5); cursor: pointer; }

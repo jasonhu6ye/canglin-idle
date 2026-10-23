@@ -13,6 +13,7 @@ import { TplIcon } from './ui/icons';
 import { ItemPopup, LootReveal } from './ui/ItemPopup';
 import { Guide, openGuide } from './ui/Guide';
 import { GuildPanel, onOpenGuild } from './ui/Guild';
+import { UpdateBanner } from './ui/UpdateBanner';
 import { BagPanel, BankPanel, CharacterPanel, MorePanel, NodeList, OfflineModal, SkillsPanel } from './ui/panels';
 import { WorldMap } from './ui/WorldMap';
 
@@ -261,6 +262,7 @@ export function App() {
       <ItemPopup s={s} />
       <LootReveal />
       <Guide />
+      <UpdateBanner />
     </div>
   );
 }
