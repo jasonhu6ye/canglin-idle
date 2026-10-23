@@ -4,7 +4,7 @@ import { QUESTS, questProgress, questText } from '../core/quests';
 import { actionDuration, combatLevel, rainBonus, isBankId, level, maxHp, removeTask, resumeWork, toggleMount, weaponStyle } from '../core/sim';
 import { wolfIconUrl } from '../game/wolfArt';
 import { openCombatLog } from './CombatLog';
-import type { BuffKind, GameState, SkillId } from '../core/types';
+import type { GameState, SkillId } from '../core/types';
 import { HERO_W, outfitOf, paintHeroSheet } from '../game/hero';
 import { store } from '../store';
 import { emitToGame } from './GameCanvas';
@@ -128,13 +128,6 @@ export function StatusChips({ s, extra, log }: { s: GameState; extra?: ReactNode
     <div className="chips">
       {extra}
       {body && <div className="chip">{body}</div>}
-      {Object.keys(s.buffs ?? {}).length > 0 && (
-        <div className="chip buffs">
-          {(Object.entries(s.buffs ?? {}) as [BuffKind, { pct: number; ms: number }][]).map(([k, b]) => (
-            <span key={k}>{BUFF_SHORT[k]} +{Math.round(b.pct * 100)}% <em>{Math.ceil(b.ms / 60000)}分</em></span>
-          ))}
-        </div>
-      )}
       {log || <button className="chip dim log-chip" title="日志 (L)" onClick={openCombatLog}>⚔ 击杀 {fmtNum(s.stats.kills)} · 阵亡 {s.stats.deaths} · <u>展开日志 ▸</u></button>}
     </div>
   );
@@ -158,7 +151,6 @@ export function MapButtons({ s, onWorldMap }: { s: GameState; onWorldMap: () => 
   );
 }
 
-const BUFF_SHORT: Record<BuffKind, string> = { atk: '命中', str: '伤害', def: '防御', speed: '速度', xp: '经验' };
 
 /** 新手任务卡片：当前目标、进度、去做；可以收起成一行（用户 10-23） */
 export function QuestCard({ s, onGo }: { s: GameState; onGo: (nodeId: string) => void }) {

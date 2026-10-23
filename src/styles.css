@@ -544,3 +544,13 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .news-body h3 { margin: 10px 0 4px; font-size: 14px; }
 .news-body ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.6; }
 .wm-legend i.stone-mark.off { background: #ff9a2a; }
+
+/* 增益栏：时钟左边 */
+.buff-bar { position: absolute; top: 10px; right: 92px; z-index: 3; display: flex; gap: 4px; flex-direction: row-reverse; }
+.buff-ico { width: 30px; padding: 2px 0 1px; display: flex; flex-direction: column; align-items: center; gap: 1px; background: #1b120ce0; border: 2px solid; border-radius: 3px; box-shadow: 0 0 0 1px #000; cursor: pointer; }
+.buff-ico img { width: 18px; height: 18px; image-rendering: pixelated; }
+.buff-ico small { font-size: 9px; line-height: 1; color: #fff3c4; font-variant-numeric: tabular-nums; }
+.buff-ico.dim { opacity: 0.55; }
+.buff-ico.on { box-shadow: 0 0 0 1px #000, 0 0 8px var(--gold); }
+.buff-tip { position: absolute; top: 44px; right: 0; width: 200px; padding: 6px 8px; display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+@media (max-width: 899px) { .buff-bar { right: 6px; top: 84px; } .buff-ico { width: 27px; } .buff-ico img { width: 16px; height: 16px; } .buff-tip { top: 40px; } .toasts { top: 126px; } }

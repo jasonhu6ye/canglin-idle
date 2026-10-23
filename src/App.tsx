@@ -14,6 +14,7 @@ import { TplIcon } from './ui/icons';
 import { ItemPopup, LootReveal } from './ui/ItemPopup';
 import { Guide, openGuide } from './ui/Guide';
 import { News } from './ui/News';
+import { BuffBar } from './ui/BuffBar';
 import { GuildPanel, onOpenGuild } from './ui/Guild';
 import { CombatLog, onOpenCombatLog } from './ui/CombatLog';
 import { UpdateBanner } from './ui/UpdateBanner';
@@ -249,6 +250,7 @@ export function App() {
         {banner && <div key={banner.key} className="region-banner">{REGIONS[banner.region].name}</div>}
         {boss && <div key={`b${boss.key}`} className="boss-banner"><small>首领</small>{boss.name}</div>}
         <DayClock region={region} />
+        <BuffBar s={s} region={region} />
         <div className="toasts">
           {toasts.map((t) => <div key={t.id} className={`toast ${t.gold ? 'gold' : ''}`}>{t.text}</div>)}
         </div>
