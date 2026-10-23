@@ -6,7 +6,7 @@ import { mix, phash, Pix } from './pix';
  * 每帧分成「后层」和「前层」两张，骑手夹在中间：侧面的远侧腿和尾巴在后，正面的尾巴在后，背面的头在后。
  */
 
-export const WOLF_W = 56;
+export const WOLF_W = 64;
 export const WOLF_H = 44;
 /** 脚底所在的行 */
 export const WOLF_FEET = 42;
@@ -85,6 +85,59 @@ function leg(p: Pix, hx: number, hy: number, a: number, bend: number, len: numbe
   paw(p, fx, fy, 1, R, dim);
 }
 
+/** 两节骨头的反向运动学：已知根部和末端，求中间关节；forward = 关节往前（+x）凸 */
+function ik(hx: number, hy: number, fx: number, fy: number, L1: number, L2: number, forward: boolean): [number, number, number, number] {
+  let dx = fx - hx;
+  let dy = fy - hy;
+  let d = Math.hypot(dx, dy);
+  const max = L1 + L2 - 0.05;
+  if (d > max) {
+    dx *= max / d;
+    dy *= max / d;
+    d = max;
+  }
+  const base = Math.atan2(dy, dx);
+  const A = Math.acos(Math.max(-1, Math.min(1, (L1 * L1 + d * d - L2 * L2) / (2 * L1 * d))));
+  const a = forward ? base - A : base + A;
+  return [hx + Math.cos(a) * L1, hy + Math.sin(a) * L1, hx + dx, hy + dy];
+}
+
+/** 前腿：肩 → 肘（往后凸）→ 腕 → 爪；fold 0-1 是抬脚时腕关节往后折的程度 */
+function foreLeg(p: Pix, sx: number, sy: number, px: number, py: number, fold: number, dim: number) {
+  const vx = 1 + (-3.4 - 1) * fold;
+  const vy = 3.6 + (1.0 - 3.6) * fold;
+  const [ex, ey, cx, cy] = ik(sx, sy, px - vx, py - vy, 9, 8.5, false);
+  limb(p, sx, sy, ex, ey, 3.4, 2.4, FUR, dim);
+  limb(p, ex, ey, cx, cy, 2.4, 1.9, FUR, dim);
+  limb(p, cx, cy, cx + vx, cy + vy, 1.9, 1.7, FUR, dim);
+  paw(p, cx + vx, cy + vy, 1, FUR, dim);
+}
+
+/** 后腿：髋 → 膝（往前凸）→ 跗（往后翘）→ 爪；push 0-1 是蹬地后脚掌往后甩的程度 */
+function hindLeg(p: Pix, hx: number, hy: number, px: number, py: number, push: number, dim: number) {
+  const vx = 2.2 + (-2.4 - 2.2) * push;
+  const vy = 5.6 + (4.4 - 5.6) * push;
+  const [kx, ky, jx, jy] = ik(hx, hy, px - vx, py - vy, 8.5, 8, true);
+  // 大腿肌肉
+  furBall(p, hx + (kx - hx) * 0.35, hy + (ky - hy) * 0.35, 4.2, 4.8, FUR, 13, dim, 0.15);
+  limb(p, kx, ky, jx, jy, 2.6, 1.9, FUR, dim);
+  limb(p, jx, jy, jx + vx, jy + vy, 1.9, 1.6, FUR, dim);
+  paw(p, jx + vx, jy + vy, 1, FUR, dim);
+}
+
+/** 周期插值：keys 首尾相接 */
+function loopKeys(k: [number, number][], t: number) {
+  const u = ((t % 1) + 1) % 1;
+  for (let i = 1; i < k.length; i++) {
+    if (u <= k[i][0]) {
+      const a = (u - k[i - 1][0]) / (k[i][0] - k[i - 1][0]);
+      const e = a * a * (3 - 2 * a);
+      return k[i - 1][1] + (k[i][1] - k[i - 1][1]) * e;
+    }
+  }
+  return k[k.length - 1][1];
+}
+
 /** 尾巴：一串由粗到细的毛团，黑灰相间 */
 function tail(p: Pix, pts: [number, number][], r0: number, dim = 0) {
   const n = pts.length;
@@ -138,7 +191,17 @@ interface SidePose {
   /** 坐下：后半身降低 */
   sit: number;
   ear: number;
+  /** 奔跑：身体伸展（肩和臀拉开多少像素）和前后俯仰（正数前高） */
+  stretch?: number;
+  pitch?: number;
+  /** 奔跑：四只爪子的位置（相对肩/臀的 x 偏移、离地高度）和关节折叠量；有它就按关节算腿 */
+  feet?: { dx: number; up: number; fold: number }[];
+  /** 尾巴往后飘（奔跑时） */
+  stream?: number;
 }
+
+/** 侧面整只狼往右挪，给尾巴和鼻尖留地方 */
+const OX = 4;
 
 function sideHead(p: Pix, hx: number, hy: number, P: SidePose) {
   // 远侧耳朵（暗）和近侧耳朵
@@ -192,18 +255,29 @@ function drawSide(back: Pix, front: Pix, P: SidePose) {
   const b = P.bob;
   const sit = P.sit;
   // 身体：肩在右、臀在左；坐下时臀部压低
-  const shX = 36, shY = 21 + b;
-  const hipX = 18 - sit * 2, hipY = 22 + b + sit * 9;
+  const st = P.stretch ?? 0;
+  const pitch = P.pitch ?? 0;
+  const shX = OX + 36 + st / 2, shY = 21 + b - pitch;
+  const hipX = OX + 18 - st / 2 - sit * 2, hipY = 22 + b + pitch + sit * 9;
+  const F = P.feet;
+  // 爪子位置：肩、臀的「静止位置」加偏移，这样身体伸缩时爪子不会跟着滑
+  const foot = (k: number, front: boolean) => [OX + (front ? 37 : 19) + F![k].dx, WOLF_FEET - F![k].up] as const;
   // ---- 后层：远侧两条腿、尾巴 ----
   const tailBase: [number, number] = [hipX - 4, hipY - 3];
   const swing = P.tail;
+  const sm = P.stream ?? 0;
   const tailPts = sit > 0.5
     ? curve(tailBase, [hipX - 12, hipY + 8], [hipX + 4 + swing * 2, WOLF_FEET - 1], 9)
-    : curve(tailBase, [hipX - 15, hipY - 6 - swing * 4], [hipX - 11 + swing * 3, hipY - 18 - swing * 2], 10);
+    : curve(tailBase, [hipX - 15 - sm * 2, hipY - 6 - swing * 4 + sm * 3], [hipX - 11 - sm * 9 + swing * 3, hipY - 18 - swing * 2 + sm * 12], 10);
   tail(back, tailPts, 4.6);
   if (sit > 0.5) {
     leg(back, shX - 1, shY + 3, 0.05, 0.05, 8.5, false, 1);
     furBall(back, hipX + 2, hipY + 3, 5, 5, FUR, 5, 1);
+  } else if (F) {
+    const [fx, fy] = foot(1, true);
+    foreLeg(back, shX - 2, shY + 3, fx - 2, fy, F[1].fold, 1);
+    const [hx, hy] = foot(3, false);
+    hindLeg(back, hipX + 1, hipY + 2, hx - 1, hy, F[3].fold, 1);
   } else {
     leg(back, shX - 2, shY + 3, P.legs[1], P.bends[1], 8.5, false, 1);
     leg(back, hipX + 1, hipY + 2, P.legs[3], P.bends[3], 8.5, true, 1);
@@ -225,6 +299,11 @@ function drawSide(back: Pix, front: Pix, P: SidePose) {
     furBall(front, hipX + 3, hipY + 4, 5.5, 5, FUR, 6, 0, 0.2);
     paw(front, hipX + 9, WOLF_FEET, 1, FUR);
     leg(front, shX + 1, shY + 3, 0.08, 0.05, 8.5, false, 0);
+  } else if (F) {
+    const [hx, hy] = foot(2, false);
+    hindLeg(front, hipX + 3, hipY + 3, hx + 1, hy, F[2].fold, 0);
+    const [fx, fy] = foot(0, true);
+    foreLeg(front, shX + 1, shY + 3, fx + 1, fy, F[0].fold, 0);
   } else {
     leg(front, hipX + 3, hipY + 3, P.legs[2], P.bends[2], 8.5, true, 0);
     front.line(hipX + 3 + Math.sin(P.legs[2]) * 6, hipY + 9, hipX + 5 + Math.sin(P.legs[2]) * 6, hipY + 12, SCAR);
@@ -239,16 +318,65 @@ function drawSide(back: Pix, front: Pix, P: SidePose) {
   sideHead(front, shX + 10, shY - 9 - P.headUp, P);
 }
 
+/*
+ * 奔跑步态（狼的旋转式跑法，一个周期 = 一步）：
+ * 远后腿 → 近后腿 → 近前腿 → 远前腿 依次落地，每只脚着地约 1/3 周期，前腿离地后全身腾空一小段。
+ * 着地的爪子匀速往后划（和地面一起动，不打滑），离地后抬起、折腿、往前甩。
+ * 后腿着地时身体收拢、前身抬起；前腿着地时身体伸展、前身压低；腾空时最高。
+ */
+const RUN = {
+  /** 每只脚落地的时刻：近前、远前、近后、远后 */
+  touch: [0.42, 0.52, 0.12, 0.02],
+  duty: 0.34,
+  /** 着地时爪子从 +reach 划到 -reach */
+  reach: [8, 8, 7, 7],
+  lift: [8, 8, 6, 6],
+};
+
+/** 身体起伏（正数往下）：着地中段最低，腾空最高 */
+const runBob = (t: number) => 1.5 * Math.cos(TAU * (t - 0.45)) + 0.4 * Math.cos(TAU * 2 * (t - 0.22));
+
+function runFoot(t: number, k: number) {
+  const u = (((t - RUN.touch[k]) % 1) + 1) % 1;
+  const r = RUN.reach[k];
+  if (u < RUN.duty) {
+    const a = u / RUN.duty;
+    // 蹬地的后半段脚掌往后翻
+    return { dx: r - 2 * r * a, up: 0, fold: k >= 2 ? Math.max(0, a - 0.6) * 1.5 : 0 };
+  }
+  const a = (u - RUN.duty) / (1 - RUN.duty);
+  const e = a * a * (3 - 2 * a);
+  const front = k < 2;
+  // 前腿离地先往后上方折起再往前伸；后腿贴着肚子往前收
+  const up = RUN.lift[k] * Math.pow(Math.sin(Math.PI * (front ? Math.min(1, a * 1.15) : a)), front ? 0.8 : 1);
+  const fold = front ? Math.sin(Math.PI * Math.min(1, a * 1.4)) : Math.max(0, 0.6 - a) * 1.2;
+  return { dx: -r + 2 * r * e - (front ? Math.sin(Math.PI * a) * 2 : 0), up, fold: Math.min(1, fold) };
+}
+
 const gallop = (t: number): SidePose => {
-  const s = (o: number) => Math.sin(t * TAU + o);
-  const c = (o: number) => Math.cos(t * TAU + o);
+  const bob = runBob(t);
+  const pitch = 1.3 * Math.cos(TAU * (t - 0.28));
   return {
-    bob: Math.round(Math.sin(t * TAU * 2 + 0.6) * 1.2),
-    legs: [s(0) * 0.85, s(0.6) * 0.85, s(Math.PI) * 0.9, s(Math.PI + 0.6) * 0.9],
-    bends: [Math.max(0, c(0)) * 1.3, Math.max(0, c(0.6)) * 1.3, Math.max(0, -c(Math.PI)) * 0.6, Math.max(0, -c(Math.PI + 0.6)) * 0.6],
-    tail: Math.sin(t * TAU), headUp: Math.round(Math.sin(t * TAU + 1) * 1), mouth: 1, wind: 2, blink: false, sit: 0, ear: -1,
+    bob, pitch,
+    stretch: 3 * Math.cos(TAU * (t - 0.62)),
+    legs: [0, 0, 0, 0], bends: [0, 0, 0, 0],
+    feet: [0, 1, 2, 3].map((k) => runFoot(t, k)),
+    // 头比身体稳：抵消一大半起伏
+    tail: Math.sin(TAU * (t - 0.3)) * 0.8, stream: 1, headUp: 0.65 * (bob - pitch),
+    mouth: 1, wind: 2 + Math.sin(TAU * 2 * t) * 0.8, blink: false, sit: 0, ear: -1,
   };
 };
+
+/** 骑手的鞍位跟着狼背起伏（像素，正数往下），每帧一个，地图场景按狼的当前帧读 */
+export function wolfSaddle(key: string, i: number): number {
+  const a = WOLF_ANIMS.find((x) => x.key === key);
+  if (!a) return 0;
+  const t = i / a.frames;
+  if (key === 'wolf-run-side') return Math.round(runBob(t));
+  if (key === 'wolf-run-down' || key === 'wolf-run-up') return Math.round(runBob(t));
+  if (key.startsWith('wolf-idle')) return Math.sin(t * TAU) > 0.4 ? -1 : 0;
+  return 0;
+}
 
 const standing = (t: number, i: number): SidePose => ({
   bob: Math.sin(t * TAU) > 0.4 ? -1 : 0,
@@ -267,22 +395,35 @@ const howl = (t: number, i: number): SidePose => {
 
 // ---- 正面（朝镜头） ----
 
+/** 正面、背面奔跑时每只脚：抬多高、离身体多远（透视里着地的爪子慢慢往身体下面收） */
+function runLift(t: number, k: number) {
+  const f = runFoot(t, k);
+  return { up: f.up, slide: f.dx / 4 };
+}
+
 function drawFront(back: Pix, front: Pix, t: number, run: boolean, i: number) {
   const s = Math.sin(t * TAU);
-  const bob = run ? Math.round(Math.sin(t * TAU * 2) * 1.2) : Math.sin(t * TAU) > 0.4 ? -1 : 0;
-  const cx = 28;
+  const bob = run ? runBob(t) : Math.sin(t * TAU) > 0.4 ? -1 : 0;
+  const cx = WOLF_W / 2;
   // 后层：背和高高翘起的尾巴尖
   furBall(back, cx, 17 + bob, 10, 6, FUR, 61, 1);
   tail(back, curve([cx + 2, 15 + bob], [cx + 6 + s * 4, 8], [cx + 2 + s * 6, 1 + bob], 8), 3.6, 1);
-  // 前层：后腿露在两边，前腿交替抬起
-  const lift = (o: number) => (run ? Math.max(0, Math.sin(t * TAU + o)) * 4 : 0);
-  for (const [x, o, dim] of [[cx - 10, Math.PI, 1], [cx + 10, 0, 1]] as [number, number, number][]) {
-    limb(front, x, 30 + bob, x, WOLF_FEET - 2 - lift(o), 3, 2.2, FUR, dim);
-    paw(front, x, WOLF_FEET - lift(o), 0, FUR, dim);
+  // 前层：后腿露在两边（远一点，脚落在前腿后面），前腿在中间；按奔跑步态依次抬落
+  // 镜头里的右边是狼的左边：近侧（k=0、2）放左边
+  const legAt = (k: number) => (run ? runLift(t, k) : { up: 0, slide: 0 });
+  for (const [x, k] of [[cx - 10, 2], [cx + 10, 3]] as [number, number][]) {
+    const L = legAt(k);
+    const fy = WOLF_FEET - 3 - L.up * 0.8 + L.slide * 0.4;
+    limb(front, x, 30 + bob, x, fy - 2, 3, 2.2, FUR, 1);
+    paw(front, x, fy, 0, FUR, 1);
   }
-  for (const [x, o] of [[cx - 5, 0], [cx + 5, Math.PI]] as [number, number][]) {
-    limb(front, x, 28 + bob, x, WOLF_FEET - 2 - lift(o), 3.2, 2.4, FUR);
-    paw(front, x, WOLF_FEET - lift(o), 0, FUR);
+  for (const [x, k] of [[cx - 5, 0], [cx + 5, 1]] as [number, number][]) {
+    const L = legAt(k);
+    // 抬起的前腿腕关节往后折：小腿变短、爪子朝后（看不到趾甲）
+    const fy = WOLF_FEET - L.up * 1.0 - L.slide * 0.5;
+    limb(front, x, 28 + bob, x, fy - 2, 3.2, 2.4, FUR);
+    if (L.up > 3) furBall(front, x, fy - 1, 2.4, 1.8, FUR, 12, 1, 0.1);
+    else paw(front, x, fy, 0, FUR);
   }
   // 胸前一大圈银白鬃毛
   furBall(front, cx, 24 + bob, 13, 9, MANE, 71, 0, 0.5);
@@ -324,8 +465,8 @@ function drawFront(back: Pix, front: Pix, t: number, run: boolean, i: number) {
 
 function drawBack(back: Pix, front: Pix, t: number, run: boolean) {
   const s = Math.sin(t * TAU);
-  const bob = run ? Math.round(Math.sin(t * TAU * 2) * 1.2) : Math.sin(t * TAU) > 0.4 ? -1 : 0;
-  const cx = 28;
+  const bob = run ? runBob(t) : Math.sin(t * TAU) > 0.4 ? -1 : 0;
+  const cx = WOLF_W / 2;
   // 后层：远处的头、耳朵和一圈鬃毛
   const hy = 12 + bob;
   for (const ex of [-1, 1]) {
@@ -338,32 +479,53 @@ function drawBack(back: Pix, front: Pix, t: number, run: boolean) {
   furBall(back, cx, hy + 6, 12, 6, MANE, 92, 0, 0.5);
   maneSpikes(back, cx, hy + 6, 11, 5, Math.PI * 1.0, Math.PI * 2.0, 10, 3.5, 0, 7);
   furBall(back, cx, hy + 11, 9, 5, FUR, 93, 1);
-  // 前层：屁股、后腿和甩动的大尾巴
-  const lift = (o: number) => (run ? Math.max(0, Math.sin(t * TAU + o)) * 4 : 0);
-  for (const [x, o] of [[cx - 6, 0], [cx + 6, Math.PI]] as [number, number][]) {
-    limb(front, x, 30 + bob, x, WOLF_FEET - 2 - lift(o), 3.8, 2.3, FUR);
-    paw(front, x, WOLF_FEET - lift(o), 0, FUR);
-    // 脚底的肉垫朝后
-    if (lift(o) > 1) front.set(x, WOLF_FEET - lift(o), '#4a3438');
+  // 远处的前腿：从两条后腿中间露出来，交替抬落
+  const legAt = (k: number) => (run ? runLift(t, k) : { up: 0, slide: 0 });
+  for (const [x, k] of [[cx - 3, 1], [cx + 3, 0]] as [number, number][]) {
+    const L = legAt(k);
+    const fy = WOLF_FEET - 4 - L.up * 0.5;
+    limb(back, x, 28 + bob, x, fy - 1.5, 2.4, 1.9, FUR, 2);
+    paw(back, x, fy, 0, FUR, 2);
   }
-  furBall(front, cx, 27 + bob, 11, 8, FUR, 94, 0, 0.3);
+  // 前层：屁股、两条后腿和甩动的大尾巴
+  furBall(front, cx, 26 + bob, 11, 7.5, FUR, 94, 0, 0.3);
+  // 背对镜头：镜头里的左边是狼的左边（远侧 k=3），右边是近侧 k=2。腿画在屁股前面，抬起来看得清
+  for (const [x, k] of [[cx - 7, 3], [cx + 7, 2]] as [number, number][]) {
+    const L = legAt(k);
+    const side = x < cx ? -1 : 1;
+    // 后腿抬起时脚掌往后翻、朝镜头露出肉垫；蹬地时腿伸直
+    const fy = WOLF_FEET - L.up * 1.2 + Math.max(0, L.slide) * 0.3;
+    const sx = x + side * L.up * 0.3;
+    furBall(front, x, 30 + bob, 4.2, 4.6, FUR, 95 + k, 0, 0.15);
+    limb(front, x, 31 + bob, sx, fy - 2.5, 3.4, 2.2, FUR);
+    paw(front, sx, fy, 0, FUR);
+    if (L.up > 1.5) {
+      front.set(sx, fy - 1, '#5a4044');
+      front.set(sx - 1, fy - 1, '#4a3438');
+      front.set(sx + 1, fy - 1, '#4a3438');
+      front.set(sx, fy - 2, '#4a3438');
+    }
+  }
   // 背上的伤疤
   front.line(cx + 3, 22 + bob, cx + 7, 27 + bob, SCAR);
-  tail(front, curve([cx, 26 + bob], [cx + 10 + s * 6, 22], [cx + 6 + s * 9, 11 + bob], 9), 4.4);
+  // 尾巴高高翘起往两边甩，不挡住后腿
+  const tb = run ? 3 : 0;
+  tail(front, curve([cx, 25 + bob], [cx + 8 + s * 6, 18 - tb], [cx + 4 + s * 9, 7 + bob - tb], 9), 4.4);
 }
 
 // ---- 精灵表 ----
 
 export interface WolfAnim { key: string; frames: number; rate: number }
 export const WOLF_ANIMS: WolfAnim[] = [
-  { key: 'wolf-run-side', frames: 24, rate: 36 },
-  { key: 'wolf-run-down', frames: 16, rate: 24 },
-  { key: 'wolf-run-up', frames: 16, rate: 24 },
-  { key: 'wolf-idle-side', frames: 16, rate: 8 },
-  { key: 'wolf-idle-down', frames: 12, rate: 7 },
-  { key: 'wolf-idle-up', frames: 12, rate: 7 },
-  { key: 'wolf-sit', frames: 12, rate: 6 },
-  { key: 'wolf-howl', frames: 16, rate: 16 },
+  // 奔跑一步 0.5 秒（骑乘速度下），每方向 32 帧
+  { key: 'wolf-run-side', frames: 32, rate: 64 },
+  { key: 'wolf-run-down', frames: 32, rate: 64 },
+  { key: 'wolf-run-up', frames: 32, rate: 64 },
+  { key: 'wolf-idle-side', frames: 24, rate: 10 },
+  { key: 'wolf-idle-down', frames: 24, rate: 10 },
+  { key: 'wolf-idle-up', frames: 24, rate: 10 },
+  { key: 'wolf-sit', frames: 16, rate: 8 },
+  { key: 'wolf-howl', frames: 24, rate: 24 },
 ];
 
 function drawWolf(key: string, i: number, n: number): [Pix, Pix] {
@@ -418,8 +580,8 @@ export function wolfIconUrl() {
   c.width = 44;
   c.height = 44;
   const ctx = c.getContext('2d')!;
-  ctx.drawImage(b.canvas(), -8, 0);
-  ctx.drawImage(f.canvas(), -8, 0);
+  ctx.drawImage(b.canvas(), -12, 0);
+  ctx.drawImage(f.canvas(), -12, 0);
   iconUrl = c.toDataURL();
   return iconUrl;
 }

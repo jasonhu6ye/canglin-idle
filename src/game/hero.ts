@@ -705,10 +705,11 @@ const swing = (key: string, tool: HeroTool, from: number, to: number, crouch = 0
 
 /** 骑在狼背上（坐骑「Chinese can fly」）：大腿往前跨，小腿垂下，手往前抓鬃毛；跑起来随狼背起伏 */
 const ride = (dir: HeroDir, run: boolean): HeroAnim => ({
-  key: `ride${run ? '' : 'idle'}-${dir}`, frames: 8, rate: run ? 12 : 6,
+  // 跑的时候和狼的步子同一个周期（0.5 秒）；身体起伏由地图场景按狼背的高度整体挪
+  key: `ride${run ? '' : 'idle'}-${dir}`, frames: run ? 16 : 8, rate: run ? 32 : 6,
   pose: (t, i) => {
     const s = Math.sin(t * TAU);
-    const bob = run ? (s > 0.2 ? -1 : s < -0.6 ? 1 : 0) : Math.sin(t * TAU) > 0.4 ? 1 : 0;
+    const bob = 0;
     if (dir === 'side') {
       return {
         dir, bob, legF: 1.25, legB: 1.05, kneeF: 1.45, kneeB: 1.35,

@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { ACTIONS, CROPS, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, DANGER, dangerLevel, nodeOfAction, travelMs, WALK_TILES_PER_SEC, type MapNode } from '../core/data';
 import { actionDuration, combatLevel, combatStats, isBankId, leaveWork, maxHp, moveSpeed, resumeWork, setLoc, startWalk, teleport as teleportState, walkPos } from '../core/sim';
 import { MON_ANIMS, monsterFrameSize, paintMonsterSheet, type MonAnim } from './monsterArt';
-import { paintWolfSheet, WOLF_ANIMS, WOLF_FEET, WOLF_H, WOLF_W } from './wolfArt';
+import { paintWolfSheet, wolfSaddle, WOLF_ANIMS, WOLF_FEET, WOLF_H, WOLF_W } from './wolfArt';
 import { HERO_ANIMS, HERO_FEET, HERO_H, HERO_W, NPC_ANIMS, NPC_OUTFITS, outfitOf, paintHeroSheet, type HeroDir } from './hero';
 import type { MonsterDef, RegionId, Summary } from '../core/types';
 import { store } from '../store';
@@ -548,6 +548,7 @@ export class MapScene extends Phaser.Scene {
 
   update(time: number, delta: number) {
     this.syncMount();
+    this.stepRider();
     this.stepKeys(time);
     this.stepHold(time);
     this.stepWalker(delta);
@@ -1004,6 +1005,7 @@ export class MapScene extends Phaser.Scene {
 
   /** 点地面：角色走过去。任务照常在后台进行，只是不再播放干活动画 */
   private moveTo(tx: number, ty: number, marker = true) {
+    if (this.mountBusy) return;
     const path = findPath(this.playerTile(), { x: tx, y: ty });
     if (marker) this.showMarker(tx, ty, !!path);
     if (!path) return;
@@ -1259,7 +1261,8 @@ export class MapScene extends Phaser.Scene {
 
   private stepWalker(delta: number) {
     const w = this.walker;
-    if (!w) return;
+    // 上下坐骑的动作做完之前原地不动（用户 10-23）
+    if (!w || this.mountBusy) return;
     let move = (w.speed * Math.min(delta, 100)) / 1000;
     let dx = 0;
     let dy = 0;
@@ -1507,7 +1510,7 @@ export class MapScene extends Phaser.Scene {
 
   /** 骑手坐在狼背上的位置（相对脚底，侧面按朝右算） */
   private seat(dir: HeroDir) {
-    return dir === 'side' ? { x: -1, y: -16 } : dir === 'down' ? { x: 0, y: -19 } : { x: 0, y: -17 };
+    return dir === 'side' ? { x: -4, y: -16 } : dir === 'down' ? { x: 0, y: -19 } : { x: 0, y: -17 };
   }
 
   private playWolf(key: string) {
@@ -1519,10 +1522,24 @@ export class MapScene extends Phaser.Scene {
   private heroAnim(kind: 'walk' | 'idle') {
     const dir = this.facing;
     const tps = this.walker ? this.walker.speed / T : WALK_TILES_PER_SEC;
-    if (this.mountMode !== 'ride' || this.mountBusy) {
-      if (this.mountBusy) return;
-      this.playerBody.anims.timeScale = kind === 'walk' ? tps / WALK_TILES_PER_SEC : 1;
-      this.playerBody.play(`${kind}-${dir}`, true);
+    if (this.mountBusy) return;
+    if (this.mountMode !== 'ride') {
+      if (kind === 'idle') {
+        // 连续点地面走时两段路之间会先调一次待机：等一小会儿还没接着走才真的停下，步子不会从头开始
+        if (!this.idleAt) this.idleAt = this.time.now + 150;
+        if (this.time.now < this.idleAt) return;
+        this.idleAt = 0;
+        this.playerBody.anims.timeScale = 1;
+        this.playerBody.play(`idle-${dir}`, true);
+        return;
+      }
+      this.idleAt = 0;
+      this.playerBody.anims.timeScale = tps / WALK_TILES_PER_SEC;
+      // 转向时接着当前的步子走
+      const prev = this.playerBody.anims.currentAnim?.key ?? '';
+      const p = prev.startsWith('walk-') && prev !== `walk-${dir}` ? this.playerBody.anims.getProgress() : 0;
+      this.playerBody.play(`walk-${dir}`, true);
+      if (p > 0) this.playerBody.anims.setProgress(p);
       return;
     }
     const flip = dir === 'side' && this.playerBody.flipX;
@@ -1534,15 +1551,41 @@ export class MapScene extends Phaser.Scene {
     else this.player.moveBelow(this.playerBody, this.wolfFront);
     this.heroName.setY(7 - HERO_FEET + 1 + seat.y);
     if (kind === 'walk') {
-      this.playerBody.anims.timeScale = tps / (WALK_TILES_PER_SEC * 2);
-      this.wolfBack.anims.timeScale = this.wolfFront.anims.timeScale = tps / (WALK_TILES_PER_SEC * 2);
+      this.idleAt = 0;
+      const ts = tps / (WALK_TILES_PER_SEC * 2);
+      this.playerBody.anims.timeScale = this.wolfBack.anims.timeScale = this.wolfFront.anims.timeScale = ts;
+      // 转向时接着当前的步子跑，不从第一帧重来
+      const prev = this.wolfFront.anims.currentAnim?.key ?? '';
+      const p = prev.includes('wolf-run-') ? this.wolfFront.anims.getProgress() : 0;
+      const changed = !prev.includes(`wolf-run-${dir}`);
       this.playerBody.play(`ride-${dir}`, true);
       this.playWolf(`wolf-run-${dir}`);
+      if (changed && p > 0) {
+        for (const w of [this.wolfBack, this.wolfFront]) w.anims.setProgress(p);
+      }
     } else {
+      // 连续点地面走时，两段路之间会先调一次待机：等一小会儿还没接着走才真的停下，免得步子从头开始
+      if (!this.idleAt) this.idleAt = this.time.now + 150;
+      if (this.time.now < this.idleAt) return;
+      this.idleAt = 0;
       this.playerBody.anims.timeScale = this.wolfBack.anims.timeScale = this.wolfFront.anims.timeScale = 1;
       this.playerBody.play(`rideidle-${dir}`, true);
       this.playWolf(`wolf-idle-${dir}`);
     }
+  }
+
+  private idleAt = 0;
+
+  /** 骑着时：骑手跟着狼背起伏；延后的待机到点了就停下 */
+  private stepRider() {
+    if (this.mountBusy) return;
+    if (this.idleAt && !this.walker && !this.working && this.time.now >= this.idleAt) this.heroAnim('idle');
+    if (this.mountMode !== 'ride') return;
+    const name = (this.wolfFront.anims.currentFrame?.frame.name ?? '') as string;
+    const m = /^(wolf-[a-z]+-[a-z]+)-(\d+)-f$/.exec(name);
+    const dy = m ? wolfSaddle(m[1], +m[2]) : 0;
+    const seat = this.seat(this.facing);
+    this.playerBody.y = 7 + seat.y + dy;
   }
 
   /** 人回到地上（脚底在容器原点） */
