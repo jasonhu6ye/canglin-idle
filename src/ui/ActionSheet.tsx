@@ -300,9 +300,14 @@ function TaskConfig({ s, action: selected, onDone, far }: { s: GameState; action
           )}
         </>
       )}
-      {far && <p className="muted small-note">不在{far.name}旁边：点开始会自己走过去再做，也可以先加进队列。</p>}
+      {far && (
+        <div className="go far-bank">
+          <span className="muted">要走到{far.name}旁边才能开工（排进队列的会自己走过去）</span>
+          <button onClick={() => { store.requestWalk(far.id); onDone(); }}>寻路去{far.name}</button>
+        </div>
+      )}
       <div className="go">
-        <button className="primary" disabled={!selected} onClick={() => go(true)}>{far ? '寻路并开始' : '立即开始'}</button>
+        <button className="primary" disabled={!selected || !!far} onClick={() => go(true)}>立即开始</button>
         <button disabled={!selected || queueFull} onClick={() => go(false)}>
           {queueFull ? `队列已满 ${MAX_QUEUE}/${MAX_QUEUE}` : `加入队列 ${s.queue.length}/${MAX_QUEUE}`}
         </button>

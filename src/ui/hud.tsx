@@ -171,7 +171,7 @@ export function QuestCard({ s, onGo }: { s: GameState; onGo: (nodeId: string) =>
       <b className="gold">新手任务 {idx}/{QUESTS.length}</b> {questText(p.q)}
       {open && <span className="muted"> {p.have}/{p.q.goal.n} · 奖励 {p.q.reward} 金币</span>}
       {!open && <span className="muted"> {p.have}/{p.q.goal.n}</span>}
-      {node && <button className="pill" onClick={() => { if (!NODES.some((n) => n.id === p.q.hint)) store.focusAction = p.q.hint; onGo(node.id); }}>去做</button>}
+      {node && <button className="pill" onClick={() => onGo(node.id)}>去做</button>}
       {open && <div className="quest-tip">💡 {p.q.tip}</div>}
     </div>
   );
