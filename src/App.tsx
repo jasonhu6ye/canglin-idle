@@ -16,11 +16,11 @@ import { GuildPanel, onOpenGuild } from './ui/Guild';
 import { BagPanel, BankPanel, CharacterPanel, MorePanel, NodeList, OfflineModal, SkillsPanel } from './ui/panels';
 import { WorldMap } from './ui/WorldMap';
 
-type Tab = 'game' | 'char' | 'bag' | 'bank' | 'skills' | 'more';
+type Tab = 'game' | 'char' | 'bag' | 'bank' | 'skills' | 'guild' | 'more';
 /** 电脑端快捷键说明（用户 10-23 要求优化电脑端操作） */
 const SHORTCUTS: [string, string][] = [
   ['WASD / 方向键', '走路'], ['鼠标右键', '点地面走过去，按住一直朝光标走'], ['鼠标左键', '点地点、怪物查看信息或攻击；拖动移动镜头'], ['滚轮 / + -', '缩放地图'],
-  ['空格', '镜头回到角色'], ['M', '世界地图'], ['G', '公会'], ['Tab', '打开 / 关闭背包'], ['左键物品图标', '查看物品详情'], ['右键物品', '背包里穿上或放进补给栏，身上的卸下，仓库的取到背包'], ['1 - 6', '打开右侧面板，再按一次同一个收起'], ['Esc', '关闭当前页面，再按一次收起右侧面板'], ['?', '显示 / 隐藏这份说明'],
+  ['空格', '镜头回到角色'], ['M', '世界地图'], ['G', '公会'], ['Tab', '打开 / 关闭背包'], ['左键物品图标', '查看物品详情'], ['右键物品', '背包里穿上或放进补给栏，身上的卸下，仓库的取到背包'], ['1 - 7', '打开右侧面板，再按一次同一个收起'], ['Esc', '关闭当前页面，再按一次收起右侧面板'], ['?', '显示 / 隐藏这份说明'],
 ];
 
 const TABS: { id: Tab; icon: [string, string]; label: string }[] = [
@@ -29,6 +29,7 @@ const TABS: { id: Tab; icon: [string, string]; label: string }[] = [
   { id: 'bag', icon: ['bag', '#a07a50'], label: '背包' },
   { id: 'bank', icon: ['coins', '#f0c850'], label: '仓库' },
   { id: 'skills', icon: ['gem', '#e8b84a'], label: '技能' },
+  { id: 'guild', icon: ['shield', '#7a8ab8'], label: '公会' },
   { id: 'more', icon: ['rune', '#9a9aa8'], label: '更多' },
 ];
 
@@ -115,17 +116,17 @@ export function App() {
   const [monster, setMonster] = useState<string | null>(null);
   // 电脑端右侧面板默认收起，点标签、地点或按快捷键才展开（用户 10-23）
   const [panelOpen, setPanelOpen] = useState(false);
-  const [guild, setGuild] = useState(false);
-  useEffect(() => onOpenGuild(() => { setGuild(true); setPanelOpen(true); setWorldMap(false); }), []);
+
   const ui = useRef({ tab, node, monster, panelOpen, wide });
   ui.current = { tab, node, monster, panelOpen, wide };
   /** 点标签：电脑端再点一次同一个标签就收起 */
   const pickTab = useCallback((id: Tab) => {
     const u = ui.current;
-    setNode(null); setMonster(null); setWorldMap(false); setGuild(false);
+    setNode(null); setMonster(null); setWorldMap(false);
     if (u.wide && u.panelOpen && u.tab === id && !u.node && !u.monster) { setPanelOpen(false); return; }
     setTab(id); setPanelOpen(true);
   }, []);
+  useEffect(() => onOpenGuild(() => pickTab('guild')), [pickTab]);
   const toasts = useToasts();
   const { region, banner } = useRegion();
   const boss = useBossBanner();
@@ -166,9 +167,9 @@ export function App() {
       const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
       if (tag === 'input' || tag === 'textarea' || e.ctrlKey || e.metaKey || e.altKey) return;
       const k = e.key;
-      if (k >= '1' && k <= '6') pickTab(TABS[+k - 1].id);
+      if (k >= '1' && k <= '7') pickTab(TABS[+k - 1].id);
       else if (k === 'm' || k === 'M') setWorldMap((v) => !v);
-      else if (k === 'g' || k === 'G') { setGuild((v) => !v); setPanelOpen(true); setWorldMap(false); }
+      else if (k === 'g' || k === 'G') pickTab('guild');
       else if (k === 'Tab') {
         e.preventDefault();
         const u = ui.current;
@@ -179,7 +180,7 @@ export function App() {
         const u = ui.current;
         // 先关打开的地点/怪物页，没有的话收起面板
         if (!u.node && !u.monster) setPanelOpen(false);
-        openItem(null); setHelp(false); setWorldMap(false); setMonster(null); setNode(null); setGuild(false);
+        openItem(null); setHelp(false); setWorldMap(false); setMonster(null); setNode(null);
       } else if (k === '+' || k === '=') emitToGame('zoom', 0.5);
       else if (k === '-' || k === '_') emitToGame('zoom', -0.5);
       else if (k === ' ') { e.preventDefault(); emitToGame('recenter'); }
@@ -199,7 +200,6 @@ export function App() {
   const showSide = !wide || panelOpen;
   if (worldMap) side = <WorldMap s={s} onClose={() => setWorldMap(false)} onOpenNode={openNode} />;
   else if (!showSide) side = null;
-  else if (guild) side = <GuildPanel s={s} onClose={() => setGuild(false)} />;
   else if (tab === 'game' && monster) side = <MonsterSheet s={s} actionId={monster} onClose={() => setMonster(null)} />;
   else if (tab === 'game' && node) side = <ActionSheet s={s} nodeId={node} onClose={() => setNode(null)} />;
   else if (tab === 'game' && wide) side = <NodeList s={s} onPick={openNode} />;
@@ -207,6 +207,7 @@ export function App() {
   else if (tab === 'bag') side = <BagPanel s={s} />;
   else if (tab === 'bank') side = <BankPanel s={s} />;
   else if (tab === 'skills') side = <SkillsPanel s={s} onPick={openNode} />;
+  else if (tab === 'guild') side = <GuildPanel s={s} onClose={() => pickTab('game')} />;
   else if (tab === 'more') side = <MorePanel s={s} />;
 
   return (
