@@ -218,6 +218,10 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .worldmap { z-index: 8; }
 .zoom-btns { margin-left: auto; display: flex; gap: 4px; }
 .zoom-btns button { padding: 4px 9px; }
+.wm-scroll.grab { cursor: grab; }
+.wm-scroll.grab:active { cursor: grabbing; }
+.zoom-btns .zoom-val { min-width: 48px; }
+.wm-legend .wm-hint { margin-left: auto; }
 .wm-scroll { flex: 1; overflow: auto; -webkit-overflow-scrolling: touch; background: #0a0604; position: relative; }
 .wm-canvas { position: relative; aspect-ratio: 1; min-width: 100%; margin: 0 auto; box-shadow: inset 0 0 0 2px var(--gold-dark); }
 .wm-canvas img { width: 100%; height: 100%; display: block; }

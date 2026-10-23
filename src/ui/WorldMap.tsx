@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ACTIONS, DANGER, dangerLevel, MAP_H, MAP_W, MONSTERS, NODES, OLD_BOX, REGIONS, SKILLS, standOf, travelMs } from '../core/data';
 import { combatLevel, moveSpeed } from '../core/sim';
 import type { GameState, RegionId } from '../core/types';
@@ -8,6 +8,7 @@ import { overviewGround } from '../game/world';
 import { emitToGame } from './GameCanvas';
 import { MonsterIcon } from './Bestiary';
 import { store } from '../store';
+import { FINE_POINTER } from './itemOpen';
 
 /** 缩略图每像素代表几格 */
 const STEP = Math.max(3, Math.round(MAP_W / 500));
@@ -51,6 +52,8 @@ const LABELS: Record<RegionId, [number, number]> = {
 /** 城镇在世界地图上只标一个点 */
 const TOWN_MARK: Record<string, string> = { smithy: '城镇', market2: '落霞城' };
 
+const MAX_ZOOM = 8;
+
 export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: () => void; onOpenNode: (id: string) => void }) {
   const [zoom, setZoom] = useState(1);
   const [sel, setSel] = useState<string | null>(null);
@@ -59,13 +62,72 @@ export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: ()
   const cl = combatLevel(s);
   const me = { x: playerPos.x / MAP_W, y: playerPos.y / MAP_H };
 
-  // 放大后滚到角色位置
+  // 缩放后：滚轮缩放时让光标下的那一点不动，按钮缩放时以画面中心为准，第一次打开对准角色
+  const anchor = useRef<{ u: number; v: number; mx: number; my: number } | null>(null);
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const a = anchor.current ?? { u: me.x, v: me.y, mx: el.clientWidth / 2, my: el.clientHeight / 2 };
+    anchor.current = null;
+    el.scrollLeft = a.u * el.scrollWidth - a.mx;
+    el.scrollTop = a.v * el.scrollHeight - a.my;
+  }, [zoom]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** 以屏幕上 (mx,my) 这一点为中心缩放 */
+  const zoomAt = (next: number, mx?: number, my?: number) => {
+    const el = scroller.current;
+    const z = Math.max(1, Math.min(MAX_ZOOM, next));
+    if (!el || z === zoom) return;
+    const x = mx ?? el.clientWidth / 2;
+    const y = my ?? el.clientHeight / 2;
+    anchor.current = { u: (el.scrollLeft + x) / el.scrollWidth, v: (el.scrollTop + y) / el.scrollHeight, mx: x, my: y };
+    setZoom(z);
+  };
+  const zoomRef = useRef(zoomAt);
+  zoomRef.current = zoomAt;
+
+  // 电脑端：滚轮自由缩放（用户 10-23 要求），按住左键拖动地图
+  const drag = useRef<{ x: number; y: number; sl: number; st: number; moved: boolean } | null>(null);
   useEffect(() => {
     const el = scroller.current;
     if (!el) return;
-    el.scrollLeft = me.x * el.scrollWidth - el.clientWidth / 2;
-    el.scrollTop = me.y * el.scrollHeight - el.clientHeight / 2;
-  }, [zoom]); // eslint-disable-line react-hooks/exhaustive-deps
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const r = el.getBoundingClientRect();
+      const k = Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.04 : 0.0012));
+      zoomRef.current(zoomNow.current * k, e.clientX - r.left, e.clientY - r.top);
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
+  const zoomNow = useRef(zoom);
+  zoomNow.current = zoom;
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    const el = scroller.current!;
+    drag.current = { x: e.clientX, y: e.clientY, sl: el.scrollLeft, st: el.scrollTop, moved: false };
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    const d = drag.current;
+    if (!d) return;
+    const dx = e.clientX - d.x;
+    const dy = e.clientY - d.y;
+    if (!d.moved && Math.hypot(dx, dy) < 4) return;
+    d.moved = true;
+    const el = scroller.current!;
+    el.scrollLeft = d.sl - dx;
+    el.scrollTop = d.st - dy;
+  };
+  const onPointerUp = () => {
+    // 拖动过就不算点击地点
+    const moved = drag.current?.moved;
+    drag.current = null;
+    if (moved) {
+      const stop = (ev: Event) => { ev.stopPropagation(); ev.preventDefault(); };
+      window.addEventListener('click', stop, { capture: true, once: true });
+      setTimeout(() => window.removeEventListener('click', stop, { capture: true }), 0);
+    }
+  };
 
   const node = sel ? NODES.find((n) => n.id === sel)! : null;
   return (
@@ -74,10 +136,12 @@ export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: ()
         <button className="back" onClick={onClose}>‹ 返回</button>
         <h2>世界地图</h2>
         <span className="zoom-btns">
-          {[1, 2, 3].map((z) => <button key={z} className={zoom === z ? 'on' : ''} onClick={() => setZoom(z)}>{z}×</button>)}
+          <button onClick={() => zoomAt(zoom / 1.4)} disabled={zoom <= 1}>－</button>
+          <button className="zoom-val" onClick={() => zoomAt(1)} title="还原">{zoom.toFixed(1)}×</button>
+          <button onClick={() => zoomAt(zoom * 1.4)} disabled={zoom >= MAX_ZOOM}>＋</button>
         </span>
       </div>
-      <div className="wm-scroll" ref={scroller}>
+      <div className={`wm-scroll ${FINE_POINTER ? 'grab' : ''}`} ref={scroller} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerLeave={onPointerUp}>
         <div className="wm-canvas" style={{ width: `${zoom * 100}%` }}>
           <img src={url} alt="" draggable={false} />
           {(Object.keys(LABELS) as RegionId[]).map((r) => (
@@ -102,6 +166,7 @@ export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: ()
       <div className="wm-legend">
         {DANGER.map((d) => <span key={d.name}><i style={{ background: d.color }} />{d.name}</span>)}
         <span><i className="me" />你</span>
+        {FINE_POINTER && <span className="wm-hint">滚轮缩放 · 按住左键拖动</span>}
       </div>
       {node && (
         <NodeCard nodeId={node.id} cl={cl} onOpen={() => onOpenNode(node.id)}
