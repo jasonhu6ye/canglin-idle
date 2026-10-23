@@ -104,7 +104,8 @@ export class IslandScene extends Phaser.Scene {
     this.facing = 'down';
     this.body.play('idle-down', true);
     this.redraw(true);
-    this.recenter();
+    this.recenter(true);
+    this.cameras.main.centerOn(this.player.x, this.player.y);
   }
 
   /** 存档变了：出岛了就切回大地图；扩建了重画地面；摆的东西变了重画 */
@@ -431,8 +432,9 @@ export class IslandScene extends Phaser.Scene {
     this.game.events.on('recenter', onRecenter);
     this.unsub.push(() => { this.game.events.off('zoom', onZoom); this.game.events.off('recenter', onRecenter); });
   }
-  private recenter() {
-    if (!this.scene.isActive()) return;
+  /** 镜头跟着人；按钮触发时岛屿场景睡着就不管（进岛时场景还在 create，不能用 isActive 拦） */
+  private recenter(force = false) {
+    if (!force && !this.scene.isActive()) return;
     this.following = true;
     this.cameras.main.startFollow(this.player, false, 0.15, 0.15);
   }
