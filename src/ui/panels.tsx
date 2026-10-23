@@ -15,6 +15,7 @@ import { outfitOf } from '../game/hero';
 import { Icon, SkillIcon } from './icons';
 import { FINE_POINTER, openItem, showLoot } from './itemOpen';
 import { openGuide } from './Guide';
+import { openGuild } from './Guild';
 
 const GEAR_SLOTS: [EquipSlot, string][] = [
   ['head', '头部'], ['neck', '项链'], ['weapon', '武器'], ['body', '身体'], ['hands', '手部'], ['feet', '脚部'], ['ring', '戒指'],
@@ -347,6 +348,8 @@ export function MorePanel({ s }: { s: GameState }) {
   const got = Object.keys(s.seen).filter((id) => id !== 'coins' && ITEMS[id]).length;
   return (
     <div className="page">
+      <h2>公会 <small className="muted">多人功能开发中</small></h2>
+      <button className="primary" onClick={openGuild}>打开公会</button>
       <h2>新手指引</h2>
       <button onClick={openGuide}>重新查看新手指引</button>
       <h2>物品图鉴 <small className="muted">已收集 {got}/{total}</small></h2>
