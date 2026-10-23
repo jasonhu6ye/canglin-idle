@@ -7,6 +7,12 @@ import { useEffect, useState } from 'react';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-10-23-i', date: '10 月 23 日', title: '自动寻路会用传送石碑',
+    lines: [
+      '自动寻路（排队任务、回仓库、地图上的「寻路前往」）遇到远路时，如果先走到附近的传说石碑再传过去更快，会自动顺路传送。只用已经激活过的石碑，离线挂机也按这条路线算时间。',
+    ],
+  },
+  {
     id: '2026-10-23-g', date: '10 月 23 日', title: '五套限定外观、寻路修复',
     lines: [
       '衣橱新增五套限定外观：南瓜提灯人、幽蓝南瓜、白发魔骑、红黑小丑、骸骨术士。每套都有动态特效（火星、鬼火、红雾、纸花、灵光），骑狼也能穿。在「更多」页输入兑换码「为爱发电」解锁。',

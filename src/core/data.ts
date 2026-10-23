@@ -1149,6 +1149,25 @@ export function travelMs(from: { x: number; y: number }, to: { x: number; y: num
   return Math.round((Math.hypot(to.x - from.x, to.y - from.y) * 1.25 * 1000) / speed);
 }
 
+/** 自动寻路顺路用石碑传送时，传送本身算多久 */
+export const STONE_JUMP_MS = 3000;
+export interface Route { ms: number; via?: [string, string] }
+/**
+ * 自动寻路的路线（用户 10-23：寻路要会自己用传送石碑）：走到离起点最近的已激活石碑、传到离终点最近的已激活石碑、
+ * 再走过去，比直接走省两成以上时间才这么走。
+ */
+export function planRoute(stones: string[] | undefined, from: { x: number; y: number }, to: { x: number; y: number }, speed = WALK_TILES_PER_SEC): Route {
+  const direct = travelMs(from, to, speed);
+  const lit = WAYSTONES.filter((n) => stones?.includes(n.id));
+  if (lit.length < 2) return { ms: direct };
+  const nearest = (p: { x: number; y: number }) => lit.reduce((b, n) => (Math.hypot(n.x - p.x, n.y - p.y) < Math.hypot(b.x - p.x, b.y - p.y) ? n : b));
+  const a = nearest(from);
+  const b = nearest(to);
+  if (a === b) return { ms: direct };
+  const ms = travelMs(from, standOf(a), speed) + STONE_JUMP_MS + travelMs(standOf(b), to, speed);
+  return ms < direct * 0.8 ? { ms, via: [a.id, b.id] } : { ms: direct };
+}
+
 /** 世界地图危险度：按地点最强怪物和玩家战斗等级的差距 */
 export const DANGER = [
   { name: '安全', color: '#7cc46a' },

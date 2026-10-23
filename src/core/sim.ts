@@ -1,4 +1,4 @@
-import { ACTIONS, CROP_DEFS, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAP_W, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, travelMs, type MapNode } from './data';
+import { ACTIONS, CROP_DEFS, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAP_W, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, planRoute, travelMs, type MapNode } from './data';
 import { nextRandom } from './rng';
 import { stepQuests } from './quests';
 import { stepAutoFarm } from './farm';
@@ -461,8 +461,8 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     const bank = s.travel && isBankId(s.travel.to) ? NODES.find((n) => n.id === s.travel!.to)! : nearestBank(s.loc);
     const dest = standOf(bank);
     if (!s.travel || s.travel.to !== bank.id) {
-      const ms = travelMs(s.loc, dest, moveSpeed(s));
-      s.travel = { to: bank.id, ms, total: ms };
+      const r = planRoute(s.waystones, s.loc, dest, moveSpeed(s));
+      s.travel = { to: bank.id, ms: r.ms, total: r.ms, ...(r.via && { via: r.via }) };
     }
     const step = Math.min(budget, s.travel.ms);
     s.travel.ms -= step;
@@ -528,8 +528,8 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     const node = cands.find((n) => n.id === s.travel?.to) ?? nodeOfAction(task.action, s.loc)!;
     const dest = standOf(node);
     if (!s.travel || s.travel.to !== node.id) {
-      const ms = travelMs(s.loc, dest, moveSpeed(s));
-      s.travel = { to: node.id, ms, total: ms };
+      const r = planRoute(s.waystones, s.loc, dest, moveSpeed(s));
+      s.travel = { to: node.id, ms: r.ms, total: r.ms, ...(r.via && { via: r.via }) };
     }
     const step = Math.min(budget, s.travel.ms);
     s.travel.ms -= step;

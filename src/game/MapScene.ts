@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ACTIONS, CROP_DEFS, CROPS, cropsOfField, FARM_PLOTS, PLOT_BY_ID, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, DANGER, dangerLevel, nodeOfAction, nodesOfAction, WAYSTONES, travelMs, WALK_TILES_PER_SEC, type MapNode } from '../core/data';
+import { ACTIONS, CROP_DEFS, CROPS, cropsOfField, FARM_PLOTS, PLOT_BY_ID, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, DANGER, dangerLevel, nodeOfAction, nodesOfAction, planRoute, standOf, STONE_JUMP_MS, WAYSTONES, travelMs, WALK_TILES_PER_SEC, type MapNode, type Route } from '../core/data';
 import { unlockWaystone, useWaystone, WAYSTONE_REACH, actionDuration, combatLevel, combatStats, isBankId, leaveWork, maxHp, moveSpeed, resumeWork, setLoc, startWalk, teleport as teleportState, walkPos } from '../core/sim';
 import { pickSeed, plotGrowth, plotPhase, tendPlot } from '../core/farm';
 import { paintWaystone } from './waystoneArt';
@@ -205,10 +205,30 @@ export class MapScene extends Phaser.Scene {
       // 寻路去的就是当前工作的地点：等于继续工作
       if (n === nodeForAction(this.currentAction) && store.state.paused) return store.dispatch(resumeWork);
       const old = this.walker;
-      this.moveTo(standTile(n).x, standTile(n).y);
+      const dest = standTile(n);
       // 走到建筑、资源点、石碑旁边：自动打开它的页面（用户 10-23）
       const opens = n.town || n.waystone || n.farm || n.actions.some((a) => ACTIONS[a].kind !== 'combat');
-      if (opens && this.walker && this.walker !== old) this.arrive = () => this.game.events.emit(NODE_CLICK, n.id);
+      const onArrive = () => this.game.events.emit(NODE_CLICK, n.id);
+      // 远路自动顺路用已激活的传送石碑（用户 10-23）
+      const r: Route = n.waystone ? { ms: 0 } : planRoute(store.state.waystones, this.playerTile(), dest, moveSpeed(store.state));
+      if (r.via) {
+        const A = WAYSTONES.find((x) => x.id === r.via![0])!;
+        const a = standTile(A);
+        this.moveTo(a.x, a.y);
+        if (!this.walker || this.walker === old) return;
+        this.float(`顺路去${A.name}传送`, '#8ae8ff');
+        this.arrive = () => {
+          this.stoneJump(r.via![1]);
+          this.time.delayedCall(500, () => {
+            const before = this.walker;
+            this.moveTo(dest.x, dest.y);
+            if (opens && this.walker && this.walker !== before) this.arrive = onArrive;
+          });
+        };
+        return;
+      }
+      this.moveTo(dest.x, dest.y);
+      if (opens && this.walker && this.walker !== old) this.arrive = onArrive;
     };
     this.game.events.on('walkto', onWalkTo);
     this.takeWalk = () => {
@@ -1478,7 +1498,10 @@ export class MapScene extends Phaser.Scene {
         // 存档只记剩余时间，按比例估一个路上的位置
         const to = standTile(node);
         const k = st.travel.total ? 1 - st.travel.ms / st.travel.total : 1;
-        place({ x: st.loc.x + (to.x - st.loc.x) * k, y: st.loc.y + (to.y - st.loc.y) * k });
+        const via = st.travel.via && WAYSTONES.find((n) => n.id === st.travel!.via![1]);
+        // 走石碑的路线：传过去以前从起点算，传过去以后从第二座石碑算
+        const from = via && st.travel.total - st.travel.ms >= travelMs(st.loc, standOf(WAYSTONES.find((n) => n.id === st.travel!.via![0])!), moveSpeed(st)) + STONE_JUMP_MS ? standTile(via) : st.loc;
+        place(via ? from : { x: st.loc.x + (to.x - st.loc.x) * k, y: st.loc.y + (to.y - st.loc.y) * k });
       }
       this.goToTask(bank);
     } else {
@@ -1502,8 +1525,22 @@ export class MapScene extends Phaser.Scene {
     // 打怪直接走到那只怪的刷新点（交过手的都能准确找到）
     const a = toBank ? undefined : ACTIONS[this.currentAction ?? ''];
     const dest = (a?.kind === 'combat' && trackSpot(a.monster, true)) || standTile(node);
-    const path = findPath(this.playerTile(), dest) ?? [];
     const st = store.state;
+    const t0 = st.queue[0];
+    const supply = toBank && t0 && ACTIONS[t0.action]?.kind === 'combat' && !t0.stocked;
+    const done = () => {
+      this.clearRoute();
+      if (toBank) this.float(supply ? '补给完毕' : '已存入仓库', '#9ad8ff', true);
+      else this.startWorking();
+    };
+    // 顺路用传送石碑（存档里算好的路线）：先走到第一座石碑，传过去，再走完剩下的
+    const via = st.travel?.to === node.id ? st.travel.via : undefined;
+    if (via) {
+      if (toBank) this.float(supply ? '回仓库拿食物' : '背包满了，回仓库', '#e8b84a');
+      this.goViaStones(via, dest, done);
+      return;
+    }
+    const path = findPath(this.playerTile(), dest) ?? [];
     const stand = standTile(node);
     const atDest = st.loc.x === stand.x && st.loc.y === stand.y;
     // 存档里还在路上：按剩余时间匀速走完这条路
@@ -1519,14 +1556,48 @@ export class MapScene extends Phaser.Scene {
       speed = len / (ms / 1000);
     }
     this.drawRoute(path);
-    const t0 = st.queue[0];
-    const supply = toBank && t0 && ACTIONS[t0.action]?.kind === 'combat' && !t0.stocked;
     if (toBank) this.float(supply ? '回仓库拿食物' : '背包满了，回仓库', '#e8b84a');
+    this.walkPath(path, done, speed);
+  }
+
+  /** 自动寻路经过石碑：走到 a，传到 b，再走到 dest；快慢按存档里剩下的时间来，和离线结算一致 */
+  private goViaStones(via: [string, string], dest: { x: number; y: number }, done: () => void) {
+    const A = WAYSTONES.find((n) => n.id === via[0]);
+    const B = WAYSTONES.find((n) => n.id === via[1]);
+    const tr = store.state.travel;
+    if (!A || !B || !tr) return;
+    const elapsed = tr.total - tr.ms;
+    const t1 = travelMs(store.state.loc, standOf(A), moveSpeed(store.state));
+    const speedFor = (path: { x: number; y: number }[], ms: number) => (ms > 500 && path.length ? pathLength(this.playerTile(), path) / (ms / 1000) : undefined);
+    const leg2 = () => {
+      const path = findPath(this.playerTile(), dest) ?? [];
+      this.drawRoute(path);
+      this.walkPath(path, done, speedFor(path, store.state.travel?.ms ?? 0));
+    };
+    if (elapsed >= t1 + STONE_JUMP_MS) {
+      const b = standTile(B);
+      if (Math.hypot(this.playerTile().x - b.x, this.playerTile().y - b.y) > 40) this.player.setPosition(b.x * T + T / 2, b.y * T + T / 2);
+      leg2();
+      return;
+    }
+    const path = findPath(this.playerTile(), standTile(A)) ?? [];
+    this.drawRoute(path);
+    this.float(`顺路去${A.name}传送`, '#8ae8ff');
     this.walkPath(path, () => {
       this.clearRoute();
-      if (toBank) this.float(supply ? '补给完毕' : '已存入仓库', '#9ad8ff', true);
-      else this.startWorking();
-    }, speed);
+      // 一道光，人出现在另一座石碑旁
+      const out = this.add.image(this.player.x, this.player.y - 8, 'glow').setTint(0x6ad8f0).setBlendMode(Phaser.BlendModes.ADD).setDepth(D_FLOAT).setScale(0.2);
+      this.tweens.add({ targets: out, scale: 2, alpha: 0, duration: 600, onComplete: () => out.destroy() });
+      const b = standTile(B);
+      this.player.setPosition(b.x * T + T / 2, b.y * T + T / 2).setDepth(b.y * T + T / 2 + 1000);
+      this.cameras.main.centerOn(this.player.x, this.player.y);
+      this.recenterCameraOnly();
+      const flash = this.add.image(this.player.x, this.player.y - 8, 'glow').setTint(0x9ae8ff).setBlendMode(Phaser.BlendModes.ADD).setDepth(D_FLOAT).setScale(0.2);
+      this.tweens.add({ targets: flash, scale: 1.8, alpha: 0, duration: 700, onComplete: () => flash.destroy() });
+      this.float(`传送到${B.name}`, '#8ae8ff', true);
+      this.idle();
+      this.time.delayedCall(500, leg2);
+    }, speedFor(path, t1 - elapsed));
   }
 
   private route?: Phaser.GameObjects.Graphics;
