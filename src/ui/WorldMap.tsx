@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ACTIONS, DANGER, dangerLevel, MAP_H, MAP_W, MONSTERS, NODES, OLD_BOX, REGIONS, SKILLS, standOf, travelMs } from '../core/data';
-import { combatLevel } from '../core/sim';
+import { combatLevel, moveSpeed } from '../core/sim';
 import type { GameState, RegionId } from '../core/types';
 import { playerPos } from '../game/MapScene';
 import { GROUND_COLOR } from '../game/tiles';
@@ -136,7 +136,7 @@ function NodeCard({ nodeId, cl, onOpen, onWalk }: { nodeId: string; cl: number; 
         </span>
       )}
       <div className="go">
-        <button className="primary" onClick={onWalk}>寻路前往 · 约 {Math.ceil(travelMs(playerPos, standOf(n)) / 1000)} 秒</button>
+        <button className="primary" onClick={onWalk}>寻路前往 · 约 {Math.ceil(travelMs(playerPos, standOf(n), moveSpeed(store.state)) / 1000)} 秒</button>
         {!TOWN_MARK[n.id] && (n.town || skills.length > 0) && <button onClick={onOpen}>查看任务</button>}
       </div>
     </div>

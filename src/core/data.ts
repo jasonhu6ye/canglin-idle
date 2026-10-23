@@ -342,6 +342,12 @@ for (const j of JEWELS) {
   item(`${j.gem}_amulet`, `${j.name}项链`, 'gear', 220 + j.power * 40, { equip: { slot: 'neck', skill: 'hitpoints', level: j.level, attack: 0, strength: j.power, defence: 0 } });
 }
 
+/** 坐骑：测试服兑换码「中国人能飞」领取（用户 10-23 要求，名字用户改为 Chinese can fly） */
+item('mount_danmark', 'Chinese can fly', 'gear', 0, {
+  desc: '黑毛银鬃的巨狼，红眼，身上有旧伤疤。骑乘时移动速度 +100%。在「更多」页输入兑换码获得。',
+  equip: { slot: 'mount', skill: 'hitpoints', level: 1, attack: 0, strength: 0, defence: 0, move: 1 },
+});
+
 const HERB_FOR_TIER = ['green_herb', 'fire_bloom', 'moon_herb', 'silver_leaf', 'flame_heart', 'frost_lotus', 'frost_lotus', 'frost_lotus'];
 const FISH_FOR_TIER = ['raw_minnow', 'raw_trout', 'raw_cod', 'raw_eel', 'raw_ghostfish', 'raw_abyssfish', 'raw_abyssfish', 'raw_abyssfish'];
 const ENH_FOR_TIER = ['enh_basic', 'enh_basic', 'enh_mid', 'enh_mid', 'enh_mid', 'enh_high', 'enh_high', 'enh_legend'];

@@ -5,6 +5,7 @@ import { resIconUrl } from '../game/resArt';
 import { equipIconUrl } from '../game/equipArt';
 import { bannerIconUrl, chestIconUrl, luckyBagIconUrl, trophyIconUrl } from '../game/lootArt';
 import { openItem } from './itemOpen';
+import { wolfIconUrl } from '../game/wolfArt';
 import type { SkillId } from '../core/types';
 
 /*
@@ -928,6 +929,7 @@ function lootUrl(id: string): string | null {
 }
 
 function BareIcon({ item, size }: { item: string; size: number }) {
+  if (item.startsWith('mount_')) return <img className="icon" src={wolfIconUrl()} width={size} height={size} alt="" draggable={false} />;
   const res = resIconUrl(item) ?? equipUrl(item) ?? lootUrl(item);
   if (res) {
     const tier = ITEMS[item].tier!;

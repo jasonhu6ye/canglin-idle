@@ -37,6 +37,8 @@ describe('数据闭环', () => {
     }
     for (const m of Object.values(MONSTERS)) m.drops.forEach((d) => made.add(d.item));
     for (const it of Object.values(ITEMS)) it.opens?.pool.forEach((e) => made.add(e.item));
+    // 兑换码送的坐骑
+    made.add('mount_danmark');
     for (const it of Object.values(ITEMS)) {
       expect(made.has(it.id), `${it.name} 没有来源`).toBe(true);
       const usable = used.has(it.id) || !!it.equip || !!it.heals || !!it.ammo || !!it.opens || it.category === 'loot' || it.category === 'deco';

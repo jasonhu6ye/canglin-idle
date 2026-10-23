@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { ACTIONS, buffText, ITEMS, MONSTERS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, type MapNode } from '../core/data';
+import { ACTIONS, buffText, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, type MapNode } from '../core/data';
 import {
   atBank, atMarket, nearestBank, nearestMarket, BAG_SLOTS, BELT_CAP, beltSlotOf, eat, fromBelt, POTION_AT, toBelt, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip, openContainer,
   weaponStyle,
+  redeemCode, toggleMount,
 } from '../core/sim';
 import type { EquipSlot, GameState, ItemCategory, SkillId, Summary } from '../core/types';
 import { XP_TABLE, levelProgress, speedForLevel, SPEED_CAP, BONUS_PER_LEVEL } from '../core/xp';
@@ -60,8 +61,8 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
       {item.ammo && <span>{item.ammo.style === 'ranged' ? '箭矢' : '符文'} · 威力 +{item.ammo.power}</span>}
       {e && (
         <span className={canEquip ? '' : 'warn'}>
-          需要{SKILLS[e.skill].name} {e.level} 级
-          {e.speed ? ` · ${SKILLS[e.skill].name}速度 +${Math.round(e.speed * 100)}%` : ` · 攻 +${e.attack} 力 +${e.strength} 防 +${e.defence}${e.attackMs ? ` · 攻速 ${(e.attackMs / 1000).toFixed(1)} 秒` : ''}`}
+          {e.move ? `坐骑 · 骑乘时移动速度 +${Math.round(e.move * 100)}%` : `需要${SKILLS[e.skill].name} ${e.level} 级`}
+          {e.move ? '' : e.speed ? ` · ${SKILLS[e.skill].name}速度 +${Math.round(e.speed * 100)}%` : ` · 攻 +${e.attack} 力 +${e.strength} 防 +${e.defence}${e.attackMs ? ` · 攻速 ${(e.attackMs / 1000).toFixed(1)} 秒` : ''}`}
           {e.style && e.slot !== 'weapon' && `（攻、力只对${STYLE_NAME[e.style]}生效）`}
         </span>
       )}
@@ -197,7 +198,13 @@ export function CharacterPanel({ s }: { s: GameState }) {
       <div className="equip tools">
         {slot('mount', '暂无坐骑')}
       </div>
-      {!s.equipment.mount && <p className="muted">还没有坐骑。坐骑即将开放，以后得到的坐骑放在这一栏。</p>}
+      {!s.equipment.mount && <p className="muted">还没有坐骑。得到坐骑后从背包装备到这一栏（测试服可在「更多」页输入兑换码领取）。</p>}
+      {s.equipment.mount && (
+        <div className="go">
+          <button className={s.mounted ? '' : 'primary'} onClick={() => store.dispatch((g) => toggleMount(g))}>{s.mounted ? '下坐骑' : '骑乘'}{FINE_POINTER ? ' (R)' : ''}</button>
+          <span className="muted">{s.mounted ? `骑乘中，移动速度 +${Math.round((ITEMS[s.equipment.mount].equip?.move ?? 0) * 100)}%` : '未骑乘'}</span>
+        </div>
+      )}
       <h2>补给栏 <small className="muted">各放一种，最多 {BELT_CAP} 个，不占背包</small></h2>
       <div className="equip tools">
         {(['food', 'potion'] as const).map((k) => {
@@ -338,6 +345,11 @@ function SkillDetail({ s, skill, onPick }: { s: GameState; skill: SkillId; onPic
   );
 }
 
+const MONSTER_COUNT = (() => {
+  const all = Object.values(MONSTERS);
+  return { all: all.length, elite: all.filter((m) => m.rank === 'elite').length, boss: all.filter((m) => m.rank === 'boss').length };
+})();
+
 export function MorePanel({ s }: { s: GameState }) {
   const [confirming, setConfirming] = useState(false);
   const [codex, setCodex] = useState(false);
@@ -351,15 +363,22 @@ export function MorePanel({ s }: { s: GameState }) {
       <h2>公会 <small className="muted">多人功能开发中</small></h2>
       <button className="primary" onClick={openGuild}>打开公会</button>
       <h2>新手指引</h2>
-      <button onClick={openGuide}>重新查看新手指引</button>
+      <button className="primary" onClick={openGuide}>重新查看新手指引</button>
+      <h2>兑换码</h2>
+      <Redeem />
       <h2>物品图鉴 <small className="muted">已收集 {got}/{total}</small></h2>
       <div className="bag-meter"><i style={{ width: `${(got / total) * 100}%` }} /></div>
       <button className="primary" onClick={() => setCodex(true)}>打开图鉴</button>
       <h2>衣橱 <small className="muted">当前：{outfitOf(s.settings.skin).name}</small></h2>
       <button className="primary" onClick={() => setWardrobe(true)}>打开衣橱</button>
       <h2>关于</h2>
-      <p>苍岭放置（暂定名）v2 单机版。角色会一直执行队列里的任务，关掉网页也会在下次打开时结算离线收益，最多 24 小时。</p>
-      <p className="muted">世界 2188×2188 格，9 个区域。资源、装备和 192 种怪物都是正式数值；美术是程序生成的像素图。存档保存在本浏览器里。</p>
+      <p>苍岭放置（暂定名）测试服，单机版。角色会一直执行队列里的任务，关掉网页也会在下次打开时结算离线收益，最多 24 小时。</p>
+      <p className="muted">
+        世界 {MAP_W}×{MAP_H} 格，{Object.keys(REGIONS).length} 个区域，两座城镇（主城和西边的落霞城）。
+        {Object.keys(SKILLS).length} 种技能、{Object.keys(ITEMS).length - 1} 种物品、{MONSTER_COUNT.all} 种怪物（精英 {MONSTER_COUNT.elite}、首领 {MONSTER_COUNT.boss}），资源、装备和怪物都是正式数值。
+        美术全部用代码逐像素绘制。存档保存在本浏览器里。
+      </p>
+      <p className="muted">版本 {__BUILD__}</p>
       <h2>存档</h2>
       <SaveBackup s={s} />
       {confirming ? (
@@ -370,6 +389,32 @@ export function MorePanel({ s }: { s: GameState }) {
       ) : (
         <button className="danger" onClick={() => setConfirming(true)}>删除存档，重新开始</button>
       )}
+    </div>
+  );
+}
+
+/** 兑换码（测试服）：领到的东西进背包，背包满了进仓库 */
+function Redeem() {
+  const [code, setCode] = useState('');
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const submit = () => {
+    let r = { ok: false, msg: '' };
+    store.dispatch((g) => {
+      const out = redeemCode(g, code);
+      r = out;
+      return out.state;
+    });
+    if (r.ok) setCode('');
+    setMsg({ text: r.ok ? `${r.msg}。到「角色」页的坐骑栏装备，地图右下角点「骑乘」或按 R 上坐骑` : r.msg, ok: r.ok });
+  };
+  return (
+    <div className="redeem">
+      <div className="go">
+        <input className="redeem-input" value={code} placeholder="输入兑换码" maxLength={32}
+          onChange={(e) => { setCode(e.target.value); setMsg(null); }} onKeyDown={(e) => e.key === 'Enter' && code.trim() && submit()} />
+        <button className="primary" disabled={!code.trim()} onClick={submit}>兑换</button>
+      </div>
+      {msg && <p className={msg.ok ? 'good' : 'warn'}>{msg.text}</p>}
     </div>
   );
 }

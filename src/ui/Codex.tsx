@@ -159,8 +159,8 @@ export function CodexDetail({ s, id, reveal = false }: { s: GameState; id: strin
       {it.ammo && <span>{it.ammo.style === 'ranged' ? '箭矢' : '符文'} · 威力 +{it.ammo.power}</span>}
       {e && (
         <span>
-          需要{SKILLS[e.skill].name} {e.level} 级
-          {e.speed ? ` · ${SKILLS[e.skill].name}速度 +${Math.round(e.speed * 100)}%` : ` · 攻 +${e.attack} 力 +${e.strength} 防 +${e.defence}`}
+          {e.move ? `坐骑 · 骑乘时移动速度 +${Math.round(e.move * 100)}%` : `需要${SKILLS[e.skill].name} ${e.level} 级`}
+          {e.move ? '' : e.speed ? ` · ${SKILLS[e.skill].name}速度 +${Math.round(e.speed * 100)}%` : ` · 攻 +${e.attack} 力 +${e.strength} 防 +${e.defence}`}
           {e.attackMs ? ` · 攻速 ${(e.attackMs / 1000).toFixed(1)} 秒` : ''}
           {e.style && e.slot !== 'weapon' && `（攻、力只对${STYLE_NAME[e.style]}生效）`}
         </span>

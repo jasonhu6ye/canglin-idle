@@ -3,6 +3,7 @@ import { ACTIONS, NODES, REGIONS, SKILLS } from './core/data';
 import type { RegionId, Summary, TaskEndReason } from './core/types';
 import { BOSS_BANNER, REGION_CHANGE } from './game/MapScene';
 import { store, useGame, useOffline } from './store';
+import { toggleMount } from './core/sim';
 import { ActionSheet, MonsterSheet } from './ui/ActionSheet';
 import { emitToGame, GameCanvas, onGameEvent } from './ui/GameCanvas';
 import { openItem } from './ui/itemOpen';
@@ -21,7 +22,7 @@ type Tab = 'game' | 'char' | 'bag' | 'bank' | 'skills' | 'guild' | 'more';
 /** 电脑端快捷键说明（用户 10-23 要求优化电脑端操作） */
 const SHORTCUTS: [string, string][] = [
   ['WASD / 方向键', '走路'], ['鼠标右键', '点地面走过去，按住一直朝光标走'], ['鼠标左键', '点地点、怪物查看信息或攻击；拖动移动镜头'], ['滚轮 / + -', '缩放地图'],
-  ['空格', '镜头回到角色'], ['M', '世界地图'], ['G', '公会'], ['Tab', '打开 / 关闭背包'], ['左键物品图标', '查看物品详情'], ['右键物品', '背包里穿上或放进补给栏，身上的卸下，仓库的取到背包'], ['1 - 7', '打开右侧面板，再按一次同一个收起'], ['Esc', '关闭当前页面，再按一次收起右侧面板'], ['?', '显示 / 隐藏这份说明'],
+  ['空格', '镜头回到角色'], ['M', '世界地图'], ['G', '公会'], ['R', '骑上 / 下坐骑（坐骑栏有坐骑时）'], ['Tab', '打开 / 关闭背包'], ['左键物品图标', '查看物品详情'], ['右键物品', '背包里穿上或放进补给栏，身上的卸下，仓库的取到背包'], ['1 - 7', '打开右侧面板，再按一次同一个收起'], ['Esc', '关闭当前页面，再按一次收起右侧面板'], ['?', '显示 / 隐藏这份说明'],
 ];
 
 const TABS: { id: Tab; icon: [string, string]; label: string }[] = [
@@ -171,6 +172,7 @@ export function App() {
       if (k >= '1' && k <= '7') pickTab(TABS[+k - 1].id);
       else if (k === 'm' || k === 'M') setWorldMap((v) => !v);
       else if (k === 'g' || k === 'G') pickTab('guild');
+      else if (k === 'r' || k === 'R') store.dispatch((g) => toggleMount(g));
       else if (k === 'Tab') {
         e.preventDefault();
         const u = ui.current;
@@ -220,7 +222,7 @@ export function App() {
         <div className="hud">
           <QueuePanel s={s} />
           <StatusChips s={s} extra={<QuestCard s={s} onGo={openNode} />} />
-          <MapButtons onWorldMap={() => setWorldMap(true)} />
+          <MapButtons s={s} onWorldMap={() => setWorldMap(true)} />
         </div>
         <BossBar s={s} />
         {banner && <div key={banner.key} className="region-banner">{REGIONS[banner.region].name}</div>}

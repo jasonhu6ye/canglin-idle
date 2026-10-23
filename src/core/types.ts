@@ -63,6 +63,8 @@ export interface ItemDef {
     speed?: number;
     /** 武器：每次攻击间隔（毫秒），不填用默认 */
     attackMs?: number;
+    /** 坐骑：骑上后移动速度加成，1 = +100% */
+    move?: number;
   };
 }
 
@@ -204,6 +206,10 @@ export interface GameState {
   /** 新手任务：第几个、当前进度 */
   quest?: { i: number; n: number };
   bestiary?: Record<string, number>;
+  /** 骑在坐骑上（坐骑栏有坐骑时才有效） */
+  mounted?: boolean;
+  /** 用过的兑换码，每个存档只能领一次 */
+  redeemed?: string[];
   /** 角色所在的格子（寻路的起点） */
   loc: { x: number; y: number };
   /** 存档时的地图边长；地图扩大后用来换算旧位置 */

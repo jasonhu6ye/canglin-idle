@@ -1,4 +1,4 @@
-import { ACTIONS, ITEMS, MAP_W, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, travelMs, type MapNode } from './data';
+import { ACTIONS, ITEMS, MAP_W, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, travelMs, type MapNode } from './data';
 import { nextRandom } from './rng';
 import { stepQuests } from './quests';
 import { BONUS_PER_LEVEL, levelForXp, speedForLevel, XP_TABLE } from './xp';
@@ -108,6 +108,8 @@ export function migrate(raw: unknown): GameState | null {
     bestiary: s.bestiary ?? {},
     quest: s.quest ?? { i: 0, n: 0 },
     buffs: s.buffs ?? {},
+    mounted: !!s.mounted && !!equipment.mount,
+    redeemed: s.redeemed ?? [],
     // 栏位里的东西改过名或删掉了就丢掉，免得界面读不到物品
     belt: Object.fromEntries(Object.entries(s.belt ?? {}).filter(([slot, b]) => b && ITEMS[b.id] && beltSlotOf(b.id) === slot && b.qty > 0)),
     // 旧存档：现在拥有的东西都算获得过
@@ -151,6 +153,47 @@ export function playerBonuses(s: GameState, style = weaponStyle(s)) {
 export const TOOL_FOR: Partial<Record<SkillId, EquipSlot>> = {
   mining: 'pickaxe', woodcutting: 'axe', fishing: 'rod', gathering: 'sickle', farming: 'hoe', hunting: 'knife', smithing: 'hammer', crafting: 'needle',
 };
+
+/** 移动速度（格/秒）：骑着坐骑时按坐骑加成 */
+export function moveSpeed(s: GameState): number {
+  const m = s.mounted ? ITEMS[s.equipment.mount ?? '']?.equip?.move ?? 0 : 0;
+  return WALK_TILES_PER_SEC * (1 + m);
+}
+
+/** 上下坐骑：正在走的路按新速度换算剩下的时间 */
+export function toggleMount(prev: GameState, on = !prev.mounted): GameState {
+  if (on && !prev.equipment.mount) return prev;
+  if (!!prev.mounted === on) return prev;
+  const s = clone(prev);
+  const before = moveSpeed(s);
+  s.mounted = on;
+  const k = before / moveSpeed(s);
+  for (const t of [s.travel, s.walk]) {
+    if (!t) continue;
+    t.ms = Math.round(t.ms * k);
+    t.total = Math.round(t.total * k);
+  }
+  return s;
+}
+
+/** 兑换码（测试服）：每个存档每个码只能领一次，东西放进背包，满了放仓库 */
+const CODES: Record<string, { item: string; qty: number }[]> = {
+  中国人能飞: [{ item: 'mount_danmark', qty: 1 }],
+};
+export function redeemCode(prev: GameState, raw: string): { state: GameState; msg: string; ok: boolean } {
+  const code = raw.trim();
+  const gifts = CODES[code];
+  if (!gifts) return { state: prev, msg: '兑换码无效', ok: false };
+  if (prev.redeemed?.includes(code)) return { state: prev, msg: '这个兑换码已经领过了', ok: false };
+  const s = clone(prev);
+  s.redeemed = [...(s.redeemed ?? []), code];
+  for (const g of gifts) {
+    const n = Math.min(g.qty, bagRoomFor(s.bag, g.item));
+    if (n > 0) s.bag[g.item] = (s.bag[g.item] ?? 0) + n;
+    if (g.qty > n) s.bank[g.item] = (s.bank[g.item] ?? 0) + g.qty - n;
+  }
+  return { state: s, msg: `兑换成功：获得 ${gifts.map((g) => `${ITEMS[g.item].name}${g.qty > 1 ? ` ×${g.qty}` : ''}`).join('、')}`, ok: true };
+}
 
 /** 某个工具栏位当前的速度加成 */
 export const slotSpeed = (s: GameState, slot: EquipSlot) => ITEMS[s.equipment[slot] ?? '']?.equip?.speed || 0;
@@ -381,7 +424,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     const bank = s.travel && isBankId(s.travel.to) ? NODES.find((n) => n.id === s.travel!.to)! : nearestBank(s.loc);
     const dest = standOf(bank);
     if (!s.travel || s.travel.to !== bank.id) {
-      const ms = travelMs(s.loc, dest);
+      const ms = travelMs(s.loc, dest, moveSpeed(s));
       s.travel = { to: bank.id, ms, total: ms };
     }
     const step = Math.min(budget, s.travel.ms);
@@ -442,7 +485,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     const node = cands.find((n) => n.id === s.travel?.to) ?? nodeOfAction(task.action, s.loc)!;
     const dest = standOf(node);
     if (!s.travel || s.travel.to !== node.id) {
-      const ms = travelMs(s.loc, dest);
+      const ms = travelMs(s.loc, dest, moveSpeed(s));
       s.travel = { to: node.id, ms, total: ms };
     }
     const step = Math.min(budget, s.travel.ms);
@@ -892,6 +935,7 @@ export function unequip(prev: GameState, slot: EquipSlot): GameState {
   if (bagRoomFor(prev.bag, id) <= 0 && !atBank(prev)) return prev;
   const s = clone(prev);
   delete s.equipment[slot];
+  if (slot === 'mount') s.mounted = false;
   stow(s, id);
   return s;
 }

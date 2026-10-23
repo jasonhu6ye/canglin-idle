@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { ACTIONS, CROPS, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, DANGER, dangerLevel, nodeOfAction, travelMs, WALK_TILES_PER_SEC, type MapNode } from '../core/data';
-import { actionDuration, combatLevel, combatStats, isBankId, leaveWork, maxHp, resumeWork, setLoc, startWalk, teleport as teleportState, walkPos } from '../core/sim';
+import { actionDuration, combatLevel, combatStats, isBankId, leaveWork, maxHp, moveSpeed, resumeWork, setLoc, startWalk, teleport as teleportState, walkPos } from '../core/sim';
 import { MON_ANIMS, monsterFrameSize, paintMonsterSheet, type MonAnim } from './monsterArt';
+import { paintWolfSheet, WOLF_ANIMS, WOLF_FEET, WOLF_H, WOLF_W } from './wolfArt';
 import { HERO_ANIMS, HERO_FEET, HERO_H, HERO_W, NPC_ANIMS, NPC_OUTFITS, outfitOf, paintHeroSheet, type HeroDir } from './hero';
 import type { MonsterDef, RegionId, Summary } from '../core/types';
 import { store } from '../store';
@@ -155,7 +156,10 @@ export class MapScene extends Phaser.Scene {
     this.playerBody = this.add.sprite(0, 7, 'hero').setOrigin(0.5, HERO_FEET / HERO_H);
     this.playerBody.play('idle-down');
     const name = this.add.text(0, 7 - HERO_FEET + 1, '[苍岭] 你', { fontFamily: FONT, fontSize: '7px', color: '#ffffff', stroke: '#000', strokeThickness: 2, resolution: 4 }).setOrigin(0.5);
-    this.player.add([ring, this.playerBody, name]).setDepth(this.player.y + 1000);
+    this.wolfBack = this.add.sprite(0, 7, 'mount-wolf').setOrigin(0.5, WOLF_FEET / WOLF_H).setVisible(false);
+    this.wolfFront = this.add.sprite(0, 7, 'mount-wolf').setOrigin(0.5, WOLF_FEET / WOLF_H).setVisible(false);
+    this.player.add([ring, this.wolfBack, this.playerBody, this.wolfFront, name]).setDepth(this.player.y + 1000);
+    this.heroName = name;
     this.tweens.add({ targets: ring, alpha: 0.4, yoyo: true, repeat: -1, duration: 700 });
 
     this.setupCamera();
@@ -257,6 +261,22 @@ export class MapScene extends Phaser.Scene {
         key: a.key, frameRate: a.rate, repeat: -1,
         frames: Array.from({ length: a.frames }, (_, i) => ({ key: 'hero', frame: `${a.key}-${i}` })),
       });
+    }
+    // 坐骑：每帧分后层和前层，骑手夹在中间
+    // 名字别和怪物「狼」的贴图撞了
+    if (!this.textures.exists('mount-wolf')) {
+      const wolf = paintWolfSheet();
+      const wt = this.textures.addCanvas('mount-wolf', wolf.canvas)!;
+      for (const f of wolf.frames) wt.add(f.name, 0, f.x, f.y, WOLF_W, WOLF_H);
+    }
+    for (const a of WOLF_ANIMS) {
+      for (const layer of ['b', 'f']) {
+        if (this.anims.exists(`mount:${a.key}-${layer}`)) continue;
+        this.anims.create({
+          key: `mount:${a.key}-${layer}`, frameRate: a.rate, repeat: a.key === 'wolf-howl' ? 0 : -1,
+          frames: Array.from({ length: a.frames }, (_, i) => ({ key: 'mount-wolf', frame: `${a.key}-${i}-${layer}` })),
+        });
+      }
     }
     // 村民：和主角同样大小、同样画法
     for (const [kind, o] of Object.entries(NPC_OUTFITS)) {
@@ -527,6 +547,7 @@ export class MapScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number) {
+    this.syncMount();
     this.stepKeys(time);
     this.stepHold(time);
     this.stepWalker(delta);
@@ -1151,7 +1172,7 @@ export class MapScene extends Phaser.Scene {
     const stand = standTile(node);
     const atDest = st.loc.x === stand.x && st.loc.y === stand.y;
     // 存档里还在路上：按剩余时间匀速走完这条路
-    const ms = st.travel?.to === node.id ? st.travel.ms : atDest ? 0 : travelMs(st.loc, stand);
+    const ms = st.travel?.to === node.id ? st.travel.ms : atDest ? 0 : travelMs(st.loc, stand, moveSpeed(st));
     let speed: number | undefined;
     if (ms > 500 && path.length) {
       let len = 0;
@@ -1229,7 +1250,7 @@ export class MapScene extends Phaser.Scene {
     this.walker = undefined;
     if (!path.length) return done();
     const tps = speed ?? WALK_TILES_PER_SEC * speedMultiplier;
-    this.playerBody.anims.timeScale = tps / WALK_TILES_PER_SEC;
+    this.working = false;
     this.walker = {
       pts: this.smoothPath(path).map((p) => ({ x: p.x * T + T / 2, y: p.y * T + T / 2 })),
       i: 0, speed: tps * T, done,
@@ -1265,7 +1286,7 @@ export class MapScene extends Phaser.Scene {
         : ax > ay * 1.6 ? 'side' : dy > 0 ? 'down' : 'up';
       this.facing = next;
       if (next === 'side' && ax > 0.01) this.playerBody.setFlipX(dx < 0);
-      this.playerBody.play(`walk-${next}`, true);
+      this.heroAnim('walk');
     }
     if (w.i >= w.pts.length) {
       this.walker = undefined;
@@ -1463,6 +1484,7 @@ export class MapScene extends Phaser.Scene {
   }
 
   private stopWorking() {
+    this.working = false;
     this.foe?.destroy();
     this.foe = undefined;
     this.workTween?.stop();
@@ -1470,8 +1492,188 @@ export class MapScene extends Phaser.Scene {
   }
 
   private idle() {
+    this.heroAnim('idle');
+  }
+
+  // ───────── 坐骑 ─────────
+  private wolfBack!: Phaser.GameObjects.Sprite;
+  private wolfFront!: Phaser.GameObjects.Sprite;
+  private heroName!: Phaser.GameObjects.Text;
+  private working = false;
+  /** 画面上的坐骑状态：没召唤 / 骑着 / 在旁边坐着等（干活、战斗时） */
+  private mountMode: 'none' | 'ride' | 'beside' = 'none';
+  private mountBusy = false;
+  private mountMult = 1;
+
+  /** 骑手坐在狼背上的位置（相对脚底，侧面按朝右算） */
+  private seat(dir: HeroDir) {
+    return dir === 'side' ? { x: -1, y: -16 } : dir === 'down' ? { x: 0, y: -19 } : { x: 0, y: -17 };
+  }
+
+  private playWolf(key: string) {
+    this.wolfBack.play(`mount:${key}-b`, true);
+    this.wolfFront.play(`mount:${key}-f`, true);
+  }
+
+  /** 按当前状态播放走路、待机动画（骑着时人和狼一起） */
+  private heroAnim(kind: 'walk' | 'idle') {
+    const dir = this.facing;
+    const tps = this.walker ? this.walker.speed / T : WALK_TILES_PER_SEC;
+    if (this.mountMode !== 'ride' || this.mountBusy) {
+      if (this.mountBusy) return;
+      this.playerBody.anims.timeScale = kind === 'walk' ? tps / WALK_TILES_PER_SEC : 1;
+      this.playerBody.play(`${kind}-${dir}`, true);
+      return;
+    }
+    const flip = dir === 'side' && this.playerBody.flipX;
+    const seat = this.seat(dir);
+    this.playerBody.setPosition(flip ? -seat.x : seat.x, 7 + seat.y);
+    for (const w of [this.wolfBack, this.wolfFront]) w.setPosition(0, 7).setFlipX(flip);
+    // 侧面：骑手画在整只狼前面（看得到跨在狼背上的腿）；正面、背面：夹在两层中间
+    if (dir === 'side') this.player.moveAbove(this.playerBody, this.wolfFront);
+    else this.player.moveBelow(this.playerBody, this.wolfFront);
+    this.heroName.setY(7 - HERO_FEET + 1 + seat.y);
+    if (kind === 'walk') {
+      this.playerBody.anims.timeScale = tps / (WALK_TILES_PER_SEC * 2);
+      this.wolfBack.anims.timeScale = this.wolfFront.anims.timeScale = tps / (WALK_TILES_PER_SEC * 2);
+      this.playerBody.play(`ride-${dir}`, true);
+      this.playWolf(`wolf-run-${dir}`);
+    } else {
+      this.playerBody.anims.timeScale = this.wolfBack.anims.timeScale = this.wolfFront.anims.timeScale = 1;
+      this.playerBody.play(`rideidle-${dir}`, true);
+      this.playWolf(`wolf-idle-${dir}`);
+    }
+  }
+
+  /** 人回到地上（脚底在容器原点） */
+  private heroGround() {
+    this.playerBody.setPosition(0, 7);
+    this.heroName.setY(7 - HERO_FEET + 1);
+    this.player.moveBelow(this.playerBody, this.wolfFront);
+  }
+
+  /** 狼在主角左边坐着等 */
+  private wolfSitBeside() {
+    for (const w of [this.wolfBack, this.wolfFront]) w.setVisible(true).setAlpha(1).setPosition(-22, 5).setFlipX(false);
+    this.wolfBack.anims.timeScale = this.wolfFront.anims.timeScale = 1;
+    this.playWolf('wolf-sit');
+    // 坐在旁边的狼整只画在人后面
+    this.player.moveAbove(this.playerBody, this.wolfFront);
+  }
+
+  private puff(x: number, y: number) {
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      const p = this.add.image(this.player.x + x, this.player.y + y, 'p-smoke').setDepth(D_FLOAT - 3).setAlpha(0.85).setScale(0.8);
+      this.tweens.add({
+        targets: p, x: p.x + Math.cos(a) * 14, y: p.y + Math.sin(a) * 7 - 6, alpha: 0, scale: 1.8,
+        duration: 520 + i * 20, ease: 'Quad.easeOut', onComplete: () => p.destroy(),
+      });
+    }
+  }
+
+  /** 人跳一下：从 (x0,y0) 跳到 (x1,y1)，跳完回调 */
+  private hop(x1: number, y1: number, done: () => void) {
+    const x0 = this.playerBody.x;
+    const y0 = this.playerBody.y;
     this.playerBody.anims.timeScale = 1;
-    this.playerBody.play(`idle-${this.facing}`, true);
+    this.playerBody.play('jump-side', true);
+    if (x1 !== x0) this.playerBody.setFlipX(x1 < x0);
+    const o = { t: 0 };
+    this.tweens.add({
+      targets: o, t: 1, duration: 380, ease: 'Sine.easeInOut',
+      onUpdate: () => this.playerBody.setPosition(x0 + (x1 - x0) * o.t, y0 + (y1 - y0) * o.t - Math.sin(o.t * Math.PI) * 12),
+      onComplete: done,
+    });
+  }
+
+  /** 每帧对一下：存档里骑没骑、现在是不是在干活，画面跟着换状态（带上下坐骑的动作） */
+  private syncMount() {
+    const st = store.state;
+    const mult = moveSpeed(st) / WALK_TILES_PER_SEC;
+    if (mult !== this.mountMult) {
+      // 路走到一半上下坐骑：剩下的路按新速度走
+      if (this.walker) this.walker.speed *= mult / this.mountMult;
+      this.mountMult = mult;
+      setSpeedMultiplier(mult);
+    }
+    if (this.mountBusy) return;
+    const want = st.mounted && st.equipment.mount ? (this.working ? 'beside' : 'ride') : 'none';
+    if (want === this.mountMode) return;
+    const from = this.mountMode;
+    this.mountMode = want;
+    this.mountBusy = true;
+    const finish = () => {
+      this.mountBusy = false;
+      if (this.mountMode === 'ride') this.heroAnim(this.walker ? 'walk' : 'idle');
+      else if (this.mountMode === 'beside') {
+        this.heroGround();
+        this.wolfSitBeside();
+        this.playerBody.setFlipX(false);
+        this.playerBody.play(this.workAnim(), true);
+      } else {
+        this.heroGround();
+        if (this.working) this.playerBody.play(this.workAnim(), true);
+        else this.heroAnim(this.walker ? 'walk' : 'idle');
+      }
+    };
+    const wolves = [this.wolfBack, this.wolfFront];
+    if (want === 'none') {
+      // 下坐骑：从狼背上跳下来，狼化成一团烟
+      const off = () => {
+        this.puff(this.wolfBack.x, 0);
+        this.tweens.add({ targets: wolves, alpha: 0, duration: 300, onComplete: () => { wolves.forEach((w) => w.setVisible(false)); finish(); } });
+      };
+      if (from === 'ride') {
+        this.heroName.setY(7 - HERO_FEET + 1);
+        this.hop(14, 7, () => {
+          this.player.setPosition(this.player.x + 14, this.player.y);
+          for (const w of wolves) w.x -= 14;
+          this.playerBody.setPosition(0, 7);
+          off();
+        });
+      } else off();
+      return;
+    }
+    if (from === 'none') {
+      // 召唤：烟里冒出来，仰头长嚎一声
+      for (const w of wolves) w.setVisible(true).setAlpha(0).setPosition(-22, 7).setFlipX(false);
+      this.player.moveAbove(this.playerBody, this.wolfFront);
+      this.puff(-22, 0);
+      this.wolfBack.anims.timeScale = this.wolfFront.anims.timeScale = 1;
+      this.playWolf('wolf-howl');
+      this.tweens.add({ targets: wolves, alpha: 1, duration: 250 });
+      this.time.delayedCall(want === 'ride' ? 900 : 700, () => {
+        if (want === 'beside') return finish();
+        this.mountUp(finish);
+      });
+      return;
+    }
+    if (from === 'beside' && want === 'ride') return this.mountUp(finish);
+    // 骑着 → 开始干活：跳下来，狼走到旁边坐下
+    this.heroName.setY(7 - HERO_FEET + 1);
+    this.tweens.add({ targets: wolves, x: -22, duration: 380 });
+    this.hop(0, 7, finish);
+  }
+
+  /** 跳上狼背：狼在左边，人跳过去，然后整体挪回原位 */
+  private mountUp(done: () => void) {
+    const wx = this.wolfBack.x;
+    this.playerBody.setPosition(0, 7);
+    this.player.moveAbove(this.playerBody, this.wolfFront);
+    this.wolfBack.anims.timeScale = this.wolfFront.anims.timeScale = 1;
+    this.playWolf('wolf-idle-side');
+    const seat = this.seat('side');
+    this.hop(wx + seat.x, 7 + seat.y, () => {
+      // 人和狼一起挪回容器原点（狼往前走一小步）
+      const shift = -wx;
+      this.tweens.add({ targets: [this.wolfBack, this.wolfFront], x: 0, duration: 260 });
+      this.tweens.add({ targets: this.playerBody, x: this.playerBody.x + shift, duration: 260, onComplete: () => {
+        this.facing = 'side';
+        this.playerBody.setFlipX(false);
+        done();
+      } });
+    });
   }
 
   /** 当前任务对应的动作动画 */
@@ -1511,9 +1713,11 @@ export class MapScene extends Phaser.Scene {
       }
     }
     // 干活时侧身朝右（怪物也站在右边）
+    this.working = true;
     this.facing = 'side';
     this.playerBody.setFlipX(false);
     this.playerBody.anims.timeScale = 1;
+    if (this.mountMode === 'ride' || this.mountBusy) return;
     this.playerBody.play(this.workAnim(), true);
   }
 

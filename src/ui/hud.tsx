@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from 'react';
 import { ACTIONS, MONSTERS, nodeOfAction, NODES, SKILLS } from '../core/data';
 import { QUESTS, questProgress, questText } from '../core/quests';
-import { actionDuration, combatLevel, isBankId, level, maxHp, removeTask, resumeWork, weaponStyle } from '../core/sim';
+import { actionDuration, combatLevel, isBankId, level, maxHp, removeTask, resumeWork, toggleMount, weaponStyle } from '../core/sim';
+import { wolfIconUrl } from '../game/wolfArt';
 import type { BuffKind, GameState, SkillId } from '../core/types';
 import { HERO_W, outfitOf, paintHeroSheet } from '../game/hero';
 import { store } from '../store';
@@ -137,9 +138,16 @@ export function StatusChips({ s, extra }: { s: GameState; extra?: ReactNode }) {
   );
 }
 
-export function MapButtons({ onWorldMap }: { onWorldMap: () => void }) {
+export function MapButtons({ s, onWorldMap }: { s: GameState; onWorldMap: () => void }) {
+  const mount = s.equipment.mount;
   return (
     <div className="map-buttons">
+      {mount && (
+        <button className={`mount-btn ${s.mounted ? 'on' : ''}`} title={s.mounted ? '下坐骑 (R)' : '骑乘 (R)'} onClick={() => store.dispatch((g) => toggleMount(g))}>
+          <img src={wolfIconUrl()} width={30} height={30} alt="" draggable={false} />
+          <small>{s.mounted ? '下骑' : '骑乘'}</small>
+        </button>
+      )}
       <button onClick={onWorldMap} title="世界地图">▦</button>
       <button onClick={() => emitToGame('zoom', 0.5)}>＋</button>
       <button onClick={() => emitToGame('zoom', -0.5)}>－</button>

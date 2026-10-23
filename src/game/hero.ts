@@ -703,9 +703,33 @@ const swing = (key: string, tool: HeroTool, from: number, to: number, crouch = 0
   },
 });
 
+/** 骑在狼背上（坐骑「Chinese can fly」）：大腿往前跨，小腿垂下，手往前抓鬃毛；跑起来随狼背起伏 */
+const ride = (dir: HeroDir, run: boolean): HeroAnim => ({
+  key: `ride${run ? '' : 'idle'}-${dir}`, frames: 8, rate: run ? 12 : 6,
+  pose: (t, i) => {
+    const s = Math.sin(t * TAU);
+    const bob = run ? (s > 0.2 ? -1 : s < -0.6 ? 1 : 0) : Math.sin(t * TAU) > 0.4 ? 1 : 0;
+    if (dir === 'side') {
+      return {
+        dir, bob, legF: 1.25, legB: 1.05, kneeF: 1.45, kneeB: 1.35,
+        armF: run ? 1.0 + s * 0.12 : 0.7, armB: run ? 0.9 : 0.6, elbowF: 0.7, elbowB: 0.7,
+        cape: run ? 2 + (i % 2) : 1, blink: !run && i === 5,
+      };
+    }
+    return { dir, bob, legF: 1, legB: 1, armLift: [run ? 1 : 0.5, run ? 1 : 0.5], cape: run ? 2 : 0, blink: !run && i === 5 };
+  },
+});
+
 export const HERO_ANIMS: HeroAnim[] = [
   walk('down'), walk('up'), walk('side'),
   idle('down'), idle('up'), idle('side'),
+  ride('side', true), ride('down', true), ride('up', true),
+  ride('side', false), ride('down', false), ride('up', false),
+  {
+    // 上下坐骑时跳一下：缩腿、张手
+    key: 'jump-side', frames: 6, rate: 12,
+    pose: (t) => ({ dir: 'side', legF: keys([[0, 0.3], [0.5, 1.2], [1, 0.9]], t), legB: keys([[0, -0.3], [0.5, 0.9], [1, 0.7]], t), kneeF: 1.4, kneeB: 1.4, armF: keys([[0, 0.4], [0.5, 2.4], [1, 1.0]], t), armB: keys([[0, -0.3], [0.5, 2.0], [1, 0.8]], t), cape: 2 }),
+  },
   swing('work-mine', 'pickaxe', 3.7, 1.1),
   swing('work-chop', 'axe', 3.2, 1.5),
   swing('work-farm', 'hoe', 2.9, 0.9, 1),

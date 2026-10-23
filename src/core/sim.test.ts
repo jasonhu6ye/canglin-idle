@@ -1,4 +1,4 @@
-import { actionDuration, advance, buySeed, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour, openContainer } from './sim';
+import { actionDuration, advance, buySeed, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour, openContainer, redeemCode, toggleMount, moveSpeed } from './sim';
 import { levelForXp, speedForLevel, XP_TABLE } from './xp';
 import type { GameState, SkillAction, TaskMode } from './types';
 import { ACTIONS, nodeOfAction, standOf, travelMs } from './data';
@@ -534,5 +534,26 @@ describe('漏洞排查', () => {
     const items = Object.keys(got).filter((k) => k !== 'coins');
     expect(items.length).toBeGreaterThan(0);
     for (const k of items) expect((s1.bag[k] ?? 0) + (s1.bank[k] ?? 0) - (s0.bank[k] ?? 0)).toBe(got[k]);
+  });
+});
+
+describe('坐骑和兑换码', () => {
+  it('兑换码只能领一次，装上坐骑骑乘后移动速度翻倍', () => {
+    let s = newGame(0, 1);
+    expect(redeemCode(s, '乱写的').ok).toBe(false);
+    const r = redeemCode(s, ' 中国人能飞 ');
+    expect(r.ok).toBe(true);
+    s = r.state;
+    expect(s.bag.mount_danmark).toBe(1);
+    expect(redeemCode(s, '中国人能飞').ok).toBe(false);
+    expect(toggleMount(s)).toBe(s);
+    s = equip(s, 'mount_danmark');
+    expect(s.equipment.mount).toBe('mount_danmark');
+    const walk = moveSpeed(s);
+    s = toggleMount(s);
+    expect(moveSpeed(s)).toBe(walk * 2);
+    s = unequip(s, 'mount');
+    expect(s.mounted).toBe(false);
+    expect(moveSpeed(s)).toBe(walk);
   });
 });
