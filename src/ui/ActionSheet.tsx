@@ -10,6 +10,8 @@ import { store } from '../store';
 import { FarmSheet } from './FarmSheet';
 import { openNodeSheet } from './itemOpen';
 import { WaystoneSheet } from './WaystoneSheet';
+import { homeNode } from '../core/home';
+import { PortalSheet } from './HomeUI';
 import { fmtNum, stacks } from './format';
 import { Icon, SkillIcon } from './icons';
 
@@ -41,7 +43,8 @@ const tierOf = (a: ActionDef) => (a.kind === 'skill' ? ITEMS[a.outputs[0]?.item]
 const isLocked = (s: GameState, a: ActionDef) => a.kind === 'skill' && level(s, a.skill) < a.level;
 
 export function ActionSheet({ s, nodeId, onClose }: { s: GameState; nodeId: string; onClose: () => void }) {
-  const node = NODES.find((n) => n.id === nodeId)!;
+  const node = NODES.find((n) => n.id === nodeId) ?? homeNode(nodeId)!;
+  if (node.portal) return <PortalSheet s={s} node={node} onClose={onClose} />;
   if (node.farm) return <FarmSheet s={s} nodeId={nodeId} onClose={onClose} />;
   if (node.waystone) return <WaystoneSheet s={s} nodeId={nodeId} onClose={onClose} />;
   return <NodeSheet s={s} node={node} onClose={onClose} />;
@@ -50,6 +53,9 @@ export function ActionSheet({ s, nodeId, onClose }: { s: GameState; nodeId: stri
 function NodeSheet({ s, node, onClose }: { s: GameState; node: MapNode; onClose: () => void }) {
   // 从别的配方跳过来：直接选中要做的那个（用户 10-23）
   const focus = store.focusAction && node.actions.includes(store.focusAction) ? store.focusAction : null;
+  // 家园岛上的制作台：人在岛上就算站在旁边
+  const isHome = node.id.startsWith('home_');
+  const near = (g: GameState) => (isHome ? !!g.home?.inside : nearNode(g, node));
   const [selected, setSelectedRaw] = useState<string | null>(focus);
   const [cat, setCat] = useState<string>('all');
   const [tier, setTier] = useState<number | 'all'>('all');
@@ -62,7 +68,7 @@ function NodeSheet({ s, node, onClose }: { s: GameState; node: MapNode; onClose:
     if (!focus) return;
     list.current?.querySelector(`[data-id="${focus}"]`)?.scrollIntoView({ block: 'center' });
     // 已经站在这里了，选中就算用掉了
-    if (!node.town || nearNode(store.state, node)) store.focusAction = null;
+    if (!node.town || near(store.state)) store.focusAction = null;
   }, [node.id]); // eslint-disable-line react-hooks/exhaustive-deps
   // 野外的怪物不在点位页面里列出，直接点地图上的怪物（用户 10-22 要求）；城镇的训练假人保留
   const all = node.closed ? [] : node.town ? node.actions : node.actions.filter((id) => ACTIONS[id].kind !== 'combat');
@@ -81,7 +87,7 @@ function NodeSheet({ s, node, onClose }: { s: GameState; node: MapNode; onClose:
       <div className="sheet-head">
         <button className="back" onClick={onClose}>‹ 返回</button>
         <h2>{node.name}</h2>
-        <small className="muted">{REGIONS[node.region].name}{!node.town && !node.cave && ` · Lv${node.lv[0]}-${node.lv[1]}`}</small>
+        <small className="muted">{isHome ? '家园岛屿' : REGIONS[node.region].name}{!node.town && !node.cave && ` · Lv${node.lv[0]}-${node.lv[1]}`}</small>
       </div>
       {cats.length > 1 && (
         <div className="chips-row filter-row">
@@ -138,7 +144,7 @@ function NodeSheet({ s, node, onClose }: { s: GameState; node: MapNode; onClose:
       {node.closed && <p className="muted pad">{node.name}暂未开放，敬请期待。</p>}
       {node.cave && <p className="muted pad">大型洞窟入口。里面的内容还在筹备，暂未开放，敬请期待。</p>}
       {!all.length && !node.cave && !node.closed && <p className="muted pad">这里是怪物出没的地方。点地图上的怪物或生物，就能查看它的信息并开打。</p>}
-      {all.length > 0 && <TaskConfig s={s} action={selected} onDone={onClose} far={node.town && !nearNode(s, node) ? node : undefined} />}
+      {all.length > 0 && <TaskConfig s={s} action={selected} onDone={onClose} far={node.town && !near(s) ? node : undefined} />}
     </div>
   );
 }

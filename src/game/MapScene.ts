@@ -3,6 +3,7 @@ import { ACTIONS, CROP_DEFS, CROPS, cropsOfField, FARM_PLOTS, PLOT_BY_ID, ITEMS,
 import { unlockWaystone, useWaystone, WAYSTONE_REACH, actionDuration, combatLevel, combatStats, isBankId, leaveWork, maxHp, moveSpeed, resumeWork, setLoc, startWalk, teleport as teleportState, walkPos } from '../core/sim';
 import { pickSeed, plotGrowth, plotPhase, tendPlot } from '../core/farm';
 import { paintWaystone } from './waystoneArt';
+import { paintPortal, paintPortalSwirl, PORTAL_H } from './homeArt';
 import { MON_ANIMS, monsterFrameSize, paintMonsterSheet, type MonAnim } from './monsterArt';
 import { paintWolfSheet, wolfSaddle, WOLF_ANIMS, WOLF_FEET, WOLF_H, WOLF_W } from './wolfArt';
 import { HERO_ANIMS, HERO_FEET, HERO_H, HERO_W, NPC_ANIMS, NPC_OUTFITS, outfitOf, paintHeroSheet, type HeroDir } from './hero';
@@ -187,6 +188,12 @@ export class MapScene extends Phaser.Scene {
     this.updateLabels();
     this.syncStones();
     this.unsub.push(store.subscribe(() => {
+      // 进了家园岛屿：切到岛屿场景（这边睡着，存档照常推进）
+      if (store.state.home?.inside && this.scene.isActive()) {
+        this.walker = undefined;
+        this.scene.switch('island');
+        return;
+      }
       this.syncStones();
       this.syncSkin();
       this.takeWalk();
@@ -194,6 +201,9 @@ export class MapScene extends Phaser.Scene {
       this.updateLabels();
     }));
     this.unsub.push(store.onGain((s) => this.showGain(s)));
+    // 从岛上回来：人站在城里的传送门前
+    this.events.on('wake', () => this.resync());
+    if (store.state.home?.inside) this.time.delayedCall(0, () => this.scene.switch('island'));
     const onStone = (id: string) => this.stoneJump(id);
     this.game.events.on('waystone', onStone);
     this.unsub.push(() => this.game.events.off('waystone', onStone));
@@ -958,6 +968,24 @@ export class MapScene extends Phaser.Scene {
     });
   }
 
+  /** 家园传送门：石拱门里一团旋转的紫光，点它进家园岛屿 */
+  private addPortal(n: MapNode) {
+    if (!this.textures.exists('home-portal')) this.textures.addCanvas('home-portal', paintPortal());
+    if (!this.textures.exists('home-swirl')) this.textures.addCanvas('home-swirl', paintPortalSwirl());
+    const cx = n.x * T + T / 2;
+    const by = n.y * T + T + 2;
+    this.add.image(cx, by, 'home-portal').setOrigin(0.5, 1).setDepth(by + 1000);
+    const swirl = this.add.image(cx, by - PORTAL_H + 22, 'home-swirl').setDepth(by + 999);
+    this.tweens.add({ targets: swirl, angle: -360, duration: 4000, repeat: -1 });
+    this.tweens.add({ targets: swirl, scale: 1.08, yoyo: true, repeat: -1, duration: 900, ease: 'Sine.inOut' });
+    const glow = this.add.image(cx, by - 24, 'glow').setTint(0x8a6af0).setBlendMode(Phaser.BlendModes.ADD).setDepth(by + 1001).setAlpha(0.45);
+    this.tweens.add({ targets: glow, alpha: 0.7, yoyo: true, repeat: -1, duration: 1300 });
+    this.add.text(cx, by - PORTAL_H - 4, n.name.replace('落霞城·', ''), {
+      fontFamily: FONT, fontSize: '7px', color: '#e8d8ff', backgroundColor: '#1b120ccc', padding: { x: 3, y: 1 }, resolution: 4,
+    }).setOrigin(0.5, 1).setDepth(D_LABEL);
+    this.add.zone(cx, by - 22, T * 3, T * 3).setInteractive({ useHandCursor: true }).setData('node', n.id);
+  }
+
   /** 按存档换石碑的样子：激活过的亮起来 */
   private syncStones() {
     const on = store.state.waystones ?? [];
@@ -1025,6 +1053,10 @@ export class MapScene extends Phaser.Scene {
   private addNode(n: MapNode) {
     if (n.waystone) {
       this.addStone(n);
+      return;
+    }
+    if (n.portal) {
+      this.addPortal(n);
       return;
     }
     this.addResources(n);

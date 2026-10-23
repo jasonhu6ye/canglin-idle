@@ -3,6 +3,7 @@ import { store } from '../store';
 import { useEffect, useRef } from 'react';
 import { DPR } from '../game/dpr';
 import { BOSS_BANNER, MapScene, NODE_CLICK, REGION_CHANGE } from '../game/MapScene';
+import { HOME_CLICK, HOME_MSG, HOME_TOOL, IslandScene } from '../game/IslandScene';
 
 let game: Phaser.Game | null = null;
 
@@ -38,7 +39,7 @@ export function GameCanvas({ onNodeClick }: { onNodeClick: (nodeId: string) => v
       // 不取整：角色和镜头按屏幕像素平滑移动，否则放大后会一格一格地跳
       roundPixels: false,
       scale: { mode: Phaser.Scale.NONE, width: w, height: h, zoom: 1 / DPR },
-      scene: [MapScene],
+      scene: [MapScene, IslandScene],
       banner: false,
       input: { touch: { capture: true } },
     });
@@ -47,6 +48,9 @@ export function GameCanvas({ onNodeClick }: { onNodeClick: (nodeId: string) => v
     const g = game;
     g.events.on(REGION_CHANGE, relay(REGION_CHANGE));
     g.events.on(BOSS_BANNER, relay(BOSS_BANNER));
+    g.events.on(HOME_MSG, relay(HOME_MSG));
+    g.events.on(HOME_TOOL, relay(HOME_TOOL));
+    g.events.on(HOME_CLICK, (id: string) => onNodeClick(id));
     // 画布改尺寸会被浏览器清空，下一帧才重画，展开/收起面板时就会闪一下：改完当场重画一帧（用户 10-23）
     const ro = new ResizeObserver(() => {
       const s = size();

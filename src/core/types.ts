@@ -213,6 +213,9 @@ export interface Plot {
   fert?: 1 | 2;
 }
 
+/** 家园岛屿上摆的一件东西：左上角所在的格子 */
+export interface HomeThing { id: string; x: number; y: number }
+
 export interface GameState {
   version: 3;
   lastTick: number;
@@ -262,6 +265,8 @@ export interface GameState {
   /** 田里种着的地块（地块 id → 作物），空地不存 */
   farm?: Record<string, Plot>;
   /** 最近一次任务停下的原因（顶部提示条用，排新任务或点掉就清空） */
+  /** 家园岛屿：扩建等级、地板、摆的东西、人在不在岛上、从哪个传送门进去的 */
+  home?: { lv: number; floors: Record<string, string>; things: HomeThing[]; inside?: boolean; from?: string };
   /** 装了洒水器的田 */
   sprinklers?: string[];
   lastStop?: { action: string; reason: TaskEndReason; mode: TaskMode; item?: string; at: number } | null;

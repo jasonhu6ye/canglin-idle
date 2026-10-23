@@ -2,6 +2,7 @@ import { ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, I
 import { nextRandom } from './rng';
 import { stepQuests } from './quests';
 import { stepAutoFarm, stepRain } from './farm';
+import { homeCan, homeChest, migrateHome } from './home';
 import { isRaining, RAIN_FISH } from './weather';
 import { BONUS_PER_LEVEL, levelForXp, speedForLevel, XP_TABLE } from './xp';
 import type {
@@ -114,6 +115,7 @@ export function migrate(raw: unknown): GameState | null {
     buffs: s.buffs ?? {},
     mounted: !!s.mounted && !!equipment.mount,
     redeemed: s.redeemed ?? [],
+    home: migrateHome(s.home),
     sprinklers: (s.sprinklers ?? []).filter((id) => FARM_NODES.some((n) => n.id === id)),
     waystones: [...new Set([WAYSTONE_HOME, ...(s.waystones ?? []).filter((id) => WAYSTONES.some((n) => n.id === id))])],
     // 地块里种的作物改过名或删掉了就清掉
@@ -468,10 +470,13 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   /** 背包满了：走回仓库，存下除食物和弹药外的东西，再走回来接着干。
    *  supply：开战前回仓库按设置拿食物和药水 */
   const stepBankTrip = (budget: number, supply = false): number => {
-    // 回最近的仓库（落霞城也有一个）
+    // 回最近的仓库（落霞城也有一个）；在家园岛上有储物箱就直接存，不用走
+    const atHome = homeChest(s);
+    if (s.home?.inside && !atHome) s.home.inside = false;
     const bank = s.travel && isBankId(s.travel.to) ? NODES.find((n) => n.id === s.travel!.to)! : nearestBank(s.loc);
-    const dest = standOf(bank);
-    if (!s.travel || s.travel.to !== bank.id) {
+    const dest = atHome ? s.loc : standOf(bank);
+    if (atHome) s.travel = { to: bank.id, ms: 0, total: 0 };
+    else if (!s.travel || s.travel.to !== bank.id) {
       const r = planRoute(s.waystones, s.loc, dest, moveSpeed(s));
       s.travel = { to: bank.id, ms: r.ms, total: r.ms, ...(r.via && { via: r.via }) };
     }
@@ -534,6 +539,8 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
 
   /** 还没到任务地点就先走路，返回走了多久 */
   const stepTravel = (task: Task, budget: number): number => {
+    // 家园岛上有对应的制作台：就地开工
+    if (homeCan(s, task.action)) return 0;
     // 两座城都有的建筑：已经在走的就接着走，否则去最近的那座
     const cands = nodesOfAction(task.action);
     if (!cands.length) return 0;
@@ -795,6 +802,8 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       regen(s, dt);
       break;
     }
+    // 在家园岛上，岛上做不了这个任务：自己从传送门出岛去做
+    if (s.home?.inside && !homeCan(s, task.action)) s.home.inside = false;
     // 开始干活了：手动寻路作废，从走到的地方出发
     if (s.walk) {
       s.loc = walkPos(s);
@@ -1033,7 +1042,8 @@ const within = (s: GameState, list: MapNode[]) => !s.travel && !s.walk && list.s
   return Math.hypot(s.loc.x - st.x, s.loc.y - st.y) <= BANK_REACH;
 });
 export function atBank(s: GameState): boolean {
-  return within(s, BANKS);
+  // 家园岛上有储物箱也算站在仓库旁
+  return homeChest(s) || (!s.home?.inside && within(s, BANKS));
 }
 /** 主城仓库、集市的站位（测试和默认用） */
 export const bankStand = () => standOf(BANKS[0]);

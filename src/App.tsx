@@ -21,6 +21,8 @@ import { UpdateBanner } from './ui/UpdateBanner';
 import { DayClock } from './ui/DayClock';
 import { BagPanel, BankPanel, CharacterPanel, MorePanel, NodeList, OfflineModal, SkillsPanel } from './ui/panels';
 import { WorldMap } from './ui/WorldMap';
+import { HomeHud } from './ui/HomeUI';
+import { homeNode } from './core/home';
 
 type Tab = 'game' | 'char' | 'bag' | 'bank' | 'skills' | 'guild' | 'more';
 /** 电脑端快捷键说明（用户 10-23 要求优化电脑端操作） */
@@ -149,7 +151,7 @@ export function App() {
       setMonster(id);
       return;
     }
-    if (NODES.find((n) => n.id === id)?.opens === 'bank') {
+    if ((NODES.find((n) => n.id === id) ?? homeNode(id))?.opens === 'bank') {
       setNode(null);
       setTab('bank');
       return;
@@ -243,6 +245,7 @@ export function App() {
         <div className={`region-tint ${region}`} />
         <div className="hud">
           <div className="top-left">
+            <HomeHud s={s} />
             <QueuePanel s={s} />
             <BuffBar s={s} region={region} />
               </div>

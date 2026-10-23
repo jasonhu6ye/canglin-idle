@@ -678,7 +678,7 @@ export function NodeList({ s, onPick }: { s: GameState; onPick: (id: string) => 
   let rows: { key: string; id: string; name: string; sub: string; lv?: string; dim?: boolean }[] = [];
   if (tab.id === 'town') {
     rows = NODES.filter((n) => n.town).map((n) => {
-      const kinds = n.waystone ? ['传送'] : n.farm ? ['种植'] : [...new Set(n.actions.map((id) => { const a = ACTIONS[id]; return a.kind === 'skill' ? SKILLS[a.skill].name : '战斗'; }))];
+      const kinds = n.portal ? ['进家园岛屿'] : n.waystone ? ['传送'] : n.farm ? ['种植'] : [...new Set(n.actions.map((id) => { const a = ACTIONS[id]; return a.kind === 'skill' ? SKILLS[a.skill].name : '战斗'; }))];
       return { key: n.id, id: n.id, name: n.name.replace('落霞城·', ''), sub: `${townName(n)} · ${n.closed ? '暂未开放' : n.opens === 'bank' ? '存取物品' : kinds.join('、')}`, dim: n.closed };
     }).sort((a, b) => (a.sub.startsWith('主城') === b.sub.startsWith('主城') ? 0 : a.sub.startsWith('主城') ? -1 : 1));
   } else if (tab.id === 'boss') {

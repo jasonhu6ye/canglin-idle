@@ -974,6 +974,15 @@ function lootUrl(id: string): string | null {
   return null;
 }
 
+/** 物品图标的图片地址（家园岛上摆战利品用） */
+export function itemImageUrl(item: string): string | undefined {
+  if (!ITEMS[item]) return undefined;
+  const res = resIconUrl(item) ?? equipUrl(item) ?? lootUrl(item);
+  if (res) return res;
+  const [tpl, tint] = itemIcon(item);
+  return iconUrl(tpl, tint);
+}
+
 function BareIcon({ item, size }: { item: string; size: number }) {
   if (item.startsWith('mount_')) return <img className="icon" src={wolfIconUrl()} width={size} height={size} alt="" draggable={false} />;
   const res = resIconUrl(item) ?? equipUrl(item) ?? lootUrl(item);

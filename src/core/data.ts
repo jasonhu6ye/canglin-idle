@@ -824,7 +824,7 @@ const filterIds = (prefix: string) => actionList.filter((a) => a.id.startsWith(p
 
 export type NodeSprite =
   | 'ore' | 'tree' | 'fish' | 'herb' | 'camp' | 'boss' | 'anvil' | 'furnace' | 'stove' | 'bench' | 'bowyer' | 'potion' | 'enhance'
-  | 'market' | 'farm' | 'bank' | 'dummy' | 'cave' | 'atelier' | 'waystone';
+  | 'market' | 'farm' | 'bank' | 'dummy' | 'cave' | 'atelier' | 'waystone' | 'portal';
 
 export interface MapNode {
   id: string;
@@ -852,6 +852,8 @@ export interface MapNode {
   farm?: number[];
   /** 传说石碑：传送点 */
   waystone?: boolean;
+  /** 家园传送门：进家园岛屿 */
+  portal?: boolean;
 }
 export type SiteKind = 'islands' | 'bamboo' | 'saltflat' | 'crater' | 'fungal' | 'glacier' | 'obsidian' | 'starabyss'
   | 'oasis' | 'mesa' | 'atoll' | 'crystalheart';
@@ -900,6 +902,8 @@ export const NODES: MapNode[] = [
   town('bowyer', '制弓台', 159, 170, 'bowyer', filterIds('plank_').concat(filterIds('fletch_'))),
   town('apothecary', '药剂铺', 177, 170, 'potion', filterIds('brew_')),
   town('enhancer', '强化台', 185, 170, 'enhance', filterIds('enhance_'), { closed: true }),
+  // 家园传送门（用户 10-23）：进自己的家园岛屿
+  town('portal_home', '家园传送门', 169, 184, 'portal', [], { portal: true }),
   town('market', '集市', 155, 182, 'market', [
     steal('farmer', '偷农夫', 1, 3, [{ item: 'potato', qty: 2, chance: 0.3 }, { item: 'seed_potato', qty: 2, chance: 0.2 }, { item: 'seed_carrot', qty: 1, chance: 0.08 }]),
     steal('vendor', '偷小贩', 10, 9, [{ item: 'cotton_1', qty: 2, chance: 0.2 }, { item: 'seed_onion', qty: 1, chance: 0.08 }, { item: 'seed_tomato', qty: 1, chance: 0.05 }]),
@@ -1001,6 +1005,7 @@ export const NODES: MapNode[] = [
     steal('spice_merchant', '偷香料商', 50, 70, [{ item: 'spice_5', qty: 2, chance: 0.15 }, { item: 'resin_5', qty: 1, chance: 0.1 }]),
   ]),
   town2('atelier', '落霞城·珍材坊', 14, -9, 'atelier', filterIds('rare_')),
+  town2('portal_home2', '落霞城·家园传送门', -7, -2, 'portal', [], { portal: true }),
   town2('smithy2', '落霞城·铁匠铺', -27, 19, 'anvil', filterIds('smith_')),
   town2('furnace2', '落霞城·熔炉', -20, 28, 'furnace', filterIds('smelt_')),
   town2('kitchen2', '落霞城·灶台', 16, 14, 'stove', filterIds('cook_')),
