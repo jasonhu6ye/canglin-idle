@@ -256,6 +256,15 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
   .tabbar button img { width: 18px; height: 18px; }
   .tabbar kbd { position: absolute; top: 2px; right: 4px; font: 9px/1 system-ui, sans-serif; color: var(--muted); opacity: 0.7; }
   .tabbar .help-btn { flex: 0 0 34px; font-size: 15px; font-weight: 700; color: var(--gold); }
+  .tabbar .fold-btn { flex: 0 0 30px; font-size: 16px; font-weight: 700; color: var(--gold); }
+  /* 面板收起时：标签变成右边一条竖排图标栏，地图占满（用户 10-23） */
+  .app.collapsed { grid-template: "top top" auto "main nav" 1fr / 1fr 62px; }
+  .app.collapsed .tabbar { flex-direction: column; justify-content: flex-start; border-bottom: 0; box-shadow: inset 2px 0 0 var(--gold-dark); padding: 4px 0; gap: 2px; }
+  .app.collapsed .tabbar button { flex: none; flex-direction: column; gap: 2px; padding: 8px 0; font-size: 11px; }
+  .app.collapsed .tabbar .help-btn, .app.collapsed .tabbar .fold-btn { flex: none; padding: 6px 0; }
+  .app.collapsed .tabbar .fold-btn { order: -1; }
+  .app.collapsed .tabbar button img { width: 24px; height: 24px; }
+  .app.collapsed .tabbar button { font-size: 12px; padding: 10px 0; }
   .queue { max-width: 380px; }
   .chips { width: 380px; }
   /* 背包、仓库格子更密 */
@@ -408,7 +417,7 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 
 /* 地点列表：区域标签 + 两列 */
 .node-page .region-tabs { gap: 4px; }
-.node-page .region-tabs .pill { padding: 3px 9px; font-size: 12px; min-height: 26px; }
+.node-page .region-tabs .pill { padding: 3px 9px; font-size: 12px; min-height: 26px; display: inline-flex; align-items: center; gap: 3px; }
 .node-list.grid2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; }
 .node-list.grid2 li { margin: 0; }
 .node-list.grid2 button { height: 100%; }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ACTIONS, buffText, ITEMS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, type MapNode } from '../core/data';
+import { ACTIONS, buffText, ITEMS, MONSTERS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, type MapNode } from '../core/data';
 import {
   atBank, atMarket, nearestBank, nearestMarket, BAG_SLOTS, BELT_CAP, beltSlotOf, eat, fromBelt, POTION_AT, toBelt, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip, openContainer,
   weaponStyle,
@@ -453,58 +453,62 @@ export function OfflineModal({ sum }: { sum: Summary }) {
 }
 
 /** 宽屏右侧的地点列表，按区域分组 */
-/** 地点列表（电脑端右侧）：按区域分组成标签，点一个只看那一组，不用一直往下滚（用户 10-23） */
-type NodeGroup = { id: string; name: string; nodes: MapNode[] };
-const NODE_GROUPS: NodeGroup[] = (() => {
-  const groups: NodeGroup[] = [
-    { id: 'town1', name: '主城', nodes: NODES.filter((n) => n.town && n.region === 'town') },
-    { id: 'town2', name: '落霞城', nodes: NODES.filter((n) => n.town && n.region !== 'town') },
-  ];
-  for (const r of Object.keys(REGIONS) as (keyof typeof REGIONS)[]) {
-    const nodes = NODES.filter((n) => !n.town && n.region === r);
-    if (nodes.length) groups.push({ id: r, name: r === 'town' ? '城郊' : REGIONS[r].name, nodes });
-  }
-  return groups;
-})();
-const groupOfNode = (id: string) => NODE_GROUPS.find((g) => g.nodes.some((n) => n.id === id))?.id ?? 'town1';
+/** 地点列表（电脑端右侧）：按用途分类，玩家一眼知道去哪练什么（用户 10-23） */
+type NodeTab = { id: string; name: string; skill?: SkillId };
+const NODE_TABS: NodeTab[] = [
+  { id: 'town', name: '城镇设施' },
+  { id: 'mining', name: '采矿', skill: 'mining' }, { id: 'woodcutting', name: '伐木', skill: 'woodcutting' },
+  { id: 'fishing', name: '钓鱼', skill: 'fishing' }, { id: 'gathering', name: '采集', skill: 'gathering' },
+  { id: 'hunting', name: '狩猎', skill: 'hunting' }, { id: 'farming', name: '种植', skill: 'farming' },
+  { id: 'thieving', name: '偷窃', skill: 'thieving' }, { id: 'boss', name: '首领' }, { id: 'cave', name: '洞窟' },
+];
+const BOSSES = Object.values(MONSTERS).filter((m) => m.rank === 'boss').sort((a, b) => a.level - b.level);
+const townName = (n: MapNode) => (n.region === 'town' ? '主城' : '落霞城');
 
 export function NodeList({ s, onPick }: { s: GameState; onPick: (id: string) => void }) {
-  // 默认打开角色所在的那一组
-  const [group, setGroup] = useState(() => {
-    const near = NODES.reduce((a, b) => (Math.hypot(b.x - s.loc.x, b.y - s.loc.y) < Math.hypot(a.x - s.loc.x, a.y - s.loc.y) ? b : a));
-    return groupOfNode(near.id);
-  });
-  const g = NODE_GROUPS.find((x) => x.id === group) ?? NODE_GROUPS[0];
+  const [tabId, setTabId] = useState('town');
+  const tab = NODE_TABS.find((t) => t.id === tabId)!;
+  let rows: { key: string; id: string; name: string; sub: string; lv?: string; dim?: boolean }[] = [];
+  if (tab.id === 'town') {
+    rows = NODES.filter((n) => n.town).map((n) => {
+      const kinds = [...new Set(n.actions.map((id) => { const a = ACTIONS[id]; return a.kind === 'skill' ? SKILLS[a.skill].name : '战斗'; }))];
+      return { key: n.id, id: n.id, name: n.name.replace('落霞城·', ''), sub: `${townName(n)} · ${n.opens === 'bank' ? '存取物品' : kinds.join('、')}` };
+    }).sort((a, b) => (a.sub.startsWith('主城') === b.sub.startsWith('主城') ? 0 : a.sub.startsWith('主城') ? -1 : 1));
+  } else if (tab.id === 'boss') {
+    rows = BOSSES.map((m) => ({ key: m.id, id: `fight_${m.id}`, name: m.name, sub: `${REGIONS[m.region].name} · ${s.bestiary?.[m.id] ? `已击败 ${s.bestiary[m.id]} 次` : '未击败'}`, lv: `Lv${m.level}` }));
+  } else if (tab.id === 'cave') {
+    rows = NODES.filter((n) => n.cave).map((n) => ({ key: n.id, id: n.id, name: n.name, sub: `${REGIONS[n.region].name} · 未开放`, dim: true }));
+  } else {
+    rows = NODES.filter((n) => !n.town || tab.skill === 'thieving' || tab.skill === 'farming').flatMap((n) => {
+      const lv = n.actions.map((id) => ACTIONS[id]).filter((a) => a.kind === 'skill' && a.skill === tab.skill).map((a) => a.level);
+      if (!lv.length) return [];
+      const lo = Math.min(...lv);
+      const hi = Math.max(...lv);
+      const lock = level(s, tab.skill!) < lo;
+      return [{ key: n.id, id: n.id, name: n.name, sub: `${n.town ? townName(n) : REGIONS[n.region].name} · ${lv.length} 项`, lv: lo === hi ? `${lo} 级` : `${lo}-${hi} 级`, dim: lock, lo }];
+    }).sort((a, b) => a.lo - b.lo);
+  }
   return (
     <div className="page node-page">
-      <h2>地点</h2>
+      <h2>地点 <small className="muted">点地图上的地点或下面的列表选任务，右下角 ▦ 打开世界地图</small></h2>
       <div className="chips-row region-tabs">
-        {NODE_GROUPS.map((x) => (
-          <button key={x.id} className={`pill ${x.id === g.id ? 'on' : ''}`} onClick={() => setGroup(x.id)}>{x.name}</button>
+        {NODE_TABS.map((t) => (
+          <button key={t.id} className={`pill ${t.id === tab.id ? 'on' : ''}`} onClick={() => setTabId(t.id)}>
+            {t.skill && <SkillIcon skill={t.skill} size={14} />}{t.name}
+          </button>
         ))}
       </div>
+      {tab.skill && <p className="muted">{SKILLS[tab.skill].name}当前 {level(s, tab.skill)} 级，灰色的是还没到等级的地点。</p>}
       <ul className="node-list grid2">
-        {g.nodes.map((n) => {
-          const kinds = [...new Set(n.actions.map((id) => {
-            const a = ACTIONS[id];
-            return a.kind === 'skill' ? SKILLS[a.skill].name : '战斗';
-          }))];
-          return (
-            <li key={n.id}>
-              <button onClick={() => onPick(n.id)} className={n.cave ? 'cave' : ''}>
-                <span className="row1">
-                  <b>{n.name.replace('落霞城·', '')}</b>
-                  {!n.town && !n.cave && <small className="muted">Lv{n.lv[0]}{n.lv[1] !== n.lv[0] && `-${n.lv[1]}`}</small>}
-                </span>
-                <small className="muted">
-                  {n.cave ? '大型洞窟 · 未开放' : n.opens === 'bank' ? '打开仓库' : `${kinds.join(' · ')} · ${n.actions.length} 项`}
-                </small>
-              </button>
-            </li>
-          );
-        })}
+        {rows.map((r) => (
+          <li key={r.key}>
+            <button onClick={() => onPick(r.id)} className={r.dim ? 'cave' : ''}>
+              <span className="row1"><b>{r.name}</b>{r.lv && <small className="muted">{r.lv}</small>}</span>
+              <small className="muted">{r.sub}</small>
+            </button>
+          </li>
+        ))}
       </ul>
-      <p className="muted">点地图上的地点或列表选择任务；点空地让角色走过去；右下角 ▦ 打开世界地图，可以寻路前往各个地点。</p>
     </div>
   );
 }

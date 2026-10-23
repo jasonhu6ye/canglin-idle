@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ACTIONS, NODES, REGIONS, SKILLS } from './core/data';
 import type { RegionId, Summary, TaskEndReason } from './core/types';
 import { BOSS_BANNER, REGION_CHANGE } from './game/MapScene';
@@ -19,7 +19,7 @@ type Tab = 'game' | 'char' | 'bag' | 'bank' | 'skills' | 'more';
 /** 电脑端快捷键说明（用户 10-23 要求优化电脑端操作） */
 const SHORTCUTS: [string, string][] = [
   ['WASD / 方向键', '走路'], ['鼠标右键', '点地面走过去，按住一直朝光标走'], ['鼠标左键', '点地点、怪物查看信息或攻击；拖动移动镜头'], ['滚轮 / + -', '缩放地图'],
-  ['空格', '镜头回到角色'], ['M', '世界地图'], ['Tab', '打开 / 关闭背包'], ['左键物品图标', '查看物品详情'], ['右键物品', '背包里穿上或放进补给栏，身上的卸下，仓库的取到背包'], ['1 - 6', '切换右侧面板'], ['Esc', '关闭当前页面'], ['?', '显示 / 隐藏这份说明'],
+  ['空格', '镜头回到角色'], ['M', '世界地图'], ['Tab', '打开 / 关闭背包'], ['左键物品图标', '查看物品详情'], ['右键物品', '背包里穿上或放进补给栏，身上的卸下，仓库的取到背包'], ['1 - 6', '打开右侧面板，再按一次同一个收起'], ['Esc', '关闭当前页面，再按一次收起右侧面板'], ['?', '显示 / 隐藏这份说明'],
 ];
 
 const TABS: { id: Tab; icon: [string, string]; label: string }[] = [
@@ -112,12 +112,24 @@ export function App() {
   const [node, setNode] = useState<string | null>(null);
   const [worldMap, setWorldMap] = useState(false);
   const [monster, setMonster] = useState<string | null>(null);
+  // 电脑端右侧面板默认收起，点标签、地点或按快捷键才展开（用户 10-23）
+  const [panelOpen, setPanelOpen] = useState(false);
+  const ui = useRef({ tab, node, monster, panelOpen, wide });
+  ui.current = { tab, node, monster, panelOpen, wide };
+  /** 点标签：电脑端再点一次同一个标签就收起 */
+  const pickTab = useCallback((id: Tab) => {
+    const u = ui.current;
+    setNode(null); setMonster(null); setWorldMap(false);
+    if (u.wide && u.panelOpen && u.tab === id && !u.node && !u.monster) { setPanelOpen(false); return; }
+    setTab(id); setPanelOpen(true);
+  }, []);
   const toasts = useToasts();
   const { region, banner } = useRegion();
   const boss = useBossBanner();
   const openNode = useCallback((id: string) => {
     setWorldMap(false);
     setMonster(null);
+    setPanelOpen(true);
     // 地图上点的是怪物
     if (ACTIONS[id]?.kind === 'combat') {
       setNode(null);
@@ -151,14 +163,18 @@ export function App() {
       const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
       if (tag === 'input' || tag === 'textarea' || e.ctrlKey || e.metaKey || e.altKey) return;
       const k = e.key;
-      if (k >= '1' && k <= '6') {
-        setTab(TABS[+k - 1].id); setNode(null); setMonster(null); setWorldMap(false);
-      } else if (k === 'm' || k === 'M') setWorldMap((v) => !v);
+      if (k >= '1' && k <= '6') pickTab(TABS[+k - 1].id);
+      else if (k === 'm' || k === 'M') setWorldMap((v) => !v);
       else if (k === 'Tab') {
         e.preventDefault();
-        setTab((t) => (t === 'bag' ? 'game' : 'bag')); setNode(null); setMonster(null); setWorldMap(false);
+        const u = ui.current;
+        if (u.wide) pickTab('bag');
+        else { setTab((t) => (t === 'bag' ? 'game' : 'bag')); setNode(null); setMonster(null); setWorldMap(false); }
       }
       else if (k === 'Escape') {
+        const u = ui.current;
+        // 先关打开的地点/怪物页，没有的话收起面板
+        if (!u.node && !u.monster) setPanelOpen(false);
         openItem(null); setHelp(false); setWorldMap(false); setMonster(null); setNode(null);
       } else if (k === '+' || k === '=') emitToGame('zoom', 0.5);
       else if (k === '-' || k === '_') emitToGame('zoom', -0.5);
@@ -176,7 +192,9 @@ export function App() {
   }), []);
 
   let side: ReactNode = null;
+  const showSide = !wide || panelOpen;
   if (worldMap) side = <WorldMap s={s} onClose={() => setWorldMap(false)} onOpenNode={openNode} />;
+  else if (!showSide) side = null;
   else if (tab === 'game' && monster) side = <MonsterSheet s={s} actionId={monster} onClose={() => setMonster(null)} />;
   else if (tab === 'game' && node) side = <ActionSheet s={s} nodeId={node} onClose={() => setNode(null)} />;
   else if (tab === 'game' && wide) side = <NodeList s={s} onPick={openNode} />;
@@ -187,7 +205,7 @@ export function App() {
   else if (tab === 'more') side = <MorePanel s={s} />;
 
   return (
-    <div className="app">
+    <div className={`app ${wide && !panelOpen ? 'collapsed' : ''}`}>
       <TopBar s={s} />
       <main>
         <GameCanvas onNodeClick={openNode} />
@@ -207,14 +225,19 @@ export function App() {
       {side && <aside className={`side ${worldMap ? 'wide-map' : ''}`}>{side}</aside>}
       <nav className="tabbar">
         {TABS.map((t, i) => (
-          <button key={t.id} className={tab === t.id && !worldMap ? 'on' : ''} title={`${t.label}（快捷键 ${i + 1}）`}
-            onClick={() => { setTab(t.id); setNode(null); setMonster(null); setWorldMap(false); }}>
+          <button key={t.id} className={tab === t.id && !worldMap && showSide ? 'on' : ''} title={`${t.label}（快捷键 ${i + 1}）`}
+            onClick={() => pickTab(t.id)}>
             <TplIcon tpl={t.icon[0]} tint={t.icon[1]} size={22} />
             <span>{t.label}</span>
             {wide && <kbd>{i + 1}</kbd>}
           </button>
         ))}
         {wide && <button className="help-btn" title="快捷键说明（?）" onClick={() => setHelp((v) => !v)}>?</button>}
+        {wide && (
+          <button className="fold-btn" title={panelOpen ? '收起面板（Esc）' : '展开面板'} onClick={() => setPanelOpen((v) => !v)}>
+            {panelOpen ? '»' : '«'}
+          </button>
+        )}
       </nav>
       {help && (
         <div className="item-popup" onClick={() => setHelp(false)}>
