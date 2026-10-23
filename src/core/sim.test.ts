@@ -1,7 +1,8 @@
 import { actionDuration, advance, buySeed, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour, openContainer, redeemCode, toggleMount, moveSpeed } from './sim';
 import { levelForXp, speedForLevel, XP_TABLE } from './xp';
 import type { GameState, SkillAction, TaskMode } from './types';
-import { ACTIONS, nodeOfAction, standOf, travelMs } from './data';
+import { ACTIONS, CROP_DEFS, FARM_NODES, nodeOfAction, plotsOf, standOf, travelMs, WATER_SPEEDUP } from './data';
+import { fieldCounts, harvestAll, plantAll, tendPlot, waterAll } from './farm';
 
 /** 测试默认已经站在任务地点、补给也带好了，不算走路时间 */
 function startHere(s: GameState, action: string, mode: TaskMode) {
@@ -467,21 +468,63 @@ describe('料理与栏位', () => {
 });
 
 describe('种植', () => {
-  it('种田消耗种子、收作物，种子大多能收回', () => {
-    const s = startHere(newGame(T0, 3), 'farm_potato', { type: 'infinite' });
-    expect(s.bank.seed_potato).toBe(10);
-    const { state, summary } = advance(s, T0 + 10 * 60000);
-    expect(summary.items.potato).toBeGreaterThan(20);
-    expect(summary.xp.farming).toBeGreaterThan(0);
-    expect(summary.xp.gathering).toBeUndefined();
+  const atFarm = (g: ReturnType<typeof newGame>) => {
+    const n = FARM_NODES[0];
+    g.loc = { x: n.x, y: n.y };
+    return g;
+  };
+
+  it('站在田边一格一格地种，种子先用背包再用仓库；离田太远种不了', () => {
+    const g = newGame(T0, 3);
+    const plot = plotsOf('farm')[0].id;
+    expect(tendPlot(g, plot, 'potato', T0).state.farm?.[plot]).toBeUndefined();
+    const { state } = tendPlot(atFarm(g), plot, 'potato', T0);
+    expect(state.farm?.[plot]?.crop).toBe('potato');
+    expect(state.bank.seed_potato).toBe(9);
+    // 等级不够的作物种不了
+    state.bank.seed_lingzhi = 1;
+    const other = plotsOf('farm')[1].id;
+    expect(tendPlot(state, other, 'carrot', T0).state.farm?.[other]).toBeUndefined();
   });
 
-  it('没有种子就种不了', () => {
-    const g = newGame(T0, 3);
-    delete g.bank.seed_potato;
-    const s = startHere(g, 'farm_potato', { type: 'infinite' });
-    const { summary } = advance(s, T0 + 60000);
-    expect(summary.items.potato).toBeUndefined();
+  it('浇水长得快，熟了收获拿作物、经验和日志；没熟收不了', () => {
+    const s = atFarm(newGame(T0, 3));
+    let r = plantAll(s, 'farm', 'potato', T0);
+    expect(fieldCounts(r.state, 'farm', T0).growing).toBe(10);
+    const plot = Object.keys(r.state.farm!)[0];
+    const dry = r.state.farm![plot].ripe;
+    r = waterAll(r.state, 'farm', T0);
+    const wet = r.state.farm![plot].ripe;
+    expect(wet - T0).toBeCloseTo((dry - T0) * (1 - WATER_SPEEDUP), -1);
+    expect(harvestAll(r.state, 'farm', T0 + 1000).summary.items.potato).toBeUndefined();
+    const h = harvestAll(r.state, 'farm', wet);
+    expect(h.summary.items.potato).toBeGreaterThanOrEqual(20);
+    expect(h.summary.xp.farming).toBeGreaterThan(0);
+    expect(h.summary.log?.length).toBe(1);
+    expect(h.summary.log?.[0].n).toBe(10);
+    expect(Object.keys(h.state.farm ?? {}).length).toBe(0);
+  });
+
+  it('一整块田种满时，每小时经验和别的采集差不多', () => {
+    const c = CROP_DEFS.potato;
+    const perHour = (56 * c.xp * 3_600_000) / c.growMs;
+    expect(perHour).toBeGreaterThan(xpPerHour(newGame(T0, 3), 'chop_plain') * 0.5);
+  });
+
+  it('自动补种：离线时熟了自己收、再种，作物进仓库，种子用完就停', () => {
+    const g = atFarm(newGame(T0, 3));
+    g.settings.autoFarm = { farm: true };
+    const r = plantAll(g, 'farm', 'potato', T0);
+    expect(r.state.bank.seed_potato ?? 0).toBe(0);
+    const s = { ...r.state, loc: bankStand() };
+    const { state, summary } = advance(s, T0 + 3 * 3_600_000);
+    expect(summary.items.potato).toBeGreaterThan(20);
+    expect(state.bank.potato).toBe(summary.items.potato);
+    expect(summary.log?.every((e) => e.crop === 'potato' && e.auto)).toBe(true);
+    // 分几次结算结果一样
+    const a = advance(advance(s, T0 + 3_600_000).state, T0 + 3 * 3_600_000).state;
+    expect(a.bank.potato).toBe(state.bank.potato);
+    expect(a.farm).toEqual(state.farm);
   });
 
   it('集市才能买种子，金币从仓库扣', () => {

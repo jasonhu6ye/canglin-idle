@@ -617,20 +617,29 @@ function wildSeed(tier: number, salt: number): Drop {
   const pool = CROPS.filter((c) => tierForLevel(c[2]) === tier);
   return { item: `seed_${pool[salt % pool.length][0]}`, qty: 1, chance: 0.03 };
 }
-/** 种田：消耗 1 颗种子，收 2-3 个作物；80% 收回种子、25% 多收一颗、1% 变异出下一种作物的种子 */
-const plant = (i: number) => {
-  const [id, name, lvl] = CROPS[i];
+/**
+ * 地块制种田（用户 10-23 改成星露谷那样一格一格地种，取消排队种地）：
+ * 种一格耗 1 颗种子，按现实时间长大（离线也长），浇过水快 25%；
+ * 收获 2-3 个作物，80% 收回种子、25% 多收一颗、1% 变异出下一种作物的种子。
+ * 一整块田（56 格）种满时每小时经验和原来排队种地差不多，但种下后可以去干别的。
+ */
+export interface CropDef { id: string; name: string; level: number; tier: number; xp: number; outputs: Drop[]; growMs: number }
+export const CROP_DEFS: Record<string, CropDef> = {};
+CROPS.forEach(([id, name, lvl], i) => {
   const next = CROPS[i + 1];
-  const aid = gather(`farm_${id}`, `种${name}`, 'farming', lvl, [
-    one(id, 2), { item: id, qty: 1, chance: 0.3 },
-    { item: `seed_${id}`, qty: 1, chance: 0.8 }, { item: `seed_${id}`, qty: 1, chance: 0.25 },
-    ...(next ? [{ item: `seed_${next[0]}`, qty: 1, chance: 0.01 }] : []),
-  ], { tool: 'hoe' });
-  const a = actionList[actionList.length - 1];
-  if (a.kind === 'skill') a.inputs = [one(`seed_${id}`)];
-  return aid;
-};
-const plantTiers = (...tiers: number[]) => CROPS.map((c, i) => [c, i] as const).filter(([c]) => tiers.includes(tierForLevel(c[2]))).map(([, i]) => plant(i));
+  CROP_DEFS[id] = {
+    id, name, level: lvl, tier: tierForLevel(lvl),
+    xp: Math.round(xpFor(lvl) * tierTime(lvl) * 2),
+    growMs: Math.round(6 * 60_000 * tierTime(lvl)),
+    outputs: [
+      one(id, 2), { item: id, qty: 1, chance: 0.3 },
+      { item: `seed_${id}`, qty: 1, chance: 0.8 }, { item: `seed_${id}`, qty: 1, chance: 0.25 },
+      ...(next ? [{ item: `seed_${next[0]}`, qty: 1, chance: 0.01 }] : []),
+    ],
+  };
+});
+/** 浇过水的作物长得快多少 */
+export const WATER_SPEEDUP = 0.25;
 const steal = (id: string, name: string, level: number, coins: number, extra: Drop[] = []) =>
   gather(`steal_${id}`, name, 'thieving', level, [one('coins', coins), ...extra], {
     ms: 2500 + level * 15, fail: { chance: 0.5, noFailLevel: level + 30, stunMs: 4000 },
@@ -829,6 +838,8 @@ export interface MapNode {
   cave?: boolean;
   /** 暂未开放的建筑（用户 10-23：强化台先不开放） */
   closed?: boolean;
+  /** 田地：能种哪几阶的作物（地块制种田） */
+  farm?: number[];
 }
 export type SiteKind = 'islands' | 'bamboo' | 'saltflat' | 'crater' | 'fungal' | 'glacier' | 'obsidian' | 'starabyss'
   | 'oasis' | 'mesa' | 'atoll' | 'crystalheart';
@@ -886,10 +897,10 @@ export const NODES: MapNode[] = [
   ]),
   town('dummy', '训练场', 181, 182, 'dummy', [fight('dummy', '打稻草人')]),
   // 城镇周围的四块田（用户 10-23 要求），每块种两阶作物
-  town('farm', '城镇农田', 148, 198, 'farm', plantTiers(0, 1)),
-  town('farm_south', '南郊麦田', 147, 217, 'farm', plantTiers(2, 3)),
-  town('farm_east', '东郊菜园', 187, 213, 'farm', plantTiers(4, 5)),
-  town('farm_west', '西岭灵田', 115, 203, 'farm', plantTiers(6, 7)),
+  town('farm', '城镇农田', 148, 198, 'farm', [], { farm: [0, 1], lv: [1, 7] }),
+  town('farm_south', '南郊麦田', 147, 217, 'farm', [], { farm: [2, 3], lv: [10, 27] }),
+  town('farm_east', '东郊菜园', 187, 213, 'farm', [], { farm: [4, 5], lv: [30, 51] }),
+  town('farm_west', '西岭灵田', 115, 203, 'farm', [], { farm: [6, 7], lv: [55, 110] }),
   { ...wild('town_lake', '镜湖码头', 0.37, 0.65, 'town', 'fish', [fishAt('minnow'), fishAt('loach'), fishAt('crucian'), fishAt('trout', '_lake')], true), town: true },
 
   // 巨木森林
@@ -1057,6 +1068,43 @@ export const NODES: MapNode[] = [
 export const ACTIONS: Record<string, ActionDef> = Object.fromEntries(actionList.map((a) => [a.id, a]));
 
 /** 动作 → 所在地点 */
+/** 城镇周围四块田的范围（老城的局部坐标）：每三行里两行耕地、一行走道，中间 5×5 留给牌子 */
+export const FARM_RECTS = [
+  { x0: 134, y0: 191, x1: 160, y1: 206, node: [148, 198], id: 'farm' },
+  { x0: 134, y0: 211, x1: 160, y1: 223, node: [147, 217], id: 'farm_south' },
+  { x0: 175, y0: 206, x1: 200, y1: 220, node: [187, 213], id: 'farm_east' },
+  { x0: 106, y0: 196, x1: 124, y1: 210, node: [115, 203], id: 'farm_west' },
+];
+export const isFarmRow = (r: { y0: number }, localY: number) => (localY - r.y0) % 3 !== 2;
+/** 田里能种的地块：牌子上下各一垄（两行耕地），牌子左右各 7 格，每块田 56 格 */
+export interface FarmPlot { id: string; field: string; x: number; y: number }
+export const FARM_NODES = NODES.filter((n) => n.farm);
+export const FARM_PLOTS: FarmPlot[] = FARM_RECTS.flatMap((r) => {
+  const [nx, ny] = r.node;
+  // 牌子上方、下方各挑离得最近的一垄（相邻的两行耕地）
+  const pairs: number[] = [];
+  for (let y = r.y0; y < r.y1; y++) if (isFarmRow(r, y) && isFarmRow(r, y + 1)) pairs.push(y);
+  const above = pairs.filter((y) => y + 1 < ny).pop()!;
+  const below = pairs.find((y) => y > ny)!;
+  const out: FarmPlot[] = [];
+  for (const y of [above, above + 1, below, below + 1]) {
+    for (let x = nx - 9; x <= nx + 9; x++) {
+      if (Math.abs(x - nx) <= 2 || x < r.x0 || x > r.x1) continue;
+      out.push({ id: `${r.id}:${out.length}`, field: r.id, ...townXY(x, y) });
+    }
+  }
+  return out;
+});
+export const PLOT_BY_ID: Record<string, FarmPlot> = Object.fromEntries(FARM_PLOTS.map((p) => [p.id, p]));
+export const plotsOf = (field: string) => FARM_PLOTS.filter((p) => p.field === field);
+/** 这种作物种在哪块田 */
+export const fieldOfCrop = (crop: string) => FARM_NODES.find((n) => n.farm!.includes(CROP_DEFS[crop]?.tier ?? -1));
+/** 这块田能种的作物（按等级从低到高） */
+export const cropsOfField = (field: string) => {
+  const n = FARM_NODES.find((x) => x.id === field);
+  return n ? CROPS.map((c) => CROP_DEFS[c[0]]).filter((c) => n.farm!.includes(c.tier)) : [];
+};
+
 const NODES_OF: Record<string, MapNode[]> = {};
 for (const n of NODES) for (const a of n.actions) (NODES_OF[a] ??= []).push(n);
 /** 能做这个动作的所有地点（两座城的同类建筑会重复） */

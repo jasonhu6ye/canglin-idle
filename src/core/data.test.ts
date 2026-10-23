@@ -1,4 +1,4 @@
-import { ACTIONS, ITEMS, MONSTERS, NODES, nodeOfAction } from './data';
+import { ACTIONS, CROP_DEFS, ITEMS, MONSTERS, NODES, nodeOfAction } from './data';
 import { SPECIES, TRAITS } from './bestiary';
 
 describe('数据闭环', () => {
@@ -39,6 +39,11 @@ describe('数据闭环', () => {
     for (const it of Object.values(ITEMS)) it.opens?.pool.forEach((e) => made.add(e.item));
     // 兑换码送的坐骑
     made.add('mount_danmark');
+    // 种田：作物来自地块收获，种子种在地块里
+    for (const c of Object.values(CROP_DEFS)) {
+      c.outputs.forEach((o) => made.add(o.item));
+      used.add(`seed_${c.id}`);
+    }
     for (const it of Object.values(ITEMS)) {
       expect(made.has(it.id), `${it.name} 没有来源`).toBe(true);
       const usable = used.has(it.id) || !!it.equip || !!it.heals || !!it.ammo || !!it.opens || it.category === 'loot' || it.category === 'deco';

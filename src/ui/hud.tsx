@@ -170,7 +170,7 @@ export function QuestCard({ s, onGo }: { s: GameState; onGo: (nodeId: string) =>
   };
   const p = questProgress(s);
   if (!p) return null;
-  const node = nodeOfAction(p.q.hint, s.loc);
+  const node = NODES.find((n) => n.id === p.q.hint) ?? nodeOfAction(p.q.hint, s.loc);
   const idx = (s.quest?.i ?? 0) + 1;
   return (
     <div className={`chip quest ${open ? '' : 'folded'}`}>

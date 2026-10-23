@@ -1,6 +1,7 @@
-import { ACTIONS, ITEMS, MAP_W, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, travelMs, type MapNode } from './data';
+import { ACTIONS, CROP_DEFS, PLOT_BY_ID, ITEMS, MAP_W, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, travelMs, type MapNode } from './data';
 import { nextRandom } from './rng';
 import { stepQuests } from './quests';
+import { stepAutoFarm } from './farm';
 import { BONUS_PER_LEVEL, levelForXp, speedForLevel, XP_TABLE } from './xp';
 import type {
   CombatLogEntry,
@@ -111,6 +112,8 @@ export function migrate(raw: unknown): GameState | null {
     buffs: s.buffs ?? {},
     mounted: !!s.mounted && !!equipment.mount,
     redeemed: s.redeemed ?? [],
+    // 地块里种的作物改过名或删掉了就清掉
+    farm: Object.fromEntries(Object.entries(s.farm ?? {}).filter(([id, p]) => PLOT_BY_ID[id] && p && CROP_DEFS[p.crop])),
     // 栏位里的东西改过名或删掉了就丢掉，免得界面读不到物品
     belt: Object.fromEntries(Object.entries(s.belt ?? {}).filter(([slot, b]) => b && ITEMS[b.id] && beltSlotOf(b.id) === slot && b.qty > 0)),
     // 旧存档：现在拥有的东西都算获得过
@@ -375,6 +378,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   let dt = Math.min(now - s.lastTick, OFFLINE_CAP_MS);
   s.lastTick = now;
   sum.elapsedMs = dt;
+  const from = now - dt;
 
   const rand = () => {
     const [r, next] = nextRandom(s.rng);
@@ -805,6 +809,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       if (isFinished(task)) endTask('complete');
     }
   }
+  stepAutoFarm(s, sum, from, now);
   const before = s.quest?.i ?? 0;
   if (stepQuests(s, sum).length) sum.quests = Array.from({ length: (s.quest?.i ?? 0) - before }, (_, k) => before + k);
   return { state: s, summary: sum };
@@ -884,7 +889,7 @@ export function startWalk(prev: GameState, from: { x: number; y: number }, to: {
 
 /** 没有任务或已暂停时，手动走到某个格子，记下位置 */
 export function setLoc(prev: GameState, x: number, y: number): GameState {
-  if ((prev.queue.length && !prev.paused) || (prev.loc.x === x && prev.loc.y === y)) return prev;
+  if ((prev.queue.length && !prev.paused) || (prev.loc.x === x && prev.loc.y === y && !prev.walk)) return prev;
   const s = clone(prev);
   s.loc = { x, y };
   s.walk = null;

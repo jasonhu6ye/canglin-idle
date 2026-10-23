@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ACTIONS, buffText, ITEMS, MONSTERS, nodeOfAction, SKILLS, TIERS, tierName } from '../core/data';
+import { ACTIONS, buffText, CROP_DEFS, fieldOfCrop, ITEMS, MONSTERS, nodeOfAction, SKILLS, TIERS, tierName } from '../core/data';
 import { maxHp, POTION_AT } from '../core/sim';
 import type { GameState, ItemDef } from '../core/types';
 import { Icon } from './icons';
@@ -45,6 +45,12 @@ function sourcesOf(id: string) {
       const out = a.outputs[0] ? ITEMS[a.outputs[0].item].name : a.name;
       use.push(`${SKILLS[a.skill].name} ${a.level} 级 · ${out}`);
     }
+  }
+  // 种田：作物和种子来自地块收获，种子种在地块里
+  for (const c of Object.values(CROP_DEFS)) {
+    const field = fieldOfCrop(c.id)?.name ?? '';
+    if (c.outputs.some((o) => o.item === id)) make.push(`种植 ${c.level} 级 · 种${c.name} @ ${field}`);
+    if (id === `seed_${c.id}`) use.push(`种植 ${c.level} 级 · 种${c.name} @ ${field}`);
   }
   const drops = Object.values(MONSTERS)
     .filter((m) => m.drops.some((d) => d.item === id))

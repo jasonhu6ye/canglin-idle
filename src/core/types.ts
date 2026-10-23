@@ -177,6 +177,11 @@ export interface CombatLogEntry {
   /** 战斗记怪物 id，采集制作记动作 id */
   monster?: string;
   action?: string;
+  /** 种田：收获的作物 id（auto = 自动补种时收的） */
+  crop?: string;
+  auto?: boolean;
+  /** 种田：这条日志合并了几格 */
+  n?: number;
   xp: Partial<Record<SkillId, number>>;
   items: Record<string, number>;
 }
@@ -190,6 +195,18 @@ export interface Settings {
   carryPotion?: boolean;
   /** 衣橱里选中的外观 */
   skin?: string;
+  /** 种田：每块田「一键种满」用的种子 */
+  farmSeed?: Record<string, string>;
+  /** 种田：哪些田开了自动补种（熟了自动收、再种同一种，离线也照样） */
+  autoFarm?: Record<string, boolean>;
+}
+
+/** 一格地：种下的作物、种下的时刻、成熟的时刻；浇过水成熟得早 */
+export interface Plot {
+  crop: string;
+  at: number;
+  ripe: number;
+  water?: boolean;
 }
 
 export interface GameState {
@@ -235,6 +252,8 @@ export interface GameState {
   paused?: boolean;
   /** 图鉴：获得过的物品 */
   seen: Record<string, 1>;
+  /** 田里种着的地块（地块 id → 作物），空地不存 */
+  farm?: Record<string, Plot>;
 }
 
 export type TaskEndReason = 'complete' | 'noInput' | 'death' | 'level' | 'noAmmo';

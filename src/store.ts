@@ -92,6 +92,20 @@ class Store {
     this.emit();
   }
 
+  /** 种田操作：先结算到现在，再种 / 浇 / 收，收获的东西也记进日志、弹提示 */
+  farm(fn: (s: GameState, now: number) => { state: GameState; summary: Summary }) {
+    const now = Date.now();
+    const { state, summary } = advance(this.state, now);
+    this.absorb(summary);
+    const r = fn(state, now);
+    this.state = r.state;
+    this.absorb(r.summary);
+    if (Object.keys(r.summary.items).length || r.summary.levelUps.length || r.summary.quests?.length) this.gainListeners.forEach((l) => l(r.summary));
+    this.save();
+    this.emit();
+    return r;
+  }
+
   /** 界面要求角色寻路去某个地点（地图场景来取） */
   pendingWalk: string | null = null;
   /** 正在追踪的怪物 id：地图上给它头顶加个箭头 */

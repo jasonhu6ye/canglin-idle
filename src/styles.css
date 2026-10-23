@@ -487,3 +487,21 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .day-clock-label b { color: var(--gold); font-variant-numeric: tabular-nums; font-weight: normal; }
 .rain-dot { display: inline-block; width: 4px; height: 6px; background: #7ab8ff; border-radius: 50% 50% 50% 50% / 30% 30% 70% 70%; box-shadow: 0 0 0 1px #0e0805; }
 @media (max-width: 899px) { .day-clock canvas { width: 54px; height: 54px; } .toasts { top: 82px; } }
+
+/* 田地面板（地块制种田） */
+.farm-grid { display: grid; gap: 2px; margin: 8px 12px 4px; padding: 4px; background: #24170e; border: 1px solid #5a3c22; border-radius: 4px; }
+.farm-grid .fp { position: relative; aspect-ratio: 1; background: #5a3c22; border-radius: 1px; overflow: hidden; }
+.farm-grid .fp.wet { background: #3a2414; }
+.farm-grid .fp b { position: absolute; left: 0; right: 0; bottom: 0; background: #5a9a34; }
+.farm-grid .fp.ripe b { background: #e8b84a; animation: fp-glow 1s ease-in-out infinite alternate; }
+@keyframes fp-glow { to { background: #fff0a0; } }
+.farm-stat { margin: 2px 12px 6px; font-size: 12px; }
+.farm-btns { display: flex; gap: 6px; margin: 6px 12px; }
+.farm-btns button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 4px; }
+.farm-btns button small { font-size: 10px; opacity: 0.8; }
+.farm-auto { display: flex; gap: 8px; align-items: flex-start; margin: 4px 12px 8px; font-size: 12px; cursor: pointer; }
+.farm-auto input { margin-top: 2px; }
+.farm-h { margin: 8px 12px 2px; font-size: 13px; }
+.farm-sheet .pad.small { font-size: 11px; }
+.farm-btns button:not(.primary) { background: #3a2a1a; border: 1px solid #8a6232; color: #f0e0c0; border-radius: 4px; }
+.farm-btns button:disabled { opacity: 0.45; cursor: default; }

@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { ACTIONS, ITEMS, MONSTERS, SKILLS } from '../core/data';
+import { ACTIONS, CROP_DEFS, ITEMS, MONSTERS, SKILLS } from '../core/data';
 import type { CombatLogEntry, SkillId } from '../core/types';
 import { store, useGame } from '../store';
 import { MonsterIcon } from './Bestiary';
@@ -147,12 +147,18 @@ function statRows(all: CombatLogEntry[], tab: StatTab): StatRow[] {
   } else {
     const n: Record<string, { ok: number; fail: number }> = {};
     for (const e of all) {
-      if (isFight(e) || !e.action) continue;
-      const r = (n[e.action] ??= { ok: 0, fail: 0 });
+      const key = e.crop ? `crop:${e.crop}` : e.action;
+      if (isFight(e) || !key) continue;
+      const r = (n[key] ??= { ok: 0, fail: 0 });
       if (e.kind === 'fail') r.fail++;
-      else r.ok++;
+      else r.ok += e.n ?? 1;
     }
     for (const [id, r] of Object.entries(n)) {
+      const crop = id.startsWith('crop:') ? CROP_DEFS[id.slice(5)] : undefined;
+      if (crop) {
+        rows.push({ key: id, icon: <SkillIcon skill="farming" size={16} />, name: `收获${crop.name}`, value: `${r.ok} 格`, rate: r.ok, sort: r.ok });
+        continue;
+      }
       const a = ACTIONS[id];
       if (!a || a.kind !== 'skill') continue;
       rows.push({ key: id, icon: <SkillIcon skill={a.skill} size={16} />, name: a.name, value: `${r.ok} 次${r.fail ? ` · 失手 ${r.fail}` : ''}`, rate: r.ok, sort: r.ok + r.fail });
@@ -174,6 +180,17 @@ function Gains({ e }: { e: CombatLogEntry }) {
 }
 
 function Entry({ e }: { e: CombatLogEntry }) {
+  if (e.crop) {
+    const c = CROP_DEFS[e.crop];
+    if (!c) return null;
+    return (
+      <li className="work">
+        <time>{clock(e.t)}</time>
+        <span className="with-icon log-what"><SkillIcon skill="farming" size={14} /> 收获{c.name}{(e.n ?? 1) > 1 && ` ${e.n} 格`}{e.auto && <em className="muted"> 自动</em>}</span>
+        <Gains e={e} />
+      </li>
+    );
+  }
   if (e.kind === 'skill' || e.kind === 'fail') {
     const a = ACTIONS[e.action ?? ''];
     if (!a || a.kind !== 'skill') return null;

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
-import { ACTIONS, CROPS, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, DANGER, dangerLevel, nodeOfAction, travelMs, WALK_TILES_PER_SEC, type MapNode } from '../core/data';
+import { ACTIONS, CROP_DEFS, CROPS, cropsOfField, FARM_PLOTS, PLOT_BY_ID, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, DANGER, dangerLevel, nodeOfAction, travelMs, WALK_TILES_PER_SEC, type MapNode } from '../core/data';
 import { actionDuration, combatLevel, combatStats, isBankId, leaveWork, maxHp, moveSpeed, resumeWork, setLoc, startWalk, teleport as teleportState, walkPos } from '../core/sim';
+import { pickSeed, plotGrowth, plotPhase, tendPlot } from '../core/farm';
 import { MON_ANIMS, monsterFrameSize, paintMonsterSheet, type MonAnim } from './monsterArt';
 import { paintWolfSheet, wolfSaddle, WOLF_ANIMS, WOLF_FEET, WOLF_H, WOLF_W } from './wolfArt';
 import { HERO_ANIMS, HERO_FEET, HERO_H, HERO_W, NPC_ANIMS, NPC_OUTFITS, outfitOf, paintHeroSheet, type HeroDir } from './hero';
@@ -373,9 +374,11 @@ export class MapScene extends Phaser.Scene {
     });
   }
 
-  // ---- 田里的作物 ----
+  // ---- 田里的作物（地块制种田，用户 10-23 要求做成星露谷那样） ----
 
-  private plots: { field: string; img: Phaser.GameObjects.Image; phase: number; crop: string; stage: number }[] = [];
+  /** 能种的地块：一格一张土和一张作物，按存档里的状态换图 */
+  private plots: { id: string; field: string; x: number; y: number; soil: Phaser.GameObjects.Image; crop: Phaser.GameObjects.Image; glint: Phaser.GameObjects.Image; key: string }[] = [];
+  private plotAt = new Map<number, string>();
 
   private cropTex(crop: string, stage: number) {
     const key = `crop-${crop}-${stage}`;
@@ -386,42 +389,171 @@ export class MapScene extends Phaser.Scene {
     return key;
   }
 
-  /** 每块田的耕地上隔一格种一株：平时是这块田最低阶的作物，长势随机；在这块田种地时换成正在种的作物，跟着进度长 */
+  /** 地块的土：翻过的深色土垄，浇过水更深、带一点反光 */
+  private soilTex(wet: boolean) {
+    const key = wet ? 'plot-wet' : 'plot-dry';
+    if (!this.textures.exists(key)) {
+      const c = document.createElement('canvas');
+      c.width = T;
+      c.height = T;
+      const g = c.getContext('2d')!;
+      const [edge, base, ridge, lit] = wet ? ['#24160c', '#3a2414', '#4a2e1a', '#6a5a5a'] : ['#3a2616', '#5a3c22', '#6e4a2a', '#8a6236'];
+      g.fillStyle = edge;
+      g.fillRect(1, 1, T - 2, T - 2);
+      g.fillStyle = base;
+      g.fillRect(2, 2, T - 4, T - 4);
+      for (const y of [4, 8, 12]) {
+        g.fillStyle = ridge;
+        g.fillRect(3, y, T - 6, 1);
+        g.fillStyle = lit;
+        for (let x = 3 + (y % 3); x < T - 3; x += 4) g.fillRect(x, y - 1, 1, 1);
+      }
+      this.textures.addCanvas(key, c);
+    }
+    return key;
+  }
+
+  private glintTex() {
+    if (!this.textures.exists('plot-glint')) {
+      const c = document.createElement('canvas');
+      c.width = 5;
+      c.height = 5;
+      const g = c.getContext('2d')!;
+      g.fillStyle = '#fff3a0';
+      g.fillRect(2, 0, 1, 5);
+      g.fillRect(0, 2, 5, 1);
+      g.fillStyle = '#ffffff';
+      g.fillRect(2, 2, 1, 1);
+      this.textures.addCanvas('plot-glint', c);
+    }
+    return 'plot-glint';
+  }
+
+  /** 田里：能种的地块按存档画；其余耕地上隔一格种一株装饰作物（这块田最低阶的作物，长势随机） */
   private buildFields() {
+    for (const p of FARM_PLOTS) this.plotAt.set(p.y * MAP_W + p.x, p.id);
     for (const f of FIELDS) {
-      const node = NODES.find((n) => n.id === f.nodeId);
-      const first = node?.actions.find((id) => id.startsWith('farm_'))?.slice(5);
+      const first = cropsOfField(f.nodeId)[0]?.id;
       if (!first) continue;
       for (let y = f.y0; y <= f.y1; y++) {
         if ((y - f.y0) % 3 === 2) continue;
         for (let x = f.x0 + ((y - f.y0) % 3); x <= f.x1; x += 2) {
           if (Math.abs(x - f.node.x) <= 2 && y >= f.node.y - 2 && y <= f.node.y + 2) continue;
-          const phase = hash(x, y, 77);
-          const stage = Math.floor(phase * 4);
-          const img = this.add.image(x * T + T / 2, y * T + T + 1, this.cropTex(first, stage)).setOrigin(0.5, 1).setDepth(y * T + T + 1000);
-          this.plots.push({ field: f.nodeId, img, phase, crop: first, stage });
+          if (this.plotAt.has(y * MAP_W + x)) continue;
+          const stage = Math.floor(hash(x, y, 77) * 4);
+          this.add.image(x * T + T / 2, y * T + T + 1, this.cropTex(first, stage)).setOrigin(0.5, 1).setDepth(y * T + T + 1000).setAlpha(0.85);
         }
       }
     }
-    this.time.addEvent({ delay: 250, loop: true, callback: () => this.growFields() });
+    for (const p of FARM_PLOTS) {
+      const soil = this.add.image(p.x * T + T / 2, p.y * T + T / 2, this.soilTex(false)).setDepth(1);
+      const crop = this.add.image(p.x * T + T / 2, p.y * T + T + 1, this.cropTex('potato', 0)).setOrigin(0.5, 1).setDepth(p.y * T + T + 1000).setVisible(false);
+      const glint = this.add.image(p.x * T + T / 2 + 4, p.y * T + 3, this.glintTex()).setDepth(D_FLOAT - 5).setVisible(false);
+      this.plots.push({ id: p.id, field: p.field, x: p.x, y: p.y, soil, crop, glint, key: '' });
+    }
+    this.growFields();
+    this.time.addEvent({ delay: 500, loop: true, callback: () => this.growFields() });
   }
 
+  /** 按存档把每格地换成对应的图：空地 / 长到第几阶段 / 熟了闪光 */
   private growFields() {
-    const st = store.state;
-    const id = this.currentAction;
-    const a = id ? ACTIONS[id] : undefined;
-    if (!a || a.kind !== 'skill' || a.skill !== 'farming' || st.paused || st.travel || this.walker) return;
-    const field = nodeForAction(id)?.id;
-    const crop = id!.slice(5);
-    const k = Math.max(0, st.progressMs) / actionDuration(st, a);
+    const now = Date.now();
+    const farm = store.state.farm ?? {};
+    const blink = Math.floor(now / 500) % 2 === 0;
     for (const p of this.plots) {
-      if (p.field !== field) continue;
-      const stage = Math.min(3, Math.floor(((k + p.phase) % 1) * 4));
-      if (stage === p.stage && crop === p.crop) continue;
-      p.stage = stage;
-      p.crop = crop;
-      p.img.setTexture(this.cropTex(crop, stage));
+      const plot = farm[p.id];
+      const ph = plotPhase(plot, now);
+      const stage = !plot ? -1 : ph === 'ripe' ? 3 : Math.min(2, Math.floor(plotGrowth(plot, now) * 3));
+      const key = `${plot?.crop ?? ''}:${stage}:${plot?.water ? 1 : 0}`;
+      p.glint.setVisible(ph === 'ripe' && blink);
+      if (key === p.key) continue;
+      p.key = key;
+      p.crop.setScale(ph === 'ripe' ? 1.15 : 1);
+      p.soil.setTexture(this.soilTex(!!plot?.water));
+      const known = !!plot && CROPS.some((c) => c[0] === plot.crop);
+      p.crop.setVisible(known);
+      if (known) p.crop.setTexture(this.cropTex(plot!.crop, stage));
     }
+  }
+
+  /** 电脑端鼠标移到地块上：描一圈框，提示能点 */
+  private plotHover?: Phaser.GameObjects.Graphics;
+  private hoverPlot(p: Phaser.Input.Pointer) {
+    const wp = this.cameras.main.getWorldPoint(p.x, p.y);
+    const x = Math.floor(wp.x / T);
+    const y = Math.floor(wp.y / T);
+    const id = this.plotIdAt(x, y);
+    if (!id) {
+      this.plotHover?.setVisible(false);
+      return;
+    }
+    this.plotHover ??= this.add.graphics().setDepth(2);
+    const ripe = plotPhase(store.state.farm?.[id], Date.now()) === 'ripe';
+    this.plotHover.clear().lineStyle(1, ripe ? 0xffe070 : 0xfff3c4, 0.9).strokeRect(x * T + 0.5, y * T + 0.5, T - 1, T - 1).setVisible(true);
+  }
+
+  /** 这一格是不是能种的地块 */
+  plotIdAt(tx: number, ty: number) {
+    return this.plotAt.get(ty * MAP_W + tx);
+  }
+
+  /** 点了一格地：走到旁边的走道，再种 / 浇水 / 收获 */
+  private tendPlotAt(id: string) {
+    const plot = PLOT_BY_ID[id];
+    if (!plot || this.mountBusy) return;
+    const me = this.playerTile();
+    const act = () => {
+      const st = store.state;
+      const p = st.farm?.[id];
+      const now = Date.now();
+      let crop: string | undefined;
+      if (!p) {
+        crop = pickSeed(st, plot.field);
+        if (!crop) {
+          this.float('没有能种的种子', '#ff9a7a');
+          this.game.events.emit(NODE_CLICK, plot.field);
+          return;
+        }
+      }
+      const before = store.state;
+      store.farm((g, t) => tendPlot(g, id, crop, t));
+      if (store.state === before) return;
+      const ph = plotPhase(p, now);
+      this.facePlot(plot);
+      if (ph === 'growing') this.float('浇水', '#8ad0ff');
+      else if (ph === 'empty') this.float(`种下 ${CROP_DEFS[crop!].name}`, '#b8e07a');
+      this.farmPose();
+    };
+    if (Math.abs(me.x - plot.x) + Math.abs(me.y - plot.y) <= 1 && !this.walker && !store.state.walk) return act();
+    // 站到地块上方或下方的走道（不踩在别的地块上），都不行就站到这一格
+    const spots = [[0, 1], [0, -1], [-1, 0], [1, 0]].map(([dx, dy]) => ({ x: plot.x + dx, y: plot.y + dy }))
+      .filter((q) => isWalkable(q.x, q.y) && !this.plotIdAt(q.x, q.y));
+    const to = spots.sort((a, b) => Math.hypot(a.x - me.x, a.y - me.y) - Math.hypot(b.x - me.x, b.y - me.y))[0] ?? { x: plot.x, y: plot.y };
+    if (to.x === me.x && to.y === me.y && !this.walker) return act();
+    store.tracking = null;
+    const old = this.walker;
+    this.moveTo(to.x, to.y);
+    if (this.walker && this.walker !== old) this.arrive = act;
+  }
+
+  /** 走到了要干的事（点了地块之后） */
+  private arrive?: () => void;
+
+  private facePlot(p: { x: number; y: number }) {
+    const dx = p.x * T + T / 2 - this.player.x;
+    const dy = p.y * T + T / 2 - this.player.y;
+    this.facing = Math.abs(dx) > Math.abs(dy) ? 'side' : dy < 0 ? 'up' : 'down';
+    if (this.facing === 'side') this.playerBody.setFlipX(dx < 0);
+  }
+
+  /** 弯腰种地的动作做一下再站好 */
+  private farmPose() {
+    if (this.mountMode === 'ride' || this.mountBusy || this.working) return;
+    this.facing = 'side';
+    this.playerBody.play('work-farm', true);
+    this.time.delayedCall(700, () => {
+      if (!this.walker && !this.working) this.idle();
+    });
   }
 
   private smoke(x: number, y: number) {
@@ -917,6 +1049,7 @@ export class MapScene extends Phaser.Scene {
     });
 
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
+      if (!p.wasTouch) this.hoverPlot(p);
       const p1 = this.input.pointer1;
       const p2 = this.input.pointer2;
       if (p1.isDown && p2.isDown && pinchStart > 0) {
@@ -956,6 +1089,13 @@ export class MapScene extends Phaser.Scene {
       const node = over.map((o) => (o.getData('monster') ?? o.getData('node')) as string | undefined).find(Boolean);
       if (node) {
         this.game.events.emit(NODE_CLICK, node);
+        return;
+      }
+      // 点田里的地块：种 / 浇水 / 收获（电脑端左键、手机端点）
+      const tp = cam.getWorldPoint(p.x, p.y);
+      const plot = this.plotIdAt(Math.floor(tp.x / T), Math.floor(tp.y / T));
+      if (plot) {
+        this.tendPlotAt(plot);
         return;
       }
       if (mouse) return; // 电脑端左键点空地不走路
@@ -1036,9 +1176,13 @@ export class MapScene extends Phaser.Scene {
 
   private followWalk(path: { x: number; y: number }[], to: { x: number; y: number }, speed?: number) {
     this.drawRoute(path);
+    this.arrive = undefined;
     this.walkPath(path, () => {
       this.clearRoute();
       store.dispatch((g) => setLoc(g, to.x, to.y));
+      const then = this.arrive;
+      this.arrive = undefined;
+      then?.();
     }, speed);
   }
 

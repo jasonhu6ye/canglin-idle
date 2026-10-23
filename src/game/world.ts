@@ -1,4 +1,4 @@
-import { MAP_H, MAP_W, NODES, OLD_BOX, town2XY, TOWN2_CENTER, townXY, type MapNode } from '../core/data';
+import { FARM_RECTS, MAP_H, MAP_W, NODES, OLD_BOX, town2XY, TOWN2_CENTER, townXY, type MapNode } from '../core/data';
 import type { RegionId } from '../core/types';
 
 /*
@@ -160,14 +160,9 @@ export const PLAZA2 = { x0: T2.x - 26, y0: T2.y - 20, x1: T2.x + 26, y1: T2.y + 
 const PLAZAS = [PLAZA, PLAZA2];
 const inPlaza = (x: number, y: number) => PLAZAS.some((P) => x >= P.x0 && x <= P.x1 && y >= P.y0 && y <= P.y1);
 /** 城镇周围的四块田：田垄范围和中间留空给地点标记的位置 */
-const FARMS = [
-  { x0: 134, y0: 191, x1: 160, y1: 206, node: [148, 198] },
-  { x0: 134, y0: 211, x1: 160, y1: 223, node: [147, 217] },
-  { x0: 175, y0: 206, x1: 200, y1: 220, node: [187, 213] },
-  { x0: 106, y0: 196, x1: 124, y1: 210, node: [115, 203] },
-].map((f) => ({ x0: tx(f.x0), y0: ty(f.y0), x1: tx(f.x1), y1: ty(f.y1), local: f, node: townXY(f.node[0], f.node[1]) }));
+const FARMS = FARM_RECTS.map((f) => ({ x0: tx(f.x0), y0: ty(f.y0), x1: tx(f.x1), y1: ty(f.y1), local: f, node: townXY(f.node[0], f.node[1]) }));
 /** 田垄（每三行里两行是耕地，第三行是走道），给场景摆作物用 */
-export const FIELDS = FARMS.map((f, i) => ({ ...f, nodeId: ['farm', 'farm_south', 'farm_east', 'farm_west'][i] }));
+export const FIELDS = FARMS.map((f) => ({ ...f, nodeId: f.local.id }));
 const SPAWN_GUESS = townXY(167, 175);
 /**
  * 老地图东边是海：现在变成老方框和热带群岛之间的一道海峡，
@@ -714,9 +709,10 @@ function groundFor(x: number, y: number): Ground {
     const pondNode = PONDS.some((p) => Math.abs(p.n.x - x) <= 3 && y < p.n.y && y >= p.n.y - 2);
     if (!pondNode) g = inPlaza(x, y) ? 'cobble' : baseGround(x, y, r);
   }
+  // 田里不铺路（路走到田边为止，田里走田埂），免得路从地块中间穿过去
   for (const F of FARMS) {
     if (x >= F.x0 && x <= F.x1 && y >= F.y0 && y <= F.y1 && !(Math.abs(x - F.node.x) <= 2 && y >= F.node.y - 2 && y <= F.node.y + 2)) {
-      g = (y - F.y0) % 3 === 2 ? 'grass' : 'farm';
+      return (y - F.y0) % 3 === 2 ? 'grass' : 'farm';
     }
   }
   if ((fl & F_ROAD) && g !== 'cobble') {

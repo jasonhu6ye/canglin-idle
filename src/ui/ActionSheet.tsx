@@ -7,6 +7,7 @@ import {
 import type { ActionDef, GameState, SkillAction, TaskMode } from '../core/types';
 import type { MapNode } from '../core/data';
 import { store } from '../store';
+import { FarmSheet } from './FarmSheet';
 import { fmtNum, stacks } from './format';
 import { Icon, SkillIcon } from './icons';
 
@@ -39,6 +40,11 @@ const isLocked = (s: GameState, a: ActionDef) => a.kind === 'skill' && level(s, 
 
 export function ActionSheet({ s, nodeId, onClose }: { s: GameState; nodeId: string; onClose: () => void }) {
   const node = NODES.find((n) => n.id === nodeId)!;
+  if (node.farm) return <FarmSheet s={s} nodeId={nodeId} onClose={onClose} />;
+  return <NodeSheet s={s} node={node} onClose={onClose} />;
+}
+
+function NodeSheet({ s, node, onClose }: { s: GameState; node: MapNode; onClose: () => void }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [cat, setCat] = useState<string>('all');
   const [tier, setTier] = useState<number | 'all'>('all');

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ACTIONS, buffText, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, type MapNode } from '../core/data';
+import { ACTIONS, buffText, cropsOfField, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, type MapNode } from '../core/data';
 import {
   atBank, atMarket, nearestBank, nearestMarket, BAG_SLOTS, BELT_CAP, beltSlotOf, eat, fromBelt, POTION_AT, toBelt, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip, openContainer,
   weaponStyle,
@@ -523,7 +523,7 @@ export function NodeList({ s, onPick }: { s: GameState; onPick: (id: string) => 
   let rows: { key: string; id: string; name: string; sub: string; lv?: string; dim?: boolean }[] = [];
   if (tab.id === 'town') {
     rows = NODES.filter((n) => n.town).map((n) => {
-      const kinds = [...new Set(n.actions.map((id) => { const a = ACTIONS[id]; return a.kind === 'skill' ? SKILLS[a.skill].name : '战斗'; }))];
+      const kinds = n.farm ? ['种植'] : [...new Set(n.actions.map((id) => { const a = ACTIONS[id]; return a.kind === 'skill' ? SKILLS[a.skill].name : '战斗'; }))];
       return { key: n.id, id: n.id, name: n.name.replace('落霞城·', ''), sub: `${townName(n)} · ${n.closed ? '暂未开放' : n.opens === 'bank' ? '存取物品' : kinds.join('、')}`, dim: n.closed };
     }).sort((a, b) => (a.sub.startsWith('主城') === b.sub.startsWith('主城') ? 0 : a.sub.startsWith('主城') ? -1 : 1));
   } else if (tab.id === 'boss') {
@@ -532,12 +532,12 @@ export function NodeList({ s, onPick }: { s: GameState; onPick: (id: string) => 
     rows = NODES.filter((n) => n.cave).map((n) => ({ key: n.id, id: n.id, name: n.name, sub: `${REGIONS[n.region].name} · 未开放`, dim: true }));
   } else {
     rows = NODES.filter((n) => !n.town || tab.skill === 'thieving' || tab.skill === 'farming').flatMap((n) => {
-      const lv = n.actions.map((id) => ACTIONS[id]).filter((a) => a.kind === 'skill' && a.skill === tab.skill).map((a) => a.level);
+      const lv = n.farm ? cropsOfField(n.id).map((c) => c.level) : n.actions.map((id) => ACTIONS[id]).filter((a) => a.kind === 'skill' && a.skill === tab.skill).map((a) => a.level);
       if (!lv.length) return [];
       const lo = Math.min(...lv);
       const hi = Math.max(...lv);
       const lock = level(s, tab.skill!) < lo;
-      return [{ key: n.id, id: n.id, name: n.name, sub: `${n.town ? townName(n) : REGIONS[n.region].name} · ${lv.length} 项`, lv: lo === hi ? `${lo} 级` : `${lo}-${hi} 级`, dim: lock, lo }];
+      return [{ key: n.id, id: n.id, name: n.name, sub: `${n.town ? townName(n) : REGIONS[n.region].name} · ${lv.length} ${n.farm ? '种作物' : '项'}`, lv: lo === hi ? `${lo} 级` : `${lo}-${hi} 级`, dim: lock, lo }];
     }).sort((a, b) => a.lo - b.lo);
   }
   return (
