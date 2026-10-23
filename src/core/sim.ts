@@ -80,7 +80,7 @@ export function migrate(raw: unknown): GameState | null {
   if (!s || typeof s !== 'object' || ![1, 2, 3].includes(s.version ?? 0)) return null;
   const fresh = newGame(s.lastTick ?? Date.now(), s.rng);
   const keep = (rec: Record<string, number> | undefined) =>
-    Object.fromEntries(Object.entries(rec ?? {}).filter(([id, q]) => ITEMS[id] && q > 0));
+    Object.fromEntries(Object.entries(rec ?? {}).filter(([id, q]) => ITEMS[id] && Number.isFinite(q) && q >= 1).map(([id, q]) => [id, Math.floor(q)]));
   const equipment: GameState['equipment'] = {};
   for (const [slot, id] of Object.entries(s.equipment ?? {})) {
     if (id && ITEMS[id]?.equip?.slot === slot) equipment[slot as EquipSlot] = id;
@@ -253,7 +253,7 @@ export function toBelt(prev: GameState, id: string): GameState {
   if (cur && cur.id !== id) {
     const back = Math.min(cur.qty, bagRoomFor(s.bag, cur.id));
     if (back < cur.qty && !atBank(s)) return prev;
-    s.bag[cur.id] = (s.bag[cur.id] ?? 0) + back;
+    if (back > 0) s.bag[cur.id] = (s.bag[cur.id] ?? 0) + back;
     if (cur.qty > back) s.bank[cur.id] = (s.bank[cur.id] ?? 0) + cur.qty - back;
     delete s.belt[slot];
   }
@@ -962,7 +962,10 @@ export function setLoc(prev: GameState, x: number, y: number): GameState {
 }
 
 export function enqueue(prev: GameState, action: string, mode: TaskMode): GameState {
-  if (prev.queue.length >= MAX_QUEUE) return prev;
+  if (prev.queue.length >= MAX_QUEUE || !ACTIONS[action]) return prev;
+  if (mode.type === 'count' && !(cleanQty(mode.count) >= 1)) return prev;
+  if (mode.type === 'time' && !(mode.ms > 0)) return prev;
+  if (mode.type === 'count') mode = { type: 'count', count: cleanQty(mode.count) };
   const s = clone(prev);
   s.queue.push({ action, mode, done: 0, elapsedMs: 0 });
   s.lastStop = null;
@@ -1043,7 +1046,11 @@ export function unequip(prev: GameState, slot: EquipSlot): GameState {
 }
 
 /** 仓库 → 背包，什么都能放，放不下的留在仓库 */
+/** 界面传来的数量：只认正整数（NaN、负数、小数会把仓库数字弄坏） */
+const cleanQty = (q: number) => (Number.isFinite(q) ? Math.floor(q) : 0);
+
 export function toBag(prev: GameState, item: string, qty: number): GameState {
+  qty = cleanQty(qty);
   const n = Math.min(prev.bank[item] ?? 0, qty, bagRoomFor(prev.bag, item));
   if (item === 'coins' || n <= 0 || !atBank(prev)) return prev;
   const s = clone(prev);
@@ -1054,6 +1061,7 @@ export function toBag(prev: GameState, item: string, qty: number): GameState {
 }
 
 export function toBank(prev: GameState, item: string, qty: number): GameState {
+  qty = cleanQty(qty);
   const n = Math.min(prev.bag[item] ?? 0, qty);
   if (n <= 0 || !atBank(prev)) return prev;
   const s = clone(prev);
@@ -1081,6 +1089,7 @@ export function atMarket(s: GameState): boolean {
 }
 
 export function sell(prev: GameState, item: string, qty: number): GameState {
+  qty = cleanQty(qty);
   const have = prev.bank[item] ?? 0;
   const n = Math.floor(Math.min(have, qty));
   if (item === 'coins' || !ITEMS[item] || n <= 0 || !atMarket(prev)) return prev;
@@ -1124,7 +1133,7 @@ export function xpPerHour(s: GameState, actionId: string): number {
 export function openContainer(prev: GameState, id: string, from: 'bag' | 'bank', count = 1): [GameState, Record<string, number>] {
   const table = ITEMS[id]?.opens;
   const have = (from === 'bag' ? prev.bag[id] : prev.bank[id]) ?? 0;
-  const n = Math.min(have, Math.max(1, Math.floor(count)));
+  const n = Math.min(have, Math.max(1, cleanQty(count)));
   if (!table || n <= 0 || (from === 'bank' && !atBank(prev))) return [prev, {}];
   const s = clone(prev);
   const rand = () => {

@@ -978,6 +978,39 @@ const MAX_NODES = 400_000;
 const SEG_TRIES: [number, number][] = [[8, 60_000], [4, 60_000], [12, 120_000], [2, 60_000]];
 
 /** A* 寻路（8 方向，斜走不切墙角）；终点不可走或走不到返回 null。返回值不含起点。 */
+/**
+ * 离 at 最近、而且从 from 走得到的格子（在 from 周围 r 格内泛洪）。
+ * 怪物刷新点用：以前有的刷在小岛、河对岸、礁石上，角色走不过去（10-23 修）
+ */
+export function reachableNear(from: Pt, at: Pt, r = 40): Pt | null {
+  const W = r * 2 + 1;
+  const seen = new Uint8Array(W * W);
+  const x0 = from.x - r;
+  const y0 = from.y - r;
+  if (!isWalkable(from.x, from.y)) return null;
+  const q = [from.x - x0 + (from.y - y0) * W];
+  seen[q[0]] = 1;
+  let best: Pt | null = null;
+  let bestD = Infinity;
+  for (let h = 0; h < q.length; h++) {
+    const i = q[h];
+    const x = (i % W) + x0;
+    const y = Math.floor(i / W) + y0;
+    const d = (x - at.x) ** 2 + (y - at.y) ** 2;
+    if (d < bestD) { bestD = d; best = { x, y }; }
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx - x0;
+      const ny = y + dy - y0;
+      if (nx < 0 || ny < 0 || nx >= W || ny >= W) continue;
+      const j = nx + ny * W;
+      if (seen[j]) continue;
+      seen[j] = 1;
+      if (isWalkable(nx + x0, ny + y0)) q.push(j);
+    }
+  }
+  return best;
+}
+
 export function findPath(from: Pt, to: Pt, maxNodes = MAX_NODES): Pt[] | null {
   if (!isWalkable(to.x, to.y) || !inMap(from.x, from.y)) return null;
   const far = Math.max(Math.abs(from.x - to.x), Math.abs(from.y - to.y)) > 48;

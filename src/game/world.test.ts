@@ -1,5 +1,5 @@
-import { findPath, isWalkable, regionAt, SPAWN, standTile } from './world';
-import { MAP_W, NODES, townXY } from '../core/data';
+import { findPath, isWalkable, reachableNear, regionAt, SPAWN, standTile } from './world';
+import { ACTIONS, MAP_W, NODES, townXY } from '../core/data';
 
 describe('世界', { timeout: 30_000 }, () => {
   it('每个资源点都在区域图上规定的区域里', () => {
@@ -27,6 +27,19 @@ describe('远路', { timeout: 120_000 }, () => {
     for (const id of ['golden_plain', 'whisper_pool', 'town_lake', 'stone_jungle', 'python_marsh']) {
       const from = NODES.find((n) => n.id === id);
       if (from) expect(findPath(standTile(from), to), id).not.toBeNull();
+    }
+  });
+  it('怪物刷新点都在角色走得到的地方（不刷在小岛、河对岸）', () => {
+    for (const n of NODES) {
+      const mons = n.actions.filter((id) => ACTIONS[id].kind === 'combat');
+      mons.forEach((id, i) => {
+        const ang = (i / mons.length) * Math.PI * 2 + 0.6;
+        const ring = 8 + (i % 4) * 4;
+        const at = { x: Math.round(n.x + Math.cos(ang) * ring), y: Math.round(n.y + 2 + Math.sin(ang) * ring * 0.6) };
+        const spot = reachableNear(standTile(n), at);
+        expect(spot, id).not.toBeNull();
+        expect(findPath(standTile(n), spot!), id).not.toBeNull();
+      });
     }
   });
 });

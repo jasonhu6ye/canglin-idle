@@ -16,7 +16,7 @@ import { paintResNode, resGlow, resOf, type ResKind } from './resArt';
 import { NODE_MARKER, paintSprite, SPRITE_VARIANTS, SPRITES } from './sprites';
 import { animateTileset, liquidIndex, paintTileset, T, TILESET, tileIndex, VARIANTS } from './tiles';
 import {
-  BUILDINGS, CHUNK, FIELDS, findPath, GROUNDS, groundIndex, hash, isWalkable, LIQUIDS, propsInChunk, regionAt, SPAWN, standTile,
+  BUILDINGS, CHUNK, FIELDS, findPath, GROUNDS, groundIndex, hash, isWalkable, LIQUIDS, propsInChunk, reachableNear, regionAt, SPAWN, standTile,
   WANDERERS, type PropKind,
 } from './world';
 
@@ -34,10 +34,18 @@ const CHIMNEY: Record<string, boolean> = { furnace: true, hall: true, smithy: tr
 export const NODE_CLICK = 'node-click';
 
 /** 点位周围第 i 种怪的刷新点；地图扩大后怪物也散开些，不挤在点位旁边 */
+const spotCache = new Map<string, { x: number; y: number }>();
 function spawnSpot(n: MapNode, i: number, total: number) {
+  const key = `${n.id}/${i}/${total}`;
+  const hit = spotCache.get(key);
+  if (hit) return hit;
   const ring = 8 + (i % 4) * 4;
   const ang = (i / Math.max(1, total)) * Math.PI * 2 + 0.6;
-  return { x: Math.round(n.x + Math.cos(ang) * ring), y: Math.round(n.y + 2 + Math.sin(ang) * ring * 0.6) };
+  const at = { x: Math.round(n.x + Math.cos(ang) * ring), y: Math.round(n.y + 2 + Math.sin(ang) * ring * 0.6) };
+  // 挪到角色走得到的地方
+  const spot = reachableNear(standTile(n), at) ?? at;
+  spotCache.set(key, spot);
+  return spot;
 }
 
 /** 首领在地图上额外放大 */
@@ -49,19 +57,14 @@ function trackSpot(monsterId: string, exact = exactTrack(monsterId)): { x: numbe
   const n = nodeOfAction(`fight_${monsterId}`);
   if (!n) return null;
   const ids = n.actions.map((id) => ACTIONS[id]).filter((a) => a.kind === 'combat').map((a) => (a as { monster: string }).monster);
-  const at = spawnSpot(n, ids.indexOf(monsterId), ids.length);
+  const at = { ...spawnSpot(n, ids.indexOf(monsterId), ids.length) };
   // Boss 和交过手的怪给准确位置
   if (!exact) {
     at.x += Math.round((Math.random() * 2 - 1) * 7);
     at.y += Math.round((Math.random() * 2 - 1) * 7);
   }
-  // 找最近的能站的格子
-  for (let r = 0; r <= 6; r++) {
-    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
-      if (Math.max(Math.abs(dx), Math.abs(dy)) === r && isWalkable(at.x + dx, at.y + dy)) return { x: at.x + dx, y: at.y + dy };
-    }
-  }
-  return null;
+  // 找最近的、走得到的格子
+  return exact ? at : reachableNear(standTile(n), at);
 }
 export const REGION_CHANGE = 'region-change';
 /** 开打首领时在屏幕上打出名字 */

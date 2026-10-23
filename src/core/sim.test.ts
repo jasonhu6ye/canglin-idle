@@ -663,3 +663,26 @@ describe('雨天钓鱼', () => {
     expect(rainBonus(s, ACTIONS.mine_stone as SkillAction, wet)).toBe(0);
   });
 });
+
+describe('界面传来的数量', () => {
+  it('NaN、负数、小数不会把仓库弄坏', () => {
+    let s = newGame(0);
+    s.loc = marketStand();
+    s.bank.copper_ore = 10;
+    for (const q of [NaN, -3, 0]) expect(sell(s, 'copper_ore', q)).toBe(s);
+    s = sell(s, 'copper_ore', 2.7);
+    expect(s.bank.copper_ore).toBe(8);
+    expect(Number.isInteger(s.bank.coins)).toBe(true);
+    expect(enqueue(s, 'mine_stone', { type: 'count', count: NaN })).toBe(s);
+  });
+  it('换食物栏时背包满了不会留下数量为 0 的格子', () => {
+    let s = newGame(0);
+    s.loc = bankStand();
+    s.belt = { food: { id: 'minnow', qty: 5 } };
+    for (let i = 0; i < 40; i++) s.bag[`copper_ore`] = 2000;
+    s.bank.steak_1 = 5;
+    s = toBelt(s, 'steak_1');
+    expect(Object.values(s.bag).every((q) => q > 0)).toBe(true);
+  });
+});
+
