@@ -17,6 +17,9 @@ describe('数据闭环', () => {
   it('每个动作都在且只在一个地点', () => {
     const seen = new Map<string, string>();
     for (const n of NODES) for (const id of n.actions) {
+      // 两座城的同类建筑可以重复，野外地点的动作只在一处
+      const prev = seen.get(id);
+      if (prev && NODES.find((x) => x.id === prev)?.town && n.town) continue;
       expect(seen.get(id), `${id} 同时在 ${seen.get(id)} 和 ${n.id}`).toBeUndefined();
       seen.set(id, n.id);
     }

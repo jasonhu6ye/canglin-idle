@@ -296,7 +296,7 @@ export const EQUIP_TYPES: EquipType[] = [
   W('longbow', '长弓', 'ranged', 'fletching', [['plank', 3], ['leather', 1]], 4, 1.25, 0.8, 2800, 'ranged'),
   W('crossbow', '弩', 'ranged', 'fletching', [['plank', 3], ['leather', 2]], 6, 0.85, 1.3, 3400, 'ranged'),
   // 魔法：加工木材 + 布料
-  W('staff', '法杖', 'magic', 'crafting', [['plank', 2], ['cloth', 1]], 4, 1.0, 0.6, 2600, 'magic'),
+  W('staff', '法杖', 'magic', 'crafting', [['plank', 2], ['cloth', 1]], 4, 1.0, 0.6, 2400, 'magic'),
   // 护甲：头、身、脚、手
   ...A('plate', ['板甲头盔', '板甲胸甲', '板甲战靴', '板甲护手'], 'bar', 'smithing', 2.0, 0, 0.25, 'melee'),
   ...A('leather', ['皮帽', '皮甲', '皮靴', '皮手套'], 'leather', 'crafting', 1.4, 0.5, 0, 'ranged'),
@@ -436,9 +436,21 @@ export const ITEMS: Record<string, ItemDef> = Object.fromEntries(itemList.map((i
 // ---- 怪物与生物 ----
 // 设计表在 bestiary.ts，这里按统一规则算出属性和掉落
 
-const RANK_HP = { normal: 1, elite: 2.5, boss: 8 };
+/*
+ * 数值平衡（用户 10-23）：按「同等级、穿同阶装备」的玩家来定怪物血量和伤害，
+ * 让每个等级段手感一致：普通怪约 15 秒一只、每只掉 1/4 血；精英约 4 倍时间；首领约 2-3 分钟，要带食物。
+ */
+const RANK_HP = { normal: 1, elite: 3.5, boss: 10 };
+/** 同级玩家的参考每秒伤害：命中约五成半，本阶武器的力量加成 */
+function refDps(L: number) {
+  const str = POWER[tierForLevel(L)];
+  const maxHit = ((L + 8) * (str + 64)) / 64;
+  return (0.55 * (maxHit + 1)) / 2 / 2.4;
+}
+/** 同级玩家的参考血量（生命等级比战斗等级涨得慢一点） */
+const refHp = (L: number) => 10 * Math.max(10, L * 0.9);
 const RANK_POW = { normal: 1, elite: 1.15, boss: 1.3 };
-const RANK_HIT = { normal: 1, elite: 1.25, boss: 1.5 };
+const RANK_HIT = { normal: 1, elite: 0.9, boss: 0.8 };
 const RANK_LOOT = { normal: 1, elite: 2, boss: 5 };
 /** 每个大类的基础攻击间隔 */
 const FAMILY_MS: Record<Family, number> = {
@@ -497,7 +509,7 @@ const monsterList: MonsterDef[] = SPECIES.map((sp, idx) => {
   const tr = new Set(sp.traits);
   const L = sp.level;
   const fam = FORM_FAMILY[sp.form];
-  let hp = (20 + L * 14) * RANK_HP[sp.rank];
+  let hp = refDps(L) * 15 * RANK_HP[sp.rank];
   if (tr.has('tough')) hp *= 1.3;
   if (tr.has('frail')) hp *= 0.75;
   let ms = FAMILY_MS[fam] + (sp.rank === 'boss' ? 400 : 0);
@@ -507,9 +519,10 @@ const monsterList: MonsterDef[] = SPECIES.map((sp, idx) => {
     id: sp.id, name: sp.name, level: L, tier: sp.tier, rank: sp.rank, boss: sp.rank === 'boss' || undefined,
     family: fam, form: sp.form, region: sp.region, traits: sp.traits, kind: isAnimal(fam, sp.form) ? 'creature' : 'monster',
     hp: Math.round(hp),
-    attack: Math.round(L * RANK_POW[sp.rank]),
+    // 攻击值跟着同阶护甲一起涨，不然高阶护甲会让怪物几乎打不中
+    attack: Math.round(((L + 8) * (1 + (1.6 * POWER[tierForLevel(L)]) / 64) - 8) * RANK_POW[sp.rank]),
     defence: Math.round(L * RANK_POW[sp.rank] * (tr.has('armored') ? 1.4 : 1)),
-    maxHit: tr.has('passive') ? 0 : Math.round((2 + L * 0.4) * RANK_HIT[sp.rank] * (tr.has('fierce') ? 1.25 : 1)),
+    maxHit: tr.has('passive') ? 0 : Math.max(1, Math.round(0.025 * refHp(L) * (ms / 1000) * RANK_HIT[sp.rank] * (tr.has('fierce') ? 1.25 : 1))),
     attackMs: Math.round(ms / 100) * 100,
     respawnMs: (sp.rank === 'boss' ? 6000 : sp.rank === 'elite' ? 3000 : 1500) * (tr.has('pack') ? 0.5 : 1),
     drops: speciesDrops(sp, idx),
@@ -957,6 +970,13 @@ export const NODES: MapNode[] = [
     steal('spice_merchant', '偷香料商', 50, 70, [{ item: 'spice_5', qty: 2, chance: 0.15 }, { item: 'resin_5', qty: 1, chance: 0.1 }]),
   ]),
   town2('atelier', '落霞城·珍材坊', 14, -9, 'atelier', filterIds('rare_')),
+  town2('smithy2', '落霞城·铁匠铺', -27, 19, 'anvil', filterIds('smith_')),
+  town2('furnace2', '落霞城·熔炉', -20, 28, 'furnace', filterIds('smelt_')),
+  town2('kitchen2', '落霞城·灶台', 16, 14, 'stove', filterIds('cook_')),
+  town2('workshop2', '落霞城·工坊', 28, 17, 'bench', filterIds('tan_').concat(filterIds('weave_'), filterIds('craft_'))),
+  town2('bowyer2', '落霞城·制弓台', 27, -4, 'bowyer', filterIds('plank_').concat(filterIds('fletch_'))),
+  town2('apothecary2', '落霞城·药剂铺', -27, -1, 'potion', filterIds('brew_')),
+  town2('enhancer2', '落霞城·强化台', -4, 16, 'enhance', filterIds('enhance_')),
   // 金穗草原
   ring('golden_plain', '金穗原野', 0.06, 0.42, 'savanna', 'camp', [mat('spice', 1), mat('resin', 1), mat('feather', 1), chop(1, '_plain')]),
   ring('lion_rock', '狮吼岩', 0.15, 0.63, 'savanna', 'boss', [mat('crystal', 1), mat('crystal', 2), mat('feather', 2), mine(1, '_lion')]),
@@ -1029,8 +1049,16 @@ export const NODES: MapNode[] = [
 export const ACTIONS: Record<string, ActionDef> = Object.fromEntries(actionList.map((a) => [a.id, a]));
 
 /** 动作 → 所在地点 */
-const NODE_OF: Record<string, MapNode> = Object.fromEntries(NODES.flatMap((n) => n.actions.map((a) => [a, n])));
-export const nodeOfAction = (id: string | undefined): MapNode | undefined => (id ? NODE_OF[id] : undefined);
+const NODES_OF: Record<string, MapNode[]> = {};
+for (const n of NODES) for (const a of n.actions) (NODES_OF[a] ??= []).push(n);
+/** 能做这个动作的所有地点（两座城的同类建筑会重复） */
+export const nodesOfAction = (id: string | undefined): MapNode[] => (id ? NODES_OF[id] ?? [] : []);
+/** 动作所在地点；给了位置就挑离它最近的那个 */
+export function nodeOfAction(id: string | undefined, near?: { x: number; y: number }): MapNode | undefined {
+  const all = nodesOfAction(id);
+  if (!near || all.length < 2) return all[0];
+  return all.reduce((a, b) => (Math.hypot(b.x - near.x, b.y - near.y) < Math.hypot(a.x - near.x, a.y - near.y) ? b : a));
+}
 /** 干活时站的格子：地点正下方一格 */
 export const standOf = (n: MapNode) => ({ x: n.x, y: n.y + 1 });
 /** 出生点：镇中心广场 */

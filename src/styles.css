@@ -393,3 +393,11 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .guide-dots { display: flex; justify-content: center; gap: 6px; }
 .guide-dots i { width: 8px; height: 8px; border-radius: 50%; background: #4a3a2a; cursor: pointer; }
 .guide-dots i.on { background: #e8b84a; }
+
+/* 技能面板：地点旁边的寻路按钮 */
+.place-row { display: flex; gap: 4px; margin-top: 4px; }
+.place-row .place { flex: 1; min-width: 0; margin: 0; }
+.place-row .walk { padding: 0 12px; flex: none; margin: 0; justify-content: center; }
+.skill-detail .walk-to { width: 100%; padding: 9px; margin: 4px 0 2px; }
+.chip.quest .fold { margin-left: 0; background: none; border: 0; box-shadow: none; color: #e8b84a; padding: 0 4px 0 0; min-height: 0; font-size: 12px; cursor: pointer; }
+.chip.quest.folded { gap: 2px; }

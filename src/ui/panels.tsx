@@ -294,6 +294,10 @@ function SkillDetail({ s, skill, onPick }: { s: GameState; skill: SkillId; onPic
   const places = whereToTrain(skill);
   const info = SKILLS[skill];
   const lvl = level(s, skill);
+  // 离角色最近、且当前等级能做的地点；制作技能就是城里对应的建筑
+  const usable = places.filter((p) => p.min <= Math.max(1, lvl));
+  const nearest = (info.group === 'produce' ? (usable.length ? usable : places) : [])
+    .slice().sort((a, b) => Math.hypot(a.node.x - s.loc.x, a.node.y - s.loc.y) - Math.hypot(b.node.x - s.loc.x, b.node.y - s.loc.y))[0];
   return (
     <div className="skill-detail frame">
       <p>{info.desc}</p>
@@ -313,11 +317,20 @@ function SkillDetail({ s, skill, onPick }: { s: GameState; skill: SkillId; onPic
           {skill === 'defence' || skill === 'hitpoints' ? '每次造成伤害都会获得 1/3 的经验。' : `装备${info.name}武器后在任意战斗点获得经验。`}
         </p>
       )}
-      {places.map(({ node, min, max }) => (
-        <button key={node.id} className="place" onClick={() => onPick(node.id)}>
-          <span>{node.name} <small className="muted">{REGIONS[node.region].name}</small></span>
-          <small>{min === max ? `${min} 级` : `${min}-${max} 级`} ›</small>
+      {nearest && (
+        // 制作类技能：直接寻路去最近的那座建筑（用户 10-23）
+        <button className="primary walk-to" onClick={() => store.requestWalk(nearest.node.id)}>
+          寻路去{nearest.node.name}{nearest.node.town ? '' : `（${REGIONS[nearest.node.region].name}）`}
         </button>
+      )}
+      {places.map(({ node, min, max }) => (
+        <div key={node.id} className="place-row">
+          <button className="place" onClick={() => onPick(node.id)}>
+            <span>{node.name} <small className="muted">{REGIONS[node.region].name}</small></span>
+            <small>{min === max ? `${min} 级` : `${min}-${max} 级`} ›</small>
+          </button>
+          <button className="place walk" title="寻路过去" onClick={() => store.requestWalk(node.id)}>寻路</button>
+        </div>
       ))}
     </div>
   );

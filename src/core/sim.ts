@@ -1,4 +1,4 @@
-import { ACTIONS, ITEMS, MAP_W, MONSTERS, nodeOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, travelMs, type MapNode } from './data';
+import { ACTIONS, ITEMS, MAP_W, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, travelMs, type MapNode } from './data';
 import { nextRandom } from './rng';
 import { stepQuests } from './quests';
 import { BONUS_PER_LEVEL, levelForXp, speedForLevel, XP_TABLE } from './xp';
@@ -309,7 +309,7 @@ export function combatStats(s: GameState, m: MonsterDef) {
     style,
     ammo: ammo?.id,
     playerHit: hitChance((lvl + 8) * (b.attack + 64) * (1 + buffPct(s, 'atk')), (m.defence + 8) * 64) * (has('evasive') ? 0.8 : 1),
-    playerMaxHit: Math.max(1, Math.round(Math.floor(0.5 + ((lvl + 8) * (strength + 64)) / 640) * 10 * dmgMult * (1 + buffPct(s, 'str')))),
+    playerMaxHit: Math.max(1, Math.round((((lvl + 8) * (strength + 64)) / 64) * dmgMult * (1 + buffPct(s, 'str')))),
     monsterHit: m.maxHit > 0 ? hitChance((m.attack + 8) * 64, (level(s, 'defence') + 8) * (b.defence + 64) * (1 + buffPct(s, 'def'))) : 0,
     monsterMaxHit: m.maxHit * MONSTER_DAMAGE_SCALE,
   };
@@ -435,10 +435,12 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
 
   /** 还没到任务地点就先走路，返回走了多久 */
   const stepTravel = (task: Task, budget: number): number => {
-    const node = nodeOfAction(task.action);
-    if (!node) return 0;
+    // 两座城都有的建筑：已经在走的就接着走，否则去最近的那座
+    const cands = nodesOfAction(task.action);
+    if (!cands.length) return 0;
+    if (cands.some((n) => { const d = standOf(n); return d.x === s.loc.x && d.y === s.loc.y; })) return 0;
+    const node = cands.find((n) => n.id === s.travel?.to) ?? nodeOfAction(task.action, s.loc)!;
     const dest = standOf(node);
-    if (s.loc.x === dest.x && s.loc.y === dest.y) return 0;
     if (!s.travel || s.travel.to !== node.id) {
       const ms = travelMs(s.loc, dest);
       s.travel = { to: node.id, ms, total: ms };

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ACTIONS, MONSTERS, nodeOfAction, NODES, SKILLS } from '../core/data';
 import { QUESTS, questProgress, questText } from '../core/quests';
 import { actionDuration, combatLevel, isBankId, level, maxHp, removeTask, resumeWork, weaponStyle } from '../core/sim';
@@ -150,18 +150,27 @@ export function MapButtons({ onWorldMap }: { onWorldMap: () => void }) {
 
 const BUFF_SHORT: Record<BuffKind, string> = { atk: '命中', str: '伤害', def: '防御', speed: '速度', xp: '经验' };
 
-/** 新手任务卡片：当前目标、进度、去做 */
+/** 新手任务卡片：当前目标、进度、去做；可以收起成一行（用户 10-23） */
 export function QuestCard({ s, onGo }: { s: GameState; onGo: (nodeId: string) => void }) {
+  const [open, setOpen] = useState(() => {
+    try { return localStorage.getItem('canglin-quest-fold') !== '1'; } catch { return true; }
+  });
+  const toggle = () => {
+    setOpen(!open);
+    try { localStorage.setItem('canglin-quest-fold', open ? '1' : '0'); } catch { /* 存不了就算了 */ }
+  };
   const p = questProgress(s);
   if (!p) return null;
-  const node = nodeOfAction(p.q.hint);
+  const node = nodeOfAction(p.q.hint, s.loc);
   const idx = (s.quest?.i ?? 0) + 1;
   return (
-    <div className="chip quest">
+    <div className={`chip quest ${open ? '' : 'folded'}`}>
+      <button className="fold" title={open ? '收起' : '展开'} onClick={toggle}>{open ? '▾' : '▸'}</button>
       <b className="gold">新手任务 {idx}/{QUESTS.length}</b> {questText(p.q)}
-      <span className="muted"> {p.have}/{p.q.goal.n} · 奖励 {p.q.reward} 金币</span>
+      {open && <span className="muted"> {p.have}/{p.q.goal.n} · 奖励 {p.q.reward} 金币</span>}
+      {!open && <span className="muted"> {p.have}/{p.q.goal.n}</span>}
       {node && <button className="pill" onClick={() => onGo(node.id)}>去做</button>}
-      <div className="quest-tip">💡 {p.q.tip}</div>
+      {open && <div className="quest-tip">💡 {p.q.tip}</div>}
     </div>
   );
 }
