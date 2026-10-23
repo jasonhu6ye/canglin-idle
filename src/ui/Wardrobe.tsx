@@ -1,17 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { setSettings } from '../core/sim';
 import type { GameState } from '../core/types';
-import { HERO_ANIMS, HERO_H, HERO_RES, HERO_W, OUTFITS, paintHeroSheet, type Outfit } from '../game/hero';
+import { HERO_ANIMS, HERO_H, HERO_W, OUTFITS, paintHeroSheet, type Outfit } from '../game/hero';
 import { store } from '../store';
 
-const PREVIEW = ['idle-down', 'walk-down', 'idle-side', 'walk-side', 'walk-up', 'work-chop', 'fight-sword'];
-const W = HERO_W * HERO_RES;
-const H = HERO_H * HERO_RES;
+const PREVIEW = ['walk-down', 'idle-side', 'walk-side', 'walk-up', 'work-chop', 'fight-sword'];
 
 /** 衣橱里的小人：轮流播放几段动作 */
 function HeroPreview({ outfit, scale = 3 }: { outfit: Outfit; scale?: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const sheet = useMemo(() => paintHeroSheet(outfit, undefined, HERO_ANIMS, HERO_RES), [outfit]);
+  const sheet = useMemo(() => paintHeroSheet(outfit), [outfit]);
   useEffect(() => {
     const anims = HERO_ANIMS.filter((a) => PREVIEW.includes(a.key));
     let tick = 0;
@@ -20,15 +18,15 @@ function HeroPreview({ outfit, scale = 3 }: { outfit: Outfit; scale?: number }) 
       if (!ctx) return;
       const a = anims[Math.floor(tick / 24) % anims.length];
       const f = sheet.frames.find((x) => x.name === `${a.key}-${tick % a.frames}`)!;
-      ctx.clearRect(0, 0, W, H);
-      ctx.drawImage(sheet.canvas, f.x, f.y, W, H, 0, 0, W, H);
+      ctx.clearRect(0, 0, HERO_W, HERO_H);
+      ctx.drawImage(sheet.canvas, f.x, f.y, HERO_W, HERO_H, 0, 0, HERO_W, HERO_H);
       tick++;
     };
     draw();
     const id = setInterval(draw, 125);
     return () => clearInterval(id);
   }, [sheet]);
-  return <canvas ref={ref} width={W} height={H} className="pix" style={{ width: HERO_W * scale, height: HERO_H * scale }} />;
+  return <canvas ref={ref} width={HERO_W} height={HERO_H} className="pix" style={{ width: HERO_W * scale, height: HERO_H * scale }} />;
 }
 
 export function Wardrobe({ s, onClose }: { s: GameState; onClose: () => void }) {

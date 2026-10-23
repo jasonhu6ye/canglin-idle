@@ -7,12 +7,6 @@ import { useEffect, useState } from 'react';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
-    id: '2026-10-23-h', date: '10 月 23 日', title: '限定外观重做',
-    lines: [
-      '五套限定外观按参考录屏重做：大头 Q 版身形、破斗篷长袍，用两倍精度绘制，细节更多。待机时大头左右轻晃、斗篷随呼吸起伏、手里的火一明一暗，南瓜偶尔会换表情。走路、干活、战斗、骑狼都已适配。',
-    ],
-  },
-  {
     id: '2026-10-23-g', date: '10 月 23 日', title: '五套限定外观、寻路修复',
     lines: [
       '衣橱新增五套限定外观：南瓜提灯人、幽蓝南瓜、白发魔骑、红黑小丑、骸骨术士。每套都有动态特效（火星、鬼火、红雾、纸花、灵光），骑狼也能穿。在「更多」页输入兑换码「为爱发电」解锁。',
