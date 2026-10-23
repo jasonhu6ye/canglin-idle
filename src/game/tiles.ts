@@ -15,7 +15,7 @@ export const TILE_COUNT = EDGE_BASE + LIQUIDS.length * 15 * VARIANTS;
 const ROWS = Math.ceil(TILE_COUNT / COLS);
 export const TILESET = { margin: 1, spacing: 2, width: COLS * CELL, height: ROWS * CELL };
 
-const ANIMATED: Ground[] = ['water', 'ocean', 'swampwater', 'lava'];
+const ANIMATED: Ground[] = ['water', 'ocean', 'swampwater', 'lava', 'shallows'];
 
 type RGB = [number, number, number];
 const hex = (h: string): RGB => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
@@ -51,6 +51,16 @@ const PAL: Record<Ground, string[]> = {
   lava: ['#8a2410', '#c8401a', '#ff8a2a', '#ffe070'],
   chasm: ['#06040c', '#0c0816', '#160f26', '#4a3a7a'],
   cliff: ['#3e3e44', '#55555c', '#6e6e76', '#8a8a92'],
+  savanna: ['#a08a3c', '#b8a04a', '#cfb85e', '#6a8a34'],
+  autumn: ['#8a4a22', '#a85e2a', '#c47a36', '#e8b040'],
+  jungle: ['#1c4a22', '#245c2a', '#2e7034', '#c84a6a'],
+  redrock: ['#8a3e26', '#a85232', '#c26a42', '#6a2a1a'],
+  dune: ['#c8964a', '#dcaa5a', '#ecc274', '#b07c3a'],
+  crystalground: ['#3a3a5e', '#4a4a74', '#5e5e8e', '#a8f0ff'],
+  alpine: ['#6a7a6a', '#869484', '#a4b0a0', '#e8eef2'],
+  coral: ['#d8b890', '#e8caa0', '#f4dcb8', '#f07a7a'],
+  shallows: ['#2a9ab0', '#38b0c4', '#5ccad8', '#e0fbff'],
+  redcliff: ['#5a2418', '#7a3422', '#9a4a30', '#b86040'],
 };
 
 function groundPixel(g: Ground, x: number, y: number, v: number, f: number): RGB {
@@ -173,6 +183,70 @@ function groundPixel(g: Ground, x: number, y: number, v: number, f: number): RGB
       if (n > 0.993) return acc;
       return n < 0.4 ? dark : base;
     }
+    case 'savanna': {
+      // 枯黄高草：竖直短线，偶尔一小块绿
+      if (hash(x >> 2, y >> 2, v + 120) < 0.08) return acc;
+      if ((x + Math.floor(hash(x, 0, v) * 6)) % 4 === 0 && y % 5 < 3) return light;
+      return n < 0.15 ? dark : base;
+    }
+    case 'autumn': {
+      // 满地落叶：红、橙、黄几种叶片色块
+      if (hash(x >> 1, y >> 1, v + 130) < 0.12) return acc;
+      if (hash(x >> 1, y >> 1, v + 131) < 0.1) return hex('#c8402a');
+      return n < 0.15 ? dark : n > 0.88 ? light : base;
+    }
+    case 'jungle': {
+      // 深绿厚叶，零星红花
+      for (let k = 0; k < 3; k++) {
+        const bx = Math.floor(hash(v, k, 13) * 13) + 1;
+        const by = Math.floor(hash(k, v, 14) * 12) + 2;
+        if (Math.abs(x - bx) + Math.abs(y - by) === 2 && y <= by) return light;
+      }
+      if (n > 0.992) return acc;
+      return n < 0.2 ? dark : base;
+    }
+    case 'redrock':
+    case 'redcliff': {
+      // 横向的沉积岩层
+      const band = (y + Math.floor(hash(x >> 3, 0, v) * 3)) % 6;
+      if (band === 0) return dark;
+      if (band === 1) return light;
+      if (g === 'redcliff' && (x + v) % 7 === 0) return dark;
+      return n > 0.95 ? acc : base;
+    }
+    case 'dune': {
+      // 弯曲的沙脊
+      const ridge = Math.sin(x * 0.35 + Math.sin(y * 0.3 + v) * 2 + y * 0.5);
+      if (ridge > 0.9) return light;
+      if (ridge < -0.92) return dark;
+      return n > 0.97 ? acc : base;
+    }
+    case 'crystalground': {
+      // 暗紫晶地，偶尔闪一颗亮晶
+      if (n > 0.985) return acc;
+      if ((x * 2 + y * 3 + v * 5) % 19 === 0) return light;
+      return n < 0.18 ? dark : base;
+    }
+    case 'alpine': {
+      // 高山草甸：灰绿碎石夹着残雪
+      if (hash(x >> 2, y >> 2, v + 150) < 0.1) return acc;
+      if (hash(x >> 1, y >> 1, v + 151) < 0.15) return (x + y) % 2 ? light : dark;
+      return n < 0.15 ? dark : base;
+    }
+    case 'coral': {
+      // 珊瑚沙：浅色沙里混着粉红碎珊瑚
+      if (hash(x >> 1, y >> 1, v + 160) < 0.05) return acc;
+      return n < 0.1 ? dark : n > 0.9 ? light : base;
+    }
+    case 'shallows': {
+      // 浅海：能看到沙底的亮斑，波纹更密
+      const t = f * 0.6;
+      const wave = Math.sin(x * 0.7 + t + Math.floor(y / 3) * 1.7 + v) + Math.sin(y * 1.1 - t * 0.6);
+      if (wave > 1.7 && y % 3 === 1) return acc;
+      if (wave > 1.1) return light;
+      if (hash(x >> 2, y >> 2, v + 170) < 0.12) return mix(base, hex('#e8d8a8'), 0.25);
+      return wave < -1.5 ? dark : base;
+    }
     case 'cliff': {
       // 竖向的岩层纹理
       const stripe = (x + Math.floor(hash(0, y >> 2, v) * 4)) % 5;
@@ -193,6 +267,18 @@ function edgePixel(g: Ground, x: number, y: number, mask: number): RGB | null {
     if (S && dS < 5) return dS === 0 ? hex('#1e1e22') : hex(dS < 2 ? '#2e2e34' : '#3a3a40');
     if (N && dN === 0) return hex('#9a9aa2');
     if ((E && dE === 0) || (W && dW === 0)) return hex('#2a2a30');
+    return null;
+  }
+  if (g === 'redcliff') {
+    // 红岩悬崖：南面是陡峭的红色崖壁
+    if (S && dS < 5) return dS === 0 ? hex('#2a0e08') : hex(dS < 2 ? '#3e160c' : '#4e1e12');
+    if (N && dN === 0) return hex('#c8784e');
+    if ((E && dE === 0) || (W && dW === 0)) return hex('#3a140c');
+    return null;
+  }
+  if (g === 'shallows') {
+    if (d === 0) return hex('#f4ecc8');
+    if (d === 1 && (x + y) % 2) return hex('#a8e8ee');
     return null;
   }
   if (g === 'chasm') {

@@ -9,8 +9,13 @@ import { FORM_FAMILY, isAnimal, SPECIES, type Family, type Species } from './bes
  */
 
 /** 世界大小：1080 → 1480 → 2188（用户 10-22 嫌挤，两次要求扩大） */
-export const MAP_W = 5088;
-export const MAP_H = 5088;
+export const MAP_W = 8848;
+export const MAP_H = 8848;
+/**
+ * 8848 大地图（用户 10-23）：原来 5088 的世界原样放在正中间这个方框里（格子尺寸不变，老地方之间走路时间不变），
+ * 外面一圈是 8 个新区域
+ */
+export const OLD_BOX = { x: 1880, y: 1880, size: 5088 };
 
 export interface SkillInfo { name: string; color: string; group: SkillGroup; desc: string }
 
@@ -51,6 +56,14 @@ export const REGIONS: Record<RegionId, { name: string; color: string }> = {
   swamp: { name: '亡者沼泽', color: '#4a5a3a' },
   woodland: { name: '幽深林地', color: '#3f6e34' },
   giantwood: { name: '巨木森林', color: '#2f5a32' },
+  savanna: { name: '金穗草原', color: '#c8b052' },
+  autumn: { name: '枫红秋林', color: '#b0562a' },
+  jungle: { name: '蛮荒雨林', color: '#2a6a2a' },
+  tropic: { name: '珊瑚群岛', color: '#3aa8b8' },
+  canyon: { name: '赤岩峡谷', color: '#a84a30' },
+  desert: { name: '流沙大漠', color: '#dcb066' },
+  alpine: { name: '云岭高山', color: '#8aa898' },
+  crystal: { name: '晶簇荒原', color: '#6a52a0' },
 };
 
 // ---- 物品 ----
@@ -199,6 +212,39 @@ TIERS.forEach((t, i) => {
   item(`${t.id}_rune`, `${t.rune}符文`, 'ammo', Math.ceil(BAR_VALUE[i] / 8), { tier: i, ammo: { style: 'magic', power: Math.round(POWER[i] / 2) } });
 });
 item('shaft', '箭杆', 'material', 1);
+
+/**
+ * 新资源线（用户 10-23 要求几十种 T1-T8 新材料）：晶石、香料、树脂、羽毛，各 8 阶共 32 种。
+ * T1 在老地图城镇附近，T2-T8 在 8848 外圈的新区域。用途都在落霞城的珍材坊：
+ * 晶石 + 树脂 + 布料 → 晶能符文；羽毛 + 树脂 + 箭杆 + 箭头 → 羽箭；香料 + 兽肉 → 香料料理
+ */
+export type MatLine = 'crystal' | 'spice' | 'resin' | 'feather';
+export const MAT_LINES: Record<MatLine, { name: string; skill: SkillId; verb: string; names: string[]; desc: string }> = {
+  crystal: { name: '晶石', skill: 'mining', verb: '开采', names: ['石英', '紫晶', '黄晶', '碧玉', '蓝晶', '星辉晶', '日耀晶', '虚空晶'], desc: '从岩缝里敲下来的晶石，能把魔力存进符文里' },
+  spice: { name: '香料', skill: 'gathering', verb: '采摘', names: ['薄荷叶', '野茴香', '肉桂皮', '丁香', '豆蔻', '藏红花', '雪域花椒', '虚空星椒'], desc: '晒干的香草和香料，和兽肉一起做成料理' },
+  resin: { name: '树脂', skill: 'woodcutting', verb: '割取', names: ['松脂', '桦胶', '枫脂', '琥珀脂', '龙血脂', '烈阳脂', '霜华脂', '白玉脂'], desc: '割开树皮流出的树脂，做箭和符文时用来粘合' },
+  feather: { name: '羽毛', skill: 'hunting', verb: '收集', names: ['雀羽', '鸦羽', '鹰羽', '鹤羽', '孔雀羽', '雷鸟羽', '冰凰羽', '天凤羽'], desc: '鸟巢边捡到的羽毛，装在箭尾上箭飞得更稳' },
+};
+export const MAT_LINE_IDS = Object.keys(MAT_LINES) as MatLine[];
+const SPICE_DISH = ['薄荷烤肉', '茴香炖肉', '肉桂烤排', '丁香焖肉', '豆蔻咖喱', '藏红花炖肉', '花椒爆肉', '星椒龙排'];
+const SPICE_BUFF: BuffKind[] = ['speed', 'str', 'atk', 'def', 'xp', 'str', 'atk', 'def'];
+TIERS.forEach((t, i) => {
+  const n = i + 1;
+  for (const line of MAT_LINE_IDS) {
+    const L = MAT_LINES[line];
+    item(`${line}_${n}`, L.names[i], 'resource', Math.round(RES_VALUE[i] * 1.3), {
+      tier: i, desc: `${L.desc}。${SKILLS[L.skill].name} ${t.level} 级可${L.verb}。`,
+    });
+  }
+  const crys = MAT_LINES.crystal.names[i];
+  const fea = MAT_LINES.feather.names[i];
+  item(`crystal_rune_${n}`, `${crys}符文`, 'ammo', Math.ceil(BAR_VALUE[i] / 5), {
+    tier: i, ammo: { style: 'magic', power: Math.round((POWER[i] / 2) * 1.3) }, desc: `嵌了${crys}的符文，比同阶普通符文威力高三成。`,
+  });
+  item(`feather_arrow_${n}`, `${fea}箭`, 'ammo', Math.ceil(BAR_VALUE[i] / 5), {
+    tier: i, ammo: { style: 'ranged', power: Math.round((POWER[i] / 2) * 1.3) }, desc: `箭尾装了${fea}，比同阶普通箭威力高三成。`,
+  });
+});
 
 // 强化石（占位）
 const STONES: [string, string, number][] = [
@@ -444,6 +490,12 @@ const herb = (id: string, suffix = '') => {
   const h = HERBS.find((x) => x[0] === id)!;
   return gather(`gather_${id}${suffix}`, `采集${h[1]}`, 'gathering', h[2], [one(id), { item: id, qty: 1, chance: 0.2 }, wildSeed(tierForLevel(h[2]), h[2])], { tool: 'sickle' });
 };
+/** 新资源线的采集动作（同一阶出现在多处时用 suffix 区分） */
+const mat = (line: MatLine, t: number, suffix = '') =>
+  gather(`${line}_${t + 1}${suffix}`, MAT_LINES[line].names[t], MAT_LINES[line].skill, TIERS[t].level, [
+    one(`${line}_${t + 1}`), { item: `${line}_${t + 1}`, qty: 1, chance: 0.15 },
+    ...(line === 'feather' ? [{ item: 'bones', qty: 1, chance: 0.1 }] : []),
+  ]);
 /** 采集时 3% 捡到同阶的野生种子 */
 function wildSeed(tier: number, salt: number): Drop {
   const pool = CROPS.filter((c) => tierForLevel(c[2]) === tier);
@@ -612,6 +664,22 @@ FEASTS.forEach(([name, kind], t) => {
   });
   make(`cook_${id}`, name, 'cooking', lvl, [one(`raw_${a[0]}`, 2), one(`raw_${b[0]}`, 2), one(`meat_${t + 1}`, 2)], [one(id)], 2.2);
 });
+// 香料料理（新资源线）：兽肉 + 香料，回血比烤兽肉多四成，带增益
+TIERS.forEach((t, i) => {
+  const n = i + 1;
+  const kind = SPICE_BUFF[i];
+  const heals = Math.round(MEAT_HEAL[i] * 1.4);
+  const buff: Buff = { kind, pct: Math.round((BUFF_BASE[kind] * 1.2 + i * 0.012) * 100) / 100, ms: (15 + i * 3) * 60000 };
+  const id = `spice_meal_${n}`;
+  const lvl = t.level + 4;
+  item(id, SPICE_DISH[i], 'food', Math.round(RES_VALUE[i] * 6), {
+    tier: i, heals, buff, desc: `兽肉用${MAT_LINES.spice.names[i]}腌过再烤。烹饪 ${lvl} 级，在落霞城珍材坊做。回复 ${heals} 生命；吃下后${buffText(buff)}。`,
+  });
+  make(`rare_cook_${n}`, SPICE_DISH[i], 'cooking', lvl, [one(`meat_${n}`), one(`spice_${n}`, 2)], [one(id)], 1.6);
+  make(`rare_rune_${n}`, `${MAT_LINES.crystal.names[i]}符文 ×8`, 'crafting', lvl, [one(`crystal_${n}`), one(`resin_${n}`), one(`cloth_${n}`)], [one(`crystal_rune_${n}`, 8)], 1.4);
+  make(`rare_arrow_${n}`, `${MAT_LINES.feather.names[i]}箭 ×10`, 'fletching', lvl,
+    [one('shaft', 10), one(`${t.id}_arrowhead`, 10), one(`feather_${n}`, 2), one(`resin_${n}`)], [one(`feather_arrow_${n}`, 10)], 1.8);
+});
 // 料理物品定义在 ITEMS 建好之后，补登记进去
 for (const it of itemList) ITEMS[it.id] ??= it;
 
@@ -621,7 +689,7 @@ const filterIds = (prefix: string) => actionList.filter((a) => a.id.startsWith(p
 
 export type NodeSprite =
   | 'ore' | 'tree' | 'fish' | 'herb' | 'camp' | 'boss' | 'anvil' | 'furnace' | 'stove' | 'bench' | 'bowyer' | 'potion' | 'enhance'
-  | 'market' | 'farm' | 'bank' | 'dummy';
+  | 'market' | 'farm' | 'bank' | 'dummy' | 'cave' | 'atelier';
 
 export interface MapNode {
   id: string;
@@ -641,26 +709,44 @@ export interface MapNode {
   opens?: 'bank';
   /** 5088 大地图新增的特色地点：自带一片地貌、专属生物和首领，地图上标大字地名（用户 10-23） */
   site?: { kind: SiteKind; r: number };
+  /** 大型洞窟入口（用户 10-23：先占位，以后开放） */
+  cave?: boolean;
 }
-export type SiteKind = 'islands' | 'bamboo' | 'saltflat' | 'crater' | 'fungal' | 'glacier' | 'obsidian' | 'starabyss';
+export type SiteKind = 'islands' | 'bamboo' | 'saltflat' | 'crater' | 'fungal' | 'glacier' | 'obsidian' | 'starabyss'
+  | 'oasis' | 'mesa' | 'atoll' | 'crystalheart';
 
-const at = (u: number, v: number) => ({ x: Math.round(u * (MAP_W - 1)), y: Math.round(v * (MAP_H - 1)) });
+/** 老地图（中间方框）里的相对坐标 */
+const at = (u: number, v: number) => ({ x: OLD_BOX.x + Math.round(u * (OLD_BOX.size - 1)), y: OLD_BOX.y + Math.round(v * (OLD_BOX.size - 1)) });
+/** 整张 8848 大地图的相对坐标（外圈新区域用） */
+const atW = (u: number, v: number) => ({ x: Math.round(u * (MAP_W - 1)), y: Math.round(v * (MAP_H - 1)) });
 
 /** 野外点位的等级范围直接取它所有动作的最低和最高等级 */
 const wild = (id: string, name: string, u: number, v: number, region: RegionId, sprite: NodeSprite, actions: string[], pond = false): MapNode => {
   const lvls = actions.map((a) => actionList.find((x) => x.id === a)!.level);
   return { id, name, ...at(u, v), region, lv: [Math.min(...lvls), Math.max(...lvls)], sprite, actions, pond };
 };
+/** 外圈新区域的点位 */
+const ring = (id: string, name: string, u: number, v: number, region: RegionId, sprite: NodeSprite, actions: string[], pond = false): MapNode =>
+  ({ ...wild(id, name, 0, 0, region, sprite, actions, pond), ...atW(u, v) });
+/** 洞窟入口：暂时没有内容 */
+const cave = (id: string, name: string, pos: { x: number; y: number }, region: RegionId): MapNode =>
+  ({ id, name, ...pos, region, lv: [0, 0], sprite: 'cave', actions: [], cave: true });
 
 const site = (n: MapNode, kind: SiteKind, r: number): MapNode => ({ ...n, site: { kind, r } });
 
-/** 镇中心：原来 1080 地图上的 (518, 529)，按比例放到新地图 */
-export const TOWN_CENTER = { x: Math.round((518 * MAP_W) / 1080), y: Math.round((529 * MAP_H) / 1080) };
+/** 镇中心：原来 1080 地图上的 (518, 529)，按比例放到老地图方框里 */
+export const TOWN_CENTER = { x: OLD_BOX.x + Math.round((518 * OLD_BOX.size) / 1080), y: OLD_BOX.y + Math.round((529 * OLD_BOX.size) / 1080) };
 /** 城镇布局按「镇中心 = (167, 170)」画的，这里平移到真正的镇中心 */
 export const townXY = (x: number, y: number) => ({ x: x - 167 + TOWN_CENTER.x, y: y - 170 + TOWN_CENTER.y });
 
 const town = (id: string, name: string, x: number, y: number, sprite: NodeSprite, actions: string[], extra: Partial<MapNode> = {}): MapNode =>
   ({ id, name, ...townXY(x, y), region: 'town', lv: [1, 1], sprite, actions, town: true, ...extra });
+
+/** 新大型城镇「落霞城」（用户 10-23）：在西边金穗草原，布局按镇中心 = (0, 0) 画 */
+export const TOWN2_CENTER = atW(0.1, 0.52);
+export const town2XY = (x: number, y: number) => ({ x: x + TOWN2_CENTER.x, y: y + TOWN2_CENTER.y });
+const town2 = (id: string, name: string, x: number, y: number, sprite: NodeSprite, actions: string[], extra: Partial<MapNode> = {}): MapNode =>
+  ({ id, name, ...town2XY(x, y), region: 'savanna', lv: [1, 1], sprite, actions, town: true, ...extra });
 
 export const NODES: MapNode[] = [
   // 城镇：坐标与 world.ts 里的建筑对齐（建筑门口下方一格）
@@ -695,7 +781,7 @@ export const NODES: MapNode[] = [
   // 幽深林地
   wild('pine_valley', '西风松谷', 0.09, 0.36, 'woodland', 'tree', [chop(2), hunt(1)]),
   wild('birch_brook', '桦影溪谷', 0.08, 0.58, 'woodland', 'fish', [chop(1), fishAt('trout'), fishAt('bighead'), fishAt('catfish')], true),
-  wild('maple_slope', '落叶长坡', 0.23, 0.64, 'woodland', 'camp', [chop(0), cotton(1), hunt(0)]),
+  wild('maple_slope', '落叶长坡', 0.23, 0.64, 'woodland', 'camp', [chop(0), cotton(1), hunt(0), mat('feather', 0)]),
   wild('moss_pool', '幽苔水洼', 0.08, 0.68, 'woodland', 'fish', [fishAt('minnow', '_moss'), fishAt('grass_carp'), fishAt('perch'), hunt(0, '_moss')], true),
   // 亡者沼泽
   wild('whisper_pool', '亡语沉潭', 0.09, 0.89, 'swamp', 'fish', [fishAt('eel'), fishAt('ghostfish'), fishAt('swamp_catfish'), fishAt('bonefin')], true),
@@ -721,8 +807,8 @@ export const NODES: MapNode[] = [
 
   // ---- 1080 大地图新增点位 ----
   // 城郊
-  wild('orchard', '城郊果园', 0.56, 0.55, 'town', 'camp', [chop(0, '_orchard'), cotton(0, '_orchard'), herb('green_herb', '_orchard')]),
-  wild('old_pit', '老矿坑', 0.45, 0.40, 'town', 'ore', [mine(0, '_pit'), mine(1, '_pit')]),
+  wild('orchard', '城郊果园', 0.56, 0.55, 'town', 'camp', [chop(0, '_orchard'), cotton(0, '_orchard'), herb('green_herb', '_orchard'), mat('spice', 0), mat('resin', 0)]),
+  wild('old_pit', '老矿坑', 0.45, 0.40, 'town', 'ore', [mine(0, '_pit'), mine(1, '_pit'), mat('crystal', 0)]),
   // 巨木森林
   wild('mushroom_grove', '苔光蘑菇林', 0.20, 0.30, 'giantwood', 'herb', [herb('moon_herb', '_grove'), chop(3, '_grove'), cotton(4, '_grove')]),
   wild('root_cave', '古根洞穴', 0.05, 0.05, 'giantwood', 'ore', [mine(5, '_root'), chop(5, '_root')]),
@@ -765,6 +851,53 @@ export const NODES: MapNode[] = [
   site(wild('glacier', '冰川裂谷', 0.47, 0.15, 'snow', 'boss', [mine(5, '_glacier'), hunt(5, '_glacier')]), 'glacier', 120),
   site(wild('obsidian', '黑曜火山群', 0.88, 0.80, 'lava', 'boss', [mine(6, '_obsidian'), hunt(6, '_obsidian')]), 'obsidian', 120),
   site(wild('starabyss', '星渊祭坛', 0.47, 0.80, 'abyss', 'boss', [mine(7, '_star'), cotton(7, '_star')]), 'starabyss', 110),
+
+  // ---- 8848 大地图外圈（用户 10-23）：8 个新区域、新大型城镇落霞城、16 处新地点 ----
+  // 落霞城：第二个仓库和集市，珍材坊专做新资源线的东西
+  town2('bank2', '落霞城·仓库', -15, -9, 'bank', [], { opens: 'bank' }),
+  town2('market2', '落霞城·集市', -14, 12, 'market', [
+    steal('caravan_guard', '偷驼队护卫', 30, 35, [{ item: 'spice_3', qty: 2, chance: 0.2 }]),
+    steal('spice_merchant', '偷香料商', 50, 70, [{ item: 'spice_5', qty: 2, chance: 0.15 }, { item: 'resin_5', qty: 1, chance: 0.1 }]),
+  ]),
+  town2('atelier', '落霞城·珍材坊', 14, -9, 'atelier', filterIds('rare_')),
+  // 金穗草原
+  ring('golden_plain', '金穗原野', 0.06, 0.42, 'savanna', 'camp', [mat('spice', 1), mat('resin', 1), mat('feather', 1), chop(1, '_plain')]),
+  ring('lion_rock', '狮吼岩', 0.15, 0.63, 'savanna', 'boss', [mat('crystal', 1), mat('crystal', 2), mat('feather', 2), mine(1, '_lion')]),
+  // 枫红秋林
+  ring('maple_valley', '枫红谷', 0.08, 0.22, 'autumn', 'tree', [mat('resin', 2), mat('spice', 2), chop(3, '_maple')]),
+  ring('leaf_corridor', '落叶回廊', 0.19, 0.08, 'autumn', 'camp', [mat('feather', 3), mat('crystal', 3), hunt(3, '_leaf')]),
+  // 蛮荒雨林
+  ring('vine_realm', '藤蔓秘境', 0.08, 0.78, 'jungle', 'tree', [mat('spice', 3), mat('resin', 4), chop(4, '_vine')]),
+  ring('python_marsh', '蟒河湿地', 0.17, 0.92, 'jungle', 'boss', [mat('feather', 4), hunt(4, '_python'), herb('flame_heart', '_python')]),
+  // 珊瑚群岛
+  site(ring('coral_atoll', '珊瑚环礁', 0.90, 0.47, 'tropic', 'fish', [mat('crystal', 4), fishAt('grouper', '_atoll'), fishAt('lanternfish', '_atoll')], true), 'atoll', 110),
+  ring('palm_coast', '椰风海岸', 0.86, 0.61, 'tropic', 'camp', [mat('resin', 3), mat('spice', 4), cotton(4, '_palm')]),
+  // 赤岩峡谷
+  site(ring('red_mesa', '赤岩台地', 0.88, 0.12, 'canyon', 'ore', [mat('crystal', 5), mine(5, '_mesa')]), 'mesa', 120),
+  ring('wind_pillars', '风语石柱', 0.93, 0.29, 'canyon', 'camp', [mat('feather', 5), hunt(5, '_pillar')]),
+  // 流沙大漠
+  site(ring('sand_oasis', '沙海绿洲', 0.86, 0.80, 'desert', 'fish', [mat('spice', 5), mat('resin', 5), fishAt('carp', '_sand')], true), 'oasis', 90),
+  ring('king_tomb', '古王陵', 0.93, 0.93, 'desert', 'boss', [mat('crystal', 6), mine(6, '_tomb')]),
+  // 云岭高山
+  ring('cloud_slope', '云巅雪坡', 0.38, 0.06, 'alpine', 'tree', [mat('resin', 6), mat('spice', 6), chop(6, '_cloud')]),
+  ring('eagle_gorge', '鹰愁涧', 0.62, 0.07, 'alpine', 'camp', [mat('feather', 6), mine(6, '_gorge')]),
+  // 晶簇荒原
+  site(ring('crystal_heart', '晶簇之心', 0.40, 0.93, 'crystal', 'boss', [mat('crystal', 7), mine(7, '_heart')]), 'crystalheart', 110),
+  ring('void_field', '虚空晶原', 0.62, 0.93, 'crystal', 'camp', [mat('spice', 7), mat('resin', 7), mat('feather', 7)]),
+
+  // ---- 12 个大型洞窟（用户 10-23：先占位，以后开放） ----
+  cave('cave_shadow', '幽影洞窟', at(0.15, 0.50), 'woodland'),
+  cave('cave_magma', '熔心洞', at(0.70, 0.86), 'lava'),
+  cave('cave_frost', '寒晶洞', at(0.55, 0.13), 'snow'),
+  cave('cave_mine', '古矿坑道', at(0.80, 0.20), 'highland'),
+  cave('cave_spider', '蛛巢洞', at(0.12, 0.85), 'swamp'),
+  cave('cave_maw', '深渊之喉', at(0.52, 0.88), 'abyss'),
+  cave('cave_echo', '回音窟', atW(0.05, 0.56), 'savanna'),
+  cave('cave_bone', '龙骨洞', atW(0.95, 0.20), 'canyon'),
+  cave('cave_falls', '水帘洞', atW(0.12, 0.86), 'jungle'),
+  cave('cave_bat', '蝠影窟', atW(0.12, 0.14), 'autumn'),
+  cave('cave_sunken', '沉海洞', atW(0.95, 0.55), 'tropic'),
+  cave('cave_vein', '晶脉洞', atW(0.52, 0.95), 'crystal'),
 ];
 
 /**
@@ -781,7 +914,7 @@ export const NODES: MapNode[] = [
       home.actions.push(fight(sp.id));
       continue;
     }
-    const pool = NODES.filter((n) => !n.town && !n.site && n.region === sp.region);
+    const pool = NODES.filter((n) => !n.town && !n.site && !n.cave && n.region === sp.region);
     const best = pool.reduce((a, b) => {
       const cost = (n: MapNode) => Math.abs(mid(n) - sp.level) + (load.get(n) ?? 0) * 6;
       return cost(b) < cost(a) ? b : a;
@@ -790,7 +923,7 @@ export const NODES: MapNode[] = [
     load.set(best, (load.get(best) ?? 0) + 1);
   }
   for (const n of NODES) {
-    if (n.town) continue;
+    if (n.town || !n.actions.length) continue;
     const lvls = n.actions.map((a) => actionList.find((x) => x.id === a)!.level);
     n.lv = [Math.min(...lvls), Math.max(...lvls)];
   }

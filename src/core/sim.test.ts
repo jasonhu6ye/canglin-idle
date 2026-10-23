@@ -297,6 +297,28 @@ describe('存档迁移', () => {
     expect(s.xp.magic).toBe(0);
     expect(s.settings.carryFood).toBeGreaterThan(0);
   });
+
+  it('5088 地图的存档：位置整体平移进 8848 中间的老方框', async () => {
+    const { OLD_BOX } = await import('./data');
+    const old = { ...newGame(T0, 1), mapSize: 5088, loc: { x: 2500, y: 2600 } };
+    const s = migrate(old)!;
+    expect(s.loc).toEqual({ x: 2500 + OLD_BOX.x, y: 2600 + OLD_BOX.y });
+    expect(s.mapSize).toBe(8848);
+  });
+
+  it('两座城的仓库、集市都能用，背包满了回最近的仓库', async () => {
+    const { NODES } = await import('./data');
+    const { nearestBank, atMarket } = await import('./sim');
+    const bank2 = NODES.find((n) => n.id === 'bank2')!;
+    const market2 = NODES.find((n) => n.id === 'market2')!;
+    const s = newGame(T0, 1);
+    s.loc = standOf(bank2);
+    expect(atBank(s)).toBe(true);
+    s.loc = standOf(market2);
+    expect(atMarket(s)).toBe(true);
+    expect(nearestBank(standOf(NODES.find((n) => n.id === 'golden_plain')!)).id).toBe('bank2');
+    expect(nearestBank(bankStand()).id).toBe('bank');
+  });
 });
 
 describe('自动寻路', () => {

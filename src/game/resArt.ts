@@ -1,12 +1,14 @@
 import { ITEMS, TIERS } from '../core/data';
 import { phash, Pix } from './pix';
+import { MAT_KINDS, matGlow, matIconUrl, paintMatNode, type MatKind } from './matArt';
 
 /*
  * T1-T8 分阶资源的像素画：背包图标（16×16）和地图上的资源物件（矿石堆、树、棉株、晒皮架）。
  * 每一阶都有自己的配色和花纹，同名的棉花、兽皮靠颜色和图案区分。
  */
 
-export type ResKind = 'ore' | 'log' | 'cotton' | 'hide';
+export type ResKind = 'ore' | 'log' | 'cotton' | 'hide' | MatKind;
+const isMat = (k: ResKind): k is MatKind => (MAT_KINDS as string[]).includes(k);
 
 /** 物品 id → 资源种类和阶级（0 = T1），不是分阶资源返回 null */
 export function resOf(id: string): { kind: ResKind; tier: number } | null {
@@ -16,6 +18,7 @@ export function resOf(id: string): { kind: ResKind; tier: number } | null {
   if (id === `${TIERS[tier].wood}_log`) return { kind: 'log', tier };
   if (id === `cotton_${tier + 1}`) return { kind: 'cotton', tier };
   if (id === `hide_${tier + 1}`) return { kind: 'hide', tier };
+  for (const k of MAT_KINDS) if (id === `${k}_${tier + 1}`) return { kind: k, tier };
   return null;
 }
 
@@ -258,6 +261,7 @@ const iconCache = new Map<string, string>();
 export function resIconUrl(id: string): string | null {
   const r = resOf(id);
   if (!r || typeof document === 'undefined') return null;
+  if (isMat(r.kind)) return matIconUrl(r.kind, r.tier);
   const hit = iconCache.get(id);
   if (hit) return hit;
   const p = new Pix(16, 16);
@@ -352,12 +356,14 @@ function hideNode(t: number) {
 
 /** 地图上资源物件的画布 */
 export function paintResNode(kind: ResKind, tier: number): HTMLCanvasElement {
+  if (isMat(kind)) return paintMatNode(kind, tier);
   const p = kind === 'ore' ? oreNode(tier) : kind === 'log' ? treeNode(tier) : kind === 'cotton' ? cottonNode(tier) : hideNode(tier);
   return p.canvas();
 }
 
 /** 会发光的资源：[颜色, 半径] */
 export function resGlow(kind: ResKind, tier: number): [number, number] | null {
+  if (isMat(kind)) return matGlow(kind, tier);
   if (kind === 'ore' && tier >= 4) return [parseInt(ORE[tier][1][1].slice(1), 16), 14];
   if (kind === 'log' && (tier === 6 || tier === 7)) return [tier === 6 ? 0xff7a2a : 0xfff0b0, 18];
   if (kind === 'cotton' && tier === 7) return [0xd8c8ff, 12];

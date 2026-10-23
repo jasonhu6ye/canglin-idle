@@ -36,7 +36,7 @@ export function ActionSheet({ s, nodeId, onClose }: { s: GameState; nodeId: stri
       <div className="sheet-head">
         <button className="back" onClick={onClose}>‹ 返回</button>
         <h2>{node.name}</h2>
-        <small className="muted">{REGIONS[node.region].name}{!node.town && ` · Lv${node.lv[0]}-${node.lv[1]}`}</small>
+        <small className="muted">{REGIONS[node.region].name}{!node.town && !node.cave && ` · Lv${node.lv[0]}-${node.lv[1]}`}</small>
       </div>
       <ul className="action-list">
         {shown.map((id) => {
@@ -74,8 +74,9 @@ export function ActionSheet({ s, nodeId, onClose }: { s: GameState; nodeId: stri
         {hidden > 0 && <li className="more" onClick={() => setShowAll(true)}>还有 {hidden} 项更高等级的，点击展开</li>}
       </ul>
 
-      {node.id === 'market' && <SeedShop s={s} />}
-      {!all.length && <p className="muted pad">这里是怪物出没的地方。点地图上的怪物或生物，就能查看它的信息并开打。</p>}
+      {node.sprite === 'market' && <SeedShop s={s} />}
+      {node.cave && <p className="muted pad">大型洞窟入口。里面的内容还在筹备，暂未开放，敬请期待。</p>}
+      {!all.length && !node.cave && <p className="muted pad">这里是怪物出没的地方。点地图上的怪物或生物，就能查看它的信息并开打。</p>}
       {all.length > 0 && <TaskConfig s={s} action={selected} onDone={onClose} far={node.town && !nearNode(s, node) ? node : undefined} />}
     </div>
   );

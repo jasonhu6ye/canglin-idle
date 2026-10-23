@@ -59,9 +59,15 @@ describe('装备体系', () => {
 });
 
 describe('怪物图鉴', () => {
-  it('原 192 种 + 新地点 20 种生物和 8 个首领，id 不重复，特性都有定义', () => {
+  it('原 192 种 + 新地点 20 种生物和 8 个首领 + 外圈 70 种和 4 个首领，id 不重复，特性都有定义', () => {
     const base = SPECIES.filter((s) => !s.home);
-    const fresh = SPECIES.filter((s) => s.home);
+    const fresh = SPECIES.filter((s) => s.home && !s.ring);
+    const ring = SPECIES.filter((s) => s.ring);
+    // 8848 外圈（用户 10-23）：70 种新生物 + 4 个新首领，都绑在外圈的地点上
+    expect(ring.filter((s) => s.rank !== 'boss')).toHaveLength(70);
+    expect(ring.filter((s) => s.rank === 'boss')).toHaveLength(4);
+    for (const s of ring) expect(NODES.find((n) => n.id === s.home), s.id).toBeDefined();
+    expect(new Set(SPECIES.map((s) => s.name)).size, '名字不重复').toBe(SPECIES.length);
     expect(base).toHaveLength(192);
     expect(fresh.filter((s) => s.rank !== 'boss')).toHaveLength(20);
     expect(fresh.filter((s) => s.rank === 'boss')).toHaveLength(8);
@@ -74,7 +80,9 @@ describe('怪物图鉴', () => {
     }
     // 每处新地点都有自己的首领
     for (const n of NODES.filter((x) => x.site)) {
-      expect(fresh.some((s) => s.home === n.id && s.rank === 'boss'), n.name).toBe(true);
+      const own = SPECIES.filter((s) => s.home === n.id);
+      if (fresh.some((s) => s.home === n.id)) expect(own.some((s) => s.rank === 'boss'), n.name).toBe(true);
+      else expect(own.length, n.name).toBeGreaterThan(0);
     }
     for (const s of SPECIES) for (const tr of s.traits) expect(TRAITS[tr], `${s.id} ${tr}`).toBeDefined();
   });

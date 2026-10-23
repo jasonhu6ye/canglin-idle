@@ -1,4 +1,4 @@
-import { MAP_H, MAP_W, NODES, townXY, type MapNode } from '../core/data';
+import { MAP_H, MAP_W, NODES, OLD_BOX, town2XY, TOWN2_CENTER, townXY, type MapNode } from '../core/data';
 import type { RegionId } from '../core/types';
 
 /*
@@ -14,18 +14,25 @@ type Pt = { x: number; y: number };
 export const GROUNDS = [
   'grass', 'meadow', 'darkgrass', 'moss', 'cobble', 'road', 'roadsnow', 'roadsand', 'roaddark', 'farm',
   'sand', 'beach', 'snow', 'ice', 'rock', 'gravel', 'ash', 'basalt', 'abyss', 'glowmoss', 'mud', 'bridge',
-  'water', 'ocean', 'swampwater', 'lava', 'chasm', 'cliff',
+  // 8848 外圈新区域的地面（用户 10-23）
+  'savanna', 'autumn', 'jungle', 'redrock', 'dune', 'crystalground', 'alpine', 'coral',
+  'water', 'ocean', 'swampwater', 'lava', 'chasm', 'cliff', 'shallows', 'redcliff',
 ] as const;
 export type Ground = (typeof GROUNDS)[number];
 const G = Object.fromEntries(GROUNDS.map((g, i) => [g, i])) as Record<Ground, number>;
 /** 走不过去的地面 */
-export const BLOCKED_GROUNDS: Ground[] = ['water', 'ocean', 'swampwater', 'lava', 'chasm', 'cliff'];
+export const BLOCKED_GROUNDS: Ground[] = ['water', 'ocean', 'swampwater', 'lava', 'chasm', 'cliff', 'shallows', 'redcliff'];
 /** 有岸边描边的地面 */
-export const LIQUIDS: Ground[] = ['water', 'ocean', 'swampwater', 'lava', 'chasm', 'cliff'];
+export const LIQUIDS: Ground[] = ['water', 'ocean', 'swampwater', 'lava', 'chasm', 'cliff', 'shallows', 'redcliff'];
 const blockedG = new Uint8Array(GROUNDS.length);
 for (const g of BLOCKED_GROUNDS) blockedG[G[g]] = 1;
 
-export const REGION_IDS: RegionId[] = ['town', 'snow', 'highland', 'coast', 'lava', 'abyss', 'swamp', 'woodland', 'giantwood'];
+export const REGION_IDS: RegionId[] = [
+  'town', 'snow', 'highland', 'coast', 'lava', 'abyss', 'swamp', 'woodland', 'giantwood',
+  'savanna', 'autumn', 'jungle', 'tropic', 'canyon', 'desert', 'alpine', 'crystal',
+];
+/** 外圈的新区域 */
+export const RING_REGIONS = new Set<RegionId>(['savanna', 'autumn', 'jungle', 'tropic', 'canyon', 'desert', 'alpine', 'crystal']);
 
 const idx = (x: number, y: number) => y * MAP_W + x;
 export const inMap = (x: number, y: number) => x >= 0 && y >= 0 && x < MAP_W && y < MAP_H;
@@ -70,20 +77,54 @@ const SHAPE_SEEDS: [number, number, RegionId][] = [
   [0.21, 0.45, 'woodland'], [0.04, 0.47, 'woodland'], [0.31, 0.53, 'woodland'], [0.16, 0.71, 'woodland'], [0.29, 0.38, 'woodland'],
   [0.10, 0.05, 'giantwood'], [0.19, 0.21, 'giantwood'], [0.03, 0.22, 'giantwood'], [0.30, 0.18, 'giantwood'],
 ];
+/** 外圈新区域的形状点（整张大地图的相对坐标）；落霞城一带是草原 */
+const RING_SEEDS: [number, number, RegionId][] = [
+  [0.30, 0.04, 'alpine'], [0.42, 0.08, 'alpine'], [0.55, 0.04, 'alpine'], [0.68, 0.09, 'alpine'], [0.36, 0.14, 'alpine'], [0.62, 0.15, 'alpine'],
+  [0.84, 0.05, 'canyon'], [0.95, 0.10, 'canyon'], [0.88, 0.22, 'canyon'], [0.96, 0.32, 'canyon'], [0.80, 0.16, 'canyon'],
+  [0.88, 0.42, 'tropic'], [0.95, 0.50, 'tropic'], [0.86, 0.56, 'tropic'], [0.94, 0.64, 'tropic'], [0.90, 0.70, 'tropic'],
+  [0.84, 0.78, 'desert'], [0.95, 0.80, 'desert'], [0.88, 0.90, 'desert'], [0.96, 0.96, 'desert'], [0.80, 0.95, 'desert'],
+  [0.32, 0.92, 'crystal'], [0.45, 0.96, 'crystal'], [0.58, 0.92, 'crystal'], [0.70, 0.96, 'crystal'], [0.40, 0.86, 'crystal'], [0.64, 0.87, 'crystal'],
+  [0.05, 0.75, 'jungle'], [0.15, 0.80, 'jungle'], [0.08, 0.90, 'jungle'], [0.20, 0.95, 'jungle'], [0.03, 0.97, 'jungle'],
+  [0.05, 0.40, 'savanna'], [0.13, 0.46, 'savanna'], [0.06, 0.55, 'savanna'], [0.14, 0.60, 'savanna'], [0.05, 0.66, 'savanna'], [0.10, 0.52, 'savanna'],
+  [0.05, 0.08, 'autumn'], [0.15, 0.05, 'autumn'], [0.08, 0.20, 'autumn'], [0.18, 0.15, 'autumn'], [0.05, 0.30, 'autumn'], [0.14, 0.28, 'autumn'],
+];
+const OB = OLD_BOX;
 const SEEDS: { x: number; y: number; r: number }[] = [
-  ...SHAPE_SEEDS.map(([u, v, r]) => ({ x: u * (MAP_W - 1), y: v * (MAP_H - 1), r: REGION_IDS.indexOf(r) })),
+  // 老地图的形状点放进中间的方框，外圈是新区域
+  ...SHAPE_SEEDS.map(([u, v, r]) => ({ x: OB.x + u * (OB.size - 1), y: OB.y + v * (OB.size - 1), r: REGION_IDS.indexOf(r) })),
+  ...RING_SEEDS.map(([u, v, r]) => ({ x: u * (MAP_W - 1), y: v * (MAP_H - 1), r: REGION_IDS.indexOf(r) })),
   ...NODES.filter((n) => !n.town || n.pond).map((n) => ({ x: n.x, y: n.y, r: REGION_IDS.indexOf(n.region) })),
 ];
-/** 区域边界扰动的幅度和尺度（格） */
-const WARP = Math.round((90 * MAP_W) / 1080);
-const WARP_SCALE = Math.round((130 * MAP_W) / 1080);
+/** 区域边界扰动的幅度和尺度（格）：按老地图 5088 的尺度，老区域的形状不变 */
+const WARP = Math.round((90 * OB.size) / 1080);
+const WARP_SCALE = Math.round((130 * OB.size) / 1080);
+/** 最近种子查询用的分桶：每桶只检查可能最近的那些种子 */
+const BUCKET = 512;
+const BX = Math.ceil(MAP_W / BUCKET);
+const BY = Math.ceil(MAP_H / BUCKET);
+const bucketSeeds: { x: number; y: number; r: number }[][] = [];
+for (let by = 0; by < BY; by++) {
+  for (let bx = 0; bx < BX; bx++) {
+    // 扰动后的查询点可能偏出桶外 WARP/2，桶放大这么多再算
+    const x0 = bx * BUCKET - WARP / 2;
+    const y0 = by * BUCKET - WARP / 2;
+    const x1 = x0 + BUCKET + WARP;
+    const y1 = y0 + BUCKET + WARP;
+    const near = (q: { x: number; y: number }) => Math.hypot(Math.max(x0 - q.x, 0, q.x - x1), Math.max(y0 - q.y, 0, q.y - y1));
+    const far = (q: { x: number; y: number }) => Math.hypot(Math.max(Math.abs(q.x - x0), Math.abs(q.x - x1)), Math.max(Math.abs(q.y - y0), Math.abs(q.y - y1)));
+    const bound = Math.min(...SEEDS.map(far));
+    bucketSeeds.push(SEEDS.filter((q) => near(q) <= bound));
+  }
+}
 
 function regionRaw(x: number, y: number) {
   const wx = x + (fbm(x, y, 11, WARP_SCALE) - 0.5) * WARP;
   const wy = y + (fbm(x, y, 12, WARP_SCALE) - 0.5) * WARP;
   let best = 0;
   let bestD = Infinity;
-  for (const s of SEEDS) {
+  const bx = Math.max(0, Math.min(BX - 1, Math.floor(x / BUCKET)));
+  const by = Math.max(0, Math.min(BY - 1, Math.floor(y / BUCKET)));
+  for (const s of bucketSeeds[by * BX + bx]) {
     const d = (s.x - wx) ** 2 + (s.y - wy) ** 2;
     if (d < bestD) {
       bestD = d;
@@ -113,7 +154,11 @@ const T0 = townXY(0, 0);
 const tx = (x: number) => x + T0.x;
 const ty = (y: number) => y + T0.y;
 export const PLAZA = { x0: tx(145), y0: ty(148), x1: tx(195), y1: ty(189) };
-const inPlaza = (x: number, y: number) => x >= PLAZA.x0 && x <= PLAZA.x1 && y >= PLAZA.y0 && y <= PLAZA.y1;
+/** 落霞城的石板广场（城中心 = TOWN2_CENTER） */
+const T2 = TOWN2_CENTER;
+export const PLAZA2 = { x0: T2.x - 26, y0: T2.y - 20, x1: T2.x + 26, y1: T2.y + 20 };
+const PLAZAS = [PLAZA, PLAZA2];
+const inPlaza = (x: number, y: number) => PLAZAS.some((P) => x >= P.x0 && x <= P.x1 && y >= P.y0 && y <= P.y1);
 /** 城镇周围的四块田：田垄范围和中间留空给地点标记的位置 */
 const FARMS = [
   { x0: 134, y0: 191, x1: 160, y1: 206, node: [148, 198] },
@@ -124,8 +169,28 @@ const FARMS = [
 /** 田垄（每三行里两行是耕地，第三行是走道），给场景摆作物用 */
 export const FIELDS = FARMS.map((f, i) => ({ ...f, nodeId: ['farm', 'farm_south', 'farm_east', 'farm_west'][i] }));
 const SPAWN_GUESS = townXY(167, 175);
-/** 东边是海 */
-const coastLine = (y: number) => MAP_W - 18 + (fbm(0, y, 9, 60) - 0.5) * 24;
+/**
+ * 老地图东边是海：现在变成老方框和热带群岛之间的一道海峡，
+ * 只在老方框的南北范围内；海峡南北两头收窄成尖，绕过去是峡谷和沙漠
+ */
+const BOX_E = OB.x + OB.size;
+const STRAIT = 150;
+/** 海峡每一行的西岸、东岸只和 y 有关，先算好 */
+const COAST = new Float32Array(MAP_H);
+const STRAIT_W = new Float32Array(MAP_H);
+const STRAIT_E = new Float32Array(MAP_H);
+for (let y = 0; y < MAP_H; y++) {
+  COAST[y] = BOX_E - 18 + (fbm(0, y, 9, 60) - 0.5) * 24;
+  // 两头 300 格里慢慢收窄
+  const taper = Math.max(0, Math.min(1, (y - OB.y + 40) / 300, (OB.y + OB.size + 40 - y) / 300));
+  STRAIT_W[y] = taper > 0 ? COAST[y] + (1 - taper) * 60 : Infinity;
+  STRAIT_E[y] = BOX_E + 18 + (STRAIT + (fbm(1, y, 10, 80) - 0.5) * 30) * taper;
+}
+const coastLine = (y: number) => COAST[clampY(y)];
+function inStrait(x: number, y: number) {
+  const yy = clampY(y);
+  return x > STRAIT_W[yy] && x < STRAIT_E[yy];
+}
 
 function baseGround(x: number, y: number, r: RegionId): Ground {
   const d = fbm(x, y, 5, 10);
@@ -139,6 +204,14 @@ function baseGround(x: number, y: number, r: RegionId): Ground {
     case 'swamp': return d > 0.6 ? 'darkgrass' : 'mud';
     case 'woodland': return d > 0.62 ? 'grass' : 'darkgrass';
     case 'giantwood': return d > 0.6 ? 'darkgrass' : 'moss';
+    case 'savanna': return d > 0.7 ? 'grass' : 'savanna';
+    case 'autumn': return d > 0.66 ? 'darkgrass' : 'autumn';
+    case 'jungle': return d > 0.62 ? 'moss' : 'jungle';
+    case 'tropic': return d > 0.64 ? 'grass' : d > 0.4 ? 'coral' : 'beach';
+    case 'canyon': return d > 0.64 ? 'sand' : 'redrock';
+    case 'desert': return d > 0.72 ? 'sand' : 'dune';
+    case 'alpine': return d > 0.66 ? 'snow' : 'alpine';
+    case 'crystal': return d > 0.66 ? 'abyss' : 'crystalground';
   }
 }
 
@@ -152,6 +225,12 @@ function feature(x: number, y: number, r: RegionId): Ground | null {
     case 'abyss': return n > 0.68 ? 'chasm' : null;
     case 'swamp': return n > 0.6 ? 'swampwater' : null;
     case 'woodland': return n > 0.78 ? 'water' : null;
+    case 'jungle': return n > 0.72 ? 'swampwater' : null;
+    case 'tropic': return n > 0.68 ? 'shallows' : null;
+    case 'canyon': return n > 0.72 ? 'redcliff' : null;
+    case 'alpine': return n > 0.74 ? 'cliff' : null;
+    case 'crystal': return n > 0.72 ? 'chasm' : null;
+    case 'autumn': return n > 0.8 ? 'water' : null;
     default: return null;
   }
 }
@@ -160,6 +239,7 @@ function feature(x: number, y: number, r: RegionId): Ground | null {
 const RIVER: Partial<Record<RegionId, Ground>> = {
   town: 'water', woodland: 'water', giantwood: 'water', coast: 'water', highland: 'water',
   snow: 'ice', swamp: 'swampwater', lava: 'lava', abyss: 'chasm',
+  savanna: 'water', autumn: 'water', jungle: 'water', tropic: 'shallows', canyon: 'redcliff', alpine: 'ice', crystal: 'chasm',
 };
 /** 特色地点的地貌（用户 10-23 要求新地貌）：以地点为圆心、半径 r 的一片，中心留空地 */
 const SITES = NODES.filter((n) => n.site).map((n) => ({ x: n.x, y: n.y, ...n.site! }));
@@ -211,6 +291,28 @@ function siteGround(x: number, y: number): Ground | null | undefined {
         if (!lane && d > 0.5 && n > 0.72) return 'chasm';
         return ring < 0.14 ? 'glowmoss' : 'abyss';
       }
+      case 'oasis': { // 沙海绿洲：沙丘环抱一汪湖水，湖边一圈绿草
+        if (d < 0.32) return lane ? 'bridge' : 'water';
+        if (d < 0.42) return 'beach';
+        if (d < 0.6) return n > 0.4 ? 'grass' : 'meadow';
+        return n > 0.6 ? 'sand' : 'dune';
+      }
+      case 'mesa': { // 赤岩台地：一圈红岩悬崖围起来的高台，四个坡道口，台上碎石
+        if (d > 0.7 && d < 0.8) return lane ? 'gravel' : 'redcliff';
+        if (d >= 0.8) return n > 0.5 ? 'sand' : 'redrock';
+        return n > 0.62 ? 'gravel' : 'redrock';
+      }
+      case 'atoll': { // 珊瑚环礁：一圈环形珊瑚沙洲，里面是浅海泻湖，环上有缺口
+        if (d < 0.5) return lane ? 'bridge' : 'shallows';
+        if (d < 0.72) return n > 0.55 ? 'grass' : 'coral';
+        return lane ? 'bridge' : n > 0.6 ? 'beach' : 'shallows';
+      }
+      case 'crystalheart': { // 晶簇之心：晶地上一道道发光的放射纹，外圈几道深裂
+        const ang = Math.atan2(dy, dx);
+        const ray = Math.abs(((ang / Math.PI) * 6 + 12) % 1 - 0.5) < 0.06;
+        if (!lane && d > 0.55 && fbm(x, y, 361, 14) > 0.7) return 'chasm';
+        return ray ? 'glowmoss' : n > 0.55 ? 'abyss' : 'crystalground';
+      }
     }
   }
   return undefined;
@@ -220,6 +322,8 @@ function landform(x: number, y: number, r: RegionId): Ground | null {
   const sg = siteGround(x, y);
   if (sg !== undefined) return sg;
   if (r === 'town' && Math.hypot(x - SPAWN_GUESS.x, y - SPAWN_GUESS.y) < 70) return null;
+  // 落霞城周围留一片平地
+  if (Math.abs(x - T2.x) < 70 && Math.abs(y - T2.y) < 60) return null;
   // 河：大尺度噪声的等值线，宽度随位置起伏
   const rv = fbm(x, y, 51, 170);
   const width = 0.006 + fbm(x, y, 52, 60) * 0.008;
@@ -245,6 +349,25 @@ function landform(x: number, y: number, r: RegionId): Ground | null {
     case 'abyss': return big > 0.78 ? 'glowmoss' : null;
     case 'swamp': return big > 0.74 ? 'moss' : null;
     case 'snow': return big > 0.78 ? 'ice' : null;
+    case 'savanna': return big > 0.8 ? 'water' : big > 0.78 ? 'mud' : fbm(x, y, 93, 30) > 0.72 ? 'grass' : null;
+    case 'autumn': return big > 0.78 ? 'water' : fbm(x, y, 94, 26) > 0.7 ? 'meadow' : null;
+    case 'jungle': return big > 0.76 ? 'swampwater' : big > 0.73 ? 'mud' : null;
+    case 'tropic': return big > 0.75 ? 'shallows' : big > 0.72 ? 'beach' : null;
+    case 'canyon': {
+      // 峡谷：脊状噪声画出一道道深谷，谷底是沙
+      const gorge = 1 - Math.abs(fbm(x, y, 75, 140) * 2 - 1);
+      if (gorge > 0.97 && fbm(x, y, 76, 50) > 0.4) return 'redcliff';
+      if (gorge > 0.95) return 'sand';
+      return big > 0.8 ? 'water' : null;
+    }
+    case 'desert': return big > 0.84 ? 'water' : big > 0.81 ? 'grass' : fbm(x, y, 95, 20) > 0.74 ? 'redrock' : null;
+    case 'alpine': {
+      const ridge = 1 - Math.abs(fbm(x, y, 73, 120) * 2 - 1);
+      if (ridge > 0.965 && fbm(x, y, 74, 45) > 0.42) return 'cliff';
+      if (ridge > 0.94) return 'rock';
+      return big > 0.79 ? 'ice' : null;
+    }
+    case 'crystal': return big > 0.79 ? 'glowmoss' : null;
     default: return null;
   }
 }
@@ -252,10 +375,13 @@ function landform(x: number, y: number, r: RegionId): Ground | null {
 /** 不考虑道路和局部修改的原始地面，粗网格寻路和世界地图缩略图用 */
 function rawGround(x: number, y: number): Ground {
   const r = REGION_IDS[regionIdx(x, y)];
-  const cl = coastLine(y);
-  if (x > cl) return 'ocean';
+  if (inStrait(x, y)) return 'ocean';
   if (inPlaza(x, y)) return 'cobble';
-  if (x > cl - 3 - hash(x, y, 8) * 2) return r === 'highland' ? 'gravel' : 'beach';
+  const cl = coastLine(y);
+  if (x > cl - 3 - hash(x, y, 8) * 2 && x < cl + 140 && y > OB.y - 60 && y < OB.y + OB.size + 60) {
+    // 海峡两岸各一道沙滩
+    if (inStrait(x - 3 - hash(x, y, 8) * 2, y) || inStrait(x + 3 + hash(x, y, 8) * 2, y)) return r === 'highland' ? 'gravel' : 'beach';
+  }
   const p = pondAt(x, y);
   if (p) return p;
   return landform(x, y, r) ?? feature(x, y, r) ?? baseGround(x, y, r);
@@ -312,7 +438,8 @@ for (const n of NODES) {
 
 export type BuildingKind =
   | 'bank' | 'hall' | 'smithy' | 'inn' | 'workshop' | 'bowyer' | 'apothecary' | 'tower'
-  | 'house' | 'house2' | 'house3' | 'stall' | 'windmill' | 'fountain' | 'barn' | 'well' | 'furnace';
+  | 'house' | 'house2' | 'house3' | 'stall' | 'windmill' | 'fountain' | 'barn' | 'well' | 'furnace'
+  | 'atelier' | 'manor' | 'tent';
 export interface Building { kind: BuildingKind; x: number; y: number; w: number; h: number }
 
 const B = (kind: BuildingKind, x: number, y: number, w: number, h: number): Building => ({ kind, x: tx(x), y: ty(y), w, h });
@@ -326,7 +453,23 @@ export const BUILDINGS: Building[] = [
   B('house3', 133, 151, 5, 4), B('house', 135, 166, 5, 4), B('house2', 197, 152, 5, 4), B('house3', 199, 168, 5, 4),
   B('house', 194, 185, 5, 4), B('house2', 172, 196, 5, 4), B('house3', 186, 199, 5, 4), B('house', 156, 136, 5, 4),
   B('house2', 178, 137, 5, 4), B('windmill', 163, 193, 3, 4), B('barn', 127, 194, 5, 4), B('well', 140, 186, 1, 1),
+  ...TOWN2_BUILDINGS(),
 ];
+
+/** 落霞城（用户 10-23 要的新大型城镇）：坐标按城中心 = (0, 0)，仓库、集市、珍材坊的门口对齐 data.ts 的点位 */
+function TOWN2_BUILDINGS(): Building[] {
+  const B2 = (kind: BuildingKind, x: number, y: number, w: number, h: number): Building => ({ kind, ...town2XY(x, y), w, h });
+  return [
+    B2('bank', -18, -14, 6, 5), B2('hall', -4, -18, 9, 7), B2('atelier', 11, -14, 7, 5), B2('tower', 21, -16, 3, 6), B2('tower', -24, -16, 3, 6),
+    B2('fountain', -2, -2, 4, 4), B2('stall', -19, 9, 3, 2), B2('stall', -15, 9, 3, 2), B2('stall', -11, 9, 3, 2),
+    B2('inn', 10, 6, 6, 5), B2('manor', 17, 5, 7, 6), B2('well', 1, 13, 1, 1),
+    // 城外：民居、帐篷、风车和谷仓
+    B2('house', -36, -14, 5, 4), B2('house2', -36, -4, 5, 4), B2('house3', -36, 6, 5, 4), B2('house', 31, -14, 5, 4),
+    B2('house2', 31, -4, 5, 4), B2('house3', 31, 8, 5, 4), B2('house', -10, 24, 5, 4), B2('house2', 6, 24, 5, 4),
+    B2('house3', -12, -30, 5, 4), B2('house', 8, -30, 5, 4), B2('windmill', -30, 24, 3, 4), B2('barn', 24, 24, 5, 4),
+    B2('tent', -50, -6, 4, 3), B2('tent', -50, 4, 4, 3), B2('tent', -56, -1, 4, 3), B2('tent', 46, -2, 4, 3), B2('tent', 52, 6, 4, 3),
+  ];
+}
 
 for (const b of BUILDINGS) {
   for (let y = b.y; y < b.y + b.h; y++) for (let x = b.x; x < b.x + b.w; x++) addFlag(x, y, F_BUILD);
@@ -386,7 +529,8 @@ for (let c = 0; c < CW * CH; c++) coarseGround[c] = G[rawGround(clampX((c % CW) 
   const costs = new Float32Array(CW * CH);
   for (let c = 0; c < CW * CH; c++) {
     const g = GROUNDS[coarseGround[c]];
-    costs[c] = g === 'ocean' ? Infinity : g === 'cobble' ? 0.6
+    // 海峡能架桥，但贵：只有绕路太远才过海
+    costs[c] = g === 'ocean' ? 40 : g === 'cobble' ? 0.6
       : (blockedG[G[g]] ? 14 : 1) + vnoise(((c % CW) * C + 2) / 40, (Math.floor(c / CW) * C + 2) / 40, 61) * 1.6;
   }
   const cost = (c: number) => costs[c];
@@ -429,9 +573,10 @@ for (let c = 0; c < CW * CH; c++) coarseGround[c] = G[rawGround(clampX((c % CW) 
     }
   };
   const center = (c: number): Pt => ({ x: (c % CW) * C + C / 2 - 1, y: Math.floor(c / CW) * C + C / 2 - 1 });
-  for (const n of NODES) {
-    if (n.town && !n.pond && n.sprite !== 'farm') continue;
-    const s = standTile(n);
+  const targets: Pt[] = NODES.filter((n) => !n.town || n.pond || n.sprite === 'farm').map(standTile);
+  // 落霞城四个城门各接一条路
+  targets.push(town2XY(0, 21), town2XY(0, -21), town2XY(-27, 0), town2XY(27, 0));
+  for (const s of targets) {
     // 粗网格上的折线每隔几个点取一个再连直线，路就不是一格一格的台阶了
     const pts: Pt[] = [s];
     for (let c = cell(s); c !== -1; c = prev[c]) pts.push(center(c));
@@ -445,30 +590,22 @@ for (let c = 0; c < CW * CH; c++) coarseGround[c] = G[rawGround(clampX((c % CW) 
 }
 export const isRoad = (x: number, y: number) => (flagAt(x, y) & F_ROAD) !== 0;
 
+/** 粗格子里有路：粗寻路时便宜一半，远路基本沿着路走。只扫有标记的块 */
+const coarseRoad = new Uint8Array(CW * CH);
+chunkFlags.forEach((fl, ci) => {
+  if (!fl) return;
+  const x0 = (ci % CHUNKS_X) * CHUNK;
+  const y0 = Math.floor(ci / CHUNKS_X) * CHUNK;
+  for (let li = 0; li < CHUNK * CHUNK; li++) {
+    if (!(fl[li] & F_ROAD)) continue;
+    const x = x0 + (li & 31);
+    const y = y0 + (li >> 5);
+    if (inMap(x, y)) coarseRoad[(y >> CS) * CW + (x >> CS)] = 1;
+  }
+});
 /** 粗网格能不能走：中心能走，或者格子里有路（桥） */
 const coarseOpen = new Uint8Array(CW * CH);
-for (let c = 0; c < CW * CH; c++) {
-  let open = !blockedG[coarseGround[c]];
-  const x0 = (c % CW) * C;
-  const y0 = Math.floor(c / CW) * C;
-  for (let k = 0; k < C * C && !open; k++) {
-    const x = x0 + (k % C);
-    const y = y0 + ((k / C) | 0);
-    if (inMap(x, y) && (flagAt(x, y) & F_ROAD)) open = 1 as unknown as boolean;
-  }
-  coarseOpen[c] = open ? 1 : 0;
-}
-/** 粗格子里有路：粗寻路时便宜一半，远路基本沿着路走 */
-const coarseRoad = new Uint8Array(CW * CH);
-for (let c = 0; c < CW * CH; c++) {
-  const x0 = (c % CW) * C;
-  const y0 = Math.floor(c / CW) * C;
-  for (let k = 0; k < C * C; k++) {
-    const x = x0 + (k % C);
-    const y = y0 + ((k / C) | 0);
-    if (inMap(x, y) && (flagAt(x, y) & F_ROAD)) { coarseRoad[c] = 1; break; }
-  }
-}
+for (let c = 0; c < CW * CH; c++) coarseOpen[c] = !blockedG[coarseGround[c]] || coarseRoad[c] ? 1 : 0;
 const coarseG = new Float32Array(CW * CH);
 const coarseSeen = new Uint32Array(CW * CH);
 const coarsePrev = new Int32Array(CW * CH);
@@ -566,7 +703,7 @@ function groundFor(x: number, y: number): Ground {
   const r = REGION_IDS[regionIdx(x, y)];
   let g = rawGround(x, y);
   // 区域交界处用抖动采样，让两种地面互相渗透一点
-  if (!blockedG[G[g]] && g !== 'cobble' && g !== 'beach') {
+  if (!blockedG[G[g]] && g !== 'cobble' && g !== 'beach' && g !== 'bridge') {
     const jr = REGION_IDS[regionIdx(x + Math.round((hash(x, y, 41) - 0.5) * 6), y + Math.round((hash(x, y, 42) - 0.5) * 6))];
     if (jr !== r) g = feature(x, y, r) ?? baseGround(x, y, jr);
   }
@@ -582,10 +719,16 @@ function groundFor(x: number, y: number): Ground {
   }
   if ((fl & F_ROAD) && g !== 'cobble') {
     if (blockedG[G[g]]) return g === 'cliff' ? 'gravel' : 'bridge';
-    return r === 'snow' ? 'roadsnow' : r === 'coast' ? 'roadsand' : r === 'lava' || r === 'abyss' || r === 'highland' ? 'roaddark' : 'road';
+    return ROAD_STYLE[r];
   }
   return g;
 }
+
+const ROAD_STYLE: Record<RegionId, Ground> = {
+  town: 'road', woodland: 'road', giantwood: 'road', swamp: 'road', autumn: 'road', jungle: 'road',
+  snow: 'roadsnow', alpine: 'roadsnow', coast: 'roadsand', savanna: 'roadsand', tropic: 'roadsand', desert: 'roadsand',
+  lava: 'roaddark', abyss: 'roaddark', highland: 'roaddark', canyon: 'roaddark', crystal: 'roaddark',
+};
 
 function ensureGround(ci: number): Uint8Array {
   lastUse[ci] = ++useClock;
@@ -621,7 +764,9 @@ export type PropKind =
   | 'oak' | 'birch' | 'maple' | 'pine' | 'snowpine' | 'redwood' | 'giant' | 'deadtree' | 'palm' | 'cactus' | 'charred'
   | 'rock' | 'boulder' | 'snowrock' | 'spike' | 'crystal' | 'stalagmite' | 'icecrystal'
   | 'bush' | 'flowers' | 'tuft' | 'fern' | 'mushroom' | 'glowshroom' | 'reeds' | 'shell' | 'bones' | 'drift' | 'ember'
-  | 'grave' | 'cross' | 'lamp' | 'barrel' | 'crate' | 'bench' | 'fence' | 'hay' | 'scarecrow' | 'dummy' | 'banner' | 'cart';
+  | 'grave' | 'cross' | 'lamp' | 'barrel' | 'crate' | 'bench' | 'fence' | 'hay' | 'scarecrow' | 'dummy' | 'banner' | 'cart'
+  // 外圈新区域（10-23）
+  | 'acacia' | 'goldtree' | 'jungletree' | 'vine' | 'coral' | 'redrock' | 'crystalspire' | 'dunegrass' | 'skull' | 'alpineflower' | 'wall';
 
 export interface Prop { kind: PropKind; x: number; y: number }
 
@@ -629,6 +774,7 @@ export const BLOCKING = new Set<PropKind>([
   'oak', 'birch', 'maple', 'pine', 'snowpine', 'redwood', 'giant', 'deadtree', 'palm', 'cactus', 'charred',
   'rock', 'boulder', 'snowrock', 'spike', 'crystal', 'stalagmite', 'icecrystal', 'grave', 'cross',
   'barrel', 'crate', 'fence', 'hay', 'dummy', 'cart', 'lamp',
+  'acacia', 'goldtree', 'jungletree', 'coral', 'redrock', 'crystalspire', 'wall',
 ]);
 
 /** 手工摆的城镇小物件（按「镇中心 = 167,170」的坐标） */
@@ -648,6 +794,23 @@ for (const { local: f } of FARMS) {
 }
 const TOWN_PROPS = new Map<number, PropKind>();
 for (const [k, x, y] of TOWN_PROPS_LOCAL) TOWN_PROPS.set(idx(tx(x), ty(y)), k);
+// 落霞城：城墙一圈，四面各留城门；城里摆灯、旗、木桶
+{
+  const put = (k: PropKind, x: number, y: number) => { const p = town2XY(x, y); TOWN_PROPS.set(idx(p.x, p.y), k); };
+  const WX = 42;
+  const WY = 36;
+  for (let x = -WX; x <= WX; x++) {
+    if (Math.abs(x) > 3) { put('wall', x, -WY); put('wall', x, WY); }
+  }
+  for (let y = -WY; y <= WY; y++) {
+    if (Math.abs(y) > 3) { put('wall', -WX, y); put('wall', WX, y); }
+  }
+  for (const [x, y] of [[-4, -WY - 1], [4, -WY - 1], [-4, WY + 1], [4, WY + 1], [-WX - 1, -4], [-WX - 1, 4], [WX + 1, -4], [WX + 1, 4]]) put('banner', x, y);
+  for (const [x, y] of [[-24, -19], [24, -19], [-24, 19], [24, 19], [-6, -6], [6, -6], [-6, 6], [6, 6], [-20, 0], [20, 0], [0, -24], [0, 24]]) put('lamp', x, y);
+  for (const [k, x, y] of [['barrel', -19, -9], ['barrel', -20, -9], ['crate', -12, -9], ['crate', 18, -9], ['barrel', 10, -9],
+    ['bench', -6, 3], ['bench', 4, 3], ['cart', -22, 12], ['crate', -8, 12], ['barrel', 9, 12], ['hay', 22, 30], ['hay', 23, 30],
+    ['banner', -6, -10], ['banner', 6, -10]] as [PropKind, number, number][]) put(k, x, y);
+}
 
 function wildProp(x: number, y: number, r: RegionId, g: Ground): PropKind | null {
   const p = hash(x, y, 1);
@@ -687,6 +850,34 @@ function wildProp(x: number, y: number, r: RegionId, g: Ground): PropKind | null
     case 'swamp':
       if (p < (f > 0.55 ? 0.14 : 0.04)) return 'deadtree';
       return p < 0.21 ? 'reeds' : p < 0.24 ? 'mushroom' : p < 0.26 ? (hash(x, y, 3) < 0.6 ? 'grave' : 'cross') : null;
+    case 'savanna':
+      // 稀树草原：零星的金合欢，大片枯草
+      if (p < (f > 0.62 ? 0.05 : 0.008)) return 'acacia';
+      return p < 0.06 ? 'dunegrass' : p < 0.07 ? 'bush' : p < 0.072 ? 'bones' : null;
+    case 'autumn': {
+      const dens = f > 0.48 ? 0.36 : 0.04;
+      if (p < dens) return fbm(x, y, 32, 26) < 0.5 ? 'maple' : 'goldtree';
+      return p < dens + 0.03 ? 'mushroom' : p < dens + 0.05 ? 'fern' : null;
+    }
+    case 'jungle':
+      if (p < (f > 0.4 ? 0.4 : 0.1)) return hash(x, y, 4) < 0.75 ? 'jungletree' : 'palm';
+      return p < 0.44 ? 'vine' : p < 0.45 ? 'fern' : p < 0.452 ? 'flowers' : null;
+    case 'tropic':
+      if (g === 'coral') return p < 0.03 ? 'coral' : p < 0.05 ? 'shell' : null;
+      return p < 0.05 ? 'palm' : p < 0.07 ? 'bush' : p < 0.08 ? 'flowers' : null;
+    case 'canyon':
+      if (p < (f > 0.6 ? 0.08 : 0.015)) return 'redrock';
+      return p < 0.1 ? 'dunegrass' : p < 0.105 ? 'cactus' : p < 0.108 ? 'skull' : null;
+    case 'desert':
+      if (g === 'grass') return p < 0.15 ? 'palm' : p < 0.2 ? 'bush' : null;
+      return p < 0.006 ? 'cactus' : p < 0.012 ? 'redrock' : p < 0.016 ? 'skull' : p < 0.03 ? 'dunegrass' : null;
+    case 'alpine':
+      if (g === 'snow') return p < 0.04 ? 'snowpine' : p < 0.06 ? 'drift' : null;
+      if (p < (f > 0.58 ? 0.12 : 0.02)) return 'snowpine';
+      return p < 0.15 ? 'alpineflower' : p < 0.17 ? 'rock' : p < 0.175 ? 'snowrock' : null;
+    case 'crystal':
+      if (p < (f > 0.55 ? 0.07 : 0.015)) return hash(x, y, 5) < 0.6 ? 'crystalspire' : 'crystal';
+      return p < 0.1 ? 'glowshroom' : p < 0.105 ? 'stalagmite' : null;
   }
 }
 
@@ -694,6 +885,8 @@ function wildProp(x: number, y: number, r: RegionId, g: Ground): PropKind | null
 const EDGE_WALL: Record<RegionId, PropKind> = {
   town: 'oak', snow: 'snowpine', highland: 'boulder', coast: 'palm', lava: 'spike', abyss: 'stalagmite',
   swamp: 'deadtree', woodland: 'pine', giantwood: 'redwood',
+  savanna: 'acacia', autumn: 'goldtree', jungle: 'jungletree', tropic: 'palm', canyon: 'redrock', desert: 'redrock',
+  alpine: 'snowpine', crystal: 'crystalspire',
 };
 
 /** 算出这块的装饰物，顺便记下哪些格子被挡住 */
@@ -717,7 +910,7 @@ function ensureProps(ci: number): Uint8Array {
         const g = GROUNDS[ground[li]];
         if (g === 'cobble' || (Math.abs(x - SPAWN.x) < 4 && Math.abs(y - SPAWN.y) < 4)) continue;
         const r = REGION_IDS[regionIdx(x, y)];
-        const edge = x < 2 || y < 2 || y >= MAP_H - 2;
+        const edge = x < 2 || y < 2 || y >= MAP_H - 2 || x >= MAP_W - 2;
         k = edge ? EDGE_WALL[r] : wildProp(x, y, r, g);
       }
       if (!k) continue;
@@ -840,4 +1033,10 @@ export const WANDERERS = [
   W('villager2', 152, 174, 3), W('merchant', 154, 181, 2), W('merchant', 158, 181, 1), W('guard', 167, 159, 1),
   W('guard', 167, 188, 2), W('villager3', 140, 170, 4), W('sheep', 120, 186, 3), W('sheep', 123, 189, 3),
   W('cow', 118, 192, 2), W('chicken', 132, 202, 2), W('chicken', 134, 203, 2),
+  // 落霞城
+  ...([
+    ['villager', -8, -6, 5], ['villager2', 8, -6, 5], ['villager3', -6, 6, 4], ['villager', 12, 12, 3], ['merchant', -15, 11, 2],
+    ['merchant', -11, 11, 2], ['guard', 0, -32, 2], ['guard', 0, 32, 2], ['guard', -38, 0, 2], ['guard', 38, 0, 2],
+    ['villager2', -30, -8, 4], ['villager3', 28, 2, 4], ['cow', 30, 28, 3], ['sheep', -26, 30, 3], ['chicken', -40, 20, 2],
+  ] as [WandererKind, number, number, number][]).map(([kind, x, y, radius]) => ({ kind, ...town2XY(x, y), radius })),
 ];

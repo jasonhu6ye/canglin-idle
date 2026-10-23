@@ -1,5 +1,6 @@
 /*
- * 怪物与生物图鉴：原 192 种（T1-T8 每阶 24 种），10-23 又加了 28 种（见 NEW_SPECIES）。
+ * 怪物与生物图鉴：原 192 种（T1-T8 每阶 24 种），10-23 又加了 28 种（见 NEW_SPECIES），
+ * 8848 大地图外圈再加 70 种和 4 个首领（见 RING_ROWS）。
  * 这里只放设计表（名字、等级、区域、外形、特性、配色），
  * 属性、掉落和刷新点在 data.ts 里按统一规则算出来。
  */
@@ -34,9 +35,10 @@ export type TraitId = keyof typeof TRAITS;
 /** 外形 → 种族大类（决定掉落和体型） */
 export const FORM_FAMILY = {
   wolf: 'beast', fox: 'beast', boar: 'beast', deer: 'beast', bear: 'beast', cat: 'beast', mammoth: 'beast', goat: 'beast',
+  lion: 'beast', rhino: 'beast', camel: 'beast', panther: 'beast', yak: 'beast', hyena: 'beast',
   rabbit: 'small', rat: 'small', hen: 'small', frog: 'small',
   hawk: 'bird', griffin: 'bird', phoenix: 'bird', bat: 'bat',
-  slime: 'slime',
+  slime: 'slime', jellyfish: 'slime',
   spider: 'insect', beetle: 'insect', scorpion: 'insect', ant: 'insect', mantis: 'insect', wasp: 'insect',
   crab: 'crab',
   snake: 'serpent', eel: 'serpent', worm: 'serpent',
@@ -47,7 +49,7 @@ export const FORM_FAMILY = {
   skeleton: 'undead', zombie: 'undead', lich: 'undead', ghost: 'undead', banshee: 'undead',
   golem: 'golem', gargoyle: 'golem',
   wisp: 'spirit',
-  treant: 'plant', mushroom: 'plant', mandrake: 'plant', vine: 'plant',
+  treant: 'plant', mushroom: 'plant', mandrake: 'plant', vine: 'plant', cactoid: 'plant',
   eye: 'eye',
 } as const;
 export type Form = keyof typeof FORM_FAMILY;
@@ -70,6 +72,7 @@ export const FORM_SIZE: Record<Form, number> = {
   skeleton: 2, zombie: 2, bandit: 2, pirate: 2, cultist: 2, ghost: 2, banshee: 2, mushroom: 2, vine: 2, knight: 2, drake: 2,
   bear: 3, orc: 3, yeti: 3, troll: 3, lich: 3, golem: 3, gargoyle: 3, treant: 3, griffin: 3, phoenix: 3, mammoth: 3, wyvern: 3,
   dragon: 4,
+  hyena: 2, panther: 2, lion: 3, camel: 3, yak: 3, rhino: 3, jellyfish: 1, cactoid: 2,
 };
 
 export interface Species {
@@ -86,6 +89,8 @@ export interface Species {
   accent: string;
   /** 专属地点（新地点的生物只在那里出现） */
   home?: string;
+  /** 8848 外圈新区域的生物（用户 10-23 加的 70 种 + 4 个首领） */
+  ring?: boolean;
 }
 
 // [id, 名字, 等级, 区域, 外形, 级别 n/e/b, 特性（空格分隔）, 主色, 点缀色]
@@ -357,13 +362,106 @@ const NEW_SPECIES: Row[][] = [
   ],
 ];
 
+/**
+ * 8848 大地图外圈 8 个新区域的生物（用户 10-23）：每区 8-9 种，共 70 种，另有 4 个首领
+ * （金鬃狮王、雨林蛇母、沙暴之王、晶簇主宰）。最后一列是住的地点。
+ */
+const RING_ROWS: Row[] = [
+  // 金穗草原 T2-T3
+  ['striped_antelope', '斑纹羚', 11, 'savanna', 'deer', 'n', 'passive swift', '#d8c090', '#3a2a20', 'golden_plain'],
+  ['meerkat', '狐獴', 10, 'savanna', 'rat', 'n', 'swift frail pack', '#c8a878', '#6a4a30', 'golden_plain'],
+  ['termite_soldier', '白蚁兵', 12, 'savanna', 'ant', 'n', 'pack armored', '#e8d8b0', '#a06030', 'golden_plain'],
+  ['spotted_hyena', '斑鬣狗', 13, 'savanna', 'hyena', 'n', 'pack fierce', '#b8986a', '#4a3a2a', 'golden_plain'],
+  ['gold_ring_snake', '金环蛇', 14, 'savanna', 'snake', 'n', 'venom', '#e8c040', '#2a2a2a', 'lion_rock'],
+  ['savanna_vulture', '秃鹫', 15, 'savanna', 'hawk', 'n', 'swift', '#4a3a34', '#e8d8c8', 'lion_rock'],
+  ['savanna_lioness', '草原母狮', 17, 'savanna', 'lion', 'n', 'swift fierce', '#d8a85a', '#c08a4a', 'lion_rock'],
+  ['grass_rhino', '草原犀牛', 22, 'savanna', 'rhino', 'e', 'tough armored', '#8a8a86', '#e8e0d0', 'lion_rock'],
+  ['lion_king', '金鬃狮王', 28, 'savanna', 'lion', 'b', 'fierce berserk tough', '#e8b850', '#8a3a10', 'lion_rock'],
+  // 枫红秋林 T3-T4
+  ['maple_deer', '枫角鹿', 21, 'autumn', 'deer', 'n', 'passive', '#c06a3a', '#f0d0a0', 'maple_valley'],
+  ['red_fox', '赤狐', 22, 'autumn', 'fox', 'n', 'swift evasive', '#d0602a', '#f8f0e0', 'maple_valley'],
+  ['squirrel', '栗鼠', 20, 'autumn', 'rat', 'n', 'swift frail', '#a0603a', '#e8c090', 'maple_valley'],
+  ['leaf_sprite', '落叶精', 24, 'autumn', 'mandrake', 'n', 'regen evasive', '#e08a30', '#a03020', 'maple_valley'],
+  ['chestnut_boar', '栗毛野猪', 25, 'autumn', 'boar', 'n', 'tough', '#8a4a2a', '#e8c890', 'leaf_corridor'],
+  ['night_owl', '夜枭', 26, 'autumn', 'hawk', 'n', 'swift evasive', '#6a5a48', '#f0c040', 'leaf_corridor'],
+  ['straw_golem', '稻草魔偶', 27, 'autumn', 'golem', 'n', 'slow thorns weak_magic', '#c8a060', '#6a4a2a', 'leaf_corridor'],
+  ['toadstool', '毒伞菇', 28, 'autumn', 'mushroom', 'n', 'venom', '#b03a2a', '#f8e8d0', 'leaf_corridor'],
+  ['maple_treant', '枫木树人', 34, 'autumn', 'treant', 'e', 'regen tough', '#a03a20', '#f0a040', 'maple_valley'],
+  // 蛮荒雨林 T4-T5
+  ['dart_frog', '箭毒蛙', 33, 'jungle', 'frog', 'n', 'venom evasive', '#3ad0f0', '#f0e030', 'vine_realm'],
+  ['toucan', '巨嘴鸟', 34, 'jungle', 'hawk', 'n', 'swift', '#1a1a1a', '#f0a020', 'vine_realm'],
+  ['bird_spider', '食鸟蛛', 36, 'jungle', 'spider', 'n', 'venom', '#3a2a20', '#e06030', 'vine_realm'],
+  ['black_panther', '黑豹', 38, 'jungle', 'panther', 'n', 'swift fierce', '#1a1a24', '#e0c040', 'vine_realm'],
+  ['vine_lasher', '鞭藤', 40, 'jungle', 'vine', 'n', 'thorns regen', '#3a8a2a', '#e04a6a', 'python_marsh'],
+  ['orchid_mantis', '兰花螳螂', 41, 'jungle', 'mantis', 'n', 'swift evasive', '#f0a0d0', '#80d070', 'python_marsh'],
+  ['jungle_croc', '雨林鳄', 42, 'jungle', 'croc', 'n', 'armored tough', '#4a6a3a', '#e0d080', 'python_marsh'],
+  ['tribal_hunter', '蛮族猎手', 44, 'jungle', 'bandit', 'n', 'swift', '#7a4a2a', '#e0c040', 'python_marsh'],
+  ['jungle_ape', '雨林巨猿', 48, 'jungle', 'troll', 'e', 'tough berserk', '#3a3a34', '#a07050', 'vine_realm'],
+  ['python_mother', '雨林蛇母', 55, 'jungle', 'snake', 'b', 'venom tough regen', '#3a6a2a', '#e0c040', 'python_marsh'],
+  // 珊瑚群岛 T4-T5
+  ['seagull', '海鸥', 32, 'tropic', 'hawk', 'n', 'swift frail', '#f0f0f0', '#f0a030', 'palm_coast'],
+  ['hermit_crab', '寄居蟹', 33, 'tropic', 'crab', 'n', 'armored', '#e0904a', '#f0e0c0', 'palm_coast'],
+  ['lamp_jelly', '灯水母', 35, 'tropic', 'jellyfish', 'n', 'venom evasive', '#a0d0ff', '#f0a0e0', 'coral_atoll'],
+  ['sea_turtle', '玳瑁海龟', 37, 'tropic', 'turtle', 'n', 'passive armored tough', '#3a8a6a', '#d8c890', 'palm_coast'],
+  ['banded_seasnake', '环纹海蛇', 39, 'tropic', 'eel', 'n', 'venom swift', '#3a5aa0', '#f0e0a0', 'coral_atoll'],
+  ['island_pirate', '海盗水手', 40, 'tropic', 'pirate', 'n', 'fierce', '#6a4a3a', '#c04040', 'palm_coast'],
+  ['moray', '珊瑚海鳗', 43, 'tropic', 'eel', 'n', 'fierce evasive', '#6a6a3a', '#e0e060', 'coral_atoll'],
+  ['coral_golem', '珊瑚魔像', 46, 'tropic', 'golem', 'n', 'armored slow', '#f07a6a', '#f8e0d0', 'coral_atoll'],
+  ['pirate_captain', '海盗船长', 50, 'tropic', 'knight', 'e', 'fierce berserk', '#2a2a40', '#e0b040', 'palm_coast'],
+  // 赤岩峡谷 T5-T6
+  ['redrock_lizard', '赤岩蜥', 46, 'canyon', 'lizard', 'n', 'armored', '#c05a3a', '#f0c080', 'red_mesa'],
+  ['coyote', '郊狼', 47, 'canyon', 'hyena', 'n', 'pack swift', '#b08860', '#5a4030', 'red_mesa'],
+  ['bighorn', '大角羊', 49, 'canyon', 'goat', 'n', 'tough', '#a07050', '#e8d8c0', 'wind_pillars'],
+  ['golden_eagle', '峡谷金雕', 50, 'canyon', 'hawk', 'n', 'swift fierce', '#6a4a2a', '#f0d070', 'wind_pillars'],
+  ['dust_devil', '尘旋灵', 52, 'canyon', 'wisp', 'n', 'evasive swift', '#d8a070', '#fff0d0', 'wind_pillars'],
+  ['red_scorpion', '赤蝎', 53, 'canyon', 'scorpion', 'n', 'venom armored', '#c04a2a', '#f0a040', 'red_mesa'],
+  ['canyon_raider', '峡谷劫匪', 54, 'canyon', 'bandit', 'n', 'fierce', '#8a4a2a', '#e0c040', 'red_mesa'],
+  ['redrock_golem', '赤岩魔像', 58, 'canyon', 'golem', 'n', 'armored slow', '#b05a3a', '#f0a060', 'red_mesa'],
+  ['storm_roc', '雷霆巨鹏', 62, 'canyon', 'griffin', 'e', 'swift fierce', '#3a4a8a', '#f0f070', 'wind_pillars'],
+  // 流沙大漠 T6-T7
+  ['desert_camel', '野骆驼', 56, 'desert', 'camel', 'n', 'passive tough', '#d8b078', '#8a5a30', 'sand_oasis'],
+  ['cactus_man', '仙人掌怪', 57, 'desert', 'cactoid', 'n', 'thorns regen', '#4a8a3a', '#f0e060', 'sand_oasis'],
+  ['sand_monitor', '沙漠巨蜥', 58, 'desert', 'lizard', 'n', 'fierce', '#b08a50', '#5a3a20', 'sand_oasis'],
+  ['scarab_swarm', '圣甲虫群', 59, 'desert', 'beetle', 'n', 'pack armored', '#2a6a8a', '#f0d040', 'sand_oasis'],
+  ['quicksand_worm', '流沙蠕虫', 60, 'desert', 'worm', 'n', 'tough slow', '#c8a060', '#8a3a2a', 'king_tomb'],
+  ['tomb_mummy', '古墓干尸', 62, 'desert', 'zombie', 'n', 'slow tough', '#c8b890', '#6a5a3a', 'king_tomb'],
+  ['sand_wraith', '沙之怨灵', 64, 'desert', 'ghost', 'n', 'evasive', '#d8c8a0', '#a06030', 'king_tomb'],
+  ['jackal_priest', '胡狼祭司', 65, 'desert', 'cultist', 'n', 'resist_magic', '#2a2a2a', '#e0b040', 'king_tomb'],
+  ['tomb_guardian', '王陵守卫', 70, 'desert', 'knight', 'e', 'armored tough', '#c8a050', '#3a6a8a', 'king_tomb'],
+  ['sandstorm_king', '沙暴之王', 78, 'desert', 'scorpion', 'b', 'venom fierce tough', '#d8a040', '#6a2a1a', 'king_tomb'],
+  // 云岭高山 T6-T7
+  ['shaggy_yak', '牦牛', 66, 'alpine', 'yak', 'n', 'passive tough', '#3a3030', '#e8e0d0', 'cloud_slope'],
+  ['cliff_antelope', '岩羚', 68, 'alpine', 'deer', 'n', 'swift', '#c8c0b0', '#6a5a4a', 'cloud_slope'],
+  ['cloud_leopard', '云豹', 70, 'alpine', 'panther', 'n', 'swift evasive', '#e8e8f0', '#4a4a5a', 'cloud_slope'],
+  ['cloud_eagle', '云鹰', 72, 'alpine', 'hawk', 'n', 'swift fierce', '#8a7a6a', '#f8f0e0', 'eagle_gorge'],
+  ['peak_yeti', '雪峰雪人', 74, 'alpine', 'yeti', 'n', 'tough fierce', '#f0f0f8', '#6a8ab0', 'eagle_gorge'],
+  ['ice_ogre', '冰原食人魔', 76, 'alpine', 'troll', 'n', 'tough regen', '#a0c0d8', '#e0f0ff', 'eagle_gorge'],
+  ['ice_rock_golem', '冰岩魔像', 78, 'alpine', 'golem', 'n', 'armored slow resist_melee', '#8ab0d0', '#e0f8ff', 'eagle_gorge'],
+  ['storm_wisp', '风暴之灵', 80, 'alpine', 'wisp', 'n', 'evasive', '#c0d8ff', '#ffffff', 'cloud_slope'],
+  ['cloud_dragon', '云岭古龙', 90, 'alpine', 'dragon', 'e', 'fierce tough', '#c8d8e8', '#6a8ac0', 'eagle_gorge'],
+  // 晶簇荒原 T7-T8
+  ['crystal_crab', '晶甲蟹', 86, 'crystal', 'crab', 'n', 'armored resist_melee', '#a080f0', '#e0d0ff', 'crystal_heart'],
+  ['prism_slime', '棱镜史莱姆', 87, 'crystal', 'slime', 'n', 'regen weak_melee', '#c0e8ff', '#ff90e0', 'crystal_heart'],
+  ['shard_spider', '晶刺蛛', 88, 'crystal', 'spider', 'n', 'venom', '#6a4aa0', '#c0a0ff', 'crystal_heart'],
+  ['crystal_golem', '晶簇魔像', 95, 'crystal', 'golem', 'n', 'armored slow', '#8a60e0', '#f0e0ff', 'crystal_heart'],
+  ['void_gazer', '虚空之眼', 98, 'crystal', 'eye', 'n', 'resist_ranged', '#2a1a4a', '#c080ff', 'void_field'],
+  ['crystal_wyvern', '晶翼飞龙', 100, 'crystal', 'wyvern', 'n', 'swift fierce', '#a0a0ff', '#ffffff', 'void_field'],
+  ['crystal_knight', '晶骸骑士', 102, 'crystal', 'knight', 'n', 'armored resist_magic', '#6a5aa0', '#e0d0ff', 'void_field'],
+  ['crystal_lich', '晶冠巫妖', 110, 'crystal', 'lich', 'e', 'resist_magic lifesteal', '#4a3a8a', '#e0c0ff', 'void_field'],
+  ['crystal_sovereign', '晶簇主宰', 120, 'crystal', 'golem', 'b', 'armored tough thorns', '#b080ff', '#ffffff', 'crystal_heart'],
+];
+const TIER_LEVELS = [1, 10, 20, 30, 40, 55, 70, 95];
+const tierOfLevel = (lvl: number) => TIER_LEVELS.filter((l) => lvl >= l).length - 1;
+
 const RANK: Record<string, Rank> = { n: 'normal', e: 'elite', b: 'boss' };
 
-export const SPECIES: Species[] = [T1, T2, T3, T4, T5, T6, T7, T8].map((rows, t) => [...rows, ...NEW_SPECIES[t]]).flatMap((rows, tier) =>
-  rows.map(([id, name, level, region, form, rank, traits, color, accent, home]) => ({
-    id, name, tier, level, region, form, rank: RANK[rank], traits: traits.split(' ').filter(Boolean) as TraitId[], color, accent, home,
-  })),
-);
+const toSpecies = ([id, name, level, region, form, rank, traits, color, accent, home]: Row, tier: number): Species => ({
+  id, name, tier, level, region, form, rank: RANK[rank], traits: traits.split(' ').filter(Boolean) as TraitId[], color, accent, home,
+});
+export const SPECIES: Species[] = [
+  ...[T1, T2, T3, T4, T5, T6, T7, T8].map((rows, t) => [...rows, ...NEW_SPECIES[t]]).flatMap((rows, tier) => rows.map((r) => toSpecies(r, tier))),
+  ...RING_ROWS.map((r) => ({ ...toSpecies(r, tierOfLevel(r[2])), ring: true })),
+];
 
 /** 体型档（精英大一档，首领大两档） */
 export const sizeOf = (sp: Pick<Species, 'form' | 'rank'>) =>

@@ -2,6 +2,7 @@ import { CROPS, ITEMS, TIERS, tierName } from '../core/data';
 
 const CROP_COLOR: Record<string, [string, string]> = Object.fromEntries(CROPS.map((c) => [c[0], [c[3], c[5]]]));
 import { resIconUrl } from '../game/resArt';
+import { equipIconUrl } from '../game/equipArt';
 import { openItem } from './itemOpen';
 import type { SkillId } from '../core/types';
 
@@ -859,6 +860,10 @@ export function itemIcon(id: string): [string, string] {
   if (id.startsWith('meat_')) return ['meat', ['#d06a6a', '#c85a5a', '#b84a5a', '#a84050', '#c05080', '#9a3a70', '#7a3a8a', '#d0a040'][tier]];
   if (id.startsWith('steak_')) return ['meat', ['#a8643a', '#a05a30', '#985030', '#904828', '#8a4a40', '#7a3a30', '#6a3a40', '#b07a2a'][tier]];
   if (id.startsWith('core_')) return ['core', ['#a0c070', '#d08a4a', '#c8d0e0', '#8a9098', '#70c8f0', '#b070ff', '#ff8a3a', '#40d898'][tier]];
+  // 外圈新材料做的符文、箭、香料料理
+  if (id.startsWith('crystal_rune_')) return ['rune', ['#e8eef4', '#a060e0', '#f0d040', '#3aa060', '#3a7ad0', '#c0b0ff', '#ff8a2a', '#7a3ad0'][tier]];
+  if (id.startsWith('feather_arrow_')) return ['arrow', ['#a07a50', '#3a3a5a', '#7a5232', '#e8e8e8', '#2aa08a', '#3a5ab0', '#8ad0f0', '#ff8a2a'][tier]];
+  if (id.startsWith('spice_meal_')) return ['food', ['#6ac860', '#c8a040', '#b0642e', '#8a4a2a', '#8ac050', '#c02a1a', '#e03a2a', '#9a5ad8'][tier]];
   if (it?.category === 'food') return ['fish', '#d08a4a'];
   if (id.endsWith('_potion')) return ['potion', SPECIFIC[id.replace('_potion', '')]?.[1] ?? '#c04ae0'];
   if (id.startsWith('plank_')) return ['plank', WOOD[TIERS[tier].wood]];
@@ -898,8 +903,16 @@ export function Icon({ item, size = 32, info = true }: { item: string; size?: nu
   );
 }
 
+/** 装备（武器、盔甲、工具）用逐阶不同造型的大图标（用户 10-23 要求重做，不能只换颜色） */
+function equipUrl(id: string): string | null {
+  const it = ITEMS[id];
+  if (!it?.equip || it.tier === undefined || it.equip.slot === 'ring' || it.equip.slot === 'neck') return null;
+  const prefix = id.split('_')[0];
+  return equipIconUrl(id.slice(prefix.length + 1), it.tier);
+}
+
 function BareIcon({ item, size }: { item: string; size: number }) {
-  const res = resIconUrl(item);
+  const res = resIconUrl(item) ?? equipUrl(item);
   if (res) {
     const tier = ITEMS[item].tier!;
     return (

@@ -160,7 +160,142 @@ function small(w: number, h: number, draw: (p: Pix) => void, outline = true) {
   return outline ? p.outline() : p;
 }
 
+/** 金合欢：细长的干，顶上一把扁平的伞状树冠 */
+function acacia() {
+  const p = new Pix(30, 26);
+  const bark = ['#4a3020', '#6a4630', '#8a6044'];
+  p.line(14, 25, 14, 14, bark[1]);
+  p.line(15, 25, 15, 14, bark[0]);
+  p.line(14, 15, 9, 9, bark[1]);
+  p.line(15, 15, 21, 8, bark[0]);
+  p.line(14, 18, 18, 12, bark[2]);
+  const pal = ['#4a5a1e', '#6a7a2a', '#8a9a3a', '#aabc54'];
+  p.blob(9, 7, 7, 2.6, pal, 51);
+  p.blob(20, 6, 8, 2.8, pal, 52);
+  p.blob(15, 5, 6, 2.2, pal, 53);
+  return p.outline();
+}
+
+/** 金叶树：圆胖的金黄树冠，落叶季 */
+function goldtree() {
+  const p = tree(20, 24, ['#8a6a14', '#c09a20', '#e8c43a', '#fff07a'], BARK, 61);
+  p.set(4, 23, '#e8c43a');
+  p.set(15, 23, '#c09a20');
+  return p;
+}
+
+/** 雨林大树：板根 + 高树干 + 层层叠叠的大叶冠，垂着藤 */
+function jungletree() {
+  const p = new Pix(26, 38);
+  const bark = ['#3a2a1a', '#5a4228', '#7a5a3a'];
+  p.trunk(12.5, 14, 36, 4, bark);
+  p.line(10, 32, 6, 37, bark[1]);
+  p.line(15, 32, 19, 37, bark[0]);
+  const pal = ['#123a1a', '#1c5226', '#2a6a32', '#46904a'];
+  p.blob(6, 15, 6, 4, pal, 71);
+  p.blob(19, 14, 6, 4, pal, 72);
+  p.blob(12.5, 9, 10, 6, pal, 73);
+  p.blob(12.5, 4, 6, 3.5, pal, 74);
+  for (const x of [4, 9, 17, 21]) {
+    const len = 6 + Math.floor(hash(x, 7, 75) * 8);
+    for (let k = 0; k < len; k++) p.set(x + Math.sin(k / 2) * 0.6, 17 + k, k % 3 ? '#3a7a2a' : '#2a5a20');
+  }
+  return p.outline();
+}
+
+/** 雨林地上的大叶藤丛 */
+function vine() {
+  const p = new Pix(14, 10);
+  for (let i = -3; i <= 3; i++) p.line(7, 9, 7 + i * 2, 3 + Math.abs(i) * 0.7, i % 2 ? '#2a6a2a' : '#3e8a36');
+  p.blob(4, 5, 2.5, 1.6, ['#1c4a1e', '#2a6a2a', '#3e8a36', '#5aac4a'], 76);
+  p.blob(10, 4, 2.5, 1.6, ['#1c4a1e', '#2a6a2a', '#3e8a36', '#5aac4a'], 77);
+  p.set(7, 2, '#e04a6a');
+  return p.outline();
+}
+
+/** 珊瑚：分叉的枝状，粉红或橙色 */
+function coral() {
+  const p = new Pix(14, 14);
+  const pal = ['#a83a4a', '#d85a6a', '#f08a8a', '#ffc0b8'];
+  const branch = (x0: number, y0: number, x1: number, y1: number, c: string) => { p.line(x0, y0, x1, y1, c); p.line(x0 + 1, y0, x1 + 1, y1, pal[0]); };
+  branch(6, 13, 6, 6, pal[1]);
+  branch(6, 9, 2, 4, pal[2]);
+  branch(6, 8, 10, 2, pal[1]);
+  branch(9, 5, 12, 4, pal[2]);
+  branch(3, 6, 2, 1, pal[1]);
+  for (const [x, y] of [[2, 1], [10, 2], [12, 4], [6, 5]]) p.set(x, y, pal[3]);
+  return p.outline();
+}
+
+/** 红砂岩：层理分明的方墩石 */
+function redrock() {
+  const p = new Pix(18, 16);
+  p.blob(8.5, 9, 8, 6.5, ['#6a2a1a', '#8a3e26', '#a85232', '#c87a50'], 81);
+  for (let y = 3; y < 16; y += 3) for (let x = 0; x < 18; x++) p.paint(x, y, '#6a2a1a');
+  p.paint(6, 4, '#e09a6a');
+  p.paint(5, 4, '#e09a6a');
+  return p.outline();
+}
+
+/** 晶柱：一根高高的发光晶体，带几根小晶 */
+function crystalspire() {
+  const p = new Pix(16, 30);
+  const pal = ['#2a5a8a', '#4a8ad0', '#8ad0ff', '#ffffff'];
+  const spike = (cx: number, top: number, bottom: number, hw: number) => {
+    for (let y = top; y <= bottom; y++) {
+      const t = Math.min(1, (y - top) / 5);
+      const half = Math.max(0.5, hw * t);
+      for (let x = Math.round(cx - half); x <= Math.round(cx + half); x++) p.set(x, y, x < cx - 0.5 ? pal[2] : x > cx + 0.5 ? pal[0] : pal[1]);
+    }
+    p.set(cx, top, pal[3]);
+  };
+  spike(8, 1, 28, 2.6);
+  spike(3.5, 15, 28, 1.6);
+  spike(12.5, 12, 28, 1.8);
+  p.line(7, 6, 7, 20, pal[3]);
+  return p.outline();
+}
+
 const PROP_ART: Record<PropKind, () => Pix> = {
+  acacia,
+  goldtree,
+  jungletree,
+  vine,
+  coral,
+  redrock,
+  crystalspire,
+  dunegrass: () => small(10, 7, (p) => {
+    for (const [x, h, c] of [[1, 3, '#b8a050'], [3, 6, '#d4bc64'], [5, 4, '#a08a40'], [7, 5, '#c8b058'], [8, 2, '#a08a40']] as const) p.line(x, 6, x + (x < 4 ? -1 : 1), 6 - h, c);
+  }, false),
+  skull: () => small(8, 6, (p) => {
+    p.blob(3.5, 2.5, 3, 2.3, ['#a8a090', '#c8c0ac', '#e4dcc8', '#ffffff'], 82);
+    p.set(2, 2, '#2a1e17');
+    p.set(5, 2, '#2a1e17');
+    p.rect(2, 5, 4, 1, '#c8c0ac');
+  }),
+  alpineflower: () => small(10, 6, (p) => {
+    for (let i = 0; i < 4; i++) {
+      const x = 1 + Math.floor(hash(i, 3, 83) * 8);
+      const y = 1 + Math.floor(hash(3, i, 83) * 3);
+      p.set(x, y + 1, '#4a6a3a');
+      p.set(x, y, i % 2 ? '#a8c8ff' : '#ffffff');
+    }
+  }, false),
+  wall: () => small(16, 24, (p) => {
+    // 城墙：一格一段的石墙，上面带垛口
+    for (let y = 6; y < 24; y++) {
+      for (let x = 0; x < 16; x++) {
+        const row = Math.floor((y - 6) / 4);
+        const joint = (y - 6) % 4 === 3 || (x + (row % 2) * 4) % 8 === 7;
+        p.set(x, y, joint ? '#6a5e4a' : (y - 6) % 4 === 0 ? '#c8b894' : '#b0a07c');
+      }
+    }
+    p.rect(0, 2, 6, 4, '#b0a07c');
+    p.rect(10, 2, 6, 4, '#b0a07c');
+    p.rect(0, 2, 6, 1, '#d8caa4');
+    p.rect(10, 2, 6, 1, '#d8caa4');
+    p.rect(0, 22, 16, 2, '#5a5040');
+  }, false),
   oak: () => tree(20, 24, LEAF, BARK, 1),
   birch: () => tree(16, 24, ['#5a7a2a', '#7a9a38', '#9cbc4a', '#c4dc6a'], ['#8a8a80', '#e8e4d8', '#ffffff'], 2),
   maple: () => tree(20, 24, ['#8a2a18', '#c04a20', '#e07a2a', '#f4b04a'], BARK, 3),
@@ -321,6 +456,7 @@ export const PROP_GLOW: Partial<Record<PropKind, { color: number; r: number; dy:
   ember: { color: 0xff6a20, r: 12, dy: -3 },
   charred: { color: 0xff5a1a, r: 10, dy: -8 },
   icecrystal: { color: 0x9ad8ff, r: 12, dy: -6 },
+  crystalspire: { color: 0x8ad0ff, r: 20, dy: -14 },
 };
 
 // ---- 建筑 ----
@@ -639,6 +775,76 @@ function furnace(wTiles: number, hTiles: number) {
   return p.outline();
 }
 
+/** 草原游牧帐篷：圆顶，彩色布条，门帘卷起 */
+function tent(wTiles: number, hTiles: number, seed: number) {
+  const W = wTiles * 16;
+  const H = hTiles * 16 + 18;
+  const p = new Pix(W + 2, H);
+  const cx = W / 2 + 1;
+  const bottom = H - 2;
+  const cloth = [['#c8b48a', '#e8d8b0', '#f4e8c8'], ['#a8885a', '#c8a878', '#e0c494']][seed % 2];
+  const band = ['#b03a2a', '#2a6aa8', '#3a8a4a'][seed % 3];
+  const rx = W / 2 - 2;
+  const top = 8;
+  for (let y = top; y < bottom; y++) {
+    const t = (y - top) / (bottom - top);
+    const half = rx * Math.sqrt(Math.min(1, t * 1.8));
+    for (let x = Math.round(cx - half); x <= Math.round(cx + half); x++) {
+      const s = (x - cx) / (half + 0.5);
+      let c = s < -0.35 ? cloth[2] : s > 0.4 ? cloth[0] : cloth[1];
+      if (Math.abs(y - (top + (bottom - top) * 0.45)) < 2) c = band;
+      if (x === Math.round(cx) && y < top + 6) c = cloth[0];
+      p.set(x, y, c);
+    }
+  }
+  p.rect(cx - 1, 2, 2, 7, '#5a3a22');
+  p.rect(cx + 1, 2, 5, 3, band);
+  // 门帘
+  for (let y = bottom - 16; y < bottom; y++) for (let x = Math.round(cx - 6); x < Math.round(cx + 6); x++) p.set(x, y, '#3a2416');
+  p.rect(Math.round(cx - 7), bottom - 17, 14, 3, cloth[0]);
+  return p.outline();
+}
+
+/** 洞窟入口：一座岩石小山，下面黑洞洞的拱门；pal 跟着区域换（用户 10-23：洞窟先占位） */
+export function paintCave(region: string): HTMLCanvasElement {
+  const PALS: Record<string, string[]> = {
+    snow: ['#5a6270', '#7a8494', '#9aa4b4', '#e4ebf3'], alpine: ['#5a6270', '#7a8494', '#9aa4b4', '#e4ebf3'],
+    lava: ['#241c1e', '#3a2c2c', '#55403e', '#b84a2a'], canyon: ['#5a2418', '#8a3e26', '#a85232', '#c87a50'],
+    desert: ['#8a6a3a', '#b08a50', '#c8a466', '#e8cc8a'], crystal: ['#2e2650', '#46407a', '#5e58a0', '#a8f0ff'],
+    abyss: ['#221b33', '#3a3050', '#524670', '#7a5ac0'], swamp: ['#3a3a2a', '#525240', '#6a6a54', '#8a8a6a'],
+    jungle: ['#2a3a2a', '#405440', '#587058', '#6aa04a'], tropic: ['#7a7060', '#9a9078', '#b8ae94', '#e8dcc0'],
+  };
+  const pal = PALS[region] ?? ['#4e4e52', '#6a6a6e', '#86868a', '#a8a8ac'];
+  const p = new Pix(64, 48);
+  p.blob(32, 28, 30, 19, pal, 91);
+  p.blob(14, 34, 12, 12, pal, 92);
+  p.blob(50, 34, 12, 12, pal, 93);
+  p.blob(30, 14, 14, 10, pal, 94);
+  // 拱形洞口，越往里越黑
+  for (let y = 22; y < 47; y++) {
+    for (let x = 18; x < 46; x++) {
+      const dx = (x - 31.5) / 13;
+      const dy = (y - 47) / 24;
+      if (dx * dx + dy * dy > 1) continue;
+      const depth = 1 - Math.sqrt(dx * dx + dy * dy);
+      p.set(x, y, depth > 0.45 ? '#020104' : depth > 0.2 ? '#0c0810' : '#1c1420');
+    }
+  }
+  // 洞口一圈石块
+  for (let a = 0; a <= Math.PI; a += 0.26) {
+    const x = 31.5 - Math.cos(a) * 14;
+    const y = 47 - Math.sin(a) * 25;
+    p.blob(x, y, 2.4, 2, [pal[0], pal[1], pal[2], pal[3]], Math.round(a * 10));
+  }
+  // 门口立一块木牌
+  p.rect(52, 34, 2, 13, '#5a3a22');
+  p.rect(47, 32, 12, 6, '#8a6238');
+  p.rect(47, 32, 12, 1, '#a87a48');
+  p.rect(49, 34, 8, 1, '#3a2416');
+  p.rect(49, 36, 6, 1, '#3a2416');
+  return p.outline().canvas();
+}
+
 function well() {
   const p = new Pix(20, 30);
   p.blob(9.5, 23, 9, 5, ['#5a564e', '#7a766e', '#9a968c', '#b8b4a8'], 41);
@@ -668,6 +874,9 @@ export function paintBuilding(kind: BuildingKind, w: number, h: number, seed = 0
     case 'barn': return barn().canvas();
     case 'well': return well().canvas();
     case 'furnace': return furnace(w, h).canvas();
+    case 'atelier': return house(w, h, { wall: 'plaster', roof: ROOF_TEAL, windows: 2, door: 'arch', sign: 'gem', chimney: true }).canvas();
+    case 'manor': return house(w, h, { wall: 'stone', roof: ROOF_PURPLE, windows: 4, door: 'double', chimney: true }).canvas();
+    case 'tent': return tent(w, h, seed).canvas();
   }
 }
 

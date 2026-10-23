@@ -1,4 +1,4 @@
-import { ACTIONS, ITEMS, MAP_W, MONSTERS, nodeOfAction, NODES, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, travelMs, type MapNode } from './data';
+import { ACTIONS, ITEMS, MAP_W, MONSTERS, nodeOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, travelMs, type MapNode } from './data';
 import { nextRandom } from './rng';
 import { stepQuests } from './quests';
 import { BONUS_PER_LEVEL, levelForXp, speedForLevel, XP_TABLE } from './xp';
@@ -53,15 +53,22 @@ export function newGame(now: number, seed = Math.floor(Math.random() * 2 ** 31))
 /** 连续阵亡这么多次（中间没打死一只）就停止战斗 */
 export const MAX_DEATH_STREAK = 3;
 
-/** 地图扩大后换算旧存档的位置：城镇里的跟着镇中心平移（建筑大小不变），野外的按比例放大 */
+/**
+ * 地图扩大后换算旧存档的位置。5088 以前：城镇里的跟着镇中心平移（建筑大小不变），野外的按比例放大到 5088；
+ * 8848（10-23）：老地图原样放在中间的方框里，整体平移
+ */
 function rescaleLoc(loc: { x: number; y: number }, old: number) {
   if (old === MAP_W) return loc;
-  const k = MAP_W / old;
-  const oldCenter = { x: Math.round(TOWN_CENTER.x / k), y: Math.round(TOWN_CENTER.y / k) };
-  if (Math.abs(loc.x - oldCenter.x) < 60 && Math.abs(loc.y - oldCenter.y) < 60) {
-    return { x: loc.x - oldCenter.x + TOWN_CENTER.x, y: loc.y - oldCenter.y + TOWN_CENTER.y };
+  let p = loc;
+  if (old !== OLD_BOX.size) {
+    const k = OLD_BOX.size / old;
+    const center = { x: TOWN_CENTER.x - OLD_BOX.x, y: TOWN_CENTER.y - OLD_BOX.y };
+    const oldCenter = { x: Math.round(center.x / k), y: Math.round(center.y / k) };
+    p = Math.abs(loc.x - oldCenter.x) < 60 && Math.abs(loc.y - oldCenter.y) < 60
+      ? { x: loc.x - oldCenter.x + center.x, y: loc.y - oldCenter.y + center.y }
+      : { x: Math.round(loc.x * k), y: Math.round(loc.y * k) };
   }
-  return { x: Math.round(loc.x * k), y: Math.round(loc.y * k) };
+  return { x: p.x + OLD_BOX.x, y: p.y + OLD_BOX.y };
 }
 
 export function migrate(raw: unknown): GameState | null {
@@ -370,11 +377,12 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   /** 背包满了：走回仓库，存下除食物和弹药外的东西，再走回来接着干。
    *  supply：开战前回仓库按设置拿食物和药水 */
   const stepBankTrip = (budget: number, supply = false): number => {
-    const bank = NODES.find((n) => n.id === 'bank')!;
+    // 回最近的仓库（落霞城也有一个）
+    const bank = s.travel && isBankId(s.travel.to) ? NODES.find((n) => n.id === s.travel!.to)! : nearestBank(s.loc);
     const dest = standOf(bank);
-    if (!s.travel || s.travel.to !== 'bank') {
+    if (!s.travel || s.travel.to !== bank.id) {
       const ms = travelMs(s.loc, dest);
-      s.travel = { to: 'bank', ms, total: ms };
+      s.travel = { to: bank.id, ms, total: ms };
     }
     const step = Math.min(budget, s.travel.ms);
     s.travel.ms -= step;
@@ -682,7 +690,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     const a0 = ACTIONS[task.action];
     // 开战前：背包食物不够设定数量就先回仓库拿（用户 10-22 要求）
     if (a0.kind === 'combat' && !task.stocked && !s.combat) {
-      if (s.travel?.to === 'bank' || needSupply()) {
+      if (isBankId(s.travel?.to) || needSupply()) {
         const used = stepBankTrip(Math.min(dt, timeLeft(task)), true);
         dt -= used;
         regen(s, used);
@@ -694,7 +702,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     }
     // 新一轮开始前（采集一次 / 打下一只怪前）检查背包，装不下就先回仓库
     const between = a0.kind === 'skill' ? s.progressMs === 0 : !s.combat || s.combat.respawnMs > 0;
-    if (s.travel?.to === 'bank' || (between && !s.travel && !fits(lootOf(a0)))) {
+    if (isBankId(s.travel?.to) || (between && !s.travel && !fits(lootOf(a0)))) {
       // 定时任务的时间也算上来回仓库的路
       const used = stepBankTrip(Math.min(dt, timeLeft(task)));
       dt -= used;
@@ -842,11 +850,32 @@ export function equip(prev: GameState, item: string): GameState {
 
 /** 站在仓库旁边多少格以内才能存取（用户 10-22 要求：仓库的东西要到仓库才能拿） */
 export const BANK_REACH = 5;
-const BANK_STAND = standOf(NODES.find((n) => n.id === 'bank')!);
-export const bankStand = () => ({ ...BANK_STAND });
+/** 所有仓库和集市（两座城各有一个，存的是同一份仓库） */
+const BANKS = NODES.filter((n) => n.opens === 'bank');
+const MARKETS = NODES.filter((n) => n.sprite === 'market');
+const BANK_IDS = new Set(BANKS.map((n) => n.id));
+export const isBankId = (id: string | undefined) => !!id && BANK_IDS.has(id);
+const nearest = (list: MapNode[], loc: { x: number; y: number }) => {
+  let best = list[0];
+  let bestD = Infinity;
+  for (const n of list) {
+    const d = travelMs(loc, standOf(n));
+    if (d < bestD) { bestD = d; best = n; }
+  }
+  return best;
+};
+export const nearestBank = (loc: { x: number; y: number }) => nearest(BANKS, loc);
+export const nearestMarket = (loc: { x: number; y: number }) => nearest(MARKETS, loc);
+const within = (s: GameState, list: MapNode[]) => !s.travel && !s.walk && list.some((n) => {
+  const st = standOf(n);
+  return Math.hypot(s.loc.x - st.x, s.loc.y - st.y) <= BANK_REACH;
+});
 export function atBank(s: GameState): boolean {
-  return !s.travel && !s.walk && Math.hypot(s.loc.x - BANK_STAND.x, s.loc.y - BANK_STAND.y) <= BANK_REACH;
+  return within(s, BANKS);
 }
+/** 主城仓库、集市的站位（测试和默认用） */
+export const bankStand = () => standOf(BANKS[0]);
+export const marketStand = () => standOf(MARKETS[0]);
 
 /** 城镇设施（灶台、熔炉、工坊…）也要站在旁边才能直接开工（用户 10-23 要求） */
 export function nearNode(s: GameState, node: MapNode): boolean {
@@ -898,11 +927,9 @@ export function depositLoot(prev: GameState): GameState {
   return s;
 }
 
-/** 卖东西要站在城镇集市旁 */
-const MARKET_STAND = standOf(NODES.find((n) => n.id === 'market')!);
-export const marketStand = () => ({ ...MARKET_STAND });
+/** 卖东西要站在集市旁（哪座城的都行） */
 export function atMarket(s: GameState): boolean {
-  return !s.travel && !s.walk && Math.hypot(s.loc.x - MARKET_STAND.x, s.loc.y - MARKET_STAND.y) <= BANK_REACH;
+  return within(s, MARKETS);
 }
 
 export function sell(prev: GameState, item: string, qty: number): GameState {

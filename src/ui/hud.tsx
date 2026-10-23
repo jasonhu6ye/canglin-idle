@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { ACTIONS, MONSTERS, nodeOfAction, NODES, SKILLS } from '../core/data';
 import { QUESTS, questProgress, questText } from '../core/quests';
-import { actionDuration, combatLevel, level, maxHp, removeTask, resumeWork, weaponStyle } from '../core/sim';
+import { actionDuration, combatLevel, isBankId, level, maxHp, removeTask, resumeWork, weaponStyle } from '../core/sim';
 import type { BuffKind, GameState, SkillId } from '../core/types';
 import { HERO_W, outfitOf, paintHeroSheet } from '../game/hero';
 import { store } from '../store';
@@ -76,10 +76,10 @@ export function StatusChips({ s, extra }: { s: GameState; extra?: ReactNode }) {
     const n = NODES.find((x) => x.id === s.travel!.to);
     const pct = (1 - s.travel.ms / s.travel.total) * 100;
     const t0 = s.queue[0];
-    const supply = s.travel.to === 'bank' && t0 && ACTIONS[t0.action]?.kind === 'combat' && !t0.stocked;
+    const supply = isBankId(s.travel.to) && t0 && ACTIONS[t0.action]?.kind === 'combat' && !t0.stocked;
     body = (
       <>
-        <b style={{ color: '#e8b84a' }}>{supply ? '补给' : s.travel.to === 'bank' ? '背包满了' : '寻路中'}</b> · {supply ? '回仓库拿食物' : s.travel.to === 'bank' ? '回仓库存东西' : `前往${n?.name}`} · 还要 {Math.ceil(s.travel.ms / 1000)} 秒
+        <b style={{ color: '#e8b84a' }}>{supply ? '补给' : isBankId(s.travel.to) ? '背包满了' : '寻路中'}</b> · {supply ? '回仓库拿食物' : isBankId(s.travel.to) ? '回仓库存东西' : `前往${n?.name}`} · 还要 {Math.ceil(s.travel.ms / 1000)} 秒
         <span className="bar wide"><i style={{ width: `${pct}%` }} /></span>
       </>
     );

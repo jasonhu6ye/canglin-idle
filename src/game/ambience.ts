@@ -41,7 +41,10 @@ function duskGlow(h: number) {
 }
 
 /** 雨只下在会下雨的地方：雪原下雪、熔岩和深渊不下 */
-const RAINY: Partial<Record<RegionId, number>> = { town: 0.3, woodland: 0.45, giantwood: 0.4, swamp: 0.55, coast: 0.35, highland: 0.3 };
+const RAINY: Partial<Record<RegionId, number>> = {
+  town: 0.3, woodland: 0.45, giantwood: 0.4, swamp: 0.55, coast: 0.35, highland: 0.3,
+  savanna: 0.15, autumn: 0.35, jungle: 0.65, tropic: 0.4, canyon: 0.08,
+};
 export const isRaining = (region: RegionId, now = Date.now()) =>
   hash(Math.floor(now / WEATHER_MS), 7, 31) < (RAINY[region] ?? 0);
 
@@ -136,7 +139,7 @@ export class Ambience {
     if (time > this.nextCritter && this.critters.length < 6) {
       this.nextCritter = time + 2500 + Math.random() * 4000;
       const day = this.dark < 0.5 && !rain;
-      const bugs = day && (region === 'town' || region === 'woodland' || region === 'giantwood' || region === 'highland');
+      const bugs = day && (region === 'town' || region === 'woodland' || region === 'giantwood' || region === 'highland' || region === 'savanna' || region === 'autumn' || region === 'jungle' || region === 'tropic');
       if (day && Math.random() < 0.45) {
         const fromLeft = Math.random() < 0.5;
         const y = v.y + v.height * (0.15 + Math.random() * 0.6);

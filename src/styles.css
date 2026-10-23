@@ -115,6 +115,14 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .region-tint.woodland { background: radial-gradient(ellipse at center, transparent 55%, rgba(10, 30, 15, 0.3)); }
 .region-tint.coast { background: radial-gradient(ellipse at center, rgba(255, 230, 160, 0.06) 50%, rgba(255, 210, 120, 0.2)); }
 .region-tint.highland { background: radial-gradient(ellipse at center, transparent 55%, rgba(40, 40, 50, 0.3)); }
+.region-tint.savanna { background: radial-gradient(ellipse at center, rgba(255, 220, 120, 0.04) 50%, rgba(220, 170, 60, 0.22)); }
+.region-tint.autumn { background: radial-gradient(ellipse at center, rgba(255, 140, 60, 0.04) 50%, rgba(170, 70, 20, 0.28)); }
+.region-tint.jungle { background: radial-gradient(ellipse at center, rgba(20, 70, 20, 0.08) 40%, rgba(5, 35, 10, 0.55)); }
+.region-tint.tropic { background: radial-gradient(ellipse at center, rgba(120, 240, 255, 0.04) 50%, rgba(40, 180, 200, 0.22)); }
+.region-tint.canyon { background: radial-gradient(ellipse at center, rgba(255, 110, 60, 0.04) 50%, rgba(140, 40, 20, 0.3)); }
+.region-tint.desert { background: radial-gradient(ellipse at center, rgba(255, 230, 150, 0.08) 45%, rgba(230, 170, 70, 0.32)); }
+.region-tint.alpine { background: radial-gradient(ellipse at center, rgba(220, 240, 255, 0) 55%, rgba(180, 210, 230, 0.28)); }
+.region-tint.crystal { background: radial-gradient(ellipse at center, rgba(120, 90, 220, 0.06) 40%, rgba(40, 20, 90, 0.5)); }
 .region-banner {
   position: absolute; top: 22%; left: 50%; transform: translateX(-50%); pointer-events: none; white-space: nowrap;
   font-size: 22px; font-weight: bold; letter-spacing: 6px; color: #fff3c4; text-shadow: 0 2px 0 #000, 0 0 12px rgba(232, 184, 74, 0.8);
@@ -218,6 +226,7 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .wm-node i { display: block; width: 9px; height: 9px; transform: rotate(45deg); box-shadow: 0 0 0 1px #000, 0 0 0 2px rgba(255, 255, 255, 0.5); }
 .wm-node span { font-size: 10px; white-space: nowrap; margin-top: 2px; text-shadow: 0 1px 0 #000, 0 0 3px #000; }
 .wm-node span.site { color: #ffd86a; font-weight: bold; }
+.wm-node.cave i { border-radius: 50% 50% 0 0; transform: none; box-shadow: 0 0 0 1px #000, 0 0 0 2px #b8a8d0; }
 .wm-node.sel i { box-shadow: 0 0 0 1px #000, 0 0 0 3px var(--gold), 0 0 10px var(--gold); }
 .wm-me { position: absolute; width: 12px; height: 12px; transform: translate(-50%, -50%); border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px var(--gold), 0 0 10px #fff; animation: blink 1s infinite alternate; pointer-events: none; }
 @keyframes blink { to { opacity: 0.4; } }

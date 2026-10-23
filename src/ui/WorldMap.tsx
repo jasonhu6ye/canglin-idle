@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ACTIONS, DANGER, dangerLevel, MAP_H, MAP_W, MONSTERS, NODES, REGIONS, SKILLS, standOf, travelMs } from '../core/data';
+import { ACTIONS, DANGER, dangerLevel, MAP_H, MAP_W, MONSTERS, NODES, OLD_BOX, REGIONS, SKILLS, standOf, travelMs } from '../core/data';
 import { combatLevel } from '../core/sim';
 import type { GameState, RegionId } from '../core/types';
 import { playerPos } from '../game/MapScene';
@@ -39,11 +39,17 @@ function overview(): string {
   return overviewUrl;
 }
 
+/** 老地图的区域名字按老方框里的相对位置算 */
+const inBox = (u: number, v: number): [number, number] => [(OLD_BOX.x + u * OLD_BOX.size) / MAP_W, (OLD_BOX.y + v * OLD_BOX.size) / MAP_H];
 /** 区域名字摆放的位置（0-1） */
 const LABELS: Record<RegionId, [number, number]> = {
-  town: [0.47, 0.53], snow: [0.46, 0.06], highland: [0.8, 0.28], coast: [0.8, 0.45], lava: [0.74, 0.86],
-  abyss: [0.45, 0.86], swamp: [0.13, 0.82], woodland: [0.15, 0.42], giantwood: [0.13, 0.2],
+  town: inBox(0.47, 0.53), snow: inBox(0.46, 0.06), highland: inBox(0.8, 0.28), coast: inBox(0.8, 0.45), lava: inBox(0.74, 0.86),
+  abyss: inBox(0.45, 0.86), swamp: inBox(0.13, 0.82), woodland: inBox(0.15, 0.42), giantwood: inBox(0.13, 0.2),
+  savanna: [0.08, 0.47], autumn: [0.1, 0.12], jungle: [0.1, 0.85], tropic: [0.92, 0.55],
+  canyon: [0.9, 0.18], desert: [0.9, 0.86], alpine: [0.5, 0.05], crystal: [0.52, 0.9],
 };
+/** 城镇在世界地图上只标一个点 */
+const TOWN_MARK: Record<string, string> = { smithy: '城镇', market2: '落霞城' };
 
 export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: () => void; onOpenNode: (id: string) => void }) {
   const [zoom, setZoom] = useState(1);
@@ -77,15 +83,16 @@ export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: ()
           {(Object.keys(LABELS) as RegionId[]).map((r) => (
             <span key={r} className="wm-region" style={{ left: `${LABELS[r][0] * 100}%`, top: `${LABELS[r][1] * 100}%` }}>{REGIONS[r].name}</span>
           ))}
-          {NODES.filter((n) => !n.town || n.pond || n.id === 'smithy').map((n) => {
+          {NODES.filter((n) => !n.town || n.pond || TOWN_MARK[n.id]).map((n) => {
             const d = n.town && !n.pond ? 0 : dangerLevel(n, cl);
-            const name = n.id === 'smithy' ? '城镇' : n.name;
+            const name = TOWN_MARK[n.id] ?? n.name;
+            const big = n.site || TOWN_MARK[n.id];
             return (
-              <button key={n.id} className={`wm-node ${sel === n.id ? 'sel' : ''}`} style={{ left: `${(n.x / MAP_W) * 100}%`, top: `${(n.y / MAP_H) * 100}%` }}
+              <button key={n.id} className={`wm-node ${sel === n.id ? 'sel' : ''} ${n.cave ? 'cave' : ''}`} style={{ left: `${(n.x / MAP_W) * 100}%`, top: `${(n.y / MAP_H) * 100}%` }}
                 onClick={() => setSel(n.id)}>
-                <i style={{ background: DANGER[d].color }} />
-                {/* 特色地点一直标名字 */}
-                {(zoom > 1 || n.site) && <span className={n.site ? 'site' : ''}>{name}</span>}
+                <i style={{ background: n.cave ? '#2a2030' : DANGER[d].color }} />
+                {/* 特色地点和城镇一直标名字 */}
+                {(zoom > 1 || big) && <span className={big ? 'site' : ''}>{name}</span>}
               </button>
             );
           })}
@@ -112,10 +119,11 @@ function NodeCard({ nodeId, cl, onOpen, onWalk }: { nodeId: string; cl: number; 
   return (
     <div className="wm-card frame">
       <div className="row1">
-        <b>{n.id === 'smithy' ? '城镇' : n.name}</b>
+        <b>{TOWN_MARK[n.id] ?? n.name}</b>
         <span style={{ color: d.color }}>危险度：{d.name}</span>
       </div>
-      <small className="muted">{REGIONS[n.region].name}{!n.town && ` · Lv${n.lv[0]}${n.lv[1] !== n.lv[0] ? `-${n.lv[1]}` : ''}`}</small>
+      <small className="muted">{REGIONS[n.region].name}{!n.town && !n.cave && ` · Lv${n.lv[0]}${n.lv[1] !== n.lv[0] ? `-${n.lv[1]}` : ''}`}</small>
+      {n.cave && <span>大型洞窟 · 尚未开放，敬请期待</span>}
       {skills.length > 0 && <span>可练：{skills.join('、')}</span>}
       {monsters.length > 0 && (
         <span className="wm-mons">
@@ -129,7 +137,7 @@ function NodeCard({ nodeId, cl, onOpen, onWalk }: { nodeId: string; cl: number; 
       )}
       <div className="go">
         <button className="primary" onClick={onWalk}>寻路前往 · 约 {Math.ceil(travelMs(playerPos, standOf(n)) / 1000)} 秒</button>
-        {n.id !== 'smithy' && (n.town || skills.length > 0) && <button onClick={onOpen}>查看任务</button>}
+        {!TOWN_MARK[n.id] && (n.town || skills.length > 0) && <button onClick={onOpen}>查看任务</button>}
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ACTIONS, buffText, ITEMS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, type MapNode } from '../core/data';
 import {
-  atBank, atMarket, BAG_SLOTS, BELT_CAP, beltSlotOf, eat, fromBelt, POTION_AT, toBelt, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip,
+  atBank, atMarket, nearestBank, nearestMarket, BAG_SLOTS, BELT_CAP, beltSlotOf, eat, fromBelt, POTION_AT, toBelt, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip,
   weaponStyle,
 } from '../core/sim';
 import type { EquipSlot, GameState, ItemCategory, SkillId, Summary } from '../core/types';
@@ -33,7 +33,7 @@ function FarFromBank() {
   return (
     <div className="go far-bank">
       <span className="muted">要走到城镇的仓库旁边才能存取</span>
-      <button onClick={() => store.requestWalk('bank')}>寻路去仓库</button>
+      <button onClick={() => store.requestWalk(nearestBank(store.state.loc).id)}>寻路去仓库</button>
     </div>
   );
 }
@@ -83,7 +83,7 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
       {from === 'bank' && id !== 'coins' && !atMarket(s) && (
         <div className="go far-bank">
           <span className="muted">卖东西要走到城镇的集市</span>
-          <button onClick={() => store.requestWalk('market')}>寻路去集市</button>
+          <button onClick={() => store.requestWalk(nearestMarket(s.loc).id)}>寻路去集市</button>
         </div>
       )}
       <div className="go">

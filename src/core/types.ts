@@ -110,7 +110,9 @@ export interface MonsterDef {
   art: { color: string; accent: string };
 }
 
-export type RegionId = 'town' | 'snow' | 'highland' | 'coast' | 'lava' | 'abyss' | 'swamp' | 'woodland' | 'giantwood';
+export type RegionId = 'town' | 'snow' | 'highland' | 'coast' | 'lava' | 'abyss' | 'swamp' | 'woodland' | 'giantwood'
+  // 8848 大地图外圈的新区域（用户 10-23）
+  | 'savanna' | 'autumn' | 'jungle' | 'tropic' | 'canyon' | 'desert' | 'alpine' | 'crystal';
 
 export interface CombatAction {
   id: string;

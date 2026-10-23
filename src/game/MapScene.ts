@@ -1,13 +1,13 @@
 import Phaser from 'phaser';
 import { ACTIONS, CROPS, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, DANGER, dangerLevel, nodeOfAction, travelMs, WALK_TILES_PER_SEC, type MapNode } from '../core/data';
-import { actionDuration, combatLevel, combatStats, leaveWork, maxHp, resumeWork, setLoc, startWalk, teleport as teleportState, walkPos } from '../core/sim';
+import { actionDuration, combatLevel, combatStats, isBankId, leaveWork, maxHp, resumeWork, setLoc, startWalk, teleport as teleportState, walkPos } from '../core/sim';
 import { MON_ANIMS, monsterFrameSize, paintMonsterSheet, type MonAnim } from './monsterArt';
 import { HERO_ANIMS, HERO_FEET, HERO_H, HERO_W, NPC_ANIMS, NPC_OUTFITS, outfitOf, paintHeroSheet, type HeroDir } from './hero';
 import type { MonsterDef, RegionId, Summary } from '../core/types';
 import { store } from '../store';
 import { Ambience, D_FLOAT, D_GLOW, D_LABEL, D_PARTICLE, D_SMOKE } from './ambience';
 import { paintArrow, paintCrop, paintHit, paintSlash } from './fxArt';
-import { paintBuilding, paintDot, paintGlow, paintProp, paintWindmillBlades, PROP_GLOW } from './art';
+import { paintBuilding, paintCave, paintDot, paintGlow, paintProp, paintWindmillBlades, PROP_GLOW } from './art';
 import { DPR } from './dpr';
 import { paintResNode, resGlow, resOf, type ResKind } from './resArt';
 import { NODE_MARKER, paintSprite, SPRITE_VARIANTS, SPRITES } from './sprites';
@@ -26,7 +26,7 @@ export const setSpeedMultiplier = (m: number) => {
 
 const DRAG_THRESHOLD = 8;
 const FONT = '"PingFang SC","Microsoft YaHei",sans-serif';
-const CHIMNEY: Record<string, boolean> = { furnace: true, hall: true, smithy: true, inn: true, house: true, house3: true };
+const CHIMNEY: Record<string, boolean> = { furnace: true, hall: true, smithy: true, inn: true, house: true, house3: true, atelier: true, manor: true };
 
 export const NODE_CLICK = 'node-click';
 
@@ -97,6 +97,7 @@ type Particle = { img: Phaser.GameObjects.Image; vx: number; vy: number; life: n
 type Ambient = 'snow' | 'ember' | 'firefly' | 'spore' | 'mote' | 'dust' | 'leaf';
 const AMBIENT: Partial<Record<RegionId, Ambient>> = {
   snow: 'snow', lava: 'ember', woodland: 'firefly', giantwood: 'leaf', abyss: 'spore', swamp: 'mote', coast: 'dust',
+  savanna: 'dust', autumn: 'leaf', jungle: 'firefly', canyon: 'dust', desert: 'dust', alpine: 'snow', crystal: 'spore',
 };
 
 export class MapScene extends Phaser.Scene {
@@ -158,7 +159,7 @@ export class MapScene extends Phaser.Scene {
     this.travelTo = store.state.travel?.to;
     if (task && store.state.paused) this.manual = true;
     else if (task) {
-      if (store.state.travel?.to === 'bank') this.goToTask(NODES.find((n) => n.id === 'bank'));
+      if (isBankId(store.state.travel?.to)) this.goToTask(NODES.find((n) => n.id === store.state.travel!.to));
       else if (store.state.travel) this.goToTask();
       else this.startWorking();
     }
@@ -577,6 +578,17 @@ export class MapScene extends Phaser.Scene {
     const cx = n.x * T + T / 2;
     const cy = n.y * T + T / 2;
     const boss = n.sprite === 'boss';
+    if (n.cave) {
+      // 洞窟入口：一座带黑洞口的石山，暂未开放
+      const key = `cave-${n.region}`;
+      if (!this.textures.exists(key)) this.textures.addCanvas(key, paintCave(n.region));
+      this.add.image(cx, cy + T / 2 - T * 2, key).setOrigin(0.5, 1).setScale(1.3).setDepth(cy + 1000 - T * 2);
+      this.add.text(cx, cy - 64, `${n.name}\n（未开放）`, {
+        fontFamily: FONT, fontSize: '8px', color: '#d8c8f0', backgroundColor: '#1b120ccc', padding: { x: 3, y: 1 }, resolution: 4, align: 'center',
+      }).setOrigin(0.5, 1).setDepth(D_LABEL);
+      this.add.zone(cx, cy - T * 2, T * 4, T * 4).setInteractive({ useHandCursor: true }).setData('node', n.id);
+      return;
+    }
     const img = this.add.image(cx, cy + T / 2, NODE_MARKER[n.sprite]).setOrigin(0.5, 1).setDepth(cy + T / 2 + 1000);
     img.setScale(boss ? 1.8 : 1.4);
     if (n.sprite === 'stove') this.tweens.add({ targets: img, scaleY: 1.12, yoyo: true, repeat: -1, duration: 300 });
@@ -964,7 +976,7 @@ export class MapScene extends Phaser.Scene {
         if (store.state.queue[0]?.action === this.currentAction) {
           const to = store.state.travel?.to;
           this.travelTo = to;
-          if (to === 'bank') this.goToTask(NODES.find((n) => n.id === 'bank'));
+          if (isBankId(to)) this.goToTask(NODES.find((n) => n.id === to));
           else if (to) this.goToTask();
           return;
         }
@@ -987,7 +999,7 @@ export class MapScene extends Phaser.Scene {
       // 背包满了回仓库，或者存完东西走回资源点
       if (to !== this.travelTo) {
         this.travelTo = to;
-        if (to === 'bank') this.goToTask(NODES.find((n) => n.id === 'bank'));
+        if (isBankId(to)) this.goToTask(NODES.find((n) => n.id === to));
         else if (to && !this.manual) this.goToTask();
       }
       return;
@@ -1028,7 +1040,7 @@ export class MapScene extends Phaser.Scene {
       place(st.walk ? walkPos(st) : st.loc);
       this.resumeWalk();
     } else if (st.travel) {
-      const bank = st.travel.to === 'bank' ? NODES.find((n) => n.id === 'bank') : undefined;
+      const bank = isBankId(st.travel.to) ? NODES.find((n) => n.id === st.travel!.to) : undefined;
       const node = bank ?? nodeForAction(task.action);
       if (node) {
         // 存档只记剩余时间，按比例估一个路上的位置

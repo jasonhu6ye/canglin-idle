@@ -167,6 +167,13 @@ const BEAST: Partial<Record<Form, { body: [number, number]; leg: number; legW: n
   croc: { body: [11, 3.8], leg: 3, legW: 2.5, head: [4, 2.5], snout: 7 },
   drake: { body: [8.5, 5], leg: 6, legW: 3, head: [4, 3.5], snout: 3 },
   dragon: { body: [10, 6], leg: 7, legW: 3.5, head: [4.5, 4], snout: 4 },
+  // 8848 外圈新增（10-23）
+  lion: { body: [9.5, 5], leg: 6.5, legW: 2.5, head: [4.2, 4], snout: 1.5 },
+  rhino: { body: [11, 6.5], leg: 5, legW: 3.5, head: [4.5, 4], snout: 3 },
+  camel: { body: [9, 5], leg: 10, legW: 1.8, head: [3, 2.6], snout: 3 },
+  panther: { body: [9.5, 3.8], leg: 6, legW: 2, head: [3.5, 3.2], snout: 1 },
+  yak: { body: [10.5, 6.5], leg: 5.5, legW: 3, head: [4.2, 4], snout: 1.5 },
+  hyena: { body: [8, 4.5], leg: 6, legW: 2, head: [3.8, 3.4], snout: 2.5 },
 };
 
 function beast(c: Ctx) {
@@ -198,6 +205,19 @@ function beast(c: Ctx) {
   if (form === 'fox') {
     blob(c, tx - 3 * u, ty + wag * 0.5, 4 * u, 2.5 * u, P, 3);
     ell(p, tx - 6 * u, ty + wag * 0.5, 1.5 * u, 1.5 * u, A[3]);
+  } else if (form === 'lion') {
+    // 狮尾：细长，末端一撮毛
+    limb(p, tx, ty, tx - 5 * u, ty + 3 * u + wag, P[1], u);
+    ell(p, tx - 5.5 * u, ty + 3.5 * u + wag, 1.4 * u, 1.4 * u, A[1]);
+  } else if (form === 'panther') {
+    // 豹尾：长长地往上翘
+    for (let k = 0; k <= 8; k++) {
+      const q = k / 8;
+      ell(p, tx - q * 7 * u, ty - Math.sin(q * 2.2) * 4 * u + wag * q, 1.1 * u, 1.1 * u, P[1]);
+    }
+  } else if (form === 'yak' || form === 'camel') {
+    limb(p, tx, ty, tx - 2 * u, ty + 4 * u + wag * 0.3, P[0], u);
+    ell(p, tx - 2 * u, ty + 4.5 * u + wag * 0.3, u, 1.5 * u, P[0]);
   } else if (form === 'cat' || form === 'griffin') {
     limb(p, tx, ty, tx - 5 * u, ty - 4 * u + wag, P[1], 1.5 * u);
     if (form === 'griffin') ell(p, tx - 5 * u, ty - 4 * u + wag, 1.5 * u, 1.5 * u, P[0]);
@@ -210,7 +230,7 @@ function beast(c: Ctx) {
       ell(p, tx - q * len, by + ry * 0.2 + Math.sin(q * 3 + o.t * TAU) * 1.2 * u + q * 2 * u, (1 - q * 0.8) * 2.4 * u, (1 - q * 0.8) * 2 * u, P[1]);
     }
     if (form === 'dragon' || form === 'drake') fillPoly(p, [[tx - len - 2 * u, by + ry * 0.2 + 2 * u], [tx - len + u, by - 1 * u], [tx - len + u, by + 4 * u]], A[2]);
-  } else if (form !== 'mammoth' && form !== 'bear') {
+  } else if (form !== 'mammoth' && form !== 'bear' && form !== 'rhino') {
     limb(p, tx, ty, tx - 2 * u, ty - u + wag * 0.3, P[1], 1.5 * u);
   }
   if (winged) wing(c, cx - rx * 0.1, by - ry * 0.7, 'far', form === 'dragon' ? 17 : 13, form === 'dragon');
@@ -222,13 +242,50 @@ function beast(c: Ctx) {
     for (let k = 0; k < 5; k++) fillPoly(p, [[cx - rx * 0.5 + k * rx * 0.25, by - ry - u], [cx - rx * 0.6 + k * rx * 0.25, by - ry * 0.6], [cx - rx * 0.35 + k * rx * 0.25, by - ry * 0.6]], form === 'boar' ? P[0] : A[1]);
   if (form === 'mammoth' || form === 'bear' || form === 'goat') for (let k = 0; k < 8; k++) p.paint(cx - rx * 0.8 + k * rx * 0.22, by + ry * 0.7, P[0]);
   if (form === 'griffin') ell(p, cx + rx * 0.4, by - ry * 0.2, rx * 0.45, ry * 0.8, A[3]);
+  if (form === 'hyena' || form === 'panther') {
+    // 斑点：鬣狗是稀疏的深色斑，豹是一圈圈的环斑
+    for (let k = 0; k < 9; k++) {
+      const sx2 = cx - rx * 0.75 + (k % 5) * rx * 0.36 + (k > 4 ? rx * 0.18 : 0);
+      const sy2 = by - ry * 0.35 + (k > 4 ? ry * 0.5 : 0);
+      if (form === 'hyena') p.paint(sx2, sy2, A[1]);
+      else { p.paint(sx2, sy2, A[0]); p.paint(sx2 + u, sy2, A[0]); p.paint(sx2, sy2 + u, A[0]); }
+    }
+    // 鬣狗背上一道竖起的鬃毛，前高后低
+    if (form === 'hyena') for (let k = 0; k < 6; k++) p.set(cx - rx * 0.2 + k * rx * 0.2, by - ry - u - (k > 3 ? u : 0), A[1]);
+  }
+  if (form === 'camel') {
+    // 驼峰：一高一低两个
+    blob(c, cx - rx * 0.25, by - ry * 0.9, rx * 0.35, ry * 0.7, P, 7);
+    blob(c, cx + rx * 0.25, by - ry * 0.75, rx * 0.28, ry * 0.55, P, 8);
+  }
+  if (form === 'yak') {
+    // 牦牛：长毛裙一直垂到膝盖
+    for (let k = 0; k < 12; k++) {
+      const fx = cx - rx * 0.9 + k * rx * 0.16;
+      limb(p, fx, by + ry * 0.4, fx + (k % 2 ? 0.5 : -0.5) * u, by + ry + 2.5 * u + (k % 3) * u * 0.5, k % 2 ? P[0] : P[1], u);
+    }
+    blob(c, cx + rx * 0.45, by - ry * 0.6, rx * 0.4, ry * 0.55, P, 9);
+  }
+  if (form === 'rhino') {
+    // 犀牛：身上几道皮甲褶
+    for (const k of [-0.35, 0.1, 0.5]) limb(p, cx + rx * k, by - ry * 0.8, cx + rx * k - u, by + ry * 0.6, P[0], u);
+  }
   drawLegs(false);
   if (winged) wing(c, cx - rx * 0.2, by - ry * 0.7, 'near', form === 'dragon' ? 17 : 13, form === 'dragon');
   // 头
-  const neckUp = form === 'deer' ? 6 * u : form === 'goat' || form === 'drake' ? 3 * u : form === 'dragon' ? 5 * u : form === 'griffin' ? 3 * u : reptile ? 0 : 1.5 * u;
+  const neckUp = form === 'camel' ? 8 * u : form === 'lion' ? 2 * u : form === 'deer' ? 6 * u : form === 'goat' || form === 'drake' ? 3 * u : form === 'dragon' ? 5 * u : form === 'griffin' ? 3 * u : reptile ? 0 : 1.5 * u;
   const hx = cx + rx * 0.85 + (o.open ? u : 0);
-  const hy = by - ry * 0.4 - neckUp + (form === 'boar' || form === 'mammoth' ? ry * 0.4 : 0) + (o.anim === 'attack' ? o.raise * -u : 0);
-  if (neckUp > u) limb(p, cx + rx * 0.6, by - ry * 0.3, hx, hy, P[1], 3 * u);
+  const hy = by - ry * 0.4 - neckUp + (form === 'boar' || form === 'mammoth' || form === 'rhino' || form === 'yak' ? ry * 0.4 : 0) + (o.anim === 'attack' ? o.raise * -u : 0);
+  if (neckUp > u) limb(p, cx + rx * 0.6, by - ry * 0.3, hx, hy, P[1], (form === 'camel' ? 2.2 : 3) * u);
+  if (form === 'lion') {
+    // 鬃毛：头后面一大圈蓬松的毛，用点缀色，越往外越暗
+    const mane = shades(A[2]);
+    blob(c, hx - u, hy + u, 6.5 * u, 6 * u, mane, 10);
+    for (let k = 0; k < 10; k++) {
+      const a = (k / 10) * TAU + o.t * 0.6;
+      p.set(hx - u + Math.cos(a) * 6.8 * u, hy + u + Math.sin(a) * 6.3 * u, mane[0]);
+    }
+  }
   const [hr, hh] = cfg.head;
   blob(c, hx, hy, hr * u, hh * u, P, 4);
   const sx = hx + hr * u * 0.7;
@@ -253,7 +310,22 @@ function beast(c: Ctx) {
     fillPoly(p, [[hx - u, top + u], [hx, top - e * u], [hx + 1.5 * u, top + u]], P[1]);
     fillPoly(p, [[hx - 2.5 * u, top + u], [hx - 2 * u, top - e * u + u], [hx - 0.5 * u, top + u]], P[0]);
   }
-  if (form === 'bear' || form === 'boar' || form === 'mammoth') ell(p, hx - hr * u * 0.4, top + u, 1.5 * u, 1.5 * u, P[0]);
+  if (form === 'bear' || form === 'boar' || form === 'mammoth' || form === 'lion' || form === 'hyena' || form === 'camel') ell(p, hx - hr * u * 0.4, top + u, 1.3 * u, 1.3 * u, P[0]);
+  if (form === 'panther') {
+    fillPoly(p, [[hx - u, top + u], [hx - 0.5 * u, top - 2 * u], [hx + u, top + u]], P[1]);
+  }
+  if (form === 'rhino') {
+    // 鼻角一大一小，攻击时往前顶
+    const hornX = sx + cfg.snout * u * 0.6 + o.open * u;
+    fillPoly(p, [[hornX - 1.5 * u, hy - u], [hornX + 1.5 * u, hy - 7 * u], [hornX + 1.5 * u, hy - u]], A[3]);
+    fillPoly(p, [[hornX - 3.5 * u, hy - 2 * u], [hornX - 2.5 * u, hy - 5 * u], [hornX - 1.5 * u, hy - 2 * u]], A[2]);
+  }
+  if (form === 'yak') {
+    // 牦牛角：向两边弯再朝上
+    limb(p, hx - u, top + u, hx - 4 * u, top - u, A[3], 1.5 * u);
+    limb(p, hx - 4 * u, top - u, hx - 4 * u, top - 4 * u, A[3], u);
+    limb(p, hx + u, top + u, hx + 3 * u, top - 2 * u, A[2], 1.2 * u);
+  }
   if (form === 'boar' || form === 'mammoth') {
     limb(p, sx + u, hy + hh * u * 0.5, sx + 3 * u, hy - (form === 'mammoth' ? -2 : 1) * u, '#f0ece0', form === 'mammoth' ? 2 * u : u);
   }
@@ -414,6 +486,7 @@ function sparks(c: Ctx, x: number, y: number, n: number, pal: string[]) {
 
 function slime(c: Ctx) {
   const { p, u, g, o, P, A } = c;
+  if (c.form === 'jellyfish') return jellyfish(c);
   const sq = o.anim === 'death' ? o.squash * 0.7 : o.squash;
   const jump = o.moving ? Math.round(Math.sin(o.phase) * 2 * u) : 0;
   const stretch = o.anim === 'attack' ? o.open * 3 * u : 0;
@@ -433,6 +506,40 @@ function slime(c: Ctx) {
     const top = cy - ry - u;
     fillPoly(p, [[cx - 4 * u, top + 2 * u], [cx - 4 * u, top - 2 * u], [cx - 2 * u, top], [cx, top - 3 * u], [cx + 2 * u, top], [cx + 4 * u, top - 2 * u], [cx + 4 * u, top + 2 * u]], '#f0c040');
   }
+}
+
+/** 水母：半透明的伞盖一张一缩地漂着，下面一串飘动的触手 */
+function jellyfish(c: Ctx) {
+  const { p, u, g, o, P, A } = c;
+  const pulse = o.anim === 'move' ? Math.sin(o.phase) : Math.sin(o.t * TAU);
+  const cx = c.S / 2 + o.lean;
+  const cy = g - 13 * u + pulse * u + o.bob + (o.anim === 'death' ? o.t * 6 * u : 0);
+  const rx = (6 + pulse * 0.8) * u * (o.anim === 'attack' ? 1 + o.open * 0.2 : 1);
+  const ry = (4.5 - pulse * 0.6) * u * o.squash;
+  // 触手：每根是一串点，越往下越淡
+  for (let k = 0; k < 6; k++) {
+    const bx = cx - rx * 0.8 + (k * rx * 1.6) / 5;
+    const len = (8 + (k % 3) * 2) * u + (o.anim === 'attack' ? o.open * 4 * u : 0);
+    for (let j = 0; j < len; j += u) {
+      const wave = Math.sin(j / (2.5 * u) + o.t * TAU + k) * 1.2 * u;
+      p.set(bx + wave, cy + ry * 0.5 + j, j > len * 0.6 ? A[1] : k % 2 ? A[2] : P[1]);
+    }
+  }
+  // 伞盖：上半椭圆，边缘一圈波浪裙边
+  for (let y = Math.floor(cy - ry); y <= cy + ry * 0.4; y++) {
+    for (let x = Math.floor(cx - rx); x <= cx + rx; x++) {
+      const dx = (x + 0.5 - cx) / rx;
+      const dy = (y + 0.5 - cy) / ry;
+      if (dx * dx + dy * dy > 1) continue;
+      const lit = -dx * 0.5 - dy * 0.8;
+      p.set(x, y, lit > 0.6 ? P[3] : lit > 0 ? P[2] : P[1]);
+    }
+  }
+  for (let x = Math.floor(cx - rx); x <= cx + rx; x += u) p.set(x, cy + ry * 0.4 + (Math.floor(x / u) % 2) * u, A[2]);
+  // 里面的发光内核
+  ell(p, cx, cy - ry * 0.1, rx * 0.35, ry * 0.35, A[3]);
+  p.set(cx - rx * 0.45, cy - ry * 0.55, '#ffffff');
+  eye(c, cx + rx * 0.3, cy - ry * 0.05);
 }
 
 // ---- 虫类 ----
@@ -863,6 +970,38 @@ function plant(c: Ctx) {
     ell(p, cx + sway, top - 6 * u, 1.5 * u, 1.5 * u, A[2]);
     return;
   }
+  if (form === 'cactoid') {
+    // 仙人掌怪：圆柱身子，两只手臂向上弯，满身小刺，头顶开一朵花
+    const top = g - 15 * u * o.squash + o.bob + (o.moving ? -Math.round(Math.abs(Math.sin(o.phase)) * 1.5 * u) : 0);
+    for (const s of [Math.PI, 0]) {
+      const sw = o.moving ? Math.sin(o.phase + s) * 1.5 * u : 0;
+      limb(p, cx + (s ? -2 : 2) * u, g - 3 * u, cx + (s ? -2.5 : 2.5) * u + sw, g, P[0], 2 * u);
+    }
+    const w = 4.5 * u;
+    for (let y = top; y <= g - 2 * u; y++) {
+      const round = y < top + 3 * u ? Math.sqrt(1 - ((top + 3 * u - y) / (3 * u)) ** 2) : 1;
+      for (let x = Math.round(cx - w * round); x <= Math.round(cx + w * round); x++) {
+        const s2 = (x - cx) / w;
+        // 竖棱
+        const rib = Math.abs(Math.round((x - cx) / (1.5 * u))) % 2 === 1;
+        p.set(x, y, s2 < -0.5 ? P[3] : s2 > 0.5 ? P[0] : rib ? P[1] : P[2]);
+      }
+    }
+    const armA = o.anim === 'attack' ? o.raise * 3 * u - o.open * 2 * u : Math.sin(o.t * TAU) * u;
+    for (const d of [-1, 1]) {
+      const ax = cx + d * w;
+      const ay = top + 7 * u;
+      limb(p, ax, ay, ax + d * 3 * u, ay, P[1], 2.4 * u);
+      limb(p, ax + d * 3 * u, ay, ax + d * 3.5 * u + (d > 0 ? armA : 0), ay - 5 * u - (d > 0 ? armA : 0), P[d > 0 ? 1 : 2], 2.2 * u);
+    }
+    for (let k = 0; k < 14; k++) p.paint(cx - w + phash(k, 1, 31) * w * 2, top + phash(k, 2, 31) * 13 * u, '#f8f4d8');
+    eye(c, cx + u, top + 4 * u);
+    eye(c, cx + 3 * u, top + 4 * u);
+    if (o.open > 0.3) ell(p, cx + 2 * u, top + 7 * u, u, u * (0.5 + o.open), '#3a0a10');
+    for (let k = 0; k < 5; k++) ell(p, cx + Math.cos((k / 5) * TAU) * 1.6 * u, top - u + Math.sin((k / 5) * TAU) * 1.2 * u, u, u, A[2]);
+    ell(p, cx, top - u, 0.8 * u, 0.8 * u, A[3]);
+    return;
+  }
   // 缠藤：从地里伸出的花茎，花冠是一张大嘴
   const sway = Math.sin(o.t * TAU) * 2 * u;
   const lunge = o.anim === 'attack' ? o.open * 5 * u - o.raise * 2 * u : 0;
@@ -945,7 +1084,7 @@ function draw(c: Ctx) {
   switch (c.form) {
     case 'rabbit': case 'rat': case 'hen': case 'frog': return small(c);
     case 'hawk': case 'phoenix': case 'bat': return flyer(c);
-    case 'slime': return slime(c);
+    case 'slime': case 'jellyfish': return slime(c);
     case 'spider': case 'beetle': case 'scorpion': case 'ant': case 'mantis': case 'wasp': return insect(c);
     case 'crab': return crab(c);
     case 'snake': case 'eel': case 'worm': return serpent(c);
@@ -956,7 +1095,7 @@ function draw(c: Ctx) {
       return humanoid(c);
     case 'ghost': case 'banshee': return ghost(c);
     case 'wisp': return wisp(c);
-    case 'treant': case 'mushroom': case 'mandrake': case 'vine': return plant(c);
+    case 'treant': case 'mushroom': case 'mandrake': case 'vine': case 'cactoid': return plant(c);
     case 'eye': return eyeball(c);
     default: return beast(c);
   }
