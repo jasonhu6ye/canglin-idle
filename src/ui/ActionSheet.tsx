@@ -13,23 +13,46 @@ import { Icon, SkillIcon } from './icons';
 const COUNTS = [10, 50, 100, 500];
 const TIMES = [10, 30, 60, 240];
 const THRESHOLDS = [0.25, 0.5, 0.75];
-/** 列表默认只显示已解锁的和接下来几个，避免铁匠铺一屏几十项 */
-const PREVIEW_LOCKED = 3;
+/** 配方分类（用户 10-23：用分类和阶级筛选代替「点击展开更多」） */
+const CATS = ['武器', '护甲', '首饰', '工具', '弹药', '锭', '板材·皮革·布料', '料理', '药水', '强化石', '其他'] as const;
+function catOf(a: ActionDef): (typeof CATS)[number] {
+  if (a.kind !== 'skill') return '其他';
+  const id = a.outputs[0]?.item ?? '';
+  const it = ITEMS[id];
+  if (!it) return '其他';
+  const slot = it.equip?.slot;
+  if (slot === 'weapon') return '武器';
+  if (slot === 'head' || slot === 'body' || slot === 'feet' || slot === 'hands') return '护甲';
+  if (slot === 'ring' || slot === 'neck') return '首饰';
+  if (it.category === 'tool') return '工具';
+  if (it.ammo || id.includes('arrowhead')) return '弹药';
+  if (id.endsWith('_bar')) return '锭';
+  if (/^(plank|leather|cloth)_\d$/.test(id)) return '板材·皮革·布料';
+  if (it.category === 'food') return '料理';
+  if (it.category === 'potion') return '药水';
+  if (id.startsWith('enh_')) return '强化石';
+  return '其他';
+}
+const tierOf = (a: ActionDef) => (a.kind === 'skill' ? ITEMS[a.outputs[0]?.item]?.tier : undefined);
 
 const isLocked = (s: GameState, a: ActionDef) => a.kind === 'skill' && level(s, a.skill) < a.level;
 
 export function ActionSheet({ s, nodeId, onClose }: { s: GameState; nodeId: string; onClose: () => void }) {
   const node = NODES.find((n) => n.id === nodeId)!;
   const [selected, setSelected] = useState<string | null>(null);
-  const [showAll, setShowAll] = useState(false);
+  const [cat, setCat] = useState<string>('all');
+  const [tier, setTier] = useState<number | 'all'>('all');
   // 野外的怪物不在点位页面里列出，直接点地图上的怪物（用户 10-22 要求）；城镇的训练假人保留
   const all = node.town ? node.actions : node.actions.filter((id) => ACTIONS[id].kind !== 'combat');
   const unlocked = all.filter((id) => !isLocked(s, ACTIONS[id]));
   const locked = all.filter((id) => isLocked(s, ACTIONS[id]));
   // 已解锁的按等级从高到低（最好的在上面），未解锁的按等级从低到高
   const byLevel = (a: string, b: string) => ACTIONS[a].level - ACTIONS[b].level;
-  const shown = showAll ? all : [...unlocked.sort(byLevel).reverse(), ...locked.sort(byLevel).slice(0, PREVIEW_LOCKED)];
-  const hidden = all.length - shown.length;
+  const cats = CATS.filter((c) => all.some((id) => catOf(ACTIONS[id]) === c));
+  const inCat = (id: string) => cat === 'all' || catOf(ACTIONS[id]) === cat;
+  const tiers = [...new Set(all.filter(inCat).map((id) => tierOf(ACTIONS[id])).filter((t): t is number => t !== undefined))].sort((a, b) => a - b);
+  const pass = (id: string) => inCat(id) && (tier === 'all' || tierOf(ACTIONS[id]) === tier);
+  const shown = [...unlocked.filter(pass).sort(byLevel).reverse(), ...locked.filter(pass).sort(byLevel)];
 
   return (
     <div className="sheet">
@@ -38,6 +61,22 @@ export function ActionSheet({ s, nodeId, onClose }: { s: GameState; nodeId: stri
         <h2>{node.name}</h2>
         <small className="muted">{REGIONS[node.region].name}{!node.town && !node.cave && ` · Lv${node.lv[0]}-${node.lv[1]}`}</small>
       </div>
+      {cats.length > 1 && (
+        <div className="chips-row filter-row">
+          <button className={`pill ${cat === 'all' ? 'on' : ''}`} onClick={() => { setCat('all'); setTier('all'); }}>全部 {all.length}</button>
+          {cats.map((c) => (
+            <button key={c} className={`pill ${cat === c ? 'on' : ''}`} onClick={() => { setCat(c); setTier('all'); }}>
+              {c} {all.filter((id) => catOf(ACTIONS[id]) === c).length}
+            </button>
+          ))}
+        </div>
+      )}
+      {tiers.length > 1 && (
+        <div className="chips-row filter-row">
+          <button className={`pill ${tier === 'all' ? 'on' : ''}`} onClick={() => setTier('all')}>全部阶级</button>
+          {tiers.map((t) => <button key={t} className={`pill ${tier === t ? 'on' : ''}`} onClick={() => setTier(t)}>{tierName(t)}</button>)}
+        </div>
+      )}
       <ul className="action-list">
         {shown.map((id) => {
           const a = ACTIONS[id];
@@ -71,7 +110,6 @@ export function ActionSheet({ s, nodeId, onClose }: { s: GameState; nodeId: stri
             </li>
           );
         })}
-        {hidden > 0 && <li className="more" onClick={() => setShowAll(true)}>还有 {hidden} 项更高等级的，点击展开</li>}
       </ul>
 
       {node.sprite === 'market' && <SeedShop s={s} />}

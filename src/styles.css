@@ -401,3 +401,7 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .skill-detail .walk-to { width: 100%; padding: 9px; margin: 4px 0 2px; }
 .chip.quest .fold { margin-left: 0; background: none; border: 0; box-shadow: none; color: #e8b84a; padding: 0 4px 0 0; min-height: 0; font-size: 12px; cursor: pointer; }
 .chip.quest.folded { gap: 2px; }
+
+/* 制作页面的分类、阶级筛选 */
+.sheet .filter-row { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 10px 0; }
+.sheet .filter-row .pill { padding: 3px 8px; font-size: 12px; min-height: 26px; }
