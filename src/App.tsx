@@ -242,7 +242,10 @@ export function App() {
         <GameCanvas onNodeClick={openNode} />
         <div className={`region-tint ${region}`} />
         <div className="hud">
-          <QueuePanel s={s} />
+          <div className="top-left">
+            <QueuePanel s={s} />
+            <BuffBar s={s} region={region} />
+              </div>
           <StatusChips s={s} extra={<QuestCard s={s} onGo={openNode} />} log={combatLog ? <CombatLog onClose={() => setCombatLog(false)} /> : null} />
           <MapButtons s={s} onWorldMap={() => setWorldMap(true)} />
         </div>
@@ -250,7 +253,6 @@ export function App() {
         {banner && <div key={banner.key} className="region-banner">{REGIONS[banner.region].name}</div>}
         {boss && <div key={`b${boss.key}`} className="boss-banner"><small>首领</small>{boss.name}</div>}
         <DayClock region={region} />
-        <BuffBar s={s} region={region} />
         <div className="toasts">
           {toasts.map((t) => <div key={t.id} className={`toast ${t.gold ? 'gold' : ''}`}>{t.text}</div>)}
         </div>

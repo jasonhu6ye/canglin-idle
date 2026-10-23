@@ -227,6 +227,8 @@ export function CharacterPanel({ s }: { s: GameState }) {
   );
 }
 
+const WIDE = () => typeof matchMedia !== 'undefined' && matchMedia('(min-width: 900px)').matches;
+
 /**
  * 人物属性（用户 10-23）：战斗属性逐项写出来自哪里（等级、装备、弹药、料理），
  * 再列各项速度加成、坐骑、天气和增益。
@@ -249,9 +251,25 @@ function Attributes({ s }: { s: GameState }) {
   const row = (name: string, value: ReactNode, from: ReactNode) => (
     <li key={name}><span>{name}</span><b>{value}</b><small className="muted">{from}</small></li>
   );
+  // 手机端默认收起，点标题展开（用户 10-23）；电脑端一直展开
+  const [open, setOpen] = useState(() => {
+    if (WIDE()) return true;
+    try { return localStorage.getItem('canglin-attr-open') === '1'; } catch { return false; }
+  });
+  const toggle = () => {
+    setOpen(!open);
+    try { localStorage.setItem('canglin-attr-open', open ? '0' : '1'); } catch { /* 存不了就算了 */ }
+  };
+  if (!open) {
+    return (
+      <h2 className="fold-h" onClick={toggle}>属性 <small className="muted">生命 {s.hp}/{maxHp(s)} · 最高伤害 {maxHit} · 防御 +{b.defence} · 展开 ▸</small></h2>
+    );
+  }
   return (
     <>
-      <h2>属性 <small className="muted">数值来自等级、装备、弹药和料理增益</small></h2>
+      {WIDE()
+        ? <h2>属性 <small className="muted">数值来自等级、装备、弹药和料理增益</small></h2>
+        : <h2 className="fold-h" onClick={toggle}>属性 <small className="muted">收起 ▾</small></h2>}
       <ul className="attr-list">
         {row('生命', `${s.hp}/${maxHp(s)}`, `生命等级 ${level(s, 'hitpoints')} ×10`)}
         {row('战斗方式', STYLE_NAME[style], weapon ? ITEMS[s.equipment.weapon!].name : '空手')}

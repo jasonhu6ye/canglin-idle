@@ -86,7 +86,8 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 /* ---- 地图上的浮层 ---- */
 .hud { position: absolute; inset: 0; pointer-events: none; }
 .hud > * { pointer-events: auto; }
-.queue { position: absolute; top: 8px; left: 8px; max-width: 70%; font-size: 12px; }
+.top-left { position: absolute; top: 8px; left: 8px; max-width: 70%; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.queue { font-size: 12px; }
 .queue.idle { color: var(--muted); }
 .queue-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .queue-row em { color: var(--muted); font-style: normal; }
@@ -284,7 +285,7 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
   .app.collapsed .tabbar .fold-btn { order: -1; }
   .app.collapsed .tabbar button img { width: 24px; height: 24px; }
   .app.collapsed .tabbar button { font-size: 12px; padding: 10px 0; }
-  .queue { max-width: 380px; }
+  .top-left { max-width: 380px; }
   .chips { width: 380px; }
   /* 背包、仓库格子更密 */
   .grid { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
@@ -546,11 +547,12 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .wm-legend i.stone-mark.off { background: #ff9a2a; }
 
 /* 增益栏：时钟左边 */
-.buff-bar { position: absolute; top: 10px; right: 92px; z-index: 3; display: flex; gap: 4px; flex-direction: row-reverse; }
+.buff-bar { position: relative; z-index: 3; display: flex; flex-wrap: wrap; gap: 4px; pointer-events: auto; }
 .buff-ico { width: 30px; padding: 2px 0 1px; display: flex; flex-direction: column; align-items: center; gap: 1px; background: #1b120ce0; border: 2px solid; border-radius: 3px; box-shadow: 0 0 0 1px #000; cursor: pointer; }
 .buff-ico img { width: 18px; height: 18px; image-rendering: pixelated; }
 .buff-ico small { font-size: 9px; line-height: 1; color: #fff3c4; font-variant-numeric: tabular-nums; }
 .buff-ico.dim { opacity: 0.55; }
 .buff-ico.on { box-shadow: 0 0 0 1px #000, 0 0 8px var(--gold); }
-.buff-tip { position: absolute; top: 44px; right: 0; width: 200px; padding: 6px 8px; display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
-@media (max-width: 899px) { .buff-bar { right: 6px; top: 84px; } .buff-ico { width: 27px; } .buff-ico img { width: 16px; height: 16px; } .buff-tip { top: 40px; } .toasts { top: 126px; } }
+.buff-tip { position: absolute; top: calc(100% + 4px); left: 0; width: 220px; padding: 6px 8px; display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+@media (max-width: 899px) { .buff-ico { width: 27px; } .buff-ico img { width: 16px; height: 16px; } }
+.fold-h { cursor: pointer; user-select: none; }
