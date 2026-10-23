@@ -103,11 +103,11 @@ function ik(hx: number, hy: number, fx: number, fy: number, L1: number, L2: numb
 }
 
 /** 前腿：肩 → 肘（往后凸）→ 腕 → 爪；fold 0-1 是抬脚时腕关节往后折的程度 */
-function foreLeg(p: Pix, sx: number, sy: number, px: number, py: number, fold: number, dim: number) {
+function foreLeg(p: Pix, sx: number, sy: number, px: number, py: number, fold: number, dim: number, lowerOnly = false) {
   const vx = 1 + (-3.4 - 1) * fold;
   const vy = 3.6 + (1.0 - 3.6) * fold;
   const [ex, ey, cx, cy] = ik(sx, sy, px - vx, py - vy, 9, 8.5, false);
-  limb(p, sx, sy, ex, ey, 3.4, 2.4, FUR, dim);
+  if (!lowerOnly) limb(p, sx, sy, ex, ey, 3.4, 2.4, FUR, dim);
   limb(p, ex, ey, cx, cy, 2.4, 1.9, FUR, dim);
   limb(p, cx, cy, cx + vx, cy + vy, 1.9, 1.7, FUR, dim);
   paw(p, cx + vx, cy + vy, 1, FUR, dim);
@@ -123,6 +123,20 @@ function hindLeg(p: Pix, hx: number, hy: number, px: number, py: number, push: n
   limb(p, kx, ky, jx, jy, 2.6, 1.9, FUR, dim);
   limb(p, jx, jy, jx + vx, jy + vy, 1.9, 1.6, FUR, dim);
   paw(p, jx + vx, jy + vy, 1, FUR, dim);
+}
+
+/** 把一条腿单独画好、描一圈深色边再盖上去，和同样黑的身体分得开；minY 以上（贴着身体的根部）不描边，免得接缝处一道黑线 */
+function stamp(dst: Pix, minY: number, draw: (p: Pix) => void) {
+  const tmp = new Pix(dst.w, dst.h);
+  draw(tmp);
+  const body = tmp.data.slice();
+  tmp.outlineTinted('#050407', 0.75);
+  for (let i = 0; i < tmp.data.length; i++) {
+    const c = tmp.data[i];
+    if (!c) continue;
+    if (!body[i] && Math.floor(i / dst.w) < minY) continue;
+    dst.data[i] = c;
+  }
 }
 
 /** 周期插值：keys 首尾相接 */
@@ -275,9 +289,9 @@ function drawSide(back: Pix, front: Pix, P: SidePose) {
     furBall(back, hipX + 2, hipY + 3, 5, 5, FUR, 5, 1);
   } else if (F) {
     const [fx, fy] = foot(1, true);
-    foreLeg(back, shX - 2, shY + 3, fx - 2, fy, F[1].fold, 1);
+    foreLeg(back, shX - 2, shY + 3, fx - 2, fy, F[1].fold, 2);
     const [hx, hy] = foot(3, false);
-    hindLeg(back, hipX + 1, hipY + 2, hx - 1, hy, F[3].fold, 1);
+    hindLeg(back, hipX + 1, hipY + 2, hx - 1, hy, F[3].fold, 2);
   } else {
     leg(back, shX - 2, shY + 3, P.legs[1], P.bends[1], 8.5, false, 1);
     leg(back, hipX + 1, hipY + 2, P.legs[3], P.bends[3], 8.5, true, 1);
@@ -301,9 +315,9 @@ function drawSide(back: Pix, front: Pix, P: SidePose) {
     leg(front, shX + 1, shY + 3, 0.08, 0.05, 8.5, false, 0);
   } else if (F) {
     const [hx, hy] = foot(2, false);
-    hindLeg(front, hipX + 3, hipY + 3, hx + 1, hy, F[2].fold, 0);
+    stamp(front, hipY + 7, (q) => hindLeg(q, hipX + 3, hipY + 3, hx + 1, hy, F[2].fold, -1));
     const [fx, fy] = foot(0, true);
-    foreLeg(front, shX + 1, shY + 3, fx + 1, fy, F[0].fold, 0);
+    stamp(front, shY + 7, (q) => foreLeg(q, shX + 1, shY + 3, fx + 1, fy, F[0].fold, -1));
   } else {
     leg(front, hipX + 3, hipY + 3, P.legs[2], P.bends[2], 8.5, true, 0);
     front.line(hipX + 3 + Math.sin(P.legs[2]) * 6, hipY + 9, hipX + 5 + Math.sin(P.legs[2]) * 6, hipY + 12, SCAR);
@@ -314,51 +328,72 @@ function drawSide(back: Pix, front: Pix, P: SidePose) {
   furBall(front, nx, ny + 2, 8, 9, MANE, 51, 0, 0.45);
   maneSpikes(front, nx, ny + 2, 7, 8, Math.PI * 0.55, Math.PI * 1.75, 9, 5 + P.wind, -0.25 - P.wind * 0.12, 3);
   maneSpikes(front, nx + 2, ny + 6, 5, 6, Math.PI * 0.1, Math.PI * 0.6, 4, 3.5, 0.1, 9);
+  // 近侧前腿的小臂画在鬃毛前面，跑起来看得清
+  if (F && sit <= 0.5) {
+    const [fx, fy] = foot(0, true);
+    stamp(front, shY + 7, (q) => foreLeg(q, shX + 1, shY + 3, fx + 1, fy, F[0].fold, -1, true));
+  }
   // 头
   sideHead(front, shX + 10, shY - 9 - P.headUp, P);
 }
 
 /*
- * 奔跑步态（狼的旋转式跑法，一个周期 = 一步）：
- * 远后腿 → 近后腿 → 近前腿 → 远前腿 依次落地，每只脚着地约 1/3 周期，前腿离地后全身腾空一小段。
- * 着地的爪子匀速往后划（和地面一起动，不打滑），离地后抬起、折腿、往前甩。
- * 后腿着地时身体收拢、前身抬起；前腿着地时身体伸展、前身压低；腾空时最高。
+ * 奔跑步态（犬科的跑法，一个周期 = 一步，参考连续摄影里狗和狼奔跑的分解动作）：
+ *   0.00 前腿伸直往前够，落地（远前、近前一前一后）
+ *   0.15 前腿在胸下撑住往后推，身体压低，后腿离地后往前收
+ *   0.40 收拢腾空：前腿往后折到肚子下，后腿伸到前腿前面，背拱起来
+ *   0.45 后腿在身体前面落地（远后、近后一前一后）
+ *   0.65 后腿往后蹬，前身抬起，前腿折着往前甩
+ *   0.90 伸展腾空：前腿往前伸直，后腿往后蹬直，身体拉到最长
+ * 着地的爪子匀速往后划（跟着地面走，不打滑）。
  */
 const RUN = {
   /** 每只脚落地的时刻：近前、远前、近后、远后 */
-  touch: [0.42, 0.52, 0.12, 0.02],
-  duty: 0.34,
-  /** 着地时爪子从 +reach 划到 -reach */
-  reach: [8, 8, 7, 7],
-  lift: [8, 8, 6, 6],
+  touch: [0.07, 0.0, 0.52, 0.45],
+  duty: 0.26,
+  /** 着地时爪子从 +reach 划到 -reach（相对肩、臀的静止位置） */
+  reach: [9, 9, 9, 9],
 };
 
-/** 身体起伏（正数往下）：着地中段最低，腾空最高 */
-const runBob = (t: number) => 1.5 * Math.cos(TAU * (t - 0.45)) + 0.4 * Math.cos(TAU * 2 * (t - 0.22));
+/** 身体起伏（正数往下）：两次着地中段最低，两次腾空最高 */
+const runBob = (t: number) => 1.4 * Math.cos(TAU * 2 * (t - 0.18));
+/** 俯仰（正数前高）：前腿着地时前身低，后腿蹬地时前身高 */
+const runPitch = (t: number) => -1.0 * Math.cos(TAU * (t - 0.16));
+/** 身体伸缩：伸展腾空时最长，收拢腾空时最短 */
+const runStretch = (t: number) => 4 * Math.cos(TAU * (t - 0.92));
 
 function runFoot(t: number, k: number) {
   const u = (((t - RUN.touch[k]) % 1) + 1) % 1;
   const r = RUN.reach[k];
+  const front = k < 2;
   if (u < RUN.duty) {
     const a = u / RUN.duty;
-    // 蹬地的后半段脚掌往后翻
-    return { dx: r - 2 * r * a, up: 0, fold: k >= 2 ? Math.max(0, a - 0.6) * 1.5 : 0 };
+    // 后腿蹬地的后半段脚掌往后翻
+    return { dx: r - 2 * r * a, up: 0, fold: front ? 0 : Math.max(0, a - 0.55) * 1.6 };
   }
   const a = (u - RUN.duty) / (1 - RUN.duty);
-  const e = a * a * (3 - 2 * a);
-  const front = k < 2;
-  // 前腿离地先往后上方折起再往前伸；后腿贴着肚子往前收
-  const up = RUN.lift[k] * Math.pow(Math.sin(Math.PI * (front ? Math.min(1, a * 1.15) : a)), front ? 0.8 : 1);
-  const fold = front ? Math.sin(Math.PI * Math.min(1, a * 1.4)) : Math.max(0, 0.6 - a) * 1.2;
-  return { dx: -r + 2 * r * e - (front ? Math.sin(Math.PI * a) * 2 : 0), up, fold: Math.min(1, fold) };
+  if (front) {
+    // 前腿：离地先往后上方折起（爪子翻到肘下），再往前甩，最后伸直往前够着落地
+    return {
+      dx: loopKeys([[0, -r], [0.2, -r - 1], [0.6, 0], [0.86, r + 2], [1, r]], a),
+      up: loopKeys([[0, 0], [0.08, 4.5], [0.22, 7.5], [0.6, 5.5], [0.86, 2.5], [1, 0]], a),
+      fold: loopKeys([[0, 0.2], [0.2, 1], [0.5, 0.85], [0.75, 0], [1, 0]], a),
+    };
+  }
+  // 后腿：离地时往后蹬直，脚掌翻起；再贴着肚子往前收，伸到前面落地
+  return {
+    dx: loopKeys([[0, -r], [0.22, -r - 2], [0.62, r * 0.4], [0.9, r + 1], [1, r]], a),
+    up: loopKeys([[0, 0], [0.1, 3], [0.25, 5], [0.5, 6.5], [0.85, 3], [1, 0]], a),
+    fold: loopKeys([[0, 0.8], [0.22, 1], [0.5, 0.2], [0.8, 0], [1, 0]], a),
+  };
 }
 
 const gallop = (t: number): SidePose => {
   const bob = runBob(t);
-  const pitch = 1.3 * Math.cos(TAU * (t - 0.28));
+  const pitch = runPitch(t);
   return {
     bob, pitch,
-    stretch: 3 * Math.cos(TAU * (t - 0.62)),
+    stretch: runStretch(t),
     legs: [0, 0, 0, 0], bends: [0, 0, 0, 0],
     feet: [0, 1, 2, 3].map((k) => runFoot(t, k)),
     // 头比身体稳：抵消一大半起伏

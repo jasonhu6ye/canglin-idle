@@ -546,7 +546,12 @@ export class MapScene extends Phaser.Scene {
     }
   }
 
+  /** 上一帧镜头中心（画布尺寸变化时保持画面不动） */
+  private camMid = { x: 0, y: 0 };
+
   update(time: number, delta: number) {
+    this.camMid.x = this.cameras.main.midPoint.x;
+    this.camMid.y = this.cameras.main.midPoint.y;
     this.syncMount();
     this.stepRider();
     this.stepKeys(time);
@@ -881,7 +886,16 @@ export class MapScene extends Phaser.Scene {
     const minZoom = () => Math.max(cssWidth() / (70 * T), 0.75) * DPR;
     const fit = () => cam.setZoom(Phaser.Math.Clamp((cssWidth() / (cssWidth() > 700 ? 26 : 15)) / T, 1.5, 4) * DPR);
     fit();
-    this.scale.on('resize', fit);
+    // 电脑端展开、收起右侧面板时画布会变宽变窄：不重新算缩放，镜头直接对准角色，
+    // 否则镜头会先停在原处再慢慢追回角色，看起来弹一下（用户 10-23）
+    let lastW = cssWidth();
+    this.scale.on('resize', () => {
+      const w = cssWidth();
+      if (Math.min(w, lastW) <= 700) fit();
+      lastW = w;
+      if (this.following) cam.centerOn(this.player.x, this.player.y);
+      else cam.centerOn(this.camMid.x, this.camMid.y);
+    });
     cam.startFollow(this.player, false, 0.12, 0.12);
 
     this.input.addPointer(1);
