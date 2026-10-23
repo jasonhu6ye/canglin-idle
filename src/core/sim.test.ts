@@ -208,6 +208,25 @@ describe('背包与战斗方式', () => {
     expect(advance(s, T0 + 500).state.travel).toBeNull();
   });
 
+  it('选了不带食物、不带药水：不回仓库补给，战斗中也不吃', () => {
+    let s = newGame(T0, 9);
+    s.xp.melee = s.xp.defence = s.xp.hitpoints = XP_TABLE[40];
+    s.bank.minnow = 300;
+    s.bag.minnow = 5;
+    s.belt = { potion: { id: 'green_herb_potion', qty: 3 } };
+    s.bank.green_herb_potion = 50;
+    s.settings.carryFood = 0;
+    s.settings.carryPotion = false;
+    s = startNow(s, 'fight_grey_wolf', { type: 'time', ms: 10 * 60_000 });
+    s.loc = standOf(nodeOfAction('fight_grey_wolf')!);
+    expect(advance(s, T0 + 1000).state.travel).toBeNull();
+    const { state, summary } = advance(s, T0 + 10 * 60_000);
+    expect(summary.bankTrips).toBe(0);
+    expect(summary.foodEaten).toBe(0);
+    expect(state.bag.minnow).toBe(5);
+    expect(state.belt?.potion?.qty).toBe(3);
+  });
+
   it('背包 20 格、每格 100 个', () => {
     let s = newGame(T0, 1);
     s.bank.minnow = 5000;

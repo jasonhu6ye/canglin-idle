@@ -157,6 +157,8 @@ export interface Settings {
   eatThreshold: number;
   /** 开始战斗时从仓库带多少份食物进背包，-1 = 全部 */
   carryFood: number;
+  /** false = 战斗不带药水：不补药水栏，也不喝 */
+  carryPotion?: boolean;
   /** 衣橱里选中的外观 */
   skin?: string;
 }

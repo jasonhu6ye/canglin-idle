@@ -196,9 +196,9 @@ export function BagPanel({ s }: { s: GameState }) {
       {items.length > 0 && !atBank(s) && <FarFromBank />}
       <div className="opts">
         <span className="lbl">开战自动从仓库带食物</span>
-        {[20, 50, 100, -1].map((n) => (
+        {[0, 20, 50, 100, -1].map((n) => (
           <button key={n} className={s.settings.carryFood === n ? 'on' : ''} onClick={() => store.dispatch((g) => setSettings(g, { carryFood: n }))}>
-            {n < 0 ? '全部' : n}
+            {n < 0 ? '全部' : n === 0 ? '不带' : n}
           </button>
         ))}
       </div>

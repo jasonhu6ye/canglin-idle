@@ -468,7 +468,9 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   };
   const eatIfNeeded = () => {
     // 血很低先喝药水栏的药水
-    while (s.hp < maxHp(s) * POTION_AT && useBelt('potion'));
+    // 选了「不带药水」「不带食物」：战斗中一口都不吃（用户 10-23）
+    if (s.settings.carryPotion !== false) while (s.hp < maxHp(s) * POTION_AT && useBelt('potion'));
+    if (s.settings.carryFood === 0) return;
     const limit = maxHp(s) * s.settings.eatThreshold;
     while (s.hp < limit) {
       if (useBelt('food')) continue;
@@ -482,7 +484,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
 
   /** 在仓库旁把食物栏、药水栏补满（同一种） */
   const refillBelt = () => {
-    for (const b of Object.values(s.belt ?? {})) {
+    for (const b of beltInUse()) {
       const n = Math.min(s.bank[b.id] ?? 0, BELT_CAP - b.qty);
       if (n <= 0) continue;
       s.bank[b.id] -= n;
@@ -490,10 +492,14 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       b.qty += n;
     }
   };
-  const beltNeeds = () => Object.values(s.belt ?? {}).some((b) => b.qty < BELT_CAP && (s.bank[b.id] ?? 0) > 0);
+  /** 这次要用的栏位：不带食物/药水时对应的栏位不补 */
+  const beltInUse = () => (['food', 'potion'] as const)
+    .filter((k) => (k === 'food' ? s.settings.carryFood !== 0 : s.settings.carryPotion !== false))
+    .map((k) => s.belt?.[k]).filter((b): b is NonNullable<typeof b> => !!b);
+  const beltNeeds = () => beltInUse().some((b) => b.qty < BELT_CAP && (s.bank[b.id] ?? 0) > 0);
 
   const foodTarget = () => (s.settings.carryFood < 0 ? Infinity : s.settings.carryFood);
-  const bagFood = () => Object.entries(s.bag).reduce((n, [id, q]) => n + (healOf(id) ? q : 0), 0) + (s.belt?.food?.qty ?? 0);
+  const bagFood = () => Object.entries(s.bag).reduce((n, [id, q]) => n + (healOf(id) && beltSlotOf(id) !== 'potion' ? q : 0), 0) + (s.belt?.food?.qty ?? 0);
   /** 背包里的食物不够设定数量，仓库里又有：要先回仓库拿 */
   const needSupply = () =>
     beltNeeds() || (bagFood() < foodTarget() && Object.keys(s.bank).some((id) => healOf(id) > 0 && bagRoomFor(s.bag, id) > 0))
@@ -516,7 +522,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   const carryFood = () => {
     const target = foodTarget();
     let have = bagFood();
-    const foods = Object.keys(s.bank).filter((id) => healOf(id)).sort((a, b) => healOf(b) - healOf(a));
+    const foods = Object.keys(s.bank).filter((id) => healOf(id) && (beltSlotOf(id) !== 'potion' || s.settings.carryPotion !== false)).sort((a, b) => healOf(b) - healOf(a));
     for (const id of foods) {
       const n = Math.min(s.bank[id], target - have, bagRoomFor(s.bag, id));
       if (n <= 0) continue;

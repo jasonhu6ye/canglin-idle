@@ -193,12 +193,23 @@ function TaskConfig({ s, action: selected, onDone, far }: { s: GameState; action
           </div>
           <div className="opts">
             <span className="lbl">带食物</span>
-            {[20, 50, 100, -1].map((n) => (
+            {[0, 20, 50, 100, -1].map((n) => (
               <button key={n} className={s.settings.carryFood === n ? 'on' : ''} onClick={() => store.dispatch((g) => setSettings(g, { carryFood: n }))}>
-                {n < 0 ? '全部' : n}
+                {n < 0 ? '全部' : n === 0 ? '不带' : n}
               </button>
             ))}
           </div>
+          <div className="opts">
+            <span className="lbl">带药水</span>
+            {[true, false].map((v) => (
+              <button key={String(v)} className={(s.settings.carryPotion !== false) === v ? 'on' : ''} onClick={() => store.dispatch((g) => setSettings(g, { carryPotion: v }))}>
+                {v ? '带' : '不带'}
+              </button>
+            ))}
+          </div>
+          {(s.settings.carryFood === 0 || s.settings.carryPotion === false) && (
+            <p className="muted small-note">选了「不带」：开打前不回仓库拿，战斗中也不吃不喝。</p>
+          )}
         </>
       )}
       {far && (
