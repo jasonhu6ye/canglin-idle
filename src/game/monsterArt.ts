@@ -1364,15 +1364,15 @@ export function finish(c: Pick<Ctx, 'p' | 'rank' | 'g' | 'S' | 'A'> & { o: Pick<
 }
 
 export function monsterFrameSize(m: MonsterDef) {
-  if (m.world) return WORLD_SIZE;
+  if (m.world || m.event) return WORLD_SIZE;
   return SIZE_PX[sizeOf({ form: m.form as Form, rank: m.rank })];
 }
 
 /** 这种怪有哪些动画：世界首领多一套大招，帧数也多 */
-export const animsOf = (m: MonsterDef): readonly { key: MonAnim; frames: number; rate: number; repeat: number }[] => (m.world ? WORLD_ANIMS : MON_ANIMS);
+export const animsOf = (m: MonsterDef): readonly { key: MonAnim; frames: number; rate: number; repeat: number }[] => (m.world || m.event ? WORLD_ANIMS : MON_ANIMS);
 
 export function drawMonsterFrame(m: MonsterDef, anim: MonAnim, i: number): Pix {
-  if (m.world) return drawWorldFrame(m, anim, i);
+  if (m.world || m.event) return drawWorldFrame(m, anim, i);
   const S = monsterFrameSize(m);
   const n = MON_ANIMS.find((a) => a.key === anim)!.frames;
   const p = new Pix(S, S);

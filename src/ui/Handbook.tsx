@@ -5,6 +5,7 @@ import { FACILITY_NAME, TOWNS } from '../core/towns';
 import { BAG_SLOTS, BELT_CAP, POTION_AT, WORLD_MOVE } from '../core/sim';
 import type { RegionId, SkillId } from '../core/types';
 import { FINE_POINTER } from './itemOpen';
+import { HW_TIERS } from '../core/halloween';
 
 /*
  * 攻略手册（用户 10-24：所有系统都要有教程和攻略文章，新人要看得懂）。
@@ -212,6 +213,15 @@ const ARTICLES: Article[] = [
         <Tip>战斗等级最好比世界首领高 10 级以上，带满食物和药水，穿整套同阶护甲（板甲减伤最稳）。开打前看一眼战前评估，掉血太快就先回去练。</Tip>
       </>;
     },
+  },
+  {
+    id: 'halloween', cat: '装备与战斗', title: '万圣节活动：南瓜王',
+    body: () => <>
+      <P>活动到 11 月 1 日结束。苍岭城东门外有一座万圣节活动祭坛，点它选难度召唤南瓜王，每小时能召唤一次。召唤后角色会自己走到祭坛开打，打赢一次南瓜王就离开。</P>
+      <ul className="hb-list">{HW_TIERS.map((h) => <li key={h.lv}><b>{h.name}</b>：Lv{h.lv}，打赢给 {h.boxes} 个南瓜礼盒</li>)}</ul>
+      <P>南瓜礼盒在背包里打开，得 8-15 南瓜积分和一些金币，积分直接存进仓库。积分在活动结束前用来兑换限定物品（兑换商店后续开放）。</P>
+      <Tip>选难度时看一眼每档的评估。没打赢也不用重新召唤，回祭坛点「前往挑战」接着打。</Tip>
+    </>,
   },
   {
     id: 'skills', cat: '生产', title: '全部技能',

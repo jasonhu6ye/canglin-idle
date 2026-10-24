@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { ACTIONS, ITEMS, MONSTERS, nodeOfAction, NODES, SKILLS } from '../core/data';
 import { QUESTS, questProgress, questText } from '../core/quests';
-import { actionDuration, combatLevel, dismissStop, enqueue, rainBonus, isBankId, level, maxHp, removeTask, resumeWork, toggleMount, weaponStyle } from '../core/sim';
+import { actionDuration, beltSlotOf, combatEstimate, combatLevel, dismissStop, enqueue, rainBonus, isBankId, level, maxHp, removeTask, resumeWork, toggleMount, weaponStyle } from '../core/sim';
 import { jumpTo, producerOf } from './ActionSheet';
 import { openNodeSheet } from './itemOpen';
 import { wolfIconUrl } from '../game/wolfArt';
@@ -55,7 +55,7 @@ export function BossBar({ s }: { s: GameState }) {
   const pct = (hp / m.hp) * 100;
   return (
     <div className="boss-bar">
-      <div className="name"><small>首领</small>{m.name}<span>Lv{m.level}</span></div>
+      <div className="name"><small>{m.event ? '万圣节限定' : m.world ? '世界首领' : '首领'}</small>{m.name}<span>Lv{m.level}</span></div>
       <div className="track"><i className="trail" style={{ width: `${pct}%` }} /><i className="fill" style={{ width: `${pct}%` }} />
       <div className="num">{s.combat.respawnMs > 0 ? `重新出现中… ${Math.ceil(s.combat.respawnMs / 1000)} 秒` : `${Math.ceil(hp)} / ${m.hp}`}</div></div>
     </div>
@@ -91,6 +91,7 @@ export function stopText(reason: TaskEndReason, action: string, item?: string): 
     case 'level': return `${name}停了：${a?.kind === 'skill' ? `${SKILLS[a.skill].name}要 ${a.level} 级` : '等级不够'}`;
     case 'death': return `${name}停了：连续阵亡 3 次。换更好的装备、食物栏放上食物，或者换只弱一点的怪`;
     case 'noAmmo': return `${name}停了：弹药用完了，背包和仓库都没有`;
+    case 'summon': return `${name}停了：南瓜王不在，要先去万圣节活动祭坛召唤`;
     default: return `${name}做完了，队列空了，角色在发呆`;
   }
 }
@@ -149,11 +150,25 @@ export function StatusChips({ s, extra, log }: { s: GameState; extra?: ReactNode
     const m = MONSTERS[a.monster];
     const hp = s.combat?.monsterHp ?? m.hp;
     const style = weaponStyle(s);
+    const respawn = s.combat?.respawnMs ?? 0;
+    const max = maxHp(s);
+    const me = Math.max(0, s.hp) / max;
+    // 背包和食物栏里还剩多少能吃的
+    const food = Object.entries(s.bag).reduce((n, [id, q]) => n + (ITEMS[id]?.heals && beltSlotOf(id) === 'food' ? q : 0), 0) + (s.belt?.food?.qty ?? 0);
+    const est = combatEstimate(s, m);
     body = (
       <>
         <SkillIcon skill={style} size={14} /> <b style={{ color: SKILLS[style].color }}>{SKILLS[style].name}</b> · {m.name}
-        <span className="bar wide foe"><i style={{ width: `${(hp / m.hp) * 100}%` }} /></span>
-        {s.combat?.respawnMs ? <em>刷新中</em> : <em>{hp}/{m.hp}</em>}
+        <span className="bar wide foe"><i style={{ width: `${respawn ? 0 : (Math.max(0, hp) / m.hp) * 100}%` }} /></span>
+        {respawn ? <em>下一只 {Math.ceil(respawn / 1000)} 秒后出现</em> : <em>{Math.max(0, hp)}/{m.hp}</em>}
+        <span className="fight-me">
+          <b>你</b>
+          <span className={`bar me ${me < 0.3 ? 'low' : me < 0.6 ? 'mid' : ''}`}><i style={{ width: `${me * 100}%` }} /></span>
+          <em>{Math.max(0, s.hp)}/{max}</em>
+          <span className={food ? '' : 'warn'}>食物 {fmtNum(food)}</span>
+          <span className="muted">约 {fmtNum(Math.round(est.perHour))} 只/时</span>
+        </span>
+        {!food && me < 0.4 && <em className="warn"> 没有食物了，血量偏低，小心阵亡</em>}
       </>
     );
   }

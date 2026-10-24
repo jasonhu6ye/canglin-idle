@@ -1,3 +1,4 @@
+import { HW_POINT, HW_TIERS, hwFight, hwOpen, hwTierOf, hwWait } from './halloween';
 import { ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAP_W, MID_BOX, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, planRoute, travelMs, type MapNode } from './data';
 import { nextRandom } from './rng';
 import { stepQuests } from './quests';
@@ -416,7 +417,7 @@ export const MONSTER_MOVES = {
 export const BOSS_ENRAGE = 0.3;
 /** 世界首领的专属大招（名字见 bestiary WORLD_SKILL）：每第 4 下，伤害 ×2.6 */
 export const WORLD_MOVE = { every: 4, mult: 2.6 } as const;
-const moveOf = (m: MonsterDef) => (m.rank === 'normal' ? undefined : m.world ? WORLD_MOVE : MONSTER_MOVES[m.rank]);
+const moveOf = (m: MonsterDef) => (m.rank === 'normal' ? undefined : m.world || m.event ? WORLD_MOVE : MONSTER_MOVES[m.rank]);
 
 /** 护甲套装效果：板甲每件减伤 3%，皮甲每件闪避 +2%，布甲每件暴击 +2% */
 export function armorPerks(s: GameState) {
@@ -884,6 +885,8 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         task.deathStreak = 0;
         s.bestiary = { ...s.bestiary, [m.id]: (s.bestiary?.[m.id] ?? 0) + 1 };
         task.done++;
+        // 召唤出来的南瓜王打赢一次就走了，要再召唤
+        if (m.event && s.halloween) s.halloween = { ...s.halloween, summoned: undefined };
         s.combat = { monsterHp: m.hp, playerTimerMs: playerAttackMs(s), monsterTimerMs: m.attackMs, respawnMs: m.respawnMs ?? RESPAWN_MS, pSwings: c.pSwings, pDmg: c.pDmg, mSwings: c.mSwings, pCrit: c.pCrit };
         return step;
       }
@@ -895,7 +898,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       if (enraged && !c.enraged) { c.enraged = true; c.mArt = 'enrage'; }
       const move = moveOf(m);
       const big = !!move && ((c.mSwings ?? 0) + 1) % move.every === 0;
-      if (big) c.mArt = m.world ? 'world' : m.rank;
+      if (big) c.mArt = m.world || m.event ? 'world' : m.rank;
       else if (c.mArt !== 'enrage' || !enraged) c.mArt = undefined;
       if (has('regen')) c.monsterHp = Math.min(m.hp, c.monsterHp + Math.ceil(m.hp * 0.03));
       c.mSwings = (c.mSwings ?? 0) + 1;
@@ -935,6 +938,14 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       s.walk = null;
     }
     const a0 = ACTIONS[task.action];
+    // 万圣节南瓜王：只有召唤出来的那一档能打，活动结束后也不能打了
+    if (a0.kind === 'combat' && MONSTERS[a0.monster].event) {
+      const d = hwTierOf(a0.monster);
+      if (s.halloween?.summoned !== d || !hwOpen(now - dt)) {
+        endTask('summon');
+        continue;
+      }
+    }
     // 开战前：背包食物不够设定数量就先回仓库拿（用户 10-22 要求）
     if (a0.kind === 'combat' && !task.stocked && !s.combat) {
       if (isBankId(s.travel?.to) || needSupply()) {
@@ -1308,7 +1319,7 @@ export function openContainer(prev: GameState, id: string, from: 'bag' | 'bank',
   }
   for (const [item, q] of Object.entries(got)) {
     s.seen[item] = 1;
-    if (item === 'coins' || from === 'bank') {
+    if (item === 'coins' || item === HW_POINT || from === 'bank') {
       s.bank[item] = (s.bank[item] ?? 0) + q;
       continue;
     }
@@ -1317,6 +1328,18 @@ export function openContainer(prev: GameState, id: string, from: 'bag' | 'bank',
     if (q > fit) s.bank[item] = (s.bank[item] ?? 0) + q - fit;
   }
   return [s, got];
+}
+
+/**
+ * 万圣节活动祭坛召唤南瓜王（用户 10-24）：每小时一次，选一档难度，召唤后马上排成当前任务（会自己走去祭坛开打）。
+ * 打赢一次南瓜王就离开；没打赢可以回来接着打，不用再召唤。
+ */
+export function summonPumpkin(prev: GameState, d: number, now: number): GameState {
+  if (!hwOpen(now) || !HW_TIERS[d] || hwWait(prev.halloween?.last, now) > 0) return prev;
+  const s = startNow(prev, hwFight(d), { type: 'count', count: 1 });
+  s.halloween = { summoned: d, last: now };
+  s.lastStop = null;
+  return s;
 }
 
 /** 点掉顶部的「任务停了」提示 */

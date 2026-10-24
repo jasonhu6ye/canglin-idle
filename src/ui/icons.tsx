@@ -1,3 +1,5 @@
+import { HW_BOX, HW_POINT } from '../core/halloween';
+import { pumpkinBoxUrl, pumpkinPointUrl } from '../game/halloweenArt';
 import { CROPS, ITEMS, MONSTERS, TIERS, tierName } from '../core/data';
 
 const CROP_COLOR: Record<string, [string, string]> = Object.fromEntries(CROPS.map((c) => [c[0], [c[3], c[5]]]));
@@ -978,6 +980,8 @@ function lootUrl(id: string): string | null {
 /** 物品图标的图片地址（家园岛上摆战利品用） */
 export function itemImageUrl(item: string): string | undefined {
   if (!ITEMS[item]) return undefined;
+  if (item === HW_BOX) return pumpkinBoxUrl();
+  if (item === HW_POINT) return pumpkinPointUrl();
   const res = resIconUrl(item) ?? equipUrl(item) ?? lootUrl(item);
   if (res) return res;
   const [tpl, tint] = itemIcon(item);
@@ -985,6 +989,8 @@ export function itemImageUrl(item: string): string | undefined {
 }
 
 function BareIcon({ item, size }: { item: string; size: number }) {
+  // 万圣节活动：南瓜礼盒、南瓜积分
+  if (item === HW_BOX || item === HW_POINT) return <img className="icon" src={item === HW_BOX ? pumpkinBoxUrl() : pumpkinPointUrl()} width={size} height={size} alt="" draggable={false} />;
   if (item.startsWith('mount_')) return <img className="icon" src={wolfIconUrl()} width={size} height={size} alt="" draggable={false} />;
   const res = resIconUrl(item) ?? equipUrl(item) ?? lootUrl(item);
   if (res) {

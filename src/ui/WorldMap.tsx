@@ -1,4 +1,5 @@
 import { skullUrl } from '../game/skullArt';
+import { pumpkinPointUrl } from '../game/halloweenArt';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ACTIONS, DANGER, dangerLevel, MAP_H, MAP_W, MID_BOX, MONSTERS, NODES, OLD_BOX, REGIONS, SKILLS, standOf, travelMs, type MapNode } from '../core/data';
 import { TOWNS } from '../core/towns';
@@ -61,10 +62,10 @@ const TOWN_MARK: Record<string, string> = { smithy: '苍岭城', market2: '落�
 const MAX_ZOOM = 8;
 
 /** 世界地图筛选（用户 10-23）：按用途看地点 */
-type Filter = 'all' | 'stone' | 'town' | 'boss' | 'world' | 'cave' | SkillId;
+type Filter = 'all' | 'stone' | 'town' | 'boss' | 'world' | 'event' | 'cave' | SkillId;
 const FILTERS: [Filter, string][] = [
   ['all', '全部'], ['stone', '传送石碑'], ['town', '城镇'], ['mining', '采矿'], ['woodcutting', '伐木'], ['fishing', '钓鱼'],
-  ['gathering', '采集'], ['hunting', '狩猎'], ['thieving', '偷窃'], ['boss', '首领'], ['world', '世界首领'], ['cave', '洞窟'],
+  ['gathering', '采集'], ['hunting', '狩猎'], ['thieving', '偷窃'], ['boss', '首领'], ['world', '世界首领'], ['event', '活动'], ['cave', '洞窟'],
 ];
 const skillsOf = (n: MapNode) => new Set(n.actions.map((id) => ACTIONS[id]).flatMap((a) => (a.kind === 'skill' ? [a.skill] : [])));
 function passes(n: MapNode, f: Filter) {
@@ -73,6 +74,7 @@ function passes(n: MapNode, f: Filter) {
   if (f === 'town') return !!TOWN_MARK[n.id];
   if (f === 'cave') return !!n.cave;
   if (f === 'world') return !!n.world;
+  if (f === 'event') return !!n.event;
   if (f === 'boss') return n.sprite === 'boss' || !!n.world || n.actions.some((id) => { const a = ACTIONS[id]; return a.kind === 'combat' && MONSTERS[a.monster].rank === 'boss'; });
   return skillsOf(n).has(f);
 }
@@ -186,14 +188,14 @@ export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: ()
             const d = n.town && !n.pond ? 0 : dangerLevel(n, cl);
             const lit = n.waystone && s.waystones?.includes(n.id);
             const name = n.waystone ? n.name.replace('传说石碑·', '石碑·') : TOWN_MARK[n.id] ?? n.name;
-            const big = n.site || n.world || TOWN_MARK[n.id] || (n.waystone && filter === 'stone');
+            const big = n.site || n.world || n.event || TOWN_MARK[n.id] || (n.waystone && filter === 'stone');
             return (
               <button key={n.id} className={`wm-node ${sel === n.id ? 'sel' : ''} ${n.cave ? 'cave' : ''} ${n.waystone ? `stone ${lit ? 'lit' : ''}` : ''}`} style={{ left: `${(n.x / MAP_W) * 100}%`, top: `${(n.y / MAP_H) * 100}%` }}
                 onClick={() => setSel(n.id)}>
                 {/* 世界首领：红色骷髅头（用户 10-24） */}
-                {n.world ? <img className="wm-skull" src={skullUrl()} alt="" draggable={false} /> : <i style={n.waystone ? undefined : { background: n.cave ? '#2a2030' : DANGER[d].color }} />}
+                {n.event ? <img className="wm-skull wm-pumpkin" src={pumpkinPointUrl()} alt="" draggable={false} /> : n.world ? <img className="wm-skull" src={skullUrl()} alt="" draggable={false} /> : <i style={n.waystone ? undefined : { background: n.cave ? '#2a2030' : DANGER[d].color }} />}
                 {/* 特色地点和城镇一直标名字 */}
-                {(zoom > 1 || big) && <span className={n.world ? 'site world' : big ? 'site' : ''}>{n.world ? `☠ ${name}` : name}</span>}
+                {(zoom > 1 || big) && <span className={n.event ? 'site event' : n.world ? 'site world' : big ? 'site' : ''}>{n.world ? `☠ ${name}` : name}</span>}
               </button>
             );
           })}

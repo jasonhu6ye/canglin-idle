@@ -11,6 +11,7 @@ import { doorOf, FACILITY_NAME, townAt, TOWNS, type Facility, type TownDef } fro
 
 export { MAP_W, MAP_H, MID_BOX, OLD_BOX, at, atW, atF } from './geo';
 import { MAP_W, MAP_H, MID_BOX, OLD_BOX, at, atW, atF } from './geo';
+import { HW_ALTAR, HW_BOX, HW_POINT, HW_TIERS, hwTierOf } from './halloween';
 
 /** soon：占位技能，还没有内容（养殖，用户 10-23） */
 export interface SkillInfo { name: string; color: string; group: SkillGroup; desc: string; soon?: boolean }
@@ -452,7 +453,7 @@ const BOSS_TROPHY: Record<string, [string, string]> = {
     });
   });
   for (const sp of SPECIES) {
-    if (sp.rank !== 'boss') continue;
+    if (sp.rank !== 'boss' || sp.event) continue;
     const [tn, td] = BOSS_TROPHY[sp.id] ?? [`${sp.name}之证`, '击败首领的凭证。'];
     item(`trophy_${sp.id}`, tn, 'loot', BAR_VALUE[sp.tier] * 20, { tier: sp.tier, boss: sp.id, desc: `${td}击败「${sp.name}」才能得到，能卖个好价钱。` });
     item(`banner_${sp.id}`, `${sp.name}战旗`, 'deco', BAR_VALUE[sp.tier] * 50, {
@@ -476,6 +477,13 @@ for (const sp of SPECIES.filter((x) => x.world)) {
     ] },
   });
 }
+
+// 万圣节活动（用户 10-24）：南瓜礼盒开出南瓜积分；积分直接进仓库，活动结束前拿去兑换（兑换商店后续开放）
+item(HW_POINT, '南瓜积分', 'misc', 0, { desc: '万圣节活动积分，开南瓜礼盒得到，直接存进仓库。活动结束前可以拿去兑换限定物品（兑换商店即将开放）。' });
+item(HW_BOX, '南瓜礼盒', 'loot', 0, {
+  tier: 0, desc: '击败万圣节限定首领「南瓜王」得到的礼盒，打开得南瓜积分和一些金币。难度越高给的礼盒越多。',
+  opens: { coins: [80, 240], rolls: 1, pool: [{ item: HW_POINT, min: 8, max: 15, w: 1 }] },
+});
 
 export const ITEMS: Record<string, ItemDef> = Object.fromEntries(itemList.map((i) => [i.id, i]));
 
@@ -516,6 +524,11 @@ function speciesDrops(sp: Species, idx: number): Drop[] {
   const fam = FORM_FAMILY[sp.form];
   const d: Drop[] = [{ item: 'coins', qty: Math.round(sp.level * 3 * (sp.rank === 'boss' ? 12 : sp.rank === 'elite' ? 3 : 1)) }];
   const add = (item: string, qty: number, chance?: number) => d.push(chance === undefined || chance >= 1 ? { item, qty } : { item, qty, chance });
+  // 南瓜王：只掉南瓜礼盒（数量看难度）和金币
+  if (sp.event) {
+    add(HW_BOX, HW_TIERS[hwTierOf(sp.id)].boxes);
+    return d;
+  }
   if (!['golem', 'spirit', 'slime', 'plant', 'eye'].includes(fam)) add('bones', k);
   if (isAnimal(fam, sp.form)) {
     add(`hide_${n}`, k, sp.rank === 'normal' ? 0.5 : 1);
@@ -580,6 +593,7 @@ const monsterList: MonsterDef[] = SPECIES.map((sp, idx) => {
   if (tr.has('frail')) hp *= 0.75;
   // 世界首领：血量再 ×4（约同级普通怪的 40 倍），伤害、防御各 +15%
   if (sp.world) hp *= 4;
+  if (sp.event) hp *= 1.6;
   let ms = FAMILY_MS[fam] + (sp.rank === 'boss' ? 400 : 0);
   if (tr.has('swift')) ms *= 0.75;
   if (tr.has('slow')) ms *= 1.25;
@@ -593,10 +607,11 @@ const monsterList: MonsterDef[] = SPECIES.map((sp, idx) => {
     maxHit: tr.has('passive') ? 0 : Math.max(1, Math.round(0.025 * refHp(L) * (ms / 1000) * RANK_HIT[sp.rank] * (tr.has('fierce') ? 1.25 : 1) * (sp.world ? 1.15 : 1))),
     attackMs: Math.round(ms / 100) * 100,
     // 世界首领倒下后 2 分钟才重新出现
-    respawnMs: sp.world ? 120_000 : (sp.rank === 'boss' ? 6000 : sp.rank === 'elite' ? 3000 : 1500) * (tr.has('pack') ? 0.5 : 1),
+    respawnMs: sp.world ? 120_000 : sp.event ? 3000 : (sp.rank === 'boss' ? 6000 : sp.rank === 'elite' ? 3000 : 1500) * (tr.has('pack') ? 0.5 : 1),
     drops: speciesDrops(sp, idx),
     art: { color: sp.color, accent: sp.accent },
     ...(sp.world ? { world: true } : {}),
+    ...(sp.event ? { event: true } : {}),
   };
 });
 // 野怪掉同阶的种子：普通 2%、精英 6%、Boss 25% 一次 3 颗
@@ -897,7 +912,7 @@ const filterIds = (prefix: string) => actionList.filter((a) => a.id.startsWith(p
 
 export type NodeSprite =
   | 'ore' | 'tree' | 'fish' | 'herb' | 'camp' | 'boss' | 'anvil' | 'furnace' | 'stove' | 'bench' | 'bowyer' | 'potion' | 'enhance'
-  | 'market' | 'farm' | 'bank' | 'dummy' | 'cave' | 'atelier' | 'waystone' | 'portal' | 'worldboss';
+  | 'market' | 'farm' | 'bank' | 'dummy' | 'cave' | 'atelier' | 'waystone' | 'portal' | 'worldboss' | 'altar';
 
 export interface MapNode {
   id: string;
@@ -925,6 +940,8 @@ export interface MapNode {
   sea?: boolean;
   /** 世界首领的巢穴（用户 10-24）：地图上红色骷髅头标记 */
   world?: boolean;
+  /** 活动祭坛（万圣节）：点了选难度召唤南瓜王，不刷野怪 */
+  event?: boolean;
   /** 田地：能种哪几阶的作物（地块制种田） */
   farm?: number[];
   /** 传说石碑：传送点 */
@@ -1036,6 +1053,8 @@ export const NODES: MapNode[] = [
     steal('noble', '偷贵族', 55, 80, [{ item: 'runic_bar', qty: 1, chance: 0.05 }]),
   ]),
   town('dummy', '训练场', 181, 182, 'dummy', [fight('dummy', '打稻草人')]),
+  // 万圣节活动祭坛（用户 10-24）：苍岭城东门外，和城镇在同一块地上
+  { id: HW_ALTAR, name: '万圣节活动祭坛', ...townXY(207, 163), region: 'town', lv: [30, 120], sprite: 'altar', actions: [], event: true },
   // 城镇周围的四块田（用户 10-23 要求），每块种两阶作物
   town('farm', '城镇农田', 148, 198, 'farm', [], { farm: [0, 1], lv: [1, 7] }),
   town('farm_south', '南郊麦田', 147, 217, 'farm', [], { farm: [2, 3], lv: [10, 27] }),

@@ -1,3 +1,4 @@
+import { HW_ALTAR, HW_TIERS, hwBossId } from './halloween';
 /*
  * 怪物与生物图鉴：原 192 种（T1-T8 每阶 24 种），10-23 又加了 28 种（见 NEW_SPECIES），
  * 8848 大地图外圈再加 70 种和 4 个首领（见 RING_ROWS）。
@@ -98,6 +99,8 @@ export interface Species {
   outer?: boolean;
   /** 世界首领（用户 10-24）：地图上红色骷髅头标记，有专属动画、大招和传说掉落 */
   world?: boolean;
+  /** 活动限定（万圣节南瓜王）：只能在活动祭坛召唤 */
+  event?: boolean;
 }
 
 // [id, 名字, 等级, 区域, 外形, 级别 n/e/b, 特性（空格分隔）, 主色, 点缀色]
@@ -535,6 +538,7 @@ const WORLD_ROWS: Row[] = [
 ];
 /** 世界首领的专属大招：每第 4 下放一次，伤害 ×2.6 */
 export const WORLD_SKILL: Record<string, { name: string; desc: string }> = {
+  ...Object.fromEntries(HW_TIERS.map((_, d) => [hwBossId(d), { name: '南瓜炸弹', desc: '高举权杖，一串燃着鬼火的南瓜灯从天而降，落地炸开' }])),
   wb_flame_dragon: { name: '天火流星', desc: '振翅升空，喷出烈焰，天上落下一阵火流星' },
   wb_soul_tree: { name: '噬魂缠根', desc: '地下钻出尖刺树根把人缠住，再吸走魂火' },
   wb_frost_colossus: { name: '永冬崩裂', desc: '双拳砸地，冰刺一路从地底炸开' },
@@ -554,6 +558,11 @@ export const SPECIES: Species[] = [
   ...RING_ROWS.map((r) => ({ ...toSpecies(r, tierOfLevel(r[2])), ring: true })),
   ...OUTER_ROWS.map((r) => ({ ...toSpecies(r, tierOfLevel(r[2])), outer: true })),
   ...WORLD_ROWS.map((r) => ({ ...toSpecies(r, tierOfLevel(r[2])), world: true })),
+  // 万圣节南瓜王（用户 10-24）：5 档难度各一只，住在活动祭坛，召唤了才能打
+  ...HW_TIERS.map((h, d): Species => ({
+    ...toSpecies([hwBossId(d), `南瓜王·${h.name}`, h.lv, 'town', 'golem', 'b', d < 2 ? 'tough fierce' : d < 4 ? 'tough fierce lifesteal' : 'tough fierce lifesteal thorns', '#e8781a', ['#8a3ad8', '#3a9ae8', '#3ad87a', '#e83a4a', '#f0d040'][d], HW_ALTAR], tierOfLevel(h.lv)),
+    event: true,
+  })),
 ];
 
 /** 体型档（精英大一档，首领大两档） */

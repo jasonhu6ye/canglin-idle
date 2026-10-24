@@ -1,3 +1,4 @@
+import { AltarSheet } from './Halloween';
 import { MonsterDetail, MonsterIcon, TraitChips } from './Bestiary';
 import { useEffect, useRef, useState } from 'react';
 import { ACTIONS, nodeOfAction, ITEMS, MONSTERS, NODES, REGIONS, SEED_PRICE, SEED_SHOP, SKILLS, tierName } from '../core/data';
@@ -47,6 +48,7 @@ export function ActionSheet({ s, nodeId, onClose }: { s: GameState; nodeId: stri
   if (node.portal) return <PortalSheet s={s} node={node} onClose={onClose} />;
   if (node.farm) return <FarmSheet s={s} nodeId={nodeId} onClose={onClose} />;
   if (node.waystone) return <WaystoneSheet s={s} nodeId={nodeId} onClose={onClose} />;
+  if (node.event) return <AltarSheet s={s} node={node} onClose={onClose} />;
   return <NodeSheet s={s} node={node} onClose={onClose} />;
 }
 

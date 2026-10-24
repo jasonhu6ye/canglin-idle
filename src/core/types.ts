@@ -124,6 +124,8 @@ export interface MonsterDef {
   art: { color: string; accent: string };
   /** 世界首领：专属动画、大招（每第 4 下）和宝库掉落 */
   world?: boolean;
+  /** 活动限定首领（万圣节南瓜王）：要在活动祭坛召唤才能打 */
+  event?: boolean;
 }
 
 export type RegionId = 'town' | 'snow' | 'highland' | 'coast' | 'lava' | 'abyss' | 'swamp' | 'woodland' | 'giantwood'
@@ -257,6 +259,8 @@ export interface GameState {
   mounted?: boolean;
   /** 用过的兑换码，每个存档只能领一次 */
   redeemed?: string[];
+  /** 万圣节活动：当前召唤出来的是第几档南瓜王（打赢就清掉）、上次召唤的时间 */
+  halloween?: { summoned?: number; last?: number };
   /** 角色所在的格子（寻路的起点） */
   loc: { x: number; y: number };
   /** 存档时的地图边长；地图扩大后用来换算旧位置 */
@@ -282,7 +286,7 @@ export interface GameState {
   lastStop?: { action: string; reason: TaskEndReason; mode: TaskMode; item?: string; at: number } | null;
 }
 
-export type TaskEndReason = 'complete' | 'noInput' | 'death' | 'level' | 'noAmmo';
+export type TaskEndReason = 'complete' | 'noInput' | 'death' | 'level' | 'noAmmo' | 'summon';
 
 /** 一次结算的汇总，用于离线收获弹窗和实时提示 */
 export interface Summary {

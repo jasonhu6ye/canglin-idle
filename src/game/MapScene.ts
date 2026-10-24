@@ -7,6 +7,7 @@ import { paintWaystone } from './waystoneArt';
 import { paintPortal, paintPortalSwirl, PORTAL_H } from './homeArt';
 import { animsOf, monsterFrameSize, paintMonsterSheet, type MonAnim } from './monsterArt';
 import { paintSkull } from './skullArt';
+import { paintAltar } from './halloweenArt';
 import { WORLD_SKILL } from '../core/bestiary';
 import { paintWolfSheet, wolfSaddle, WOLF_ANIMS, WOLF_FEET, WOLF_H, WOLF_W } from './wolfArt';
 import { FRAME_H, FRAME_W, HERO_ANIMS, HERO_FEET, HERO_PAD, NPC_ANIMS, NPC_OUTFITS, outfitOf, paintHeroSheet, type HeroDir } from './hero';
@@ -55,7 +56,9 @@ function spawnSpot(n: MapNode, i: number, total: number) {
 /** 首领在地图上额外放大 */
 const BOSS_SCALE = 1.35;
 /** 世界首领的图本身就画得很大（96×96），不再放大 */
-const monScale = (m: MonsterDef) => (m.world ? 1 : m.rank === 'boss' ? BOSS_SCALE : 1);
+/** 世界首领和活动首领用 96×96 的大图 */
+const big96 = (m: MonsterDef) => !!(m.world || m.event);
+const monScale = (m: MonsterDef) => (big96(m) ? 1 : m.rank === 'boss' ? BOSS_SCALE : 1);
 const exactTrack = (id: string) => MONSTERS[id].rank === 'boss' || store.state.bestiary?.[id] !== undefined;
 
 /** 追踪：Boss 给准确的刷新点，其他怪只给附近一个大概位置 */
@@ -175,7 +178,11 @@ export class MapScene extends Phaser.Scene {
     const name = this.add.text(0, 7 - HERO_FEET + 1, '[苍岭] 你', { fontFamily: FONT, fontSize: '7px', color: '#ffffff', stroke: '#000', strokeThickness: 2, resolution: 4 }).setOrigin(0.5);
     this.wolfBack = this.add.sprite(0, 7, 'mount-wolf').setOrigin(0.5, WOLF_FEET / WOLF_H).setVisible(false);
     this.wolfFront = this.add.sprite(0, 7, 'mount-wolf').setOrigin(0.5, WOLF_FEET / WOLF_H).setVisible(false);
-    this.player.add([ring, this.wolfBack, this.playerBody, this.wolfFront, name]).setDepth(this.player.y + 1000);
+    // 头顶小血条：打怪时或没满血时显示，红字飘在它上面，不和名字叠在一起
+    const hpBg = this.add.rectangle(0, name.y - 7, 22, 4, 0x1b120c).setStrokeStyle(1, 0x000000).setVisible(false);
+    const hpFill = this.add.rectangle(-10, name.y - 7, 20, 2, 0x5ad04a).setOrigin(0, 0.5).setVisible(false);
+    this.heroHp = [hpBg, hpFill];
+    this.player.add([ring, this.wolfBack, this.playerBody, this.wolfFront, name, hpBg, hpFill]).setDepth(this.player.y + 1000);
     this.heroName = name;
     this.tweens.add({ targets: ring, alpha: 0.4, yoyo: true, repeat: -1, duration: 700 });
 
@@ -884,6 +891,7 @@ export class MapScene extends Phaser.Scene {
     this.stepHold(time);
     this.stepWalker(delta);
     this.syncFoe();
+    this.updateHeroHp();
     this.updateBars();
     this.updateTracking(time);
     this.updateChunks();
@@ -1119,6 +1127,10 @@ export class MapScene extends Phaser.Scene {
       this.addLair(n, cx, cy);
       return;
     }
+    if (n.event) {
+      this.addAltar(n, cx, cy);
+      return;
+    }
     const img = this.add.image(cx, cy + T / 2, NODE_MARKER[n.sprite]).setOrigin(0.5, 1).setDepth(cy + T / 2 + 1000);
     img.setScale(boss ? 1.8 : 1.4);
     if (n.sprite === 'stove') this.tweens.add({ targets: img, scaleY: 1.12, yoyo: true, repeat: -1, duration: 300 });
@@ -1151,6 +1163,20 @@ export class MapScene extends Phaser.Scene {
       this.add.zone(cx, cy, T * 2.5, T * 2.5).setInteractive({ useHandCursor: true }).setData('node', n.id);
     }
     this.tweens.add({ targets: text, y: text.y - 2, yoyo: true, repeat: -1, duration: 900, ease: 'Sine.inOut' });
+  }
+
+  /** 万圣节活动祭坛（用户 10-24）：四帧动画（鬼火跳、召唤阵转），点它打开召唤面板 */
+  private addAltar(n: MapNode, cx: number, cy: number) {
+    for (let f = 0; f < 4; f++) if (!this.textures.exists(`altar-${f}`)) this.textures.addCanvas(`altar-${f}`, paintAltar(f));
+    const img = this.add.image(cx, cy - T / 2, 'altar-0').setOrigin(0.5, 1).setScale(1.5).setDepth(cy - T / 2 + 1000);
+    let f = 0;
+    this.time.addEvent({ delay: 220, loop: true, callback: () => img.setTexture(`altar-${(f = (f + 1) % 4)}`) });
+    this.addGlow(cx, cy - 70, 0xa050ff, 44);
+    this.addGlow(cx, cy - 30, 0xff8a20, 30);
+    this.add.text(cx, cy - 108, `🎃 ${n.name}\n召唤南瓜王 · Lv30-120`, {
+      fontFamily: FONT, fontSize: '9px', color: '#ffb050', stroke: '#1a0820', strokeThickness: 3, resolution: 4, align: 'center',
+    }).setOrigin(0.5, 1).setDepth(D_LABEL);
+    this.add.zone(cx, cy - 50, T * 6, T * 6).setInteractive({ useHandCursor: true }).setData('node', n.id);
   }
 
   /** 世界首领的巢穴：头顶飘一个红色骷髅头（用户 10-24），地上一圈暗红光，远远就能看到 */
@@ -1205,7 +1231,7 @@ export class MapScene extends Phaser.Scene {
     const key = this.monTex(m);
     const S = monsterFrameSize(m);
     // 原点放在脚底那一行
-    const spr = this.add.sprite(x, y, key, 'idle-0').setOrigin(0.5, (S - (m.world ? 4 : 3)) / S);
+    const spr = this.add.sprite(x, y, key, 'idle-0').setOrigin(0.5, (S - (big96(m) ? 4 : 3)) / S);
     // 首领再放大一圈，更有压迫感（用户 10-23）
     spr.setScale(monScale(m));
     // 点怪物弹出它的信息页
@@ -1247,6 +1273,8 @@ export class MapScene extends Phaser.Scene {
   }
 
   private spawnNode(n: MapNode) {
+    // 活动祭坛的南瓜王要召唤了才出现，开打时再放出来
+    if (n.event) return;
     const mons = n.actions.map((id) => ACTIONS[id]).filter((a) => a.kind === 'combat').map((a) => MONSTERS[(a as { monster: string }).monster]);
     mons.forEach((m, i) => {
       // 世界首领就站在骷髅头标记正下方
@@ -1839,8 +1867,8 @@ export class MapScene extends Phaser.Scene {
 
   private addBar(spr: Phaser.GameObjects.Sprite, m: MonsterDef) {
     const boss = m.rank === 'boss';
-    const w = m.world ? 96 : boss ? 64 : 18;
-    const h = m.world ? 7 : boss ? 6 : 2;
+    const w = big96(m) ? 96 : boss ? 64 : 18;
+    const h = big96(m) ? 7 : boss ? 6 : 2;
     const bg = this.add.rectangle(0, 0, w + 2, h + 2, 0x1b120c).setStrokeStyle(boss ? 1.5 : 1, boss ? 0xe8b84a : 0x6b5132).setOrigin(0.5, 1);
     // 掉血时先掉红条，后面一截浅色残影慢慢跟上
     const trail = this.add.rectangle(0, 0, w, h, boss ? 0xffb08a : 0xfff0c0).setOrigin(0, 1);
@@ -1848,10 +1876,10 @@ export class MapScene extends Phaser.Scene {
     const bar: (typeof this.bars)[number] = { spr, m, bg, trail, fill, w, h, live: false, shown: 1 };
     if (boss) {
       // 首领：血条上方常驻名字，脚下一圈暗红光环和阴影
-      bar.label = this.add.text(0, 0, m.world ? `☠ 世界首领 · ${m.name}  Lv${m.level}` : `首领 · ${m.name}  Lv${m.level}`, {
-        fontFamily: FONT, fontSize: m.world ? '11px' : '10px', color: m.world ? '#ff7a6a' : '#ffd86a', stroke: '#2a0808', strokeThickness: 3, resolution: 4,
+      bar.label = this.add.text(0, 0, m.event ? `🎃 万圣节限定 · ${m.name}  Lv${m.level}` : m.world ? `☠ 世界首领 · ${m.name}  Lv${m.level}` : `首领 · ${m.name}  Lv${m.level}`, {
+        fontFamily: FONT, fontSize: big96(m) ? '11px' : '10px', color: m.event ? '#ffa040' : m.world ? '#ff7a6a' : '#ffd86a', stroke: '#2a0808', strokeThickness: 3, resolution: 4,
       }).setOrigin(0.5, 1);
-      const S = monsterFrameSize(m) * monScale(m) * (m.world ? 0.8 : 1);
+      const S = monsterFrameSize(m) * monScale(m) * (big96(m) ? 0.8 : 1);
       const shadow = this.add.ellipse(spr.x, spr.y, S * 0.9, S * 0.28, 0x000000, 0.35);
       const ring = this.add.ellipse(spr.x, spr.y, S * 1.1, S * 0.36).setStrokeStyle(1.5, 0xff4a2a, 0.8);
       const glow = this.add.image(spr.x, spr.y - S * 0.3, 'glow').setTint(0xc02010).setBlendMode(Phaser.BlendModes.ADD).setScale((S * 1.6) / 64).setAlpha(0.45);
@@ -1991,8 +2019,9 @@ export class MapScene extends Phaser.Scene {
 
   /** 怪物出手：打中主角就闪红、往后一顿、飘红字；没打中飘「闪避」 */
   private monsterSwingFx(dmg: number, art?: string, foe?: Phaser.GameObjects.Sprite, m?: MonsterDef) {
-    const x = this.player.x;
-    const y = this.player.y - 22;
+    // 飘在主角头顶血条上面，不压住名字
+    const x = this.player.x - 6;
+    const y = this.player.y - 36;
     // 精英、首领的大招和首领狂怒：在怪头上喊出来
     const world = art === 'world' && m ? WORLD_SKILL[m.id] : undefined;
     const shout = world ? `${world.name}！` : art === 'enrage' ? '狂怒！' : art === 'boss' ? MONSTER_MOVES.boss.name : art === 'elite' ? MONSTER_MOVES.elite.name : '';
@@ -2024,7 +2053,21 @@ export class MapScene extends Phaser.Scene {
         this.tweens.add({ targets: p, x: x + Math.cos(a) * 10, y: y + Math.sin(a) * 4 - 3, alpha: 0, scale: 1.2, duration: 500, onComplete: () => p.destroy() });
       }
     };
-    switch (m.id) {
+    switch (m.event ? 'pumpkin' : m.id) {
+      case 'pumpkin': {
+        // 南瓜炸弹：一串南瓜灯从天上落下来，落地炸出橙紫两色的火花
+        for (let k = 0; k < 5; k++) {
+          const tx = px + (Math.random() - 0.5) * 34;
+          const ty = py + (Math.random() - 0.5) * 12;
+          const ball = glow(tx, ty - 120, 0xff8a10, 0.22).setAlpha(0);
+          const wisp = glow(tx, ty - 126, 0xa050ff, 0.12).setAlpha(0);
+          this.tweens.add({
+            targets: [ball, wisp], y: `+=${120}`, alpha: 1, delay: 380 + k * 150, duration: 420, ease: 'Quad.easeIn',
+            onComplete: () => { ball.destroy(); wisp.destroy(); burst(tx, ty, k % 2 ? 0xa050ff : 0xff8a20); this.cameras.main.shake(70, 0.003); },
+          });
+        }
+        break;
+      }
       case 'wb_flame_dragon': {
         // 天火流星：一串火球从天上斜着砸下来
         for (let k = 0; k < 7; k++) {
@@ -2215,6 +2258,25 @@ export class MapScene extends Phaser.Scene {
   private wolfBack!: Phaser.GameObjects.Sprite;
   private wolfFront!: Phaser.GameObjects.Sprite;
   private heroName!: Phaser.GameObjects.Text;
+  private heroHp!: [Phaser.GameObjects.Rectangle, Phaser.GameObjects.Rectangle];
+  private lastHp?: number;
+
+  /** 主角头顶血条，吃东西回血时飘绿字 */
+  private updateHeroHp() {
+    const s = store.state;
+    const max = maxHp(s);
+    const a = this.currentAction ? ACTIONS[this.currentAction] : undefined;
+    const show = (this.working && a?.kind === 'combat') || s.hp < max;
+    const r = Math.max(0, Math.min(1, s.hp / max));
+    const [bg, fill] = this.heroHp;
+    bg.setVisible(show);
+    fill.setVisible(show).setScale(r, 1).setFillStyle(r < 0.3 ? 0xe8161a : r < 0.6 ? 0xe8b84a : 0x5ad04a);
+    // 一下回了很多血 = 吃了东西或喝了药（自然回血每次只有一点点）
+    if (this.lastHp !== undefined && s.hp - this.lastHp >= Math.max(3, max * 0.04) && this.working) {
+      this.popText(this.player.x + 10, this.player.y - 34, `+${s.hp - this.lastHp}`, '#7aff6a', 8);
+    }
+    this.lastHp = s.hp;
+  }
   private working = false;
   /** 画面上的坐骑状态：没召唤 / 骑着 / 在旁边坐着等（干活、战斗时） */
   private mountMode: 'none' | 'ride' | 'beside' = 'none';
@@ -2457,15 +2519,17 @@ export class MapScene extends Phaser.Scene {
     if (!a || this.manual) return;
     if (a.kind === 'combat') {
       const m = MONSTERS[a.monster];
-      const gap = Math.max(14, monsterFrameSize(m) * monScale(m) * (m.world ? 0.4 : 0.55));
+      const gap = Math.max(26, monsterFrameSize(m) * monScale(m) * (big96(m) ? 0.4 : 0.55));
       this.foe = this.monSprite(m, this.player.x + gap, this.player.y + 7).setFlipX(true);
       this.foe.setDepth(this.foe.y + 1000);
       this.foeSeen = undefined;
+      // 普通怪平时不挂血条，正在打的这只也挂一条，看得出还剩多少血
+      if (!this.bars.some((b) => b.spr === this.foe)) this.addBar(this.foe, m);
       const bar = this.bars.find((b) => b.spr === this.foe);
       if (bar) bar.live = true;
       if (m.rank === 'boss') {
-        this.game.events.emit(BOSS_BANNER, m.name, !!m.world);
-        this.cameras.main.shake(m.world ? 500 : 300, m.world ? 0.007 : 0.004);
+        this.game.events.emit(BOSS_BANNER, m.name, m.event ? 'event' : !!m.world);
+        this.cameras.main.shake(big96(m) ? 500 : 300, big96(m) ? 0.007 : 0.004);
       }
     }
     // 干活时侧身朝右（怪物也站在右边）；钓鱼朝着水

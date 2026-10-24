@@ -1,0 +1,33 @@
+/*
+ * 万圣节限定活动（用户 10-24）：苍岭城东边的活动祭坛可以召唤南瓜王，
+ * 5 档难度（30 级起），每小时召唤一次，打赢掉南瓜礼盒，礼盒开出南瓜积分（活动结束前拿去兑换，兑换商店后续开放）。
+ * 活动到 11 月 1 日 0 点（本地时间）关闭。这里只放常量和纯函数，data/sim/ui 都从这里取。
+ */
+
+/** 活动结束时间：2026 年 11 月 1 日 0 点（玩家本地时间） */
+export const HW_END = new Date(2026, 10, 1).getTime();
+/** 召唤冷却：1 小时 */
+export const HW_COOLDOWN = 3_600_000;
+export const HW_ALTAR = 'hw_altar';
+export const HW_BOX = 'pumpkin_box';
+export const HW_POINT = 'pumpkin_pt';
+
+/** 五档难度：南瓜王等级、打赢给几个礼盒 */
+export const HW_TIERS = [
+  { lv: 30, boxes: 1, name: '难度一' },
+  { lv: 50, boxes: 2, name: '难度二' },
+  { lv: 70, boxes: 4, name: '难度三' },
+  { lv: 95, boxes: 6, name: '难度四' },
+  { lv: 120, boxes: 10, name: '难度五' },
+] as const;
+export const hwBossId = (d: number) => `pumpkin_king_${d + 1}`;
+export const hwFight = (d: number) => `fight_${hwBossId(d)}`;
+/** 南瓜王的 id 对应第几档，不是南瓜王返回 -1 */
+export const hwTierOf = (monsterId: string) => {
+  const m = /^pumpkin_king_(\d)$/.exec(monsterId);
+  return m ? Number(m[1]) - 1 : -1;
+};
+
+export const hwOpen = (now: number) => now < HW_END;
+/** 还要等多久才能再召唤（毫秒，0 表示现在就行） */
+export const hwWait = (last: number | undefined, now: number) => (last === undefined ? 0 : Math.max(0, last + HW_COOLDOWN - now));

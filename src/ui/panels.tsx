@@ -21,6 +21,8 @@ import { Icon, SkillIcon } from './icons';
 import { FINE_POINTER, openItem, showLoot } from './itemOpen';
 import { openGuide } from './Guide';
 import { openNews } from './News';
+import { openHalloween } from './Halloween';
+import { hwOpen } from '../core/halloween';
 import { stopText } from './hud';
 import { actionName } from './format';
 import { openGuild } from './Guild';
@@ -517,6 +519,10 @@ export function MorePanel({ s }: { s: GameState }) {
     <div className="page">
       <h2>公会 <small className="muted">多人功能开发中</small></h2>
       <button className="primary" onClick={openGuild}>打开公会</button>
+      {hwOpen(Date.now()) && <>
+        <h2>万圣节活动 <small className="muted">11 月 1 日结束</small></h2>
+        <button className="primary" onClick={openHalloween}>查看活动说明</button>
+      </>}
       <h2>更新公告 <small className="muted">最近更新了什么</small></h2>
       <button className="primary" onClick={openNews}>查看更新公告</button>
       <h2>新手指引</h2>

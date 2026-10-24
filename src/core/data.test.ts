@@ -49,7 +49,8 @@ describe('数据闭环', () => {
     for (const it of Object.values(ITEMS)) {
       expect(made.has(it.id), `${it.name} 没有来源`).toBe(true);
       const usable = used.has(it.id) || !!it.equip || !!it.heals || !!it.ammo || !!it.opens || it.category === 'loot' || it.category === 'deco';
-      if (!['coins', 'bones', 'burnt_food'].includes(it.id) && !it.id.startsWith('enh_')) expect(usable, `${it.name} 没有用途`).toBe(true);
+      // 南瓜积分留给以后的兑换商店（用户 10-24）
+      if (!['coins', 'bones', 'burnt_food', 'pumpkin_pt'].includes(it.id) && !it.id.startsWith('enh_')) expect(usable, `${it.name} 没有用途`).toBe(true);
     }
   });
 });
@@ -74,7 +75,7 @@ describe('装备体系', () => {
 describe('怪物图鉴', () => {
   it('原 192 种 + 新地点 20 种生物和 8 个首领 + 外圈 70 种和 4 个首领，id 不重复，特性都有定义', () => {
     const base = SPECIES.filter((s) => !s.home);
-    const fresh = SPECIES.filter((s) => s.home && !s.ring && !s.outer && !s.world);
+    const fresh = SPECIES.filter((s) => s.home && !s.ring && !s.outer && !s.world && !s.event);
     const ring = SPECIES.filter((s) => s.ring);
     // 12080 最外圈（用户 10-24）：43 种新生物 + 8 个首领，每个新群系一个首领
     const outer = SPECIES.filter((s) => s.outer);
@@ -133,7 +134,7 @@ describe('怪物图鉴', () => {
   it('宝箱、福袋奖池里的东西都存在；每个首领都有专属战利品和战旗', () => {
     for (const it of Object.values(ITEMS)) it.opens?.pool.forEach((e) => expect(ITEMS[e.item], `${it.name} 奖池里的 ${e.item}`).toBeTruthy());
     for (const m of Object.values(MONSTERS)) {
-      if (m.rank !== 'boss') continue;
+      if (m.rank !== 'boss' || m.event) continue;
       expect(m.drops.some((d) => d.item === `banner_${m.id}`), `${m.name} 没有战旗`).toBe(true);
       expect(m.drops.some((d) => d.item === `trophy_${m.id}`), `${m.name} 没有战利品`).toBe(true);
     }

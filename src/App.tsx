@@ -14,6 +14,7 @@ import { TplIcon } from './ui/icons';
 import { ItemPopup, LootReveal } from './ui/ItemPopup';
 import { Guide, openGuide } from './ui/Guide';
 import { News } from './ui/News';
+import { HalloweenChip, HalloweenNotice } from './ui/Halloween';
 import { BuffBar } from './ui/BuffBar';
 import { GuildPanel, onOpenGuild } from './ui/Guild';
 import { CombatLog, onOpenCombatLog } from './ui/CombatLog';
@@ -47,6 +48,7 @@ const END_TEXT: Record<TaskEndReason, string> = {
   death: '你阵亡了，战斗停止',
   level: '等级不够，已跳过',
   noAmmo: '弹药用完了，战斗停止',
+  summon: '南瓜王已经离开（要先在活动祭坛召唤）',
 };
 
 type Toast = { id: number; text: string; gold: boolean };
@@ -86,11 +88,11 @@ function useRegion() {
 
 /** 开打首领：屏幕中间压一条红色横幅 */
 function useBossBanner() {
-  const [boss, setBoss] = useState<{ key: number; name: string; world?: boolean } | null>(null);
+  const [boss, setBoss] = useState<{ key: number; name: string; world?: boolean | 'event' } | null>(null);
   useEffect(() => {
     let key = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const off = onGameEvent(BOSS_BANNER, (name: string, world?: boolean) => {
+    const off = onGameEvent(BOSS_BANNER, (name: string, world?: boolean | 'event') => {
       setBoss({ key: ++key, name, world });
       clearTimeout(timer);
       timer = setTimeout(() => setBoss(null), 2800);
@@ -250,12 +252,12 @@ export function App() {
             <QueuePanel s={s} />
             <BuffBar s={s} region={region} />
               </div>
-          <StatusChips s={s} extra={<QuestCard s={s} onGo={openNode} />} log={combatLog ? <CombatLog onClose={() => setCombatLog(false)} /> : null} />
+          <StatusChips s={s} extra={<><HalloweenChip s={s} /><QuestCard s={s} onGo={openNode} /></>} log={combatLog ? <CombatLog onClose={() => setCombatLog(false)} /> : null} />
           <MapButtons s={s} onWorldMap={() => setWorldMap(true)} />
         </div>
         <BossBar s={s} />
         {banner && <div key={banner.key} className="region-banner">{REGIONS[banner.region].name}</div>}
-        {boss && <div key={`b${boss.key}`} className={`boss-banner ${boss.world ? 'world' : ''}`}><small>{boss.world ? '☠ 世界首领 ☠' : '首领'}</small>{boss.name}</div>}
+        {boss && <div key={`b${boss.key}`} className={`boss-banner ${boss.world === 'event' ? 'world event' : boss.world ? 'world' : ''}`}><small>{boss.world === 'event' ? '🎃 万圣节限定首领 🎃' : boss.world ? '☠ 世界首领 ☠' : '首领'}</small>{boss.name}</div>}
         <DayClock region={region} />
         <div className="toasts">
           {toasts.map((t) => <div key={t.id} className={`toast ${t.gold ? 'gold' : ''}`}>{t.text}</div>)}
@@ -295,6 +297,7 @@ export function App() {
       <LootReveal />
       <Guide />
       <News />
+      <HalloweenNotice />
       <UpdateBanner />
       {inactive && (
         <div className="modal-bg tab-lock">

@@ -7,6 +7,17 @@ import { useEffect, useState } from 'react';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-10-24-j', date: '10 月 24 日', title: '万圣节限定活动「南瓜王降临」开启 + 战斗体验优化',
+    lines: [
+      '苍岭城东门外立起了万圣节活动祭坛（世界地图选「活动」能找到）。点祭坛选难度召唤南瓜王，每小时能召唤一次，召唤后角色会自己走过去开打。',
+      '南瓜王有 5 档难度：30 / 50 / 70 / 95 / 120 级，打赢分别给 1 / 2 / 4 / 6 / 10 个南瓜礼盒。礼盒打开得南瓜积分（直接存进仓库）和金币，积分在活动结束前用来兑换限定物品，兑换商店后续开放。',
+      '南瓜王有自己的 74 帧动画，每 4 下放一次大招「南瓜炸弹」。活动 11 月 1 日关闭。',
+      '地图左下有万圣节提示条，显示召唤冷却，点「寻路」直接走去祭坛；「更多」页可以重看活动说明。',
+      '战斗优化：正在打的怪头上也有血条；主角头顶加了小血条，吃东西回血会飘绿字；挨打的红字不再压住名字；怪物站得离主角远一点，不再叠在一起。',
+      '战斗状态栏现在同时显示双方血量、身上还剩多少食物、每小时大约打几只，下一只怪的刷新倒计时；没食物又血少时会提醒。',
+    ],
+  },
+  {
     id: '2026-10-24-i', date: '10 月 24 日', title: '五个世界首领登场：红色骷髅头标记、专属动画和大招',
     lines: [
       '地图上新增 5 处世界首领巢穴，头顶飘着红色骷髅头，世界地图里有「世界首领」筛选：炎煌古龙（50 级，熔岩地带）、噬魂魔树（70 级，腐月湿地）、永冬巨像（90 级，寒星山脉）、天罚雷鹏（110 级，雷鸣断层）、虚无魔眼（135 级，星陨晶海）。',
@@ -190,6 +201,16 @@ type Fn = () => void;
 const fns = new Set<Fn>();
 export const openNews = () => fns.forEach((f) => f());
 
+const closed = new Set<() => void>();
+/** 更新公告关掉以后（或者这次本来就不弹）再弹别的，比如活动公告，免得两个弹窗叠在一起 */
+export function onNewsClosed(f: () => void) {
+  closed.add(f);
+  return () => { closed.delete(f); };
+}
+export function newsPending() {
+  try { return !!localStorage.getItem('canglin-guide-seen') && localStorage.getItem(KEY) !== NEWS[0].id; } catch { return false; }
+}
+
 export function News() {
   const [open, setOpen] = useState(() => {
     try {
@@ -214,6 +235,7 @@ export function News() {
   const close = () => {
     try { localStorage.setItem(KEY, NEWS[0].id); } catch { /* 存不了就算了 */ }
     setOpen(false);
+    closed.forEach((f) => f());
   };
   const shown = more ? NEWS : NEWS.slice(0, 1);
   return (

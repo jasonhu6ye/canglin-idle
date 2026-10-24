@@ -473,6 +473,138 @@ function voidEye(w: W) {
   }
 }
 
+// ---- 万圣节南瓜王（用户 10-24）：飘着的南瓜头国王，破烂紫袍，手持南瓜灯权杖；大招召下一串南瓜炸弹 ----
+function pumpkinKing(w: W) {
+  const { t, P, A } = w;
+  const robe = shades('#3a1a4a');
+  const leaf = shades('#3a8a2a');
+  const gold = shades('#e8b83a');
+  const st = strike(w);
+  const ch = charge(w);
+  const dn = sink(w);
+  const r = release(w);
+  const cx = 20 + recoil(w);
+  const bob = Math.sin(t * TAU * (w.anim === 'move' ? 2 : 1)) * 1.2 + dn * 8;
+  const hy = 15 + bob - ch * 1.5;
+  shadow(w, cx, 10);
+  // 地上一圈鬼火
+  for (let k = 0; k < 4; k++) {
+    const a = t * TAU + (k / 4) * TAU;
+    const x = cx + Math.cos(a) * 13;
+    const y = GROUND - 1 + Math.sin(a) * 1.5;
+    if (Math.sin(a) < 0.2) { E(w, x, y - 1, 0.9, 1.4, A[2]); dot(w, x, y - 2.4, A[3]); }
+  }
+  // 破烂长袍：下摆一条条飘
+  const top = hy + 6;
+  F(w, [[cx - 5, top], [cx + 5, top], [cx + 10, GROUND - 6 + bob * 0.3], [cx - 10, GROUND - 6 + bob * 0.3]], robe[1]);
+  for (let k = 0; k < 7; k++) {
+    const x = cx - 9.5 + k * 3;
+    const wave = Math.sin(t * TAU * 2 + k) * 1.2;
+    const len = 3 + (k % 3) * 1.5;
+    F(w, [[x - 1.4, GROUND - 6.5 + bob * 0.3], [x + 1.4, GROUND - 6.5 + bob * 0.3], [x + wave, GROUND - 6 + len + bob * 0.3]], k % 2 ? robe[0] : robe[1]);
+  }
+  L(w, cx - 4, top + 1, cx - 8, GROUND - 7, robe[2], 0.4);
+  L(w, cx + 3, top + 1, cx + 6, GROUND - 7, robe[0], 0.4);
+  // 金色腰带
+  L(w, cx - 6.5, top + 7, cx + 6.5, top + 7, gold[2], 0.8);
+  E(w, cx, top + 7, 1.1, 1.1, A[3]);
+  // 远处的藤蔓手
+  const vx = cx - 7 - ch * 2;
+  const vy = top + 5 - ch * 6 + Math.sin(t * TAU) * 1;
+  chain(w, [[cx - 4, top + 2], [cx - 8, top + 4], [vx, vy]], 1, 0.5, () => leaf[0]);
+  for (let k = -1; k <= 1; k++) L(w, vx, vy, vx - 2, vy + k * 1.2, leaf[1], 0.3);
+  // 斗篷领子
+  F(w, [[cx - 7, top + 1], [cx - 3, top - 1], [cx, top + 2], [cx + 3, top - 1], [cx + 7, top + 1], [cx + 5, top + 4], [cx - 5, top + 4]], A[1]);
+  // 南瓜头：一瓣一瓣的，越往边越暗
+  const hx = cx + 1 + st * 1.5;
+  E(w, hx, hy, 9.5, 7.8, P[1]);
+  for (let k = -2; k <= 2; k++) E(w, hx + k * 3.3, hy, 2.6 - Math.abs(k) * 0.3, 7.2 - Math.abs(k) * 0.6, k === 0 ? P[2] : Math.abs(k) === 1 ? P[2] : P[1]);
+  for (let k = -1; k <= 1; k += 2) L(w, hx + k * 1.7, hy - 6.8, hx + k * 1.9, hy + 6.8, P[0], 0.35);
+  for (let k = -1; k <= 1; k += 2) L(w, hx + k * 5, hy - 5.5, hx + k * 5.6, hy + 5.5, P[0], 0.35);
+  E(w, hx - 3, hy - 4, 1.6, 1, P[3]);
+  // 刻出来的脸，里面的火光一跳一跳
+  const flick = 0.5 + 0.5 * Math.sin(t * TAU * 3 + w.i);
+  const glow = ch > 0.3 || flick > 0.7 ? '#fff4a0' : '#ffc030';
+  const eye = (x: number) => F(w, [[x - 2, hy - 0.5], [x, hy - 3.5 - ch], [x + 2, hy - 0.5]], glow);
+  eye(hx - 2.5);
+  eye(hx + 3.5);
+  const open = Math.max(0, st) * 1.5 + ch * 1.5;
+  F(w, [[hx - 5, hy + 2], [hx + 6, hy + 2], [hx + 4.5, hy + 4.5 + open], [hx - 3.5, hy + 4.5 + open]], glow);
+  for (let k = 0; k < 4; k++) F(w, [[hx - 3.5 + k * 2.6, hy + 2], [hx - 2.3 + k * 2.6, hy + 3.4], [hx - 1.1 + k * 2.6, hy + 2]], P[1]);
+  for (let k = 0; k < 3; k++) F(w, [[hx - 2.4 + k * 2.6, hy + 4.6 + open], [hx - 1.2 + k * 2.6, hy + 3.2 + open], [hx + k * 2.6, hy + 4.6 + open]], P[1]);
+  // 藤蔓茎 + 歪戴的王冠
+  L(w, hx, hy - 7.5, hx - 1, hy - 9.5, leaf[1], 1);
+  const cy = hy - 9 - ch * 0.5;
+  F(w, [[hx - 5, cy + 2], [hx - 5.5, cy - 2.5], [hx - 3, cy], [hx - 0.5, cy - 4], [hx + 2, cy], [hx + 4.5, cy - 2.5], [hx + 4, cy + 2]], gold[2]);
+  L(w, hx - 5, cy + 1.6, hx + 4, cy + 1.6, gold[0], 0.5);
+  E(w, hx - 0.5, cy - 0.4, 0.8, 0.8, A[3]);
+  dot(w, hx - 5.5, cy - 2.8, gold[3]);
+  dot(w, hx + 4.5, cy - 2.8, gold[3]);
+  dot(w, hx - 0.5, cy - 4.2, gold[3]);
+  // 近处的手和南瓜灯权杖：攻击往前挥，大招高高举起
+  const ang = ch > 0 ? 0.3 - 0.3 * ch : 0.3 + st * 1.1;
+  const sx = cx + 6;
+  const sy = top + 3;
+  const hand: [number, number] = [sx + 4 + st * 3 + ch * 2, sy + 1 - ch * 5];
+  chain(w, [[cx + 4, top + 2], [sx + 1, sy + 2], hand], 1.1, 0.7, () => robe[2]);
+  const len = 15;
+  const tipX = hand[0] + Math.sin(ang + 0.2) * len * 0.75;
+  const tipY = hand[1] - Math.cos(ang) * len * 0.75;
+  const botX = hand[0] - Math.sin(ang + 0.2) * len * 0.25;
+  const botY = hand[1] + Math.cos(ang) * len * 0.25;
+  L(w, botX, botY, tipX, tipY, '#5a3a20', 0.8);
+  E(w, hand[0], hand[1], 1.2, 1.2, leaf[1]);
+  // 权杖头：小南瓜灯 + 紫色鬼火
+  E(w, tipX, tipY - 1, 2.6, 2.2, P[2]);
+  F(w, [[tipX - 1.4, tipY - 1.2], [tipX - 0.6, tipY - 2.4], [tipX + 0.2, tipY - 1.2]], glow);
+  L(w, tipX - 1.3, tipY - 0.1, tipX + 1.3, tipY - 0.1, glow, 0.35);
+  const fl = 2 + ch * 3 + Math.sin(t * TAU * 4) * 0.6;
+  F(w, [[tipX - 1.3, tipY - 3], [tipX + 0.2 + Math.sin(t * TAU * 3) * 0.6, tipY - 3 - fl], [tipX + 1.3, tipY - 3]], A[2]);
+  dot(w, tipX, tipY - 3.6, A[3]);
+  // 两只绕着飞的小蝙蝠
+  for (let k = 0; k < 2; k++) {
+    const a = t * TAU * (k ? -1 : 1) + k * Math.PI;
+    const bx = cx + Math.cos(a) * 16;
+    const by = hy - 6 + Math.sin(a) * 4;
+    const f = (w.i + k) % 2 ? 1.2 : -0.6;
+    F(w, [[bx - 2.4, by - f], [bx, by + 0.6], [bx + 2.4, by - f], [bx, by - 0.4]], '#1a1020');
+    dot(w, bx + 0.4, by - 0.1, '#ff4040');
+  }
+  // 攻击：权杖划出一道紫光
+  if (w.anim === 'attack' && st > 0.5) for (let k = 0; k < 9; k++) {
+    const a = -0.6 + k * 0.17;
+    dot(w, hand[0] + Math.sin(a) * 12, hand[1] - Math.cos(a) * 12 + 4, k % 2 ? A[3] : A[2]);
+  }
+  // 蓄力：身上冒紫光
+  if (w.anim === 'skill' && w.t < 0.3) for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * TAU + w.t * 6;
+    dot(w, hx + Math.cos(a) * (12 - ch * 3), hy + 4 + Math.sin(a) * (10 - ch * 3), A[3]);
+  }
+  // 大招：三个燃着鬼火的南瓜灯从天上掉下来，落地炸开
+  if (r >= 0) {
+    for (let k = 0; k < 3; k++) {
+      const q = Math.max(0, Math.min(1, r * 2.2 - k * 0.45));
+      if (q <= 0) continue;
+      const x = 31 + k * 5.5;
+      if (q < 1) {
+        const y = 2 + (GROUND - 4) * q * q;
+        E(w, x, y, 2.2, 1.9, P[2]);
+        F(w, [[x - 1.2, y - 0.4], [x - 0.5, y - 1.4], [x + 0.2, y - 0.4]], '#fff4a0');
+        for (let j = 1; j <= 3; j++) dot(w, x + (phash(j, k, w.i) - 0.5), y - 2 - j * 1.4, j % 2 ? A[2] : A[3]);
+      } else {
+        const b = Math.min(1, (r * 2.2 - k * 0.45 - 1) * 2.5);
+        for (let j = 0; j < 10; j++) {
+          const a = (j / 10) * TAU;
+          const rr = 1.5 + b * 4.5;
+          dot(w, x + Math.cos(a) * rr, GROUND - 2 + Math.sin(a) * rr * 0.6 - b * 1.5, j % 2 ? P[3] : A[3]);
+        }
+        if (b < 0.6) E(w, x, GROUND - 2, 2.5 * (1 - b), 2 * (1 - b), '#fff4c0');
+        for (let j = 0; j < 3; j++) dot(w, x - 2 + j * 2, GROUND - 0.5, P[0]);
+      }
+    }
+  }
+}
+
 const DRAW: Record<string, (w: W) => void> = {
   wb_flame_dragon: dragon,
   wb_soul_tree: soulTree,
@@ -486,7 +618,7 @@ export function drawWorldFrame(m: MonsterDef, anim: MonAnim, i: number): Pix {
   const n = WORLD_ANIMS.find((a) => a.key === anim)?.frames ?? 12;
   const p = new Pix(S, S);
   const w: W = { p, u: S / 48, anim, t: i / n, i, P: shades(m.art.color), A: shades(m.art.accent), m };
-  (DRAW[m.id] ?? dragon)(w);
-  finish({ p, rank: m.rank, g: S - 4, S, A: w.A, o: { anim: anim === 'skill' ? 'attack' : anim, t: w.t } });
+  (DRAW[m.id] ?? (m.event ? pumpkinKing : dragon))(w);
+  finish({ p, rank: m.rank, g: S - 4, S, A: w.A, o: { anim: anim === 'skill' ? 'attack' : anim === 'hurt' && i > 0 ? 'idle' : anim, t: w.t } });
   return p;
 }

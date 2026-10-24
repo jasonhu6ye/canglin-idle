@@ -1,4 +1,5 @@
-import { actionDuration, advance, buySeed, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour, openContainer, redeemCode, toggleMount, moveSpeed, rainBonus } from './sim';
+import { actionDuration, advance, buySeed, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour, openContainer, redeemCode, toggleMount, moveSpeed, rainBonus, summonPumpkin } from './sim';
+import { HW_BOX, HW_END, HW_POINT, HW_TIERS, hwFight } from './halloween';
 import { levelForXp, speedForLevel, XP_TABLE } from './xp';
 import type { GameState, SkillAction, TaskMode } from './types';
 import { ACTIONS, ITEMS, CROP_DEFS, FARM_NODES, nodeOfAction, plotsOf, standOf, travelMs, WATER_SPEEDUP } from './data';
@@ -823,5 +824,41 @@ describe('怪物招式', () => {
     for (let t = 500; t < 1_800_000 && !(big && enrage); t += 500) { b = advance(b, T0 + t).state; if (b.combat?.mArt === 'boss') big = true; if (b.combat?.enraged) enrage = true; }
     expect(big).toBe(true);
     expect(enrage).toBe(true);
+  });
+});
+
+describe('万圣节南瓜王', () => {
+  const strong = () => {
+    const s = newGame(T0, 1);
+    for (const k of ['melee', 'defence', 'hitpoints', 'ranged', 'magic'] as const) s.xp[k] = XP_TABLE[120];
+    s.hp = 9999;
+    return s;
+  };
+  it('召唤后排成当前任务；冷却 1 小时内不能再召唤；活动结束后不能召唤', () => {
+    const s = summonPumpkin(strong(), 0, T0);
+    expect(s.queue[0].action).toBe(hwFight(0));
+    expect(s.halloween).toEqual({ summoned: 0, last: T0 });
+    expect(summonPumpkin(s, 1, T0 + HOUR - 1)).toBe(s);
+    expect(summonPumpkin(s, 1, T0 + HOUR).halloween?.summoned).toBe(1);
+    expect(summonPumpkin(strong(), 0, HW_END)).toEqual(strong());
+  });
+  it('打赢一次就离开，掉对应数量的礼盒；礼盒开出的积分直接进仓库', () => {
+    let s = summonPumpkin(strong(), 0, T0);
+    s.loc = standOf(nodeOfAction(hwFight(0))!);
+    s.queue[0].stocked = true;
+    s = advance(s, T0 + 30 * 60_000).state;
+    expect(s.lastStop?.reason ?? 'none').toBe('complete');
+    expect(s.halloween?.summoned).toBeUndefined();
+    expect(s.queue.length).toBe(0);
+    expect(owned(s, HW_BOX)).toBe(HW_TIERS[0].boxes);
+    const [o] = openContainer(s, HW_BOX, s.bag[HW_BOX] ? 'bag' : 'bank');
+    expect(o.bank[HW_POINT]).toBeGreaterThanOrEqual(8);
+    expect(o.bag[HW_POINT]).toBeUndefined();
+  });
+  it('没召唤就排南瓜王：任务直接停下', () => {
+    let s = startHere(strong(), hwFight(0), { type: 'infinite' });
+    s = advance(s, T0 + 60_000).state;
+    expect(s.queue.length).toBe(0);
+    expect(s.lastStop?.reason).toBe('summon');
   });
 });
