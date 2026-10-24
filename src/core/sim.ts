@@ -145,6 +145,7 @@ export function migrate(raw: unknown): GameState | null {
     quest: obj<GameState['quest']>(s.quest) && Number.isInteger(s.quest!.i) && s.quest!.i >= 0 ? { i: s.quest!.i, n: Math.max(0, num(s.quest!.n, 0)) } : { i: 0, n: 0 },
     buffs: Object.fromEntries(Object.entries(obj<GameState['buffs']>(s.buffs) ?? {}).filter(([, b]) => b && Number.isFinite(b.pct) && Number.isFinite(b.ms) && b.ms > 0)),
     mounted: !!s.mounted && !!equipment.mount,
+    rage: Math.max(0, Math.min(RAGE_MAX, num(s.rage, 0))),
     redeemed: arr<string>(s.redeemed).filter((c) => typeof c === 'string'),
     home: migrateHome(obj(s.home)),
     sprinklers: arr<string>(s.sprinklers).filter((id) => FARM_NODES.some((n) => n.id === id)),
@@ -421,6 +422,22 @@ export const WEAPON_ARTS: Record<string, { name: string; desc: string }> = {
   staff: { name: '汲取', desc: '造成伤害的 15% 回复自己的生命' },
 };
 
+/** 怒气必杀技：打中和挨打攒怒气，满 100 下一次出手放出来（用户 10-24「继续优化战斗」） */
+export const RAGE_MAX = 100;
+export const RAGE_HIT = 8;
+export const RAGE_HURT = 12;
+export const ULTS: Record<CombatStyle, { name: string; mult: number; desc: string }> = {
+  melee: { name: '旋风斩', mult: 3, desc: '必中，3 倍伤害' },
+  ranged: { name: '穿云箭', mult: 3, desc: '必中，3 倍伤害，不耗箭' },
+  magic: { name: '烈焰术', mult: 2.5, desc: '必中，2.5 倍伤害，并回复 10% 生命' },
+};
+/** 怪物的招式：精英每第 6 下「重击」×1.6；首领每第 5 下「毁灭一击」×2.2，血量低于 30% 进入「狂怒」出手快 30% */
+export const MONSTER_MOVES = {
+  elite: { every: 6, mult: 1.6, name: '重击' },
+  boss: { every: 5, mult: 2.2, name: '毁灭一击' },
+} as const;
+export const BOSS_ENRAGE = 0.3;
+
 /** 护甲套装效果：板甲每件减伤 3%，皮甲每件闪避 +2%，布甲每件暴击 +2% */
 export function armorPerks(s: GameState) {
   const n = { plate: 0, leather: 0, cloth: 0 };
@@ -467,13 +484,16 @@ export function combatEstimate(s: GameState, m: MonsterDef) {
   let avg = st.playerHit * ((1 + st.playerMaxHit) / 2) * (1 + st.crit * (st.critMult - 1));
   if (st.kind === 'sword') avg *= 1 + 0.6 / 4;
   if (st.kind === 'shortbow') avg *= 1.15;
+  // 平均每十来下放一次必杀技
+  avg *= 1 + (ULTS[st.style].mult - 1) / 12;
   const dps = Math.max(1e-6, avg / swing);
   let killMs = m.hp / dps;
   if (st.kind === 'longbow') killMs = Math.max(swing, killMs - swing * 0.8 * st.playerHit);
   const rage = m.traits.includes('berserk') ? 1.25 : 1;
   const venom = m.traits.includes('venom') ? Math.ceil(m.level / 8) : 0;
   const stun = st.kind === 'crossbow' ? 1 / (1 + (0.15 * st.playerHit * 1200) / swing) : 1;
-  const mAvg = st.monsterMaxHit > 0 ? st.monsterHit * (1 - st.dodge) * (((1 + st.monsterMaxHit * rage) / 2) * (1 - st.reduce) + venom) : 0;
+  const move = m.rank === 'normal' ? 1 : 1 + (MONSTER_MOVES[m.rank].mult - 1) / MONSTER_MOVES[m.rank].every;
+  const mAvg = st.monsterMaxHit > 0 ? move * (m.rank === 'boss' ? 1.1 : 1) * st.monsterHit * (1 - st.dodge) * (((1 + st.monsterMaxHit * rage) / 2) * (1 - st.reduce) + venom) : 0;
   const raw = (mAvg / m.attackMs) * killMs * stun;
   // 法杖吸血回不过满血，按一半算
   const taken = st.kind === 'staff' ? Math.max(raw * 0.5, raw - m.hp * 0.15) : raw;
@@ -874,6 +894,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         const dmg = Math.max(1, Math.min(c.monsterHp, Math.round(raw)));
         c.monsterHp -= dmg;
         c.pDmg = (c.pDmg ?? -1) > 0 ? c.pDmg! + dmg : dmg;
+        s.rage = Math.min(RAGE_MAX, (s.rage ?? 0) + RAGE_HIT);
         addXp(st.style, dmg);
         addXp('defence', dmg / 3);
         addXp('hitpoints', dmg / 3);
@@ -884,7 +905,22 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       };
       const longShot = st.kind === 'longbow' && first;
       if (longShot) c.pArt = 'longbow';
-      if (strike(longShot ? 1.8 : 1)) return step;
+      if ((s.rage ?? 0) >= RAGE_MAX) {
+        // 必杀技：必中、几倍伤害（不吃武器特技）
+        s.rage = 0;
+        c.pArt = `ult_${st.style}`;
+        const ult = ULTS[st.style];
+        let raw = (1 + Math.floor(rand() * st.playerMaxHit)) * ult.mult;
+        if (rand() < st.crit) { raw *= st.critMult; c.pCrit = true; }
+        const dmg = Math.max(1, Math.min(c.monsterHp, Math.round(raw)));
+        c.monsterHp -= dmg;
+        c.pDmg = dmg;
+        addXp(st.style, dmg);
+        addXp('defence', dmg / 3);
+        addXp('hitpoints', dmg / 3);
+        if (st.style === 'magic') s.hp = Math.min(maxHp(s), s.hp + Math.round(maxHp(s) * 0.1));
+        if (has('thorns') && hurt(Math.floor(dmg * 0.15))) return step;
+      } else if (strike(longShot ? 1.8 : 1)) return step;
       if (st.kind === 'sword' && c.hitsOnThis % 4 === 0) { c.pArt = 'sword'; if (strike(0.6)) return step; }
       if (st.kind === 'shortbow' && rand() < 0.15) { c.pArt = 'shortbow'; if (strike(1)) return step; }
       if (c.monsterHp <= 0) {
@@ -906,16 +942,24 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       }
     }
     if (c.monsterTimerMs <= 0) {
-      c.monsterTimerMs += m.attackMs;
+      // 首领残血狂怒：出手快 30%
+      const enraged = m.rank === 'boss' && c.monsterHp < m.hp * BOSS_ENRAGE;
+      c.monsterTimerMs += enraged ? Math.round(m.attackMs * 0.7) : m.attackMs;
+      if (enraged && !c.enraged) { c.enraged = true; c.mArt = 'enrage'; }
+      const move = m.rank === 'normal' ? undefined : MONSTER_MOVES[m.rank];
+      const big = !!move && ((c.mSwings ?? 0) + 1) % move.every === 0;
+      if (big) c.mArt = m.rank;
+      else if (c.mArt !== 'enrage' || !enraged) c.mArt = undefined;
       if (has('regen')) c.monsterHp = Math.min(m.hp, c.monsterHp + Math.ceil(m.hp * 0.03));
       c.mSwings = (c.mSwings ?? 0) + 1;
       c.mDmg = -1;
       if (st.monsterMaxHit > 0 && rand() < st.monsterHit && rand() >= st.dodge) {
         const rage = has('berserk') && c.monsterHp < m.hp / 2 ? 1.5 : 1;
-        let dmg = Math.max(1, Math.round((1 + Math.floor(rand() * st.monsterMaxHit * rage)) * (1 - st.reduce)));
+        let dmg = Math.max(1, Math.round((1 + Math.floor(rand() * st.monsterMaxHit * rage)) * (1 - st.reduce) * (big && move ? move.mult : 1)));
         if (has('venom')) dmg += Math.ceil(m.level / 8);
         if (has('lifesteal')) c.monsterHp = Math.min(m.hp, c.monsterHp + Math.ceil(dmg / 2));
         c.mDmg = dmg;
+        s.rage = Math.min(RAGE_MAX, (s.rage ?? 0) + RAGE_HURT);
         hurt(dmg);
       }
     }

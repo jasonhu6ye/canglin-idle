@@ -807,3 +807,23 @@ describe('战斗优化（10-24）', () => {
     expect(art).toBe(true);
   });
 });
+
+describe('怒气必杀技和怪物招式', () => {
+  it('怒气会攒满并放出必杀技；首领会用毁灭一击、残血狂怒', async () => {
+    const { MONSTERS } = await import('./data');
+    let s = newGame(T0, 5);
+    s = startHere(s, 'fight_field_mouse', { type: 'infinite' });
+    let ult = false;
+    for (let t = 500; t < 900_000 && !ult; t += 500) { s = advance(s, T0 + t).state; if (s.combat?.pArt === 'ult_melee') ult = true; }
+    expect(ult).toBe(true);
+    const boss = Object.values(MONSTERS).find((m) => m.rank === 'boss')!;
+    let b = newGame(T0, 6);
+    for (const k of Object.keys(b.xp)) (b.xp as Record<string, number>)[k] = 5_000_000;
+    b.hp = 10_000;
+    b = startHere(b, `fight_${boss.id}`, { type: 'infinite' });
+    let big = false, enrage = false;
+    for (let t = 500; t < 1_800_000 && !(big && enrage); t += 500) { b = advance(b, T0 + t).state; if (b.combat?.mArt === 'boss') big = true; if (b.combat?.enraged) enrage = true; }
+    expect(big).toBe(true);
+    expect(enrage).toBe(true);
+  });
+});

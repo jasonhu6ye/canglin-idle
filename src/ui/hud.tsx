@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { ACTIONS, ITEMS, MONSTERS, nodeOfAction, NODES, SKILLS } from '../core/data';
 import { QUESTS, questProgress, questText } from '../core/quests';
-import { actionDuration, combatLevel, dismissStop, enqueue, rainBonus, isBankId, level, maxHp, removeTask, resumeWork, toggleMount, weaponStyle } from '../core/sim';
+import { RAGE_MAX, ULTS, actionDuration, combatLevel, dismissStop, enqueue, rainBonus, isBankId, level, maxHp, removeTask, resumeWork, toggleMount, weaponStyle } from '../core/sim';
 import { jumpTo, producerOf } from './ActionSheet';
 import { openNodeSheet } from './itemOpen';
 import { wolfIconUrl } from '../game/wolfArt';
@@ -154,6 +154,9 @@ export function StatusChips({ s, extra, log }: { s: GameState; extra?: ReactNode
         <SkillIcon skill={style} size={14} /> <b style={{ color: SKILLS[style].color }}>{SKILLS[style].name}</b> · {m.name}
         <span className="bar wide foe"><i style={{ width: `${(hp / m.hp) * 100}%` }} /></span>
         {s.combat?.respawnMs ? <em>刷新中</em> : <em>{hp}/{m.hp}</em>}
+        <span className={`rage ${(s.rage ?? 0) >= RAGE_MAX ? 'full' : ''}`} title={`怒气：打中和挨打会攒，满了放「${ULTS[style].name}」（${ULTS[style].desc}）`}>
+          怒 <span className="bar"><i style={{ width: `${((s.rage ?? 0) / RAGE_MAX) * 100}%` }} /></span>
+        </span>
       </>
     );
   }

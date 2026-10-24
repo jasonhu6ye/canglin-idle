@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { ACTIONS, BUFF_NAME, buffText, cropsOfField, WAYSTONES, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, type MapNode } from '../core/data';
 import {
-  atBank, atMarket, nearestBank, nearestMarket, BAG_SLOTS, BELT_CAP, beltSlotOf, eat, fromBelt, POTION_AT, toBelt, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, armorPerks, weaponKind, WEAPON_ARTS, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip, openContainer,
+  atBank, atMarket, nearestBank, nearestMarket, BAG_SLOTS, BELT_CAP, beltSlotOf, eat, fromBelt, POTION_AT, toBelt, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, armorPerks, weaponKind, WEAPON_ARTS, ULTS, RAGE_HIT, RAGE_HURT, RAGE_MAX, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip, openContainer,
   weaponStyle, bestAmmo, buffPct, levelSpeed, maxHp, moveSpeed, playerAttackMs,
   redeemCode, toggleMount,
 } from '../core/sim';
@@ -288,6 +288,7 @@ function Attributes({ s }: { s: GameState }) {
             {row('闪避', pct(perks.dodge), <>基础 3%{perks.dodge > 0.03 && <> · 皮甲 +{pct(perks.dodge - 0.03)}</>}</>)}
             {row('减伤', pct(perks.reduce), perks.reduce > 0 ? '板甲每件 3%' : '穿板甲每件减 3%')}
             {art && row('武器特技', art.name, art.desc)}
+            {row('必杀技', ULTS[style].name, `${ULTS[style].desc} · 打中 +${RAGE_HIT}、挨打 +${RAGE_HURT} 怒气，满 ${RAGE_MAX} 放出（现在 ${s.rage ?? 0}）`)}
           </>;
         })()}
         {row('防御加成', `+${b.defence}`, <>全身装备 · 防御等级 {level(s, 'defence')}{defBuff > 0 && <> · 料理防御 +{pct(defBuff)}</>}</>)}

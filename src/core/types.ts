@@ -169,6 +169,10 @@ export interface CombatState {
   /** 最近一次出手是不是暴击、触发了哪种武器特技（飘字用） */
   pCrit?: boolean;
   pArt?: string;
+  /** 怪物最近一次出手：elite / boss 大招，enrage 刚进入狂怒 */
+  mArt?: string;
+  /** 首领已经狂怒了 */
+  enraged?: boolean;
   /** 对这只怪出手了几次（连斩、蓄力用） */
   hitsOnThis?: number;
   /** 这一只怪打到现在拿了多少经验（击杀时记进战斗日志） */
@@ -248,6 +252,8 @@ export interface GameState {
   /** 新手任务：第几个、当前进度 */
   quest?: { i: number; n: number };
   bestiary?: Record<string, number>;
+  /** 怒气（0-100），满了下一次出手放必杀技，换怪不清零 */
+  rage?: number;
   /** 骑在坐骑上（坐骑栏有坐骑时才有效） */
   mounted?: boolean;
   /** 用过的兑换码，每个存档只能领一次 */
