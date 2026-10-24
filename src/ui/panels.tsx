@@ -316,7 +316,7 @@ function Attributes({ s }: { s: GameState }) {
   );
 }
 
-/** 背包：随身带的东西，20 格 */
+/** 背包：随身带的东西，24 格 */
 export function BagPanel({ s }: { s: GameState }) {
   const [sel, setSel] = useState<string | null>(null);
   const items = Object.entries(s.bag).filter(([id]) => ITEMS[id]);

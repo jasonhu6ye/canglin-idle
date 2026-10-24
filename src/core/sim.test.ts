@@ -177,8 +177,8 @@ describe('装备', () => {
     s = equip(s, 'wood_sword');
     expect(s.equipment.weapon).toBe('wood_sword');
     expect(s.bag.wood_sword).toBeUndefined();
-    for (let i = 0; i < 20; i++) s.bag[`raw_${['minnow', 'shrimp', 'carp', 'trout', 'bass', 'cod', 'salmon', 'eel', 'lava_eel', 'ghostfish', 'abyssfish'][i % 11]}`] = 100 * (i < 11 ? 1 : 2);
-    expect(bagSlotsUsed(s.bag)).toBe(20);
+    for (const [i, id] of ['minnow', 'shrimp', 'carp', 'trout', 'bass', 'cod', 'salmon', 'eel', 'lava_eel', 'ghostfish', 'abyssfish', 'loach'].entries()) s.bag[`raw_${id}`] = 200;
+    expect(bagSlotsUsed(s.bag)).toBe(24);
     // 不在仓库旁：背包满了卸不下
     expect(unequip(s, 'weapon').equipment.weapon).toBe('wood_sword');
     s.loc = bankStand();
@@ -249,12 +249,12 @@ describe('背包与战斗方式', () => {
     expect(state.belt?.potion?.qty).toBe(3);
   });
 
-  it('背包 20 格、每格 100 个', () => {
+  it('背包 24 格、每格 100 个', () => {
     let s = newGame(T0, 1);
     s.bank.minnow = 5000;
     s.loc = bankStand();
     s = toBag(s, 'minnow', 5000);
-    expect(s.bag.minnow).toBe(2000);
+    expect(s.bag.minnow).toBe(2400);
   });
 
   it('远程没有箭就停止，有箭会消耗并练远程', () => {
@@ -359,12 +359,12 @@ describe('自动寻路', () => {
 
   it('背包满了自动回仓库存东西，再走回去接着干', () => {
     const s = startHere(newGame(T0, 1), 'mine_stone', { type: 'infinite' });
-    s.bag = { sapphire: 1900 };
+    s.bag = { sapphire: 2300 };
     const { state, summary } = advance(s, T0 + HOUR);
     expect(summary.bankTrips).toBeGreaterThan(0);
-    expect(state.bank.sapphire).toBe(1900);
+    expect(state.bank.sapphire).toBe(2300);
     expect(owned(state, 'stone')).toBe(summary.items.stone);
-    expect(Object.values(state.bag).reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(2000);
+    expect(Object.values(state.bag).reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(2400);
   });
 });
 

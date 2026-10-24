@@ -21,7 +21,7 @@ export const MONSTER_DAMAGE_SCALE = 3;
 /** 存档是纯 JSON；不用 structuredClone，iOS 15.4 以下没有 */
 const clone = (s: GameState): GameState => JSON.parse(JSON.stringify(s));
 
-export const BAG_SLOTS = 20;
+export const BAG_SLOTS = 24;
 /** 背包每格最多叠多少个 */
 export const BAG_STACK = 100;
 export const DEFAULT_CARRY_FOOD = 100;

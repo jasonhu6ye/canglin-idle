@@ -7,6 +7,10 @@ import { useEffect, useState } from 'react';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-10-24-e', date: '10 月 24 日', title: '背包扩到 24 格',
+    lines: ['背包从 20 格增加到 24 格，老存档自动生效。'],
+  },
+  {
     id: '2026-10-24-d', date: '10 月 24 日', title: '战斗系统优化：暴击、闪避、武器特技、战前评估',
     lines: [
       '暴击：基础 5%，暴击伤害 ×1.5，打出来会飘橙色「暴击」。',
