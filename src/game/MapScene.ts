@@ -1,7 +1,7 @@
 import { leaveHome } from '../core/home';
 import Phaser from 'phaser';
 import { ACTIONS, CROP_DEFS, CROPS, cropsOfField, FARM_PLOTS, PLOT_BY_ID, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, DANGER, dangerLevel, nodeOfAction, nodesOfAction, planRoute, standOf, STONE_JUMP_MS, WAYSTONES, travelMs, WALK_TILES_PER_SEC, type MapNode, type Route } from '../core/data';
-import { unlockWaystone, useWaystone, WAYSTONE_REACH, actionDuration, combatLevel, combatStats, WEAPON_ARTS, ULTS, MONSTER_MOVES, isBankId, leaveWork, maxHp, moveSpeed, resumeWork, setLoc, startWalk, teleport as teleportState, walkPos } from '../core/sim';
+import { unlockWaystone, useWaystone, WAYSTONE_REACH, actionDuration, combatLevel, combatStats, MONSTER_MOVES, isBankId, leaveWork, maxHp, moveSpeed, resumeWork, setLoc, startWalk, teleport as teleportState, walkPos } from '../core/sim';
 import { pickSeed, plotGrowth, plotPhase, tendPlot } from '../core/farm';
 import { paintWaystone } from './waystoneArt';
 import { paintPortal, paintPortalSwirl, PORTAL_H } from './homeArt';
@@ -1891,7 +1891,7 @@ export class MapScene extends Phaser.Scene {
     const prev = this.foeSeen;
     this.foeSeen = { hp: c.monsterHp, timer: c.monsterTimerMs, respawn: c.respawnMs, p: c.pSwings ?? 0, m: c.mSwings ?? 0 };
     if (!prev) return;
-    if (this.foeSeen.p > prev.p) this.playerSwingFx(foe, m, c.pDmg ?? -1, !!c.pCrit, c.pArt);
+    if (this.foeSeen.p > prev.p) this.playerSwingFx(foe, m, c.pDmg ?? -1, !!c.pCrit);
     if (this.foeSeen.m > prev.m) this.monsterSwingFx(c.mDmg ?? -1, c.mArt, foe);
     if (c.respawnMs > 0 && prev.respawn <= 0) {
       this.playMon(foe, m, 'death');
@@ -1909,7 +1909,7 @@ export class MapScene extends Phaser.Scene {
   // ---- 战斗特效 ----
 
   /** 主角出手：按武器放刀光 / 箭 / 法球，打到之后再闪白、击退、飘数字 */
-  private playerSwingFx(foe: Phaser.GameObjects.Sprite, m: MonsterDef, dmg: number, crit = false, art?: string) {
+  private playerSwingFx(foe: Phaser.GameObjects.Sprite, m: MonsterDef, dmg: number, crit = false) {
     const w = store.state.equipment.weapon ?? '';
     const key = w.slice(w.indexOf('_') + 1);
     const S = monsterFrameSize(m);
@@ -1927,15 +1927,6 @@ export class MapScene extends Phaser.Scene {
       const heavy = crit || dmg >= Math.max(3, combatStats(store.state, m).playerMaxHit * 0.85);
       this.popText(nx, ny, crit ? `暴击 ${dmg}!` : heavy ? `${dmg}!` : `${dmg}`, crit ? '#ff7a30' : heavy ? '#ffb030' : '#ffffff', crit ? 11 : heavy ? 10 : 8);
       if (heavy) this.cameras.main.shake(crit ? 130 : 90, crit ? 0.003 : 0.002);
-      // 武器特技、必杀技触发：在主角头上飘一下名字
-      const ult = art?.startsWith('ult_') ? ULTS[art.slice(4) as keyof typeof ULTS] : undefined;
-      if (ult) {
-        this.popText(this.player.x, this.player.y - 30, `${ult.name}！`, '#ffe070', 11);
-        this.cameras.main.shake(180, 0.005);
-        this.cameras.main.flash(100, 255, 220, 120);
-      }
-      const name = !ult && art && WEAPON_ARTS[art]?.name;
-      if (name) this.popText(this.player.x, this.player.y - 26, name, '#8ae8ff', 8);
     };
     const from = { x: this.player.x + 6, y: this.player.y - 4 };
     if (['shortbow', 'longbow', 'crossbow'].includes(key)) {

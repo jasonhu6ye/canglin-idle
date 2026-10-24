@@ -617,8 +617,3 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .tab-lock { z-index: 100; }
 .combat-info .good { color: #8ee08a; }
 
-.chip .rage { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; color: #ff9a4a; font-size: 11px; }
-.chip .rage .bar { width: 46px; height: 5px; background: #2a1810; display: inline-block; position: relative; border-radius: 2px; overflow: hidden; }
-.chip .rage .bar i { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #c84a1a, #ffb03a); }
-.chip .rage.full .bar i { background: #ffe070; box-shadow: 0 0 6px #ffb03a; }
-.chip .rage.full { color: #ffe070; }

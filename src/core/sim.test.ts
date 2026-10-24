@@ -774,14 +774,12 @@ describe('弹药很多时不来回跑', () => {
 });
 
 describe('战斗优化（10-24）', () => {
-  it('匕首暴击率高，皮甲加闪避，板甲减伤', async () => {
+  it('暴击基础 5%，皮甲加闪避，板甲减伤', async () => {
     const { combatStats, armorPerks, combatEstimate } = await import('./sim');
     const { MONSTERS } = await import('./data');
     const m = MONSTERS.field_mouse;
     let s = newGame(T0, 1);
     s.equipment.weapon = 'wood_dagger';
-    expect(combatStats(s, m).crit).toBeCloseTo(0.17);
-    s.equipment.weapon = 'wood_sword';
     expect(combatStats(s, m).crit).toBeCloseTo(0.05);
     const leather = Object.keys(ITEMS).filter((i) => ITEMS[i].equip?.style === 'ranged' && ITEMS[i].equip?.slot !== 'weapon' && ITEMS[i].equip?.defence);
     const plate = Object.keys(ITEMS).filter((i) => ITEMS[i].equip?.style === 'melee' && ITEMS[i].equip?.slot !== 'weapon' && ITEMS[i].equip?.defence);
@@ -793,29 +791,22 @@ describe('战斗优化（10-24）', () => {
     expect(['轻松', '适中']).toContain(e.rating);
     expect(e.perHour).toBeGreaterThan(100);
   });
-  it('打一阵会出暴击，剑会触发连斩', () => {
+  it('打一阵会出暴击', () => {
     let s = newGame(T0, 3);
     s.equipment.weapon = 'wood_sword';
     s = startHere(s, 'fight_field_mouse', { type: 'infinite' });
-    let crit = false, art = false;
-    for (let t = 500; t < 600_000 && !(crit && art); t += 500) {
+    let crit = false;
+    for (let t = 500; t < 600_000 && !crit; t += 500) {
       s = advance(s, T0 + t).state;
       if (s.combat?.pCrit) crit = true;
-      if (s.combat?.pArt === 'sword') art = true;
     }
     expect(crit).toBe(true);
-    expect(art).toBe(true);
   });
 });
 
-describe('怒气必杀技和怪物招式', () => {
-  it('怒气会攒满并放出必杀技；首领会用毁灭一击、残血狂怒', async () => {
+describe('怪物招式', () => {
+  it('首领会用毁灭一击、残血狂怒', async () => {
     const { MONSTERS } = await import('./data');
-    let s = newGame(T0, 5);
-    s = startHere(s, 'fight_field_mouse', { type: 'infinite' });
-    let ult = false;
-    for (let t = 500; t < 900_000 && !ult; t += 500) { s = advance(s, T0 + t).state; if (s.combat?.pArt === 'ult_melee') ult = true; }
-    expect(ult).toBe(true);
     const boss = Object.values(MONSTERS).find((m) => m.rank === 'boss')!;
     let b = newGame(T0, 6);
     for (const k of Object.keys(b.xp)) (b.xp as Record<string, number>)[k] = 5_000_000;

@@ -145,7 +145,6 @@ export function migrate(raw: unknown): GameState | null {
     quest: obj<GameState['quest']>(s.quest) && Number.isInteger(s.quest!.i) && s.quest!.i >= 0 ? { i: s.quest!.i, n: Math.max(0, num(s.quest!.n, 0)) } : { i: 0, n: 0 },
     buffs: Object.fromEntries(Object.entries(obj<GameState['buffs']>(s.buffs) ?? {}).filter(([, b]) => b && Number.isFinite(b.pct) && Number.isFinite(b.ms) && b.ms > 0)),
     mounted: !!s.mounted && !!equipment.mount,
-    rage: Math.max(0, Math.min(RAGE_MAX, num(s.rage, 0))),
     redeemed: arr<string>(s.redeemed).filter((c) => typeof c === 'string'),
     home: migrateHome(obj(s.home)),
     sprinklers: arr<string>(s.sprinklers).filter((id) => FARM_NODES.some((n) => n.id === id)),
@@ -408,29 +407,6 @@ function hitChance(attackRoll: number, defenceRoll: number): number {
     : attackRoll / (2 * (defenceRoll + 1));
 }
 
-/** 武器种类（剑、长枪…），从装备 id 的后半截取 */
-export const weaponKind = (s: GameState) => { const w = s.equipment.weapon ?? ''; return w.slice(w.indexOf('_') + 1); };
-
-/** 每种武器的特技（用户 10-24「优化战斗系统」） */
-export const WEAPON_ARTS: Record<string, { name: string; desc: string }> = {
-  sword: { name: '连斩', desc: '每第 4 次出手多砍一刀（六成伤害）' },
-  spear: { name: '破甲', desc: '无视怪物 25% 防御，更容易命中' },
-  dagger: { name: '要害', desc: '暴击率 +12%，暴击伤害 ×2' },
-  shortbow: { name: '连射', desc: '15% 几率多射一箭，不额外耗箭' },
-  longbow: { name: '蓄力', desc: '每只怪的第一箭伤害 ×1.8' },
-  crossbow: { name: '震慑', desc: '命中时 15% 几率把怪震住 1.2 秒' },
-  staff: { name: '汲取', desc: '造成伤害的 15% 回复自己的生命' },
-};
-
-/** 怒气必杀技：打中和挨打攒怒气，满 100 下一次出手放出来（用户 10-24「继续优化战斗」） */
-export const RAGE_MAX = 100;
-export const RAGE_HIT = 8;
-export const RAGE_HURT = 12;
-export const ULTS: Record<CombatStyle, { name: string; mult: number; desc: string }> = {
-  melee: { name: '旋风斩', mult: 3, desc: '必中，3 倍伤害' },
-  ranged: { name: '穿云箭', mult: 3, desc: '必中，3 倍伤害，不耗箭' },
-  magic: { name: '烈焰术', mult: 2.5, desc: '必中，2.5 倍伤害，并回复 10% 生命' },
-};
 /** 怪物的招式：精英每第 6 下「重击」×1.6；首领每第 5 下「毁灭一击」×2.2，血量低于 30% 进入「狂怒」出手快 30% */
 export const MONSTER_MOVES = {
   elite: { every: 6, mult: 1.6, name: '重击' },
@@ -460,17 +436,15 @@ export function combatStats(s: GameState, m: MonsterDef) {
   const has = (t: string) => m.traits.includes(t);
   // 抗性和弱点只影响对应战斗方式的伤害
   const dmgMult = (has(`resist_${style}`) ? 0.7 : 1) * (has(`weak_${style}`) ? 1.3 : 1);
-  const kind = weaponKind(s);
   const perks = armorPerks(s);
   return {
     style,
     ammo: ammo?.id,
-    kind,
-    crit: 0.05 + perks.crit + (kind === 'dagger' ? 0.12 : 0),
-    critMult: kind === 'dagger' ? 2 : 1.5,
+    crit: 0.05 + perks.crit,
+    critMult: 1.5,
     dodge: perks.dodge,
     reduce: perks.reduce,
-    playerHit: hitChance((lvl + 8) * (b.attack + 64) * (1 + buffPct(s, 'atk')), (m.defence * (kind === 'spear' ? 0.75 : 1) + 8) * 64) * (has('evasive') ? 0.8 : 1),
+    playerHit: hitChance((lvl + 8) * (b.attack + 64) * (1 + buffPct(s, 'atk')), (m.defence + 8) * 64) * (has('evasive') ? 0.8 : 1),
     playerMaxHit: Math.max(1, Math.round((((lvl + 8) * (strength + 64)) / 64) * dmgMult * (1 + buffPct(s, 'str')))),
     monsterHit: m.maxHit > 0 ? hitChance((m.attack + 8) * 64, (level(s, 'defence') + 8) * (b.defence + 64) * (1 + buffPct(s, 'def'))) : 0,
     monsterMaxHit: m.maxHit * MONSTER_DAMAGE_SCALE,
@@ -482,21 +456,13 @@ export function combatEstimate(s: GameState, m: MonsterDef) {
   const st = combatStats(s, m);
   const swing = playerAttackMs(s);
   let avg = st.playerHit * ((1 + st.playerMaxHit) / 2) * (1 + st.crit * (st.critMult - 1));
-  if (st.kind === 'sword') avg *= 1 + 0.6 / 4;
-  if (st.kind === 'shortbow') avg *= 1.15;
-  // 平均每十来下放一次必杀技
-  avg *= 1 + (ULTS[st.style].mult - 1) / 12;
   const dps = Math.max(1e-6, avg / swing);
-  let killMs = m.hp / dps;
-  if (st.kind === 'longbow') killMs = Math.max(swing, killMs - swing * 0.8 * st.playerHit);
+  const killMs = m.hp / dps;
   const rage = m.traits.includes('berserk') ? 1.25 : 1;
   const venom = m.traits.includes('venom') ? Math.ceil(m.level / 8) : 0;
-  const stun = st.kind === 'crossbow' ? 1 / (1 + (0.15 * st.playerHit * 1200) / swing) : 1;
   const move = m.rank === 'normal' ? 1 : 1 + (MONSTER_MOVES[m.rank].mult - 1) / MONSTER_MOVES[m.rank].every;
   const mAvg = st.monsterMaxHit > 0 ? move * (m.rank === 'boss' ? 1.1 : 1) * st.monsterHit * (1 - st.dodge) * (((1 + st.monsterMaxHit * rage) / 2) * (1 - st.reduce) + venom) : 0;
-  const raw = (mAvg / m.attackMs) * killMs * stun;
-  // 法杖吸血回不过满血，按一半算
-  const taken = st.kind === 'staff' ? Math.max(raw * 0.5, raw - m.hp * 0.15) : raw;
+  const taken = (mAvg / m.attackMs) * killMs;
   const hp = maxHp(s);
   const ratio = taken / hp;
   const rating = ratio < 0.2 ? '轻松' : ratio < 0.5 ? '适中' : ratio < 1 ? '危险' : '很难';
@@ -857,11 +823,14 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     if (c.respawnMs > 0) {
       const step = Math.min(budget, c.respawnMs);
       c.respawnMs -= step;
+      regen(s, step);
       return step;
     }
     const step = Math.min(budget, c.playerTimerMs, c.monsterTimerMs);
     c.playerTimerMs -= step;
     c.monsterTimerMs -= step;
+    // 回血先算到出手这一刻：不管离线一次结算还是分段结算，回血和挨打的先后都一样
+    regen(s, step);
     const st = combatStats(s, m);
 
     if (c.playerTimerMs <= 0) {
@@ -883,34 +852,8 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       c.pSwings = (c.pSwings ?? 0) + 1;
       c.pDmg = -1;
       c.pCrit = false;
-      c.pArt = undefined;
-      const first = (c.hitsOnThis ?? 0) === 0;
-      c.hitsOnThis = (c.hitsOnThis ?? 0) + 1;
-      /** 打一下：返回是否把自己打死了（荆棘反伤） */
-      const strike = (mult: number): boolean => {
-        if (rand() >= st.playerHit || c.monsterHp <= 0) return false;
-        let raw = (1 + Math.floor(rand() * st.playerMaxHit)) * mult;
-        if (rand() < st.crit) { raw *= st.critMult; c.pCrit = true; }
-        const dmg = Math.max(1, Math.min(c.monsterHp, Math.round(raw)));
-        c.monsterHp -= dmg;
-        c.pDmg = (c.pDmg ?? -1) > 0 ? c.pDmg! + dmg : dmg;
-        s.rage = Math.min(RAGE_MAX, (s.rage ?? 0) + RAGE_HIT);
-        addXp(st.style, dmg);
-        addXp('defence', dmg / 3);
-        addXp('hitpoints', dmg / 3);
-        if (st.kind === 'staff') s.hp = Math.min(maxHp(s), s.hp + Math.max(1, Math.round(dmg * 0.15)));
-        if (st.kind === 'crossbow' && rand() < 0.15) { c.monsterTimerMs += 1200; c.pArt = 'crossbow'; }
-        // 荆棘：打它会被反伤
-        return has('thorns') && hurt(Math.floor(dmg * 0.15));
-      };
-      const longShot = st.kind === 'longbow' && first;
-      if (longShot) c.pArt = 'longbow';
-      if ((s.rage ?? 0) >= RAGE_MAX) {
-        // 必杀技：必中、几倍伤害（不吃武器特技）
-        s.rage = 0;
-        c.pArt = `ult_${st.style}`;
-        const ult = ULTS[st.style];
-        let raw = (1 + Math.floor(rand() * st.playerMaxHit)) * ult.mult;
+      if (rand() < st.playerHit) {
+        let raw = 1 + Math.floor(rand() * st.playerMaxHit);
         if (rand() < st.crit) { raw *= st.critMult; c.pCrit = true; }
         const dmg = Math.max(1, Math.min(c.monsterHp, Math.round(raw)));
         c.monsterHp -= dmg;
@@ -918,11 +861,9 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         addXp(st.style, dmg);
         addXp('defence', dmg / 3);
         addXp('hitpoints', dmg / 3);
-        if (st.style === 'magic') s.hp = Math.min(maxHp(s), s.hp + Math.round(maxHp(s) * 0.1));
+        // 荆棘：打它会被反伤
         if (has('thorns') && hurt(Math.floor(dmg * 0.15))) return step;
-      } else if (strike(longShot ? 1.8 : 1)) return step;
-      if (st.kind === 'sword' && c.hitsOnThis % 4 === 0) { c.pArt = 'sword'; if (strike(0.6)) return step; }
-      if (st.kind === 'shortbow' && rand() < 0.15) { c.pArt = 'shortbow'; if (strike(1)) return step; }
+      }
       if (c.monsterHp <= 0) {
         const got: Record<string, number> = {};
         for (const d of m.drops) {
@@ -937,7 +878,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         task.deathStreak = 0;
         s.bestiary = { ...s.bestiary, [m.id]: (s.bestiary?.[m.id] ?? 0) + 1 };
         task.done++;
-        s.combat = { monsterHp: m.hp, playerTimerMs: playerAttackMs(s), monsterTimerMs: m.attackMs, respawnMs: m.respawnMs ?? RESPAWN_MS, pSwings: c.pSwings, pDmg: c.pDmg, mSwings: c.mSwings, pCrit: c.pCrit, pArt: c.pArt };
+        s.combat = { monsterHp: m.hp, playerTimerMs: playerAttackMs(s), monsterTimerMs: m.attackMs, respawnMs: m.respawnMs ?? RESPAWN_MS, pSwings: c.pSwings, pDmg: c.pDmg, mSwings: c.mSwings, pCrit: c.pCrit };
         return step;
       }
     }
@@ -959,7 +900,6 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         if (has('venom')) dmg += Math.ceil(m.level / 8);
         if (has('lifesteal')) c.monsterHp = Math.min(m.hp, c.monsterHp + Math.ceil(dmg / 2));
         c.mDmg = dmg;
-        s.rage = Math.min(RAGE_MAX, (s.rage ?? 0) + RAGE_HURT);
         hurt(dmg);
       }
     }
@@ -1026,7 +966,8 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     dt -= used;
     if (s.queue[0] === task) {
       task.elapsedMs += used;
-      regen(s, used);
+      // 战斗的回血在 stepCombat 里按出手前算过了
+      if (a.kind === 'skill') regen(s, used);
       if (isFinished(task)) endTask('complete');
     }
   }

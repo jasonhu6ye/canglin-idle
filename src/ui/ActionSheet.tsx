@@ -2,7 +2,7 @@ import { MonsterDetail, MonsterIcon, TraitChips } from './Bestiary';
 import { useEffect, useRef, useState } from 'react';
 import { ACTIONS, nodeOfAction, ITEMS, MONSTERS, NODES, REGIONS, SEED_PRICE, SEED_SHOP, SKILLS, tierName } from '../core/data';
 import {
-  actionDuration, atMarket, bestAmmo, bestFood, buySeed, combatEstimate, combatStats, WEAPON_ARTS, enqueue, level, MAX_QUEUE, nearNode, setSettings, startNow, weaponStyle, xpPerHour,
+  actionDuration, atMarket, bestAmmo, bestFood, buySeed, combatEstimate, combatStats, enqueue, level, MAX_QUEUE, nearNode, setSettings, startNow, weaponStyle, xpPerHour,
 } from '../core/sim';
 import type { ActionDef, GameState, SkillAction, TaskMode } from '../core/types';
 import type { MapNode } from '../core/data';
@@ -355,10 +355,9 @@ function CombatInfo({ s, monster }: { s: GameState; monster: string }) {
       <span>它的命中 {Math.round(st.monsterHit * 100)}% · 最高 {st.monsterMaxHit}</span>
       {(() => {
         const e = combatEstimate(s, m);
-        const art = WEAPON_ARTS[st.kind];
         const cls = e.rating === '轻松' ? 'good' : e.rating === '适中' ? '' : 'warn';
         return <>
-          <span>暴击 {Math.round(st.crit * 100)}% · 闪避 {Math.round(st.dodge * 100)}%{st.reduce > 0 && ` · 减伤 ${Math.round(st.reduce * 100)}%`}{art && ` · 特技「${art.name}」`}</span>
+          <span>暴击 {Math.round(st.crit * 100)}% · 闪避 {Math.round(st.dodge * 100)}%{st.reduce > 0 && ` · 减伤 ${Math.round(st.reduce * 100)}%`}</span>
           <span className={cls}>评估：<b>{e.rating}</b> · 每只约 {Math.max(1, Math.round(e.killMs / 1000))} 秒、掉血约 {Math.round(e.taken)} · 每小时约 {fmtNum(Math.floor(e.perHour))} 只<small className="muted">（不算回仓库的路）</small></span>
         </>;
       })()}
