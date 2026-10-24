@@ -1097,6 +1097,12 @@ function draw(c: Ctx) {
     case 'wisp': return wisp(c);
     case 'treant': case 'mushroom': case 'mandrake': case 'vine': case 'cactoid': return plant(c);
     case 'eye': return eyeball(c);
+    case 'octopus': return octopus(c);
+    case 'shark': return shark(c);
+    case 'manta': return manta(c);
+    case 'moth': return moth(c);
+    case 'elemental': return elemental(c);
+    case 'hydra': return hydra(c);
     default: return beast(c);
   }
 }
@@ -1126,6 +1132,211 @@ function wyvern(c: Ctx) {
   limb(p, hx - u, hy - 2 * u, hx - 5 * u, hy - 4 * u, A[2], u);
   if (o.open > 0.5) breath(c, hx + 6 * u, hy + u);
   wing(c, cx - u, by - 3 * u, 'near', 13, true);
+}
+
+// ---- 12080 外圈新外形（用户 10-24：新生物要有动态模型） ----
+
+/** 章鱼：圆头趴在地上，八条触手各自卷动，攻击时前面几条甩出去 */
+function octopus(c: Ctx) {
+  const { p, u, g, o, P, A } = c;
+  const cx = c.S / 2 + o.lean;
+  const hy = g - 9 * u + o.bob + (o.moving ? Math.sin(o.phase * 2) * u : 0);
+  for (let k = 0; k < 8; k++) {
+    const far = k % 2 === 0;
+    const base = cx - 5 * u + k * 1.4 * u;
+    const reach = o.anim === 'attack' && k >= 5 ? o.open * 6 * u : 0;
+    let px = base;
+    let py = hy + 3 * u;
+    for (let j = 0; j < 7; j++) {
+      const q = j / 6;
+      const curl = Math.sin(o.t * TAU + k * 0.9 + q * 3) * 1.6 * u;
+      const dir = (k - 3.5) / 3.5;
+      px = base + dir * q * 7 * u + curl * q + reach * q;
+      py = Math.min(g, hy + 3 * u + q * 7 * u - (reach ? q * q * 4 * u : 0));
+      ell(p, px, py, (1.3 - q * 0.7) * u, (1.3 - q * 0.7) * u, far ? P[0] : j > 4 ? A[2] : P[1]);
+    }
+    if (!far) p.set(px, py, A[3]);
+  }
+  blob(c, cx, hy - u, 6 * u * (2 - o.squash) * 0.95, 6 * u * o.squash, P, 31);
+  ell(p, cx - 2 * u, hy - 4 * u, 2 * u, 1.2 * u, P[3]);
+  for (let k = 0; k < 4; k++) p.set(cx - 3 * u + k * 2 * u, hy - 2 * u + (k % 2) * u, A[2]);
+  for (const ex of [cx - u, cx + 3 * u]) {
+    ell(p, ex, hy + u, 1.3 * u, 1.3 * u, '#f0e8c0');
+    p.set(ex + u * 0.4, hy + u, '#140c10');
+  }
+  if (c.rank === 'boss') fillPoly(p, [[cx - 3 * u, hy - 6 * u], [cx - 2 * u, hy - 9 * u], [cx, hy - 7 * u], [cx + 2 * u, hy - 9 * u], [cx + 3 * u, hy - 6 * u]], '#f0c040');
+}
+
+/** 鲨鱼：贴着地面「游」，尾巴左右甩，攻击时张开满是尖牙的嘴往前冲 */
+function shark(c: Ctx) {
+  const { p, u, g, o, P, A } = c;
+  const swim = Math.sin(o.anim === 'move' ? o.phase * 2 : o.t * TAU);
+  const cx = c.S / 2 - u + o.lean + (o.anim === 'attack' ? o.open * 2 * u : 0);
+  const cy = g - 8 * u + o.bob + swim * 0.6 * u + (o.anim === 'death' ? o.t * 4 * u : 0);
+  // 尾巴
+  const tx = cx - 11 * u;
+  const tw = swim * 2 * u;
+  fillPoly(p, [[cx - 7 * u, cy - u], [tx, cy - 5 * u + tw], [tx + 2 * u, cy + tw * 0.3], [tx, cy + 4 * u + tw], [cx - 7 * u, cy + u]], P[1]);
+  // 身体：上深下浅
+  for (let y = Math.floor(cy - 4 * u); y <= cy + 4 * u; y++) {
+    for (let x = Math.floor(cx - 9 * u); x <= cx + 9 * u; x++) {
+      const dx = (x + 0.5 - cx) / (9 * u);
+      const dy = (y + 0.5 - cy) / ((dx > 0 ? 4 - dx * 1.5 : 4 + dx * 2) * u);
+      if (dx * dx + dy * dy > 1) continue;
+      p.set(x, y, dy > 0.25 ? A[3] : dy > -0.3 ? P[2] : P[1]);
+    }
+  }
+  // 背鳍、胸鳍
+  fillPoly(p, [[cx - 2 * u, cy - 3 * u], [cx - 4 * u, cy - 9 * u - swim * 0.5 * u], [cx + 2 * u, cy - 3 * u]], P[1]);
+  fillPoly(p, [[cx, cy + 2 * u], [cx - 3 * u, cy + 6 * u + swim * u], [cx + 2 * u, cy + 3 * u]], P[0]);
+  for (let k = 0; k < 3; k++) limb(p, cx + 3 * u + k * u, cy - u, cx + 3 * u + k * u, cy + u, P[0]);
+  eye(c, cx + 6 * u, cy - u, '#140c10', c.S >= 32);
+  // 嘴：张开时露出两排牙
+  const open = o.open * 2.5 * u;
+  if (open > u * 0.5) {
+    fillPoly(p, [[cx + 9 * u, cy + u - open], [cx + 4 * u, cy + 2 * u], [cx + 9 * u, cy + 2 * u + open]], '#3a0a10');
+    for (let k = 0; k < 3; k++) {
+      p.set(cx + 5 * u + k * 1.4 * u, cy + 1.4 * u - open * 0.5, '#ffffff');
+      p.set(cx + 5 * u + k * 1.4 * u, cy + 2.4 * u + open * 0.5, '#ffffff');
+    }
+  } else limb(p, cx + 5 * u, cy + 2 * u, cx + 8.5 * u, cy + 1.5 * u, P[0]);
+  if (c.m.traits.includes('fierce')) for (let k = 0; k < 3; k++) limb(p, cx - 4 * u + k * 2 * u, cy - 2 * u, cx - 3 * u + k * 2 * u, cy + 2 * u, A[1]);
+}
+
+/** 地上一圈点状影子（浮空的生物用，不画成一整条黑块） */
+function shadow(c: Ctx, cx: number, rx: number) {
+  for (let x = Math.floor(cx - rx); x <= cx + rx; x++) if ((x & 1) === 0) c.p.set(x, c.g, c.P[0]);
+}
+
+/** 魔鬼鱼：浮在半空，一对宽大的三角翼像鸟一样上下扇，头前一对角状头鳍，后面拖一条细长尾巴 */
+function manta(c: Ctx) {
+  const { p, u, g, o, P, A } = c;
+  const fl = o.anim === 'death' ? -0.6 : o.anim === 'move' ? Math.sin(o.phase * 2) : Math.sin(o.t * TAU) * 0.7;
+  const cx = c.S / 2 + o.lean;
+  const cy = c.S * 0.5 + o.bob + Math.round(-fl * u) + (o.anim === 'death' ? o.t * (g - 3 * u - c.S * 0.5) : 0);
+  shadow(c, cx, 6 * u);
+  // 尾巴
+  for (let k = 0; k < 11; k++) p.set(cx - 5 * u - k * u, cy + Math.sin(k * 0.7 + o.t * TAU) * u + k * 0.15 * u, k < 5 ? P[0] : P[1]);
+  // 远处那只翼：往上扇
+  fillPoly(p, [[cx - 4 * u, cy - u], [cx + 3 * u, cy - u], [cx - 2 * u, cy - u - (3 + fl * 6) * u]], P[0]);
+  // 身体：扁的菱形，背深腹浅
+  fillPoly(p, [[cx - 6 * u, cy], [cx, cy - 2 * u], [cx + 5 * u, cy - u], [cx + 5 * u, cy + u], [cx, cy + 2 * u]], P[1]);
+  fillPoly(p, [[cx - 4 * u, cy + u], [cx + 4 * u, cy + u], [cx, cy + 2 * u]], A[3]);
+  ell(p, cx, cy - u, 3 * u, 0.8 * u, P[2]);
+  for (let k = 0; k < 3; k++) p.set(cx - 2 * u + k * 2 * u, cy - u, A[2]);
+  // 头鳍：攻击时张开
+  limb(p, cx + 5 * u, cy - u, cx + 7 * u + o.open * 2 * u, cy - 2 * u - o.open * u, P[2], u);
+  limb(p, cx + 5 * u, cy + u, cx + 7 * u + o.open * 2 * u, cy + 2 * u + o.open * u, P[2], u);
+  eye(c, cx + 4 * u, cy - u, A[3]);
+  // 近处那只翼：画在身体前面，扇下去时盖住肚子
+  const tip = cy - (2 + fl * 6) * u;
+  fillPoly(p, [[cx - 5 * u, cy], [cx + 3 * u, cy], [cx - u, tip], [cx - 3 * u, tip + u]], P[2]);
+  limb(p, cx + 3 * u, cy, cx - u, tip, P[3]);
+  if (o.anim === 'attack' && o.open > 0.4) for (let k = 0; k < 4; k++) p.set(cx + 9 * u + k * u, cy + (k % 2 ? u : -u), A[3]);
+}
+
+/** 飞蛾：毛茸茸的身子、带眼斑的大翅膀，扑扇时洒下鳞粉 */
+function moth(c: Ctx) {
+  const { p, u, g, o, P, A } = c;
+  const cx = c.S / 2 + o.lean;
+  const by = c.S * 0.48 + o.bob + Math.round(Math.sin(o.t * TAU * 2) * u) + (o.anim === 'death' ? o.t * (g - c.S * 0.48) : 0);
+  const fl = o.anim === 'death' ? -0.5 : Math.sin(o.t * TAU * (o.moving ? 4 : 2));
+  const wing = (front: boolean) => {
+    const h = (front ? 10 : 8) * u * (0.4 + Math.abs(fl) * 0.6);
+    const x0 = cx - (front ? 0 : 2 * u);
+    const col = front ? P[2] : P[1];
+    fillPoly(p, [[x0, by], [x0 - 5 * u, by - h], [x0 - 10 * u, by - h * 0.75], [x0 - 9 * u, by - h * 0.2], [x0 - 4 * u, by + u]], col);
+    fillPoly(p, [[x0, by + u], [x0 - 8 * u, by + h * 0.5], [x0 - 5 * u, by + h * 0.75], [x0 - 2 * u, by + 2 * u]], front ? P[1] : P[0]);
+    if (front) {
+      ell(p, x0 - 6 * u, by - h * 0.55, 2 * u, 2 * u * (0.4 + Math.abs(fl) * 0.6), A[2]);
+      p.set(x0 - 6 * u, by - h * 0.55, '#140c10');
+      limb(p, x0 - u, by, x0 - 9 * u, by - h * 0.7, P[3]);
+    }
+  };
+  wing(false);
+  for (let k = 0; k < 4; k++) ell(p, cx - k * 1.5 * u, by + k * 0.4 * u, (2 - k * 0.3) * u, (2 - k * 0.3) * u, k % 2 ? P[1] : A[1]);
+  blob(c, cx + 2 * u, by - u, 2 * u, 2 * u, A);
+  eye(c, cx + 3 * u, by - u, '#140c10');
+  limb(p, cx + 3 * u, by - 3 * u, cx + 5 * u, by - 6 * u, P[0]);
+  limb(p, cx + 2 * u, by - 3 * u, cx + 3 * u, by - 6 * u, P[0]);
+  wing(true);
+  // 鳞粉往下飘
+  for (let k = 0; k < 5; k++) {
+    const ph = (o.t + k / 5) % 1;
+    p.set(cx - 4 * u + (phash(k, 3, 9) - 0.5) * 10 * u, by + 2 * u + ph * (g - by - 2 * u), ph < 0.5 ? A[3] : A[2]);
+  }
+  if (o.anim === 'attack' && o.open > 0.3) for (let k = 0; k < 6; k++) p.set(cx + 5 * u + k * u, by + Math.sin(k) * 2 * u, A[3]);
+}
+
+/** 元素：悬浮的发光核心，外面一圈碎块（岩石、冰晶、火焰看主色）绕着转，攻击时碎块往前飞 */
+function elemental(c: Ctx) {
+  const { p, u, g, o, P, A } = c;
+  const cx = c.S / 2 + o.lean;
+  const cy = g - 11 * u + o.bob + Math.sin(o.t * TAU) * u + (o.anim === 'death' ? o.t * 6 * u : 0);
+  shadow(c, cx, 4 * u);
+  const n = c.rank === 'normal' ? 5 : 7;
+  const pieces: [number, number, number][] = [];
+  for (let k = 0; k < n; k++) {
+    const a = o.t * TAU + (k / n) * TAU;
+    // 攻击时碎块往外甩一点、整体前冲一点，都留在画框里
+    const rr = (7 + (o.anim === 'attack' ? o.open * 2 : 0) + (o.anim === 'death' ? o.t * 5 : 0)) * u;
+    pieces.push([cx + Math.cos(a) * rr + (o.anim === 'attack' ? o.open * u : 0), cy + Math.sin(a) * rr * 0.45, Math.sin(a)]);
+  }
+  const chunk = ([x, y]: [number, number, number], k: number) => fillPoly(p, [[x - 1.5 * u, y], [x, y - 2 * u], [x + 1.5 * u, y - 0.5 * u], [x + u, y + 1.5 * u], [x - u, y + 1.2 * u]], k % 2 ? P[1] : P[2]);
+  pieces.forEach((q, k) => q[2] < 0 && chunk(q, k));
+  // 核心：外圈主色、里面点缀色发亮，一闪一闪
+  const pulse = 1 + Math.sin(o.t * TAU * 2) * 0.08;
+  ell(p, cx, cy, 4.5 * u * pulse, 5 * u * pulse * o.squash, P[1]);
+  ell(p, cx, cy, 3.3 * u * pulse, 3.8 * u * pulse * o.squash, A[2]);
+  ell(p, cx - u, cy - u, 1.6 * u, 1.8 * u, A[3]);
+  p.set(cx - 1.5 * u, cy - 2 * u, '#ffffff');
+  eye(c, cx + u, cy, '#140c10');
+  eye(c, cx + 2.5 * u, cy, '#140c10');
+  pieces.forEach((q, k) => q[2] >= 0 && chunk(q, k));
+  sparks(c, cx, cy - 4 * u, 3, A);
+}
+
+/** 多头蛇：粗壮的身子盘在地上，几条脖子各自摆动，攻击时轮流往前咬 */
+function hydra(c: Ctx) {
+  const { p, u, g, o, P, A } = c;
+  const cx = c.S / 2 - 4 * u + o.lean;
+  const by = g - 5 * u + o.bob;
+  // 尾巴盘在后面
+  for (let k = 0; k <= 10; k++) {
+    const q = k / 10;
+    ell(p, cx - 4 * u - q * 7 * u, g - 2 * u - Math.sin(q * 4 + o.t * TAU) * u, (1 - q * 0.6) * 2.5 * u, (1 - q * 0.6) * 2.5 * u, P[1]);
+  }
+  blob(c, cx, by, 7 * u, 5 * u * o.squash, P, 41);
+  ell(p, cx + u, by + 2 * u, 5 * u, 2 * u, A[1]);
+  for (const x of [cx - 4 * u, cx + 4 * u]) {
+    const sw = o.moving ? Math.sin(o.phase + x) * u : 0;
+    limb(p, x, by + 2 * u, x + sw + u, g, P[0], 2.5 * u);
+  }
+  const heads = c.rank === 'boss' ? 5 : 3;
+  // 脖子从身体前上方扇形散开：最后面那条朝上，最前面那条朝前，先画后面的
+  const bx = cx + 3 * u;
+  const bY = by - 3 * u;
+  for (let h = 0; h < heads; h++) {
+    const q = h / (heads - 1);
+    const bite = o.anim === 'attack' ? (h === Math.floor(o.t * heads) % heads ? o.open * 3 * u : o.open * u) : 0;
+    const ang = -Math.PI * (0.62 - q * 0.47) + Math.sin(o.t * TAU + h * 1.7) * 0.12 + (o.anim === 'death' ? o.t * 0.9 : 0);
+    const L = (11 - Math.abs(q - 0.5) * 3) * u;
+    const hx = bx + Math.cos(ang) * L + bite;
+    const hy = bY + Math.sin(ang) * L;
+    const col = h % 2 ? P[1] : P[2];
+    for (let k = 0; k <= 8; k++) {
+      const t = k / 8;
+      const nx = bx + (hx - bx) * t + Math.sin(t * 3.2 + h + o.t * TAU) * 0.8 * u;
+      const ny = bY + (hy - bY) * t;
+      ell(p, nx, ny, (1.5 - t * 0.4) * u, (1.5 - t * 0.4) * u, col);
+    }
+    // 头：朝前的楔形，深色下颚线把每个头分开
+    fillPoly(p, [[hx - 2 * u, hy - 2 * u], [hx + 2 * u, hy - 1.5 * u], [hx + 4.5 * u, hy], [hx + 2 * u, hy + 1.5 * u], [hx - 2 * u, hy + 1.5 * u]], col);
+    limb(p, hx - 2 * u, hy + 1.5 * u, hx + 4 * u, hy + 0.5 * u, P[0]);
+    p.set(hx + u, hy - u, A[3]);
+    limb(p, hx - u, hy - 2 * u, hx - 3 * u, hy - 3.5 * u, A[2]);
+    if (bite > 2 * u) limb(p, hx + 2 * u, hy + u, hx + 4.5 * u, hy + 2 * u, '#3a0a10');
+  }
 }
 
 /** 受击闪白、死亡溶解 */

@@ -51,18 +51,20 @@ export const FORM_FAMILY = {
   wisp: 'spirit',
   treant: 'plant', mushroom: 'plant', mandrake: 'plant', vine: 'plant', cactoid: 'plant',
   eye: 'eye',
+  // 12080 外圈新外形（10-24）
+  octopus: 'aquatic', shark: 'aquatic', manta: 'aquatic', moth: 'insect', elemental: 'spirit', hydra: 'dragon',
 } as const;
 export type Form = keyof typeof FORM_FAMILY;
 export type Family = (typeof FORM_FAMILY)[Form];
 
 export const FAMILY_NAME: Record<Family, string> = {
   beast: '野兽', small: '小动物', bird: '飞禽', bat: '蝙蝠', slime: '软泥', insect: '虫类', crab: '甲壳', serpent: '蛇虫',
-  reptile: '爬行', dragon: '龙类', humanoid: '人形', undead: '亡灵', golem: '魔像', spirit: '元素', plant: '植物', eye: '魔眼',
+  reptile: '爬行', dragon: '龙类', humanoid: '人形', undead: '亡灵', golem: '魔像', spirit: '元素', plant: '植物', eye: '魔眼', aquatic: '海兽',
 };
 
 /** 动物类：掉兽皮和兽肉，算「生物」；其余算「怪物」，掉魔核 */
 export const isAnimal = (f: Family, form: Form) =>
-  ['beast', 'small', 'bird', 'bat', 'reptile', 'dragon'].includes(f) || form === 'snake';
+  ['beast', 'small', 'bird', 'bat', 'reptile', 'dragon', 'aquatic'].includes(f) || form === 'snake';
 
 /** 体型档：0=20px 1=24 2=32 3=40 4=48 5=56 */
 export const FORM_SIZE: Record<Form, number> = {
@@ -73,6 +75,7 @@ export const FORM_SIZE: Record<Form, number> = {
   bear: 3, orc: 3, yeti: 3, troll: 3, lich: 3, golem: 3, gargoyle: 3, treant: 3, griffin: 3, phoenix: 3, mammoth: 3, wyvern: 3,
   dragon: 4,
   hyena: 2, panther: 2, lion: 3, camel: 3, yak: 3, rhino: 3, jellyfish: 1, cactoid: 2,
+  octopus: 2, shark: 3, manta: 2, moth: 2, elemental: 2, hydra: 3,
 };
 
 export interface Species {
@@ -91,6 +94,8 @@ export interface Species {
   home?: string;
   /** 8848 外圈新区域的生物（用户 10-23 加的 70 种 + 4 个首领） */
   ring?: boolean;
+  /** 12080 最外圈的新生物（10-24） */
+  outer?: boolean;
 }
 
 // [id, 名字, 等级, 区域, 外形, 级别 n/e/b, 特性（空格分隔）, 主色, 点缀色]
@@ -450,6 +455,71 @@ const RING_ROWS: Row[] = [
   ['crystal_lich', '晶冠巫妖', 110, 'crystal', 'lich', 'e', 'resist_magic lifesteal', '#4a3a8a', '#e0c0ff', 'void_field'],
   ['crystal_sovereign', '晶簇主宰', 120, 'crystal', 'golem', 'b', 'armored tough thorns', '#b080ff', '#ffffff', 'crystal_heart'],
 ];
+/**
+ * 12080 最外圈（用户 10-24）：8 个新群系各 6-8 种生物 + 1 个首领，用了 6 种新外形
+ * （章鱼、鲨鱼、魔鬼鱼、飞蛾、元素、多头蛇）。都绑在最外圈的地点上，海岛上的等航行系统开放
+ */
+const OUTER_ROWS: Row[] = [
+  // 青岚丘陵 T2-T3：刚出新手区的第二站，大多是温和的山地动物
+  ['hill_hare', '青岚山兔', 11, 'hills', 'rabbit', 'n', 'passive swift', '#a8b890', '#f0f0e0', 'hill_pines'],
+  ['pine_moth', '松针蛾', 13, 'hills', 'moth', 'n', 'evasive', '#7a9a6a', '#e8d070', 'hill_pines'],
+  ['quarry_golem', '青石傀儡', 17, 'hills', 'golem', 'n', 'armored slow', '#7a8a8a', '#a0e0c0', 'hill_quarry'],
+  ['brook_otter', '岚溪水獭', 14, 'hills', 'fox', 'n', 'swift pack', '#6a5040', '#d8c0a0', 'hill_brook'],
+  ['terrace_goat', '梯田山羊', 16, 'hills', 'goat', 'n', 'tough', '#e0d8c0', '#8a6a4a', 'hill_terrace'],
+  ['mist_hawk', '岚雾鹰', 19, 'hills', 'hawk', 'n', 'swift', '#8a9aa8', '#f0f0f0', 'hill_terrace'],
+  ['sunken_octopus', '沉木章鱼', 23, 'hills', 'octopus', 'e', 'regen evasive', '#a05a6a', '#f0c0a0', 'sunken_bay'],
+  ['terrace_ox_king', '青岚牛王', 28, 'hills', 'yak', 'b', 'tough berserk', '#5a6a5a', '#e8d080', 'hill_terrace'],
+  // 古藤群岛 T4-T5：海上群岛，古藤和巨木里住着植物和飞虫
+  ['isle_vine_lurker', '藤影潜伏者', 42, 'vineisles', 'vine', 'n', 'venom', '#3a6a3a', '#c0e070', 'vine_isle'],
+  ['drift_crab', '浮木寄居蟹', 44, 'vineisles', 'crab', 'n', 'armored', '#a07050', '#e8d0a0', 'drift_isle'],
+  ['leaf_moth', '霜叶蛾', 46, 'vineisles', 'moth', 'n', 'swift evasive', '#c86a3a', '#f0e0c0', 'frost_bay'],
+  ['bay_manta', '霜湾魔鬼鱼', 49, 'vineisles', 'manta', 'n', 'evasive', '#4a6a8a', '#c0e0f0', 'frost_bay'],
+  ['root_treant', '古根树人', 52, 'vineisles', 'treant', 'e', 'tough regen', '#5a4a2a', '#8ac060', 'vine_heart'],
+  ['vine_mother', '万藤之母', 60, 'vineisles', 'hydra', 'b', 'regen venom tough', '#2a7a3a', '#f0a0d0', 'vine_heart'],
+  // 腐月湿地 T5-T6：紫色月光下的沼泽，亡灵和毒虫
+  ['moon_toad', '月沼蟾蜍', 56, 'moonmire', 'frog', 'n', 'venom', '#6a5a8a', '#c0f080', 'moon_pool'],
+  ['bog_moth', '腐木灯蛾', 58, 'moonmire', 'moth', 'n', 'venom evasive', '#5a4a6a', '#c0a0ff', 'bog_hollow'],
+  ['mire_hag', '泥沼巫婆', 62, 'moonmire', 'cultist', 'n', 'resist_magic', '#4a3a5a', '#a0e0a0', 'bog_hollow'],
+  ['grave_walker', '荒冢行尸', 64, 'moonmire', 'zombie', 'n', 'tough slow', '#5a6a5a', '#c0c0a0', 'grave_moor'],
+  ['moon_wisp', '月影幽火', 66, 'moonmire', 'elemental', 'n', 'evasive weak_melee', '#4a3a8a', '#e0c0ff', 'moon_pool'],
+  ['bone_hydra', '骸骨多头蛇', 70, 'moonmire', 'hydra', 'e', 'lifesteal armored', '#c8c0a8', '#6a3a8a', 'grave_moor'],
+  ['eclipse_witch', '月蚀魔女', 78, 'moonmire', 'banshee', 'b', 'lifesteal resist_magic berserk', '#2a1a3a', '#ff80c0', 'eclipse_mire'],
+  // 潮歌群岛 T5：东边海上的珊瑚群岛
+  ['song_siren', '潮歌海妖', 55, 'archipelago', 'banshee', 'n', 'evasive resist_ranged', '#4ab8a8', '#f0f0ff', 'song_isle'],
+  ['reef_octopus', '礁石章鱼', 57, 'archipelago', 'octopus', 'n', 'regen', '#d07050', '#f0e0a0', 'song_isle'],
+  ['turtle_shark', '海龟岛鲨', 60, 'archipelago', 'shark', 'n', 'fierce swift', '#5a7a9a', '#e8f0f0', 'turtle_isle'],
+  ['coral_manta', '珊瑚魔鬼鱼', 62, 'archipelago', 'manta', 'e', 'evasive tough', '#e06a8a', '#ffe0a0', 'turtle_isle'],
+  ['tide_queen', '碧潮女王', 70, 'archipelago', 'octopus', 'b', 'regen tough thorns', '#2ab0a0', '#ffd060', 'holy_reef'],
+  // 寒星山脉 T7：北边雪山，冰元素和雪兽
+  ['frost_elemental', '霜晶元素', 74, 'frostpeak', 'elemental', 'n', 'armored resist_ranged', '#8ab0e0', '#ffffff', 'star_peak'],
+  ['starpeak_yeti', '寒星雪怪', 78, 'frostpeak', 'yeti', 'n', 'tough fierce', '#e8f0f8', '#6a8ac0', 'frost_pines'],
+  ['ice_moth', '冰翼蛾', 80, 'frostpeak', 'moth', 'n', 'swift evasive', '#c0e0ff', '#8a60e0', 'snow_eagle_cliff'],
+  ['snow_griffin', '雪鹰狮鹫', 84, 'frostpeak', 'griffin', 'n', 'swift fierce', '#f0f0f0', '#c0a060', 'snow_eagle_cliff'],
+  ['aurora_shark', '极光冰鲨', 87, 'frostpeak', 'shark', 'n', 'fierce', '#6a8ab0', '#a0ffd0', 'aurora_lake'],
+  ['star_mammoth', '寒星猛犸', 90, 'frostpeak', 'mammoth', 'e', 'tough armored', '#8a7a6a', '#e0f0ff', 'frost_pines'],
+  ['aurora_hydra', '极光冰蛟', 96, 'frostpeak', 'hydra', 'b', 'armored regen fierce', '#a0c8f0', '#80ffc0', 'aurora_lake'],
+  // 雷鸣断层 T8：东北角的雷暴高原
+  ['storm_elemental', '雷暴元素', 98, 'thunder', 'elemental', 'n', 'swift weak_ranged', '#4a4a8a', '#f0f080', 'storm_mesa'],
+  ['thunder_ram', '雷角公羊', 100, 'thunder', 'goat', 'n', 'fierce tough', '#5a5a7a', '#f0e060', 'storm_mesa'],
+  ['spire_beetle', '铁林雷甲虫', 103, 'thunder', 'beetle', 'n', 'armored thorns', '#3a3a5a', '#80c0ff', 'iron_spires'],
+  ['pale_shark', '苍岸雷鲨', 106, 'thunder', 'shark', 'n', 'swift fierce', '#c0c8d0', '#80c0ff', 'pale_shore'],
+  ['rift_wyvern', '裂谷雷翼龙', 110, 'thunder', 'wyvern', 'e', 'swift fierce', '#4a5a8a', '#ffff80', 'thunder_rift'],
+  ['thunder_lord', '雷鸣之主', 122, 'thunder', 'elemental', 'b', 'swift fierce berserk', '#2a2a6a', '#ffff60', 'thunder_rift'],
+  // 灰烬海角 T7：东南角的火山海岸
+  ['ash_hound', '灰烬猎犬', 76, 'ashcape', 'wolf', 'n', 'pack fierce', '#3a2a2a', '#ff8030', 'ash_dunes'],
+  ['cinder_elemental', '余烬元素', 80, 'ashcape', 'elemental', 'n', 'thorns resist_melee', '#5a2a1a', '#ffa030', 'cinder_vents'],
+  ['ember_moth', '焦林火蛾', 83, 'ashcape', 'moth', 'n', 'swift', '#6a2a1a', '#ffd040', 'ember_grove'],
+  ['fjord_shark', '灼风火鲨', 88, 'ashcape', 'shark', 'n', 'fierce berserk', '#5a3a3a', '#ff6020', 'scorch_fjord'],
+  ['magma_salamander', '熔岩蝾螈王', 92, 'ashcape', 'salamander', 'e', 'regen thorns', '#c04a1a', '#ffe060', 'cinder_vents'],
+  ['ash_tyrant', '灰烬暴君', 104, 'ashcape', 'hydra', 'b', 'fierce tough berserk', '#3a1a1a', '#ff5010', 'scorch_fjord'],
+  // 星陨晶海 T8+：南边海上的终局区域
+  ['starglow_moth', '晶光蛾', 108, 'starsea', 'moth', 'n', 'evasive resist_magic', '#3a3a8a', '#a0f0ff', 'glow_isle'],
+  ['star_manta', '星海魔鬼鱼', 112, 'starsea', 'manta', 'n', 'swift evasive', '#2a2a6a', '#e0e0ff', 'tide_ruins'],
+  ['ruin_sentinel', '遗迹守卫', 116, 'starsea', 'golem', 'n', 'armored resist_ranged', '#8a8aa8', '#a0c0ff', 'tide_ruins'],
+  ['void_octopus', '虚空章鱼', 120, 'starsea', 'octopus', 'e', 'regen lifesteal', '#1a1a4a', '#c080ff', 'glow_isle'],
+  ['star_elemental', '星辉元素', 124, 'starsea', 'elemental', 'n', 'resist_magic weak_melee', '#4a4ab0', '#ffffff', 'starfall'],
+  ['star_leviathan', '坠星海兽', 140, 'starsea', 'shark', 'b', 'tough fierce lifesteal', '#1a1a5a', '#80e0ff', 'starfall'],
+];
 const TIER_LEVELS = [1, 10, 20, 30, 40, 55, 70, 95];
 const tierOfLevel = (lvl: number) => TIER_LEVELS.filter((l) => lvl >= l).length - 1;
 
@@ -461,6 +531,7 @@ const toSpecies = ([id, name, level, region, form, rank, traits, color, accent, 
 export const SPECIES: Species[] = [
   ...[T1, T2, T3, T4, T5, T6, T7, T8].map((rows, t) => [...rows, ...NEW_SPECIES[t]]).flatMap((rows, tier) => rows.map((r) => toSpecies(r, tier))),
   ...RING_ROWS.map((r) => ({ ...toSpecies(r, tierOfLevel(r[2])), ring: true })),
+  ...OUTER_ROWS.map((r) => ({ ...toSpecies(r, tierOfLevel(r[2])), outer: true })),
 ];
 
 /** 体型档（精英大一档，首领大两档） */

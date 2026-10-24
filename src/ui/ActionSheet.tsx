@@ -141,7 +141,7 @@ function NodeSheet({ s, node, onClose }: { s: GameState; node: MapNode; onClose:
       </ul>
 
       {node.sprite === 'market' && <SeedShop s={s} />}
-      {node.closed && <p className="muted pad">{node.name}暂未开放，敬请期待。</p>}
+      {node.closed && <p className="muted pad">{node.sea ? `${node.name}在海上的岛屿，要等以后的航行系统开放才能去，敬请期待。` : `${node.name}暂未开放，敬请期待。`}</p>}
       {node.cave && <p className="muted pad">大型洞窟入口。里面的内容还在筹备，暂未开放，敬请期待。</p>}
       {!all.length && !node.cave && !node.closed && <p className="muted pad">这里是怪物出没的地方。点地图上的怪物或生物，就能查看它的信息并开打。</p>}
       {all.length > 0 && <TaskConfig s={s} action={selected} onDone={onClose} far={node.town && !near(s) ? node : undefined} />}

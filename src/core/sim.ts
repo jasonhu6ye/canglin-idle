@@ -1,4 +1,4 @@
-import { ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAP_W, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, planRoute, travelMs, type MapNode } from './data';
+import { ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAP_W, MID_BOX, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, planRoute, travelMs, type MapNode } from './data';
 import { nextRandom } from './rng';
 import { stepQuests } from './quests';
 import { stepAutoFarm, stepRain } from './farm';
@@ -60,10 +60,11 @@ export const MAX_DEATH_STREAK = 3;
 
 /**
  * 地图扩大后换算旧存档的位置。5088 以前：城镇里的跟着镇中心平移（建筑大小不变），野外的按比例放大到 5088；
- * 8848（10-23）：老地图原样放在中间的方框里，整体平移
+ * 8848（10-23）：老地图原样放在中间的方框里，整体平移；12080（10-24）：8848 的世界再整体平移进中间
  */
 function rescaleLoc(loc: { x: number; y: number }, old: number) {
   if (old === MAP_W) return loc;
+  if (old === MID_BOX.size) return { x: loc.x + MID_BOX.x, y: loc.y + MID_BOX.y };
   let p = loc;
   if (old !== OLD_BOX.size) {
     const k = OLD_BOX.size / old;
@@ -100,7 +101,7 @@ export function migrate(raw: unknown): GameState | null {
   // 采草药的动作 id 从 farm_ 改成 gather_（10-23 采集和种植彻底分开），旧队列照着改名
   const renamed = (id: string) => (!ACTIONS[id] && id.startsWith('farm_') && ACTIONS[`gather_${id.slice(5)}`] ? `gather_${id.slice(5)}` : id);
   const oldQueue = arr<GameState['queue'][number]>(s.queue).filter((t) => obj(t) && typeof t.action === 'string');
-  const queue = oldQueue.map((t) => ({ ...t, action: renamed(t.action) })).filter((t) => ACTIONS[t.action] && okMode(t.mode));
+  const queue = oldQueue.map((t) => ({ ...t, action: renamed(t.action) })).filter((t) => ACTIONS[t.action] && nodesOfAction(t.action).length && okMode(t.mode));
   const sameTask = !!queue[0] && queue[0].action === oldQueue[0]?.action;
   const xpIn = obj<Record<string, number>>(s.xp) ?? {};
   const xp = { ...fresh.xp };
@@ -647,6 +648,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     if (homeCan(s, task.action)) return 0;
     // 两座城都有的建筑：已经在走的就接着走，否则去最近的那座
     const cands = nodesOfAction(task.action);
+    // 只在海岛上的动作进不了队列（enqueue、migrate 都滤掉了），这里不会没有地点
     if (!cands.length) return 0;
     if (cands.some((n) => { const d = standOf(n); return d.x === s.loc.x && d.y === s.loc.y; })) return 0;
     const node = cands.find((n) => n.id === s.travel?.to) ?? nodeOfAction(task.action, s.loc)!;
@@ -1104,6 +1106,8 @@ export function setLoc(prev: GameState, x: number, y: number): GameState {
 
 export function enqueue(prev: GameState, action: string, mode: TaskMode): GameState {
   if (prev.queue.length >= MAX_QUEUE || !ACTIONS[action]) return prev;
+  // 只在海岛上（还没开放）的动作：哪儿都做不了，不让排进队列
+  if (!nodesOfAction(action).length) return prev;
   if (mode.type === 'count' && !(cleanQty(mode.count) >= 1)) return prev;
   if (mode.type === 'time' && !(mode.ms > 0)) return prev;
   if (mode.type === 'count') mode = { type: 'count', count: cleanQty(mode.count) };

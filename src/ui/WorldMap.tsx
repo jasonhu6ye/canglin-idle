@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ACTIONS, DANGER, dangerLevel, MAP_H, MAP_W, MONSTERS, NODES, OLD_BOX, REGIONS, SKILLS, standOf, travelMs, type MapNode } from '../core/data';
+import { ACTIONS, DANGER, dangerLevel, MAP_H, MAP_W, MID_BOX, MONSTERS, NODES, OLD_BOX, REGIONS, SKILLS, standOf, travelMs, type MapNode } from '../core/data';
+import { TOWNS } from '../core/towns';
 import { combatLevel, moveSpeed } from '../core/sim';
 import type { GameState, RegionId, SkillId } from '../core/types';
 import { playerPos } from '../game/MapScene';
@@ -42,15 +43,19 @@ function overview(): string {
 
 /** 老地图的区域名字按老方框里的相对位置算 */
 const inBox = (u: number, v: number): [number, number] => [(OLD_BOX.x + u * OLD_BOX.size) / MAP_W, (OLD_BOX.y + v * OLD_BOX.size) / MAP_H];
+/** 8848 那一圈按 8848 方框里的相对位置算 */
+const inMid = (u: number, v: number): [number, number] => [(MID_BOX.x + u * MID_BOX.size) / MAP_W, (MID_BOX.y + v * MID_BOX.size) / MAP_H];
 /** 区域名字摆放的位置（0-1） */
 const LABELS: Record<RegionId, [number, number]> = {
   town: inBox(0.47, 0.53), snow: inBox(0.46, 0.06), highland: inBox(0.8, 0.28), coast: inBox(0.8, 0.45), lava: inBox(0.74, 0.86),
   abyss: inBox(0.45, 0.86), swamp: inBox(0.13, 0.82), woodland: inBox(0.15, 0.42), giantwood: inBox(0.13, 0.2),
-  savanna: [0.08, 0.47], autumn: [0.1, 0.12], jungle: [0.1, 0.85], tropic: [0.92, 0.55],
-  canyon: [0.9, 0.18], desert: [0.9, 0.86], alpine: [0.5, 0.05], crystal: [0.52, 0.9],
+  savanna: inMid(0.08, 0.47), autumn: inMid(0.1, 0.12), jungle: inMid(0.1, 0.85), tropic: inMid(0.92, 0.55),
+  canyon: inMid(0.9, 0.18), desert: inMid(0.9, 0.86), alpine: inMid(0.5, 0.05), crystal: inMid(0.52, 0.9),
+  hills: [0.06, 0.36], vineisles: [0.08, 0.04], moonmire: [0.06, 0.74], archipelago: [0.95, 0.45],
+  frostpeak: [0.5, 0.04], ashcape: [0.92, 0.92], thunder: [0.9, 0.03], starsea: [0.5, 0.97],
 };
-/** 城镇在世界地图上只标一个点 */
-const TOWN_MARK: Record<string, string> = { smithy: '城镇', market2: '落霞城' };
+/** 城镇在世界地图上只标一个点（新城镇标在仓库上） */
+const TOWN_MARK: Record<string, string> = { smithy: '苍岭城', market2: '落霞城', ...Object.fromEntries(TOWNS.map((t) => [`${t.id}_bank`, t.name])) };
 
 const MAX_ZOOM = 8;
 

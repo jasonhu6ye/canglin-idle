@@ -10,6 +10,8 @@ describe('世界', { timeout: 30_000 }, () => {
     for (const n of NODES) {
       const s = standTile(n);
       const path = findPath(SPAWN, s);
+      // 海岛要等航行系统（用户 10-24），陆地上的都要走得到
+      if (n.sea) { expect(path, `${n.name} 在海岛上，不该有桥`).toBeNull(); continue; }
       expect(path, n.name).not.toBeNull();
       expect(path!.every((p) => isWalkable(p.x, p.y))).toBe(true);
     }

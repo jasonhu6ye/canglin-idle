@@ -15,7 +15,7 @@ export const TILE_COUNT = EDGE_BASE + LIQUIDS.length * 15 * VARIANTS;
 const ROWS = Math.ceil(TILE_COUNT / COLS);
 export const TILESET = { margin: 1, spacing: 2, width: COLS * CELL, height: ROWS * CELL };
 
-const ANIMATED: Ground[] = ['water', 'ocean', 'swampwater', 'lava', 'shallows'];
+const ANIMATED: Ground[] = ['water', 'ocean', 'swampwater', 'lava', 'shallows', 'moonwater', 'starwater'];
 
 type RGB = [number, number, number];
 const hex = (h: string): RGB => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
@@ -61,6 +61,16 @@ const PAL: Record<Ground, string[]> = {
   coral: ['#d8b890', '#e8caa0', '#f4dcb8', '#f07a7a'],
   shallows: ['#2a9ab0', '#38b0c4', '#5ccad8', '#e0fbff'],
   redcliff: ['#5a2418', '#7a3422', '#9a4a30', '#b86040'],
+  // 12080 最外圈（10-24）
+  hillgrass: ['#3e8a5a', '#4e9e68', '#68b47c', '#c8e0a0'],
+  marble: ['#a8a49c', '#d4d0c6', '#e8e4dc', '#b8b0e0'],
+  moonmud: ['#3a2e48', '#4a3c5a', '#5e4e70', '#a888d8'],
+  frostrock: ['#4a5670', '#5e6c8a', '#7888a6', '#d8e8ff'],
+  stormrock: ['#262634', '#33334a', '#44445e', '#9ad0ff'],
+  blacksand: ['#1e1a1c', '#2c2628', '#3c3436', '#e06a2a'],
+  chalk: ['#c8c4b8', '#e2ded2', '#f2eee4', '#a8a498'],
+  moonwater: ['#2e2448', '#3a2e5c', '#52427a', '#c8a8ff'],
+  starwater: ['#141850', '#1c2266', '#2a3284', '#e8e0ff'],
 };
 
 function groundPixel(g: Ground, x: number, y: number, v: number, f: number): RGB {
@@ -247,6 +257,59 @@ function groundPixel(g: Ground, x: number, y: number, v: number, f: number): RGB
       if (hash(x >> 2, y >> 2, v + 170) < 0.12) return mix(base, hex('#e8d8a8'), 0.25);
       return wave < -1.5 ? dark : base;
     }
+    case 'hillgrass': {
+      // 青岚草：蓝绿色的短草，草叶比普通草地稀，偶尔一朵小白花
+      for (let k = 0; k < 3; k++) {
+        const bx = Math.floor(hash(v, k, 23) * 14) + 1;
+        const by = Math.floor(hash(k, v, 24) * 12) + 3;
+        if ((y === by && (x === bx - 1 || x === bx + 1)) || (y === by - 1 && x === bx)) return light;
+      }
+      if (n > 0.992) return acc;
+      return n < 0.12 ? dark : n2 < 0.25 ? mix(base, light, 0.3) : base;
+    }
+    case 'marble': {
+      // 白石板：大块方砖，细缝，偶尔一道淡紫的纹
+      const lx = x % 8;
+      const ly = y % 8;
+      if (lx === 7 || ly === 7) return dark;
+      if ((lx + ly * 2 + v) % 13 === 0 && n > 0.5) return acc;
+      if (lx === 0 || ly === 0) return light;
+      return n < 0.08 ? mix(base, dark, 0.3) : base;
+    }
+    case 'moonmud': {
+      // 紫色烂泥：小水洼反着淡紫的光
+      if (hash(x >> 2, y >> 2, v + 180) < 0.16) return n > 0.75 ? acc : dark;
+      return n < 0.12 ? dark : n > 0.9 ? light : base;
+    }
+    case 'frostrock':
+    case 'stormrock': {
+      // 冷色岩地：斜向的裂纹；雷鸣断层的裂纹里透着电光
+      const crack = (x * 2 + y * 3 + v * 5) % 23 === 0 || (x + y * 2 + v) % 29 === 0;
+      if (crack) return g === 'stormrock' && n > 0.6 ? acc : dark;
+      if (g === 'frostrock' && n > 0.97) return acc;
+      return n < 0.14 ? dark : n > 0.86 ? light : base;
+    }
+    case 'blacksand': {
+      // 黑沙：细碎的颗粒，偶尔一粒火星
+      if (n > 0.993) return acc;
+      const ripple = Math.sin((x * 0.8 + y * 0.5 + v * 4) * 0.7) > 0.9;
+      return ripple ? light : n < 0.2 ? dark : base;
+    }
+    case 'chalk': {
+      // 白垩：横向的浅色层理
+      const band = (y + Math.floor(hash(x >> 3, 1, v) * 3)) % 5;
+      if (band === 0) return acc;
+      return n > 0.9 ? light : base;
+    }
+    case 'moonwater':
+    case 'starwater': {
+      // 月沼和晶海：波纹里闪着星光
+      const t = f * 0.5;
+      const wave = Math.sin(x * 0.5 + t + Math.floor(y / 4) * 2.3 + v) + Math.sin(y * 0.8 - t * 0.7);
+      if (hash(x, y, Math.floor(f / 2) + v * 7) > (g === 'starwater' ? 0.992 : 0.996)) return acc;
+      if (wave > 1.5) return light;
+      return wave < -1.4 ? dark : base;
+    }
     case 'cliff': {
       // 竖向的岩层纹理
       const stripe = (x + Math.floor(hash(0, y >> 2, v) * 4)) % 5;
@@ -295,6 +358,17 @@ function edgePixel(g: Ground, x: number, y: number, mask: number): RGB | null {
   if (g === 'swampwater') {
     if (d === 0) return hex('#5a6a3a');
     if (d === 1 && (x + y) % 2) return hex('#7a8a50');
+    return null;
+  }
+  if (g === 'moonwater') {
+    if (d === 0) return hex('#6a5a8a');
+    if (d === 1 && (x + y) % 2) return hex('#9a80c8');
+    return null;
+  }
+  if (g === 'starwater') {
+    if (N && dN === 0) return hex('#1a1a40');
+    if (d === 0) return hex('#d8d0ff');
+    if (d === 1 && (x + y) % 3) return hex('#8a8ae0');
     return null;
   }
   // 水和海：岸边一道浪花，北岸加一点岸壁阴影

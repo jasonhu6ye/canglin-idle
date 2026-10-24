@@ -14,6 +14,13 @@ export const HERO_W = 28;
 export const HERO_H = 30;
 /** 脚底所在的行，精灵原点放在这里 */
 export const HERO_FEET = 27;
+/**
+ * 每帧四周的留白（用户 10-24：挥镐、挥斧时工具头超出 28×30 被裁掉）。
+ * 角色本身还是 28×30，画法坐标不变，只是画布变大、精灵原点跟着平移
+ */
+export const HERO_PAD = { l: 18, r: 18, t: 10, b: 2 };
+export const FRAME_W = HERO_W + HERO_PAD.l + HERO_PAD.r;
+export const FRAME_H = HERO_H + HERO_PAD.t + HERO_PAD.b;
 
 /** 一套外观的配色：衣橱里每套皮肤就是一组颜色和几个开关 */
 export interface Outfit {
@@ -508,8 +515,10 @@ function drawHead(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose: Pos
   }
 }
 
-function drawFrame(pose: Pose, o: Outfit): Pix {
-  const p = new Pix(HERO_W, HERO_H);
+export function drawFrame(pose: Pose, o: Outfit): Pix {
+  const p = new Pix(FRAME_W, FRAME_H);
+  p.ox = HERO_PAD.l;
+  p.oy = HERO_PAD.t;
   const R = rampsOf(o);
   const cx = 14;
   const crouch = pose.crouch ?? 0;
@@ -1014,7 +1023,7 @@ function drawFx(p: Pix, o: Outfit, pose: Pose, at: { cx: number; sy: number; hip
   const G = o.glow ?? ['#c84a10', '#ffa020', '#fff0a0'];
   const { cx, sy, hipY, headY, lantern } = at;
   const put = (x: number, y: number, c: string) => {
-    if (x >= 0 && y >= 0 && x < HERO_W && y < HERO_H) p.set(x, y, c);
+    if (x >= -HERO_PAD.l && y >= -HERO_PAD.t && x < HERO_W + HERO_PAD.r && y < HERO_H + HERO_PAD.b) p.set(x, y, c);
   };
   if (o.fx === 'embers' || o.fx === 'wisps') {
     // 火星 / 鬼火：从灯里往上飘，越往上越暗，到头就灭
@@ -1228,16 +1237,16 @@ export function paintHeroSheet(outfit: Outfit = OUTFITS[0], canvas = document.cr
   const total = anims.reduce((n, a) => n + a.frames, 0);
   const cols = 16;
   const rows = Math.ceil(total / cols);
-  canvas.width = cols * HERO_W;
-  canvas.height = rows * HERO_H;
+  canvas.width = cols * FRAME_W;
+  canvas.height = rows * FRAME_H;
   const ctx = canvas.getContext('2d')!;
   const frames: { name: string; x: number; y: number }[] = [];
   let k = 0;
   for (const a of anims) {
     for (let i = 0; i < a.frames; i++) {
-      const x = (k % cols) * HERO_W;
-      const y = Math.floor(k / cols) * HERO_H;
-      ctx.clearRect(x, y, HERO_W, HERO_H);
+      const x = (k % cols) * FRAME_W;
+      const y = Math.floor(k / cols) * FRAME_H;
+      ctx.clearRect(x, y, FRAME_W, FRAME_H);
       const pose = a.pose(i / a.frames, i);
       pose.t = i / a.frames;
       pose.seed = k;

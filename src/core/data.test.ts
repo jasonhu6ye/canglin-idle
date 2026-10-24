@@ -74,8 +74,14 @@ describe('装备体系', () => {
 describe('怪物图鉴', () => {
   it('原 192 种 + 新地点 20 种生物和 8 个首领 + 外圈 70 种和 4 个首领，id 不重复，特性都有定义', () => {
     const base = SPECIES.filter((s) => !s.home);
-    const fresh = SPECIES.filter((s) => s.home && !s.ring);
+    const fresh = SPECIES.filter((s) => s.home && !s.ring && !s.outer);
     const ring = SPECIES.filter((s) => s.ring);
+    // 12080 最外圈（用户 10-24）：43 种新生物 + 8 个首领，每个新群系一个首领
+    const outer = SPECIES.filter((s) => s.outer);
+    expect(outer.filter((s) => s.rank !== 'boss')).toHaveLength(43);
+    expect(outer.filter((s) => s.rank === 'boss')).toHaveLength(8);
+    expect(new Set(outer.filter((s) => s.rank === 'boss').map((s) => s.region)).size).toBe(8);
+    for (const s of outer) expect(NODES.find((n) => n.id === s.home), s.id).toBeDefined();
     // 8848 外圈（用户 10-23）：70 种新生物 + 4 个新首领，都绑在外圈的地点上
     expect(ring.filter((s) => s.rank !== 'boss')).toHaveLength(70);
     expect(ring.filter((s) => s.rank === 'boss')).toHaveLength(4);
@@ -102,7 +108,9 @@ describe('怪物图鉴', () => {
 
   it('每种怪物都有刷新点，掉落物都存在且有用处', () => {
     for (const s of SPECIES) {
-      expect(nodeOfAction(`fight_${s.id}`), s.id).toBeDefined();
+      // 海岛上的生物要等航行系统开放（用户 10-24），暂时没有能去的刷新点
+      const home = NODES.find((n) => n.id === s.home);
+      if (!home?.sea) expect(nodeOfAction(`fight_${s.id}`), s.id).toBeDefined();
       for (const d of MONSTERS[s.id].drops) expect(ITEMS[d.item], `${s.id} → ${d.item}`).toBeDefined();
     }
     const used = new Set(Object.values(ACTIONS).flatMap((a) => (a.kind === 'skill' ? a.inputs?.map((i) => i.item) ?? [] : [])));

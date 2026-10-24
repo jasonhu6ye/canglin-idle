@@ -126,7 +126,9 @@ export interface MonsterDef {
 
 export type RegionId = 'town' | 'snow' | 'highland' | 'coast' | 'lava' | 'abyss' | 'swamp' | 'woodland' | 'giantwood'
   // 8848 大地图外圈的新区域（用户 10-23）
-  | 'savanna' | 'autumn' | 'jungle' | 'tropic' | 'canyon' | 'desert' | 'alpine' | 'crystal';
+  | 'savanna' | 'autumn' | 'jungle' | 'tropic' | 'canyon' | 'desert' | 'alpine' | 'crystal'
+  // 12080 最外圈的新群系（用户 10-24）
+  | 'hills' | 'vineisles' | 'moonmire' | 'archipelago' | 'frostpeak' | 'ashcape' | 'thunder' | 'starsea';
 
 export interface CombatAction {
   id: string;

@@ -7,7 +7,7 @@ import { openNodeSheet } from './itemOpen';
 import { wolfIconUrl } from '../game/wolfArt';
 import { openCombatLog } from './CombatLog';
 import type { GameState, SkillId, TaskEndReason } from '../core/types';
-import { HERO_W, outfitOf, paintHeroSheet } from '../game/hero';
+import { HERO_PAD, HERO_W, outfitOf, paintHeroSheet } from '../game/hero';
 import { store } from '../store';
 import { emitToGame } from './GameCanvas';
 import { actionName, fmtNum, modeLabel } from './format';
@@ -23,7 +23,7 @@ function portrait(skin?: string): string {
     const f = sheet.frames.find((x) => x.name === 'idle-down-0')!;
     const c = document.createElement('canvas');
     c.width = c.height = HERO_W;
-    c.getContext('2d')!.drawImage(sheet.canvas, f.x, f.y, HERO_W, HERO_W, 0, 0, HERO_W, HERO_W);
+    c.getContext('2d')!.drawImage(sheet.canvas, f.x + HERO_PAD.l, f.y + HERO_PAD.t, HERO_W, HERO_W, 0, 0, HERO_W, HERO_W);
     url = c.toDataURL();
     portraits.set(o.id, url);
   }

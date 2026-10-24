@@ -12,6 +12,8 @@ import { store } from '../store';
 import { RAIN_FISH } from '../core/weather';
 import { fmtDuration, fmtNum } from './format';
 import { Codex } from './Codex';
+import { Handbook } from './Handbook';
+import { TOWNS } from '../core/towns';
 import { Wardrobe } from './Wardrobe';
 import { exportSave, importError, importSave } from '../saveCode';
 import { outfitOf } from '../game/hero';
@@ -176,14 +178,78 @@ export function BankPanel({ s }: { s: GameState }) {
   );
 }
 
-/** 角色：身上的装备和工具，点一下卸下到背包 */
+/** 装备一行的数值简写：攻击、力量、防御、速度、移速 */
+function gearStats(id: string) {
+  const e = ITEMS[id]?.equip;
+  if (!e) return '';
+  const out: string[] = [];
+  if (e.attack) out.push(`攻击 ${e.attack}`);
+  if (e.strength) out.push(`力量 ${e.strength}`);
+  if (e.defence) out.push(`防御 ${e.defence}`);
+  if (e.speed) out.push(`速度 +${Math.round(e.speed * 100)}%`);
+  if (e.move) out.push(`移速 +${Math.round(e.move * 100)}%`);
+  return out.join(' · ');
+}
+
+/**
+ * 快速换装（用户 10-24）：点角色页的栏位，弹出背包（站在仓库旁时也包括仓库）里
+ * 所有能放进这一栏的装备，点一下就换上，不用再去背包里找
+ */
+function SlotPicker({ s, slot, name, onClose }: { s: GameState; slot: EquipSlot; name: string; onClose: () => void }) {
+  const cur = s.equipment[slot];
+  const bank = atBank(s);
+  const fits = (id: string) => ITEMS[id]?.equip?.slot === slot;
+  const list = [
+    ...Object.keys(s.bag).filter(fits).map((id) => ({ id, from: '背包', n: s.bag[id] })),
+    ...(bank ? Object.keys(s.bank).filter((id) => fits(id) && !s.bag[id]).map((id) => ({ id, from: '仓库', n: s.bank[id] })) : []),
+  ].sort((a, b) => ITEMS[b.id].equip!.level - ITEMS[a.id].equip!.level || ITEMS[b.id].value - ITEMS[a.id].value);
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal frame slot-picker" onClick={(e) => e.stopPropagation()}>
+        <h2>{name}</h2>
+        {cur ? (
+          <div className="pick-row cur">
+            <Icon item={cur} size={28} info={false} />
+            <div><b>{ITEMS[cur].name}</b> <small className="muted">已装备</small><small className="muted">{gearStats(cur)}</small></div>
+            <button onClick={() => openItem(cur)}>详情</button>
+            <button onClick={() => { store.dispatch((g) => unequip(g, slot)); onClose(); }}>卸下</button>
+          </div>
+        ) : <p className="muted">这一栏现在是空的。</p>}
+        <h3 className="muted">可装备 {list.length} 件{bank ? '（含仓库）' : ''}</h3>
+        <div className="pick-list">
+          {list.map(({ id, from, n }) => {
+            const e = ITEMS[id].equip!;
+            const ok = level(s, e.skill) >= e.level;
+            return (
+              <div key={id} className={`pick-row ${ok ? '' : 'locked'}`}>
+                <Icon item={id} size={28} info={false} />
+                <div>
+                  <b>{ITEMS[id].name}</b>{n > 1 && <small className="muted"> ×{n}</small>} <small className="muted">{from}</small>
+                  <small className={ok ? 'muted' : 'bad'}>{SKILLS[e.skill].name} {e.level} 级{ok ? '' : '（等级不够）'}</small>
+                  <small className="muted">{gearStats(id)}</small>
+                </div>
+                <button onClick={() => openItem(id)}>详情</button>
+                <button className="primary" disabled={!ok} onClick={() => { store.dispatch((g) => equip(g, id)); onClose(); }}>{cur ? '替换' : '装备'}</button>
+              </div>
+            );
+          })}
+          {!list.length && <p className="muted">背包里没有能放进这一栏的装备。{bank ? '' : '仓库里的装备要站在仓库旁边才会列出来。'}</p>}
+        </div>
+        <button className="close" onClick={onClose}>关闭</button>
+      </div>
+    </div>
+  );
+}
+
+/** 角色：身上的装备和工具。点栏位弹出可换的装备，右键直接卸下 */
 export function CharacterPanel({ s }: { s: GameState }) {
   const style = weaponStyle(s);
+  const [pick, setPick] = useState<[EquipSlot, string] | null>(null);
   const slot = (slotId: EquipSlot, name: string) => {
     const id = s.equipment[slotId];
     return (
-      <button key={slotId} className={`slot ${id ? 'full' : ''}`} title={id ? (FINE_POINTER ? '左键看详情，右键卸下' : '点击卸下') : ''}
-        onClick={() => id && (FINE_POINTER ? openItem(id) : store.dispatch((g) => unequip(g, slotId)))}
+      <button key={slotId} className={`slot ${id ? 'full' : ''}`} title={FINE_POINTER ? '左键换装备，右键卸下' : '点击换装备或卸下'}
+        onClick={() => setPick([slotId, name])}
         onContextMenu={(e) => { e.preventDefault(); if (id) store.dispatch((g) => unequip(g, slotId)); }}>
         {id ? <Icon item={id} size={28} info={false} /> : <span className="empty" />}
         <small>{id ? ITEMS[id].name : name}</small>
@@ -224,7 +290,8 @@ export function CharacterPanel({ s }: { s: GameState }) {
       <h2>工具</h2>
       <div className="equip tools">{TOOL_SLOTS.map(([id, name]) => slot(id, name))}</div>
       <p className="muted">{TOOL_SLOTS.map(([slot, name]) => `${name} +${Math.round(slotSpeed(s, slot) * 100)}%`).join(' · ')}</p>
-      <p className="muted">点击身上的装备会卸下放进背包，背包满了才会送回仓库。背包里的装备随时能穿；仓库里的要站在仓库旁才能穿。</p>
+      <p className="muted">点任意栏位会列出背包里能放进这一栏的装备，点「装备」直接换上，点「卸下」放回背包（背包满了送回仓库）。站在仓库旁时，仓库里的装备也会列出来。</p>
+      {pick && <SlotPicker s={s} slot={pick[0]} name={pick[1]} onClose={() => setPick(null)} />}
     </div>
   );
 }
@@ -440,7 +507,9 @@ export function MorePanel({ s }: { s: GameState }) {
   const [confirming, setConfirming] = useState(false);
   const [codex, setCodex] = useState(false);
   const [wardrobe, setWardrobe] = useState(false);
+  const [book, setBook] = useState(false);
   if (codex) return <Codex s={s} onClose={() => setCodex(false)} />;
+  if (book) return <Handbook onClose={() => setBook(false)} />;
   if (wardrobe) return <Wardrobe s={s} onClose={() => setWardrobe(false)} />;
   const total = Object.keys(ITEMS).length - 1;
   const got = Object.keys(s.seen).filter((id) => id !== 'coins' && ITEMS[id]).length;
@@ -452,6 +521,8 @@ export function MorePanel({ s }: { s: GameState }) {
       <button className="primary" onClick={openNews}>查看更新公告</button>
       <h2>新手指引</h2>
       <button className="primary" onClick={openGuide}>重新查看新手指引</button>
+      <h2>攻略手册 <small className="muted">每个系统的教程、城镇和首领攻略</small></h2>
+      <button className="primary" onClick={() => setBook(true)}>打开攻略手册</button>
       <h2>日志 <small className="muted">战斗掉落、采集制作的产出和经验</small></h2>
       <button className="primary" onClick={openCombatLog}>打开日志</button>
       <h2>兑换码</h2>
@@ -464,7 +535,7 @@ export function MorePanel({ s }: { s: GameState }) {
       <h2>关于</h2>
       <p>苍岭放置（暂定名）测试服，单机版。角色会一直执行队列里的任务，关掉网页也会在下次打开时结算离线收益，最多 24 小时。</p>
       <p className="muted">
-        世界 {MAP_W}×{MAP_H} 格，{Object.keys(REGIONS).length} 个区域，两座城镇（主城和西边的落霞城）。
+        世界 {MAP_W}×{MAP_H} 格，{Object.keys(REGIONS).length} 个区域，{TOWNS.length + 2} 座城镇。
         {Object.keys(SKILLS).length} 种技能、{Object.keys(ITEMS).length - 1} 种物品、{MONSTER_COUNT.all} 种怪物（精英 {MONSTER_COUNT.elite}、首领 {MONSTER_COUNT.boss}），资源、装备和怪物都是正式数值。
         美术全部用代码逐像素绘制。存档保存在本浏览器里。
       </p>

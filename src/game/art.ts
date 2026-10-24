@@ -1,4 +1,5 @@
 import { hash, type BuildingKind, type PropKind } from './world';
+import type { TownTheme } from '../core/towns';
 import { Pix, mix, phash } from './pix';
 
 /*
@@ -256,7 +257,173 @@ function crystalspire() {
   return p.outline();
 }
 
+// ---- 12080 最外圈新群系和新城镇的装饰（10-24） ----
+
+/** 垂柳：弯弯的干，长长下垂的蓝绿枝条 */
+function willow() {
+  const p = new Pix(22, 28);
+  p.trunk(10.5, 12, 26, 3, BARK);
+  const pal = ['#2a5a46', '#3a7a5a', '#58a070', '#8ccc94'];
+  p.blob(10.5, 9, 9, 6, pal, 61);
+  for (let i = 0; i < 9; i++) {
+    const x = 3 + i * 2 + (hash(i, 1, 62) < 0.5 ? 0 : 1);
+    const len = 8 + Math.floor(hash(i, 2, 62) * 9);
+    for (let k = 0; k < len; k++) p.set(x + Math.sin(k / 3 + i) * 0.6, 11 + k, k % 4 === 3 ? pal[3] : k % 2 ? pal[1] : pal[2]);
+  }
+  return p.outline();
+}
+
+/** 古藤：粗大扭曲的藤干缠成一团，顶上挂着叶子和发光的果子 */
+function ancientvine() {
+  const p = new Pix(24, 32);
+  const bark = ['#2a3a1e', '#3e5428', '#587236'];
+  for (let k = 0; k < 3; k++) {
+    for (let y = 8; y < 31; y++) {
+      const x = 11.5 + Math.sin(y / 4 + k * 2.1) * (3 + k);
+      p.set(x, y, bark[k]);
+      p.set(x + 1, y, bark[(k + 1) % 3]);
+    }
+  }
+  p.blob(8, 8, 7, 5, ['#1a4a1e', '#2a6a2a', '#3e8a36', '#62b04a'], 63);
+  p.blob(16, 6, 7, 5, ['#1a4a1e', '#2a6a2a', '#3e8a36', '#62b04a'], 64);
+  for (const [x, y] of [[5, 11], [19, 10], [12, 3]]) { p.set(x, y, '#f0e060'); p.set(x, y + 1, '#c0a030'); }
+  return p.outline();
+}
+
+/** 雷击石柱：一根黑色石尖，上面缠着蓝白的电纹 */
+function stormspire() {
+  const p = new Pix(14, 32);
+  const pal = ['#1a1a28', '#2a2a3e', '#3e3e58', '#5a5a7a'];
+  for (let y = 1; y < 31; y++) {
+    const half = 1 + (y / 31) * 5;
+    for (let x = Math.round(7 - half); x <= Math.round(7 + half); x++) p.set(x, y, x < 6 ? pal[2] : x > 8 ? pal[0] : pal[1]);
+  }
+  let x = 7;
+  for (let y = 3; y < 28; y++) {
+    x += hash(y, 3, 65) < 0.5 ? -1 : 1;
+    x = Math.max(4, Math.min(10, x));
+    p.paint(x, y, y % 5 === 0 ? '#ffffff' : '#8ad0ff');
+  }
+  return p.outline();
+}
+
+/** 晶海星屑：一簇从地里冒出来的紫白晶石，带闪光 */
+function starshard() {
+  const p = shards(14, 18, ['#3a2a7a', '#6a4ad0', '#b8a0ff', '#ffffff']);
+  p.set(3, 4, '#ffffff');
+  p.set(11, 7, '#ffffff');
+  return p;
+}
+
+/** 尖木栅栏：一格一根削尖的木桩 */
+function palisade() {
+  const p = new Pix(16, 26);
+  for (const [x, top] of [[1, 2], [6, 0], [11, 3]]) {
+    for (let y = top; y < 25; y++) {
+      const tip = y - top;
+      for (let i = 0; i < 4; i++) {
+        if (tip < 3 && (i < 2 - tip || i > 1 + tip)) continue;
+        p.set(x + i, y, i === 0 ? '#9a7044' : i === 3 ? '#4a3020' : '#7a5432');
+      }
+    }
+  }
+  p.rect(0, 10, 16, 2, '#3a2a1a');
+  p.rect(0, 19, 16, 2, '#3a2a1a');
+  return p.outline();
+}
+
+/** 晶墙：半透明的紫色晶块砌成，顶上一排晶尖 */
+function crystalwall() {
+  const p = new Pix(16, 26);
+  const pal = ['#3a2a6a', '#5a44a0', '#8a70d8', '#d8ccff'];
+  for (let y = 8; y < 25; y++) {
+    for (let x = 0; x < 16; x++) {
+      const row = Math.floor((y - 8) / 5);
+      const joint = (y - 8) % 5 === 4 || (x + (row % 2) * 4) % 8 === 7;
+      p.set(x, y, joint ? pal[0] : (x + y) % 9 === 0 ? pal[3] : x < 8 ? pal[2] : pal[1]);
+    }
+  }
+  for (const cx of [3, 8, 13]) {
+    for (let y = 1; y < 8; y++) {
+      const half = (y - 1) * 0.4;
+      for (let x = Math.round(cx - half); x <= Math.round(cx + half); x++) p.set(x, y, x < cx ? pal[3] : pal[2]);
+    }
+  }
+  return p.outline();
+}
+
+/** 纸灯笼：挂在木杆上的红灯笼 */
+function lantern() {
+  const p = new Pix(10, 24);
+  p.rect(4, 6, 2, 17, '#3a2a1e');
+  p.rect(2, 22, 6, 1, '#2a1e17');
+  p.rect(4, 3, 4, 1, '#3a2a1e');
+  p.blob(5, 9, 3.5, 3.5, ['#8a1a1a', '#c02a2a', '#e8503a', '#ffb070'], 66);
+  p.rect(3, 5, 4, 1, '#2a1e17');
+  p.rect(3, 13, 4, 1, '#2a1e17');
+  p.set(5, 14, '#e8b84a');
+  p.set(5, 15, '#e8b84a');
+  p.set(4, 8, '#fff0b0');
+  return p.outline();
+}
+
+/** 小渔船：停在水上的木船，船头翘起，桅杆收着帆 */
+function boat() {
+  const p = new Pix(30, 22);
+  for (let y = 12; y < 20; y++) {
+    const t = (y - 12) / 8;
+    const x0 = Math.round(2 + t * 4 - (y < 14 ? 2 : 0));
+    const x1 = Math.round(28 - t * 5);
+    for (let x = x0; x <= x1; x++) p.set(x, y, y === 12 ? '#c89a62' : y < 15 ? '#8a6238' : y % 3 ? '#6a4a2a' : '#5a3a22');
+  }
+  p.rect(14, 1, 2, 12, '#5a3a22');
+  p.rect(10, 3, 10, 2, '#e8dcc0');
+  p.rect(11, 5, 8, 6, '#d8ccb0');
+  p.rect(11, 5, 1, 6, '#f4ead8');
+  return p.outline();
+}
+
+/** 遗迹石柱：带凹槽的白石柱，柱头、柱础各一块 */
+function pillar(broken: boolean) {
+  const p = new Pix(12, 34);
+  const pal = ['#8a867c', '#b8b4a8', '#dcd8cc', '#f4f0e8'];
+  const top = broken ? 14 : 4;
+  for (let y = top; y < 31; y++) for (let x = 2; x < 10; x++) p.set(x, y, x === 2 ? pal[3] : x === 9 ? pal[0] : x % 3 === 1 ? pal[1] : pal[2]);
+  if (broken) {
+    for (let x = 2; x < 10; x++) for (let y = top - Math.floor(hash(x, 4, 67) * 4); y < top; y++) p.set(x, y, pal[1]);
+  } else {
+    p.rect(0, 1, 12, 3, pal[2]);
+    p.rect(0, 1, 12, 1, pal[3]);
+  }
+  p.rect(0, 31, 12, 3, pal[1]);
+  p.rect(0, 31, 12, 1, pal[3]);
+  if (broken) p.blob(10, 31, 2.5, 1.5, pal, 68);
+  return p.outline();
+}
+
 const PROP_ART: Record<PropKind, () => Pix> = {
+  willow,
+  ancientvine,
+  stormspire,
+  starshard,
+  palisade,
+  crystalwall,
+  lantern,
+  boat,
+  pillar: () => pillar(false),
+  brokenpillar: () => pillar(true),
+  moonflower: () => small(10, 8, (p) => {
+    for (let i = 0; i < 3; i++) {
+      const x = 2 + i * 3;
+      const y = 2 + (i % 2) * 2;
+      p.line(x, 7, x, y + 1, '#4a6a5a');
+      p.set(x, y, '#e8e0ff');
+      p.set(x - 1, y, '#b8a8f0');
+      p.set(x + 1, y, '#b8a8f0');
+      p.set(x, y - 1, '#b8a8f0');
+    }
+  }),
+  ashrock: () => rock(16, 13, ['#1a1416', '#2c2426', '#40363a', '#e06a2a'], false, 69),
   acacia,
   goldtree,
   jungletree,
@@ -457,12 +624,22 @@ export const PROP_GLOW: Partial<Record<PropKind, { color: number; r: number; dy:
   charred: { color: 0xff5a1a, r: 10, dy: -8 },
   icecrystal: { color: 0x9ad8ff, r: 12, dy: -6 },
   crystalspire: { color: 0x8ad0ff, r: 20, dy: -14 },
+  lantern: { color: 0xff8a4a, r: 20, dy: -15 },
+  stormspire: { color: 0x8ad0ff, r: 16, dy: -16 },
+  starshard: { color: 0xb090ff, r: 16, dy: -8 },
+  moonflower: { color: 0xc8b0ff, r: 10, dy: -4 },
 };
 
 // ---- 建筑 ----
 
 interface HouseStyle {
-  wall: 'wood' | 'stone' | 'plaster';
+  wall: 'wood' | 'stone' | 'plaster' | 'whitewash' | 'charred' | 'crystalstone' | 'marble';
+  /** 屋顶积雪（雪隘堡） */
+  snowCap?: boolean;
+  /** 屋檐挂两盏红灯笼（岩灯城） */
+  lanterns?: boolean;
+  /** 屋顶塌了几块（虚辉遗都） */
+  ruined?: boolean;
   roof: string[];
   windows: number;
   door?: 'single' | 'double' | 'arch';
@@ -505,6 +682,25 @@ function drawWall(p: Pix, x0: number, y0: number, w: number, h: number, kind: Ho
         const t = hash(Math.floor((lx + off) / 8), row, 3);
         c = joint ? '#5a564e' : t < 0.3 ? '#8a8478' : t > 0.8 ? '#aaa496' : '#9a9486';
         if (!joint && ly % 4 === 0) c = '#b4ae9e';
+      } else if (kind === 'whitewash' || kind === 'marble') {
+        // 白墙：珊瑚港的石灰墙、遗都的白石墙（带一点裂纹）
+        c = kind === 'marble' ? (hash(x, y, 6) < 0.1 ? '#c8c4b8' : '#dcd8cc') : hash(x, y, 4) < 0.06 ? '#e4e0d4' : '#f2eee4';
+        if (ly === 0) c = kind === 'marble' ? '#a8a49a' : '#c8c4b8';
+        if (kind === 'marble' && (lx * 3 + ly * 5) % 41 === 0) c = '#8a867c';
+        if (kind === 'whitewash' && ly > h - 5) c = '#5a8ab0';
+      } else if (kind === 'charred') {
+        // 熏黑的木板
+        c = ly % 4 === 3 ? '#1a1412' : hash(0, Math.floor(ly / 4), x0) < 0.5 ? '#3a2c24' : '#4a382c';
+        if (ly % 4 === 0) c = '#5a463a';
+        if (lx === 0 || lx === w - 1) c = '#1a1412';
+        if (hash(x, y, 5) < 0.02) c = '#c84a1a';
+      } else if (kind === 'crystalstone') {
+        // 紫晶砖
+        const row = Math.floor(ly / 5);
+        const off = row % 2 ? 5 : 0;
+        const joint = ly % 5 === 4 || (lx + off) % 10 === 9;
+        c = joint ? '#3a2a6a' : hash(Math.floor((lx + off) / 10), row, 8) < 0.3 ? '#7a62c8' : '#6a54b0';
+        if (!joint && ly % 5 === 0) c = '#a890f0';
       } else if (kind === 'plaster') {
         c = '#e6d8b8';
         if (hash(x, y, 4) < 0.08) c = '#d4c4a0';
@@ -587,6 +783,21 @@ function house(wTiles: number, hTiles: number, s: HouseStyle) {
   const roofH = H - wallH - 2;
   drawWall(p, 2, roofH + 1, W - 2, wallH, s.wall);
   drawRoof(p, 0, 0, W + 2, roofH, s.roof);
+  if (s.snowCap) {
+    // 屋顶上半积雪，雪边参差
+    for (let x = 0; x < W + 2; x++) {
+      const depth = Math.floor(roofH * 0.35) + Math.floor(hash(x, 3, 11) * 3);
+      for (let y = 0; y < depth; y++) if (p.get(x, y)) p.set(x, y, y === depth - 1 ? '#c4d0e0' : hash(x, y, 12) < 0.1 ? '#dfe8f2' : '#f4f8fc');
+    }
+  }
+  if (s.ruined) {
+    // 塌掉的屋顶：几个窟窿露出黑洞洞的屋里
+    for (let k = 0; k < 3; k++) {
+      const cx0 = 6 + Math.floor(hash(k, wTiles, 13) * (W - 12));
+      const cy0 = 3 + Math.floor(hash(wTiles, k, 14) * (roofH - 8));
+      p.blob(cx0, cy0, 4 + k, 3, ['#1a1418', '#241c22', '#2e252c', '#3a3038'], 15 + k);
+    }
+  }
   if (s.chimney) {
     p.rect(W - 14, 0, 7, 10, '#6a625a');
     p.rect(W - 14, 0, 7, 2, '#3a3632');
@@ -603,6 +814,12 @@ function house(wTiles: number, hTiles: number, s: HouseStyle) {
     if (wx > 3 && wx < W - 10) drawWindow(p, wx, wy);
   }
   if (s.sign) drawSign(p, Math.round(cx + 9), roofH + 4, s.sign);
+  if (s.lanterns) {
+    for (const lx of [4, W - 4]) {
+      p.rect(lx, roofH, 1, 3, '#2a1e17');
+      p.blob(lx, roofH + 5, 2.2, 2.6, ['#8a1a1a', '#c02a2a', '#e8503a', '#ffb070'], lx);
+    }
+  }
   return p.outline();
 }
 
@@ -855,29 +1072,279 @@ function well() {
   return p.outline();
 }
 
-export function paintBuilding(kind: BuildingKind, w: number, h: number, seed = 0): HTMLCanvasElement {
+// ---- 12080 新城镇的建筑（10-24：每座城一种风格） ----
+
+const ROOF_THATCH = ['#6a4a18', '#9a742e', '#c09a48', '#e4c470'];
+const ROOF_SLATE = ['#262c3a', '#363e52', '#4a546c', '#66728c'];
+const ROOF_LACQUER = ['#4a0e0e', '#7a1a16', '#a42a20', '#d04a30'];
+const ROOF_ASH = ['#1a1616', '#2a2424', '#3c3434', '#584c48'];
+const ROOF_CRYSTAL = ['#3a2a6a', '#5a44a0', '#8a70d8', '#cfc0ff'];
+const ROOF_MOSS = ['#203424', '#2e4a34', '#426644', '#62885a'];
+const ROOF_SEA = ['#163a5a', '#1e5080', '#2e6aa4', '#5a92c8'];
+
+/** 每座新城的建筑风格：墙、屋顶和附加装饰 */
+const THEMES: Record<TownTheme, Partial<HouseStyle>> = {
+  village: { wall: 'plaster', roof: ROOF_THATCH },
+  snowfort: { wall: 'stone', roof: ROOF_SLATE, snowCap: true },
+  lantern: { wall: 'stone', roof: ROOF_LACQUER, lanterns: true },
+  port: { wall: 'whitewash', roof: ROOF_SEA },
+  ashcamp: { wall: 'charred', roof: ROOF_ASH },
+  crystal: { wall: 'crystalstone', roof: ROOF_CRYSTAL },
+  stilt: { wall: 'wood', roof: ROOF_MOSS },
+  ruins: { wall: 'marble', roof: ROOF_SLATE, ruined: true },
+};
+
+/** 把一张画好的房子垫高：底下加一排木桩和一架梯子（遗忘哨塔的高脚屋） */
+function onStilts(src: Pix, lift = 10) {
+  const p = new Pix(src.w, src.h + lift);
+  for (let y = 0; y < src.h; y++) for (let x = 0; x < src.w; x++) { const c = src.get(x, y); if (c) p.set(x, y, c); }
+  for (let x = 3; x < src.w - 3; x += 10) p.rect(x, src.h - 2, 3, lift + 2, x % 20 ? '#4a3a2a' : '#5a4632');
+  p.rect(1, src.h - 2, src.w - 2, 2, '#3a2a1e');
+  const cx = Math.round(src.w / 2);
+  for (let y = src.h; y < src.h + lift; y += 3) p.rect(cx - 3, y, 6, 1, '#8a6a46');
+  p.rect(cx - 4, src.h, 1, lift, '#6a4a2e');
+  p.rect(cx + 3, src.h, 1, lift, '#6a4a2e');
+  return p.outline();
+}
+
+/** 堡垒主楼：中间高大的石楼，两侧带垛口的塔楼 */
+function keep(wTiles: number, hTiles: number) {
+  const W = wTiles * 16;
+  const H = hTiles * 16 + 30;
+  const p = new Pix(W + 2, H);
+  const bottom = H - 2;
+  drawWall(p, 14, 26, W - 26, bottom - 26, 'stone');
+  drawRoof(p, 10, 8, W - 18, 20, ROOF_SLATE);
+  for (const tx of [0, W - 16]) {
+    drawWall(p, tx, 14, 18, bottom - 14, 'stone');
+    for (let x = tx; x < tx + 18; x += 6) p.rect(x, 8, 4, 6, '#9a9486');
+    p.rect(tx, 13, 18, 2, '#5a564e');
+    drawWindow(p, tx + 5, 30);
+  }
+  for (let x = 10; x < W - 8; x++) for (let y = 8; y < 13; y++) if (p.get(x, y)) p.set(x, y, y < 11 ? '#f4f8fc' : '#c4d0e0');
+  drawDoor(p, W / 2 + 1, bottom, 'double');
+  drawWindow(p, W / 2 - 16, 38);
+  drawWindow(p, W / 2 + 10, 38);
+  p.rect(W / 2 - 2, 26, 6, 10, '#2a4a9a');
+  p.rect(W / 2 - 2, 26, 6, 1, '#e8b84a');
+  return p.outline();
+}
+
+/** 哨塔：高高的木塔，顶上带棚子的瞭望台 */
+function watchtower(wTiles: number, hTiles: number, stone: boolean) {
+  const W = wTiles * 16;
+  const H = hTiles * 16 + 22;
+  const p = new Pix(W + 2, H);
+  const bottom = H - 2;
+  const cx = W / 2 + 1;
+  const legW = Math.max(3, Math.round(W * 0.1));
+  for (const lx of [4, W - 4 - legW]) p.rect(lx, 24, legW, bottom - 24, stone ? '#8a8478' : '#6a4a2e');
+  for (let y = 34; y < bottom - 6; y += 14) { p.line(4 + legW, y, W - 4 - legW, y + 10, '#5a3a22'); p.line(W - 4 - legW, y, 4 + legW, y + 10, '#5a3a22'); }
+  drawWall(p, 0, 16, W + 2, 12, stone ? 'stone' : 'wood');
+  for (let x = 0; x < W + 2; x += 5) p.rect(x, 12, 3, 4, stone ? '#9a9486' : '#7a5432');
+  drawRoof(p, 2, 0, W - 2, 12, stone ? ROOF_SLATE : ROOF_BROWN);
+  p.rect(cx - 3, 18, 6, 6, '#2a1e17');
+  p.set(cx, 20, '#ffd25e');
+  return p.outline();
+}
+
+/** 灯塔楼：三层叠起来的红漆宝塔，每层屋檐挂灯笼 */
+function lanterntower(wTiles: number, hTiles: number) {
+  const W = wTiles * 16;
+  const H = hTiles * 16 + 22;
+  const p = new Pix(W + 2, H);
+  const bottom = H - 2;
+  const cx = W / 2 + 1;
+  const tiers = 4;
+  const tierH = Math.floor((bottom - 6) / tiers);
+  for (let t = 0; t < tiers; t++) {
+    const y0 = 6 + t * tierH;
+    const half = W * (0.22 + t * 0.07);
+    drawWall(p, Math.round(cx - half * 0.7), y0 + 8, Math.round(half * 1.4), tierH - 8, 'plaster');
+    drawRoof(p, Math.round(cx - half), y0, Math.round(half * 2), 9, ROOF_LACQUER);
+    for (const lx of [Math.round(cx - half) + 1, Math.round(cx + half) - 2]) p.blob(lx, y0 + 12, 1.8, 2.2, ['#8a1a1a', '#c02a2a', '#e8503a', '#ffb070'], lx + t);
+    if (t > 0) drawWindow(p, Math.round(cx - 4), y0 + 12);
+  }
+  p.rect(cx - 1, 0, 2, 7, '#e8b84a');
+  p.blob(cx, 2, 2.5, 2.5, ['#a07a1a', '#e8b84a', '#ffe070', '#ffffff'], 7);
+  drawDoor(p, cx, bottom, 'arch');
+  return p.outline();
+}
+
+/** 灯塔：红白相间的圆塔，顶上玻璃灯室 */
+function lighthouse(wTiles: number, hTiles: number) {
+  const W = wTiles * 16;
+  const H = hTiles * 16 + 24;
+  const p = new Pix(W + 2, H);
+  const bottom = H - 2;
+  const cx = W / 2 + 1;
+  for (let y = 22; y < bottom; y++) {
+    const half = W * 0.22 + ((y - 22) / (bottom - 22)) * W * 0.18;
+    for (let x = Math.round(cx - half); x <= Math.round(cx + half); x++) {
+      const band = Math.floor((y - 22) / 10) % 2;
+      const sh = (x - cx) / half;
+      const base = band ? ['#f4ead8', '#dcd0bc', '#b8ac98'] : ['#d0443a', '#b03a2e', '#8a2a22'];
+      p.set(x, y, sh < -0.4 ? base[0] : sh > 0.5 ? base[2] : base[1]);
+    }
+  }
+  p.rect(Math.round(cx - W * 0.3), 18, Math.round(W * 0.6) + 1, 4, '#3a3a40');
+  p.rect(Math.round(cx - W * 0.2), 8, Math.round(W * 0.4) + 1, 10, '#ffe890');
+  p.rect(Math.round(cx - W * 0.2), 8, Math.round(W * 0.4) + 1, 1, '#3a3a40');
+  p.rect(Math.round(cx), 8, 1, 10, '#3a3a40');
+  drawRoof(p, Math.round(cx - W * 0.26), 0, Math.round(W * 0.52) + 1, 8, ROOF_RED);
+  drawDoor(p, cx, bottom, 'arch');
+  return p.outline();
+}
+
+/** 仓库：宽大的木棚，正中一扇大拉门，门口堆着木箱 */
+function warehouse(wTiles: number, hTiles: number) {
+  const p = house(wTiles, hTiles, { wall: 'wood', roof: ROOF_SEA, windows: 0, door: 'double' });
+  const W = wTiles * 16;
+  const bottom = p.h - 2;
+  p.rect(Math.round(W / 2) - 10, bottom - 20, 22, 20, '#3a2416');
+  for (let x = Math.round(W / 2) - 9; x < Math.round(W / 2) + 11; x += 4) p.rect(x, bottom - 19, 1, 19, '#5a3a22');
+  for (const [x, w] of [[4, 10], [W - 14, 10]]) {
+    p.rect(x, bottom - 10, w, 10, '#9a6e40');
+    p.rect(x, bottom - 10, w, 1, '#b8884e');
+    p.line(x, bottom - 10, x + w - 1, bottom - 1, '#7a5230');
+  }
+  return p.outline();
+}
+
+/** 篝火：一圈石头围着交叉的木柴，火苗由场景加动画 */
+function bonfire(wTiles: number) {
+  const W = wTiles * 16;
+  const p = new Pix(W + 2, 40);
+  const cx = W / 2 + 1;
+  for (let a = 0; a < Math.PI * 2; a += 0.5) p.blob(cx + Math.cos(a) * (W / 2 - 4), 30 + Math.sin(a) * 6, 3, 2.2, ['#3a3a40', '#5a5a62', '#7a7a84', '#9a9aa4'], Math.round(a * 10));
+  p.line(cx - 12, 33, cx + 10, 22, '#5a3a22');
+  p.line(cx + 12, 33, cx - 10, 22, '#6a4a2a');
+  p.line(cx - 12, 32, cx + 10, 21, '#7a5432');
+  p.blob(cx, 22, 7, 9, ['#c8401a', '#ff8a2a', '#ffc840', '#fff4b0'], 21);
+  p.blob(cx, 18, 4, 7, ['#ff8a2a', '#ffc840', '#fff4b0', '#ffffff'], 22);
+  return p.outline();
+}
+
+/** 晶塔：石台上立着一根巨大的发光晶柱，周围几根小晶 */
+function crystaltower(wTiles: number, hTiles: number) {
+  const W = wTiles * 16;
+  const H = hTiles * 16 + 30;
+  const p = new Pix(W + 2, H);
+  const bottom = H - 2;
+  const cx = W / 2 + 1;
+  drawWall(p, 6, bottom - 22, W - 10, 22, 'crystalstone');
+  for (let x = 4; x < W - 2; x += 6) p.rect(x, bottom - 26, 4, 4, '#6a54b0');
+  const pal = ['#3a2a8a', '#6a4ad0', '#a888f8', '#ffffff'];
+  const spike = (sx: number, top: number, bot: number, hw: number) => {
+    for (let y = top; y <= bot; y++) {
+      const t = Math.min(1, (y - top) / 14);
+      const half = Math.max(0.5, hw * t);
+      for (let x = Math.round(sx - half); x <= Math.round(sx + half); x++) p.set(x, y, x < sx - 1 ? pal[2] : x > sx + 1 ? pal[0] : pal[1]);
+    }
+    p.set(sx, top, pal[3]);
+  };
+  spike(cx, 2, bottom - 24, W * 0.18);
+  spike(cx - W * 0.3, bottom - 70, bottom - 24, W * 0.08);
+  spike(cx + W * 0.3, bottom - 60, bottom - 24, W * 0.08);
+  p.line(cx - 2, 12, cx - 2, bottom - 40, pal[3]);
+  drawDoor(p, cx, bottom, 'arch');
+  return p.outline();
+}
+
+/** 断壁残垣：只剩半截墙，没有屋顶，墙头参差 */
+function ruin(wTiles: number, hTiles: number) {
+  const W = wTiles * 16;
+  const H = hTiles * 16 + 10;
+  const p = new Pix(W + 2, H);
+  const bottom = H - 2;
+  drawWall(p, 2, 10, W - 2, bottom - 10, 'marble');
+  for (let x = 2; x < W; x++) {
+    const cut = 10 + Math.floor(Math.abs(Math.sin(x * 0.21 + wTiles)) * 18 + hash(x, 5, 17) * 4);
+    for (let y = 10; y < cut; y++) p.set(x, y, null);
+  }
+  p.rect(Math.round(W / 2) - 6, bottom - 18, 12, 18, '#1a1418');
+  for (let i = 0; i < 4; i++) p.blob(6 + hash(i, 1, 18) * (W - 12), bottom - 1, 3, 1.6, ['#8a867c', '#b8b4a8', '#dcd8cc', '#f4f0e8'], i);
+  return p.outline();
+}
+
+/** 神殿：台阶、一排石柱、三角形山花，中间挂着仓库的招牌 */
+function temple(wTiles: number, hTiles: number) {
+  const W = wTiles * 16;
+  const H = hTiles * 16 + 26;
+  const p = new Pix(W + 2, H);
+  const bottom = H - 2;
+  const cx = W / 2 + 1;
+  const pal = ['#8a867c', '#b8b4a8', '#dcd8cc', '#f4f0e8'];
+  for (let k = 0; k < 3; k++) p.rect(k * 3, bottom - 3 - k * 3, W + 2 - k * 6, 3, pal[k + 1]);
+  const colTop = 30;
+  const colBot = bottom - 9;
+  p.rect(8, colTop, W - 14, colBot - colTop, '#2a2430');
+  for (let x = 6; x < W - 4; x += 14) for (let y = colTop; y < colBot; y++) for (let i = 0; i < 7; i++) p.set(x + i, y, i === 0 ? pal[3] : i === 6 ? pal[0] : i % 2 ? pal[1] : pal[2]);
+  p.rect(2, colTop - 6, W - 2, 6, pal[2]);
+  p.rect(2, colTop - 6, W - 2, 1, pal[3]);
+  for (let y = 4; y < colTop - 6; y++) {
+    const half = ((y - 4) / (colTop - 10)) * (W / 2);
+    for (let x = Math.round(cx - half); x <= Math.round(cx + half); x++) p.set(x, y, y === Math.round(colTop - 7) ? pal[0] : pal[2]);
+  }
+  p.blob(cx, colTop - 12, 3, 3, ['#4a2a8a', '#7a4ad0', '#b48af0', '#ffffff'], 23);
+  drawSign(p, Math.round(cx - 5), colTop + 4, 'coin');
+  return p.outline();
+}
+
+export function paintBuilding(kind: BuildingKind, w: number, h: number, seed = 0, theme?: TownTheme): HTMLCanvasElement {
+  const T = theme ? THEMES[theme] : {};
+  // 新城镇里的设施和民居：同样的招牌，换成这座城的墙和屋顶
+  const H = (base: HouseStyle) => {
+    const p = house(w, h, { ...base, ...T, roof: theme ? T.roof! : base.roof });
+    return theme === 'stilt' ? onStilts(p) : p;
+  };
   switch (kind) {
-    case 'bank': return house(w, h, { wall: 'stone', roof: ROOF_GREEN, windows: 2, door: 'double', sign: 'coin' }).canvas();
-    case 'hall': return house(w, h, { wall: 'stone', roof: ROOF_BLUE, windows: 4, door: 'double', chimney: true }).canvas();
-    case 'smithy': return house(w, h, { wall: 'stone', roof: ROOF_BROWN, windows: 2, door: 'double', sign: 'anvil', chimney: true }).canvas();
-    case 'inn': return house(w, h, { wall: 'plaster', roof: ROOF_RED, windows: 2, sign: 'pot', chimney: true }).canvas();
-    case 'workshop': return house(w, h, { wall: 'wood', roof: ROOF_TEAL, windows: 2, sign: 'hammer' }).canvas();
-    case 'bowyer': return house(w, h, { wall: 'wood', roof: ROOF_GREEN, windows: 2, sign: 'bow' }).canvas();
-    case 'apothecary': return house(w, h, { wall: 'plaster', roof: ROOF_PURPLE, windows: 2, sign: 'potion' }).canvas();
+    case 'bank': return H({ wall: 'stone', roof: ROOF_GREEN, windows: 2, door: 'double', sign: 'coin' }).canvas();
+    case 'hall': return H({ wall: 'stone', roof: ROOF_BLUE, windows: 4, door: 'double', chimney: true }).canvas();
+    case 'smithy': return H({ wall: 'stone', roof: ROOF_BROWN, windows: 2, door: 'double', sign: 'anvil', chimney: true }).canvas();
+    case 'inn': return H({ wall: 'plaster', roof: ROOF_RED, windows: 2, sign: 'pot', chimney: true }).canvas();
+    case 'workshop': return H({ wall: 'wood', roof: ROOF_TEAL, windows: 2, sign: 'hammer' }).canvas();
+    case 'bowyer': return H({ wall: 'wood', roof: ROOF_GREEN, windows: 2, sign: 'bow' }).canvas();
+    case 'apothecary': return H({ wall: 'plaster', roof: ROOF_PURPLE, windows: 2, sign: 'potion' }).canvas();
     case 'tower': return tower().canvas();
-    case 'house': return house(w, h, { wall: 'plaster', roof: ROOF_RED, windows: 2, chimney: true }).canvas();
-    case 'house2': return house(w, h, { wall: 'wood', roof: ROOF_BLUE, windows: 2 }).canvas();
-    case 'house3': return house(w, h, { wall: 'stone', roof: ROOF_BROWN, windows: 2, chimney: true }).canvas();
+    case 'house': return H({ wall: 'plaster', roof: ROOF_RED, windows: 2, chimney: true }).canvas();
+    case 'house2': return H({ wall: 'wood', roof: ROOF_BLUE, windows: 2 }).canvas();
+    case 'house3': return H({ wall: 'stone', roof: ROOF_BROWN, windows: 2, chimney: true }).canvas();
     case 'stall': return stall(seed).canvas();
     case 'windmill': return windmill().canvas();
     case 'fountain': return fountain().canvas();
     case 'barn': return barn().canvas();
     case 'well': return well().canvas();
     case 'furnace': return furnace(w, h).canvas();
-    case 'atelier': return house(w, h, { wall: 'plaster', roof: ROOF_TEAL, windows: 2, door: 'arch', sign: 'gem', chimney: true }).canvas();
-    case 'manor': return house(w, h, { wall: 'stone', roof: ROOF_PURPLE, windows: 4, door: 'double', chimney: true }).canvas();
-    case 'tent': return tent(w, h, seed).canvas();
+    case 'atelier': return H({ wall: 'plaster', roof: ROOF_TEAL, windows: 2, door: 'arch', sign: 'gem', chimney: true }).canvas();
+    case 'manor': return H({ wall: 'stone', roof: ROOF_PURPLE, windows: 4, door: 'double', chimney: true }).canvas();
+    case 'tent': return (theme === 'ashcamp' ? darkTent(w, h, seed) : tent(w, h, seed)).canvas();
+    case 'thatch': return house(w, h, { wall: 'plaster', roof: ROOF_THATCH, windows: 2, chimney: seed % 2 === 0 }).canvas();
+    case 'keep': return keep(w, h).canvas();
+    case 'watchtower': return watchtower(w, h, theme === 'snowfort').canvas();
+    case 'lanterntower': return lanterntower(w, h).canvas();
+    case 'lighthouse': return lighthouse(w, h).canvas();
+    case 'warehouse': return warehouse(w, h).canvas();
+    case 'bonfire': return bonfire(w).canvas();
+    case 'crystaltower': return crystaltower(w, h).canvas();
+    case 'stilthouse': return onStilts(house(w, h, { wall: 'wood', roof: ROOF_MOSS, windows: 2, chimney: seed % 3 === 0 })).canvas();
+    case 'ruin': return ruin(w, h).canvas();
+    case 'temple': return temple(w, h).canvas();
   }
+}
+
+/** 灰烬营地的帐篷：熏黑的帆布，红色布条 */
+function darkTent(w: number, h: number, seed: number) {
+  const p = tent(w, h, seed);
+  for (let y = 0; y < p.h; y++) {
+    for (let x = 0; x < p.w; x++) {
+      const c = p.get(x, y);
+      if (!c || c === '#1a120e' || c === '#3a2416' || c === '#5a3a22') continue;
+      if (['#b03a2a', '#2a6aa8', '#3a8a4a'].includes(c)) p.set(x, y, '#a02a1a');
+      else p.set(x, y, mix(c, '#2a2020', 0.6));
+    }
+  }
+  return p;
 }
 
 export const paintWindmillBlades = () => windmillBlades().canvas();

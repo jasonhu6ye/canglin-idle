@@ -325,7 +325,14 @@ describe('存档迁移', () => {
     const old = { ...newGame(T0, 1), mapSize: 5088, loc: { x: 2500, y: 2600 } };
     const s = migrate(old)!;
     expect(s.loc).toEqual({ x: 2500 + OLD_BOX.x, y: 2600 + OLD_BOX.y });
-    expect(s.mapSize).toBe(8848);
+    expect(s.mapSize).toBe(12080);
+  });
+
+  it('8848 地图的存档：位置整体平移进 12080 中间', async () => {
+    const { MID_BOX } = await import('./data');
+    const old = { ...newGame(T0, 1), mapSize: 8848, loc: { x: 4000, y: 5000 } };
+    const s = migrate(old)!;
+    expect(s.loc).toEqual({ x: 4000 + MID_BOX.x, y: 5000 + MID_BOX.y });
   });
 
   it('两座城的仓库、集市都能用，背包满了回最近的仓库', async () => {

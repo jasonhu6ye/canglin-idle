@@ -7,7 +7,7 @@ import { paintWaystone } from './waystoneArt';
 import { paintPortal, paintPortalSwirl, PORTAL_H } from './homeArt';
 import { MON_ANIMS, monsterFrameSize, paintMonsterSheet, type MonAnim } from './monsterArt';
 import { paintWolfSheet, wolfSaddle, WOLF_ANIMS, WOLF_FEET, WOLF_H, WOLF_W } from './wolfArt';
-import { HERO_ANIMS, HERO_FEET, HERO_H, HERO_W, NPC_ANIMS, NPC_OUTFITS, outfitOf, paintHeroSheet, type HeroDir } from './hero';
+import { FRAME_H, FRAME_W, HERO_ANIMS, HERO_FEET, HERO_PAD, NPC_ANIMS, NPC_OUTFITS, outfitOf, paintHeroSheet, type HeroDir } from './hero';
 import type { MonsterDef, RegionId, Summary } from '../core/types';
 import { store } from '../store';
 import { Ambience, D_FLOAT, D_GLOW, D_LABEL, D_PARTICLE, D_SMOKE } from './ambience';
@@ -31,7 +31,7 @@ export const setSpeedMultiplier = (m: number) => {
 
 const DRAG_THRESHOLD = 8;
 const FONT = '"PingFang SC","Microsoft YaHei",sans-serif';
-const CHIMNEY: Record<string, boolean> = { furnace: true, hall: true, smithy: true, inn: true, house: true, house3: true, atelier: true, manor: true };
+const CHIMNEY: Record<string, boolean> = { furnace: true, hall: true, smithy: true, inn: true, house: true, house3: true, atelier: true, manor: true, thatch: true };
 
 export const NODE_CLICK = 'node-click';
 
@@ -166,7 +166,7 @@ export class MapScene extends Phaser.Scene {
     if (!store.state.walk && (start.x !== saved.x || start.y !== saved.y)) store.dispatch((g) => setLoc(g, start.x, start.y));
     this.player = this.add.container(start.x * T + T / 2, start.y * T + T / 2);
     const ring = this.add.ellipse(0, 6, 14, 6).setStrokeStyle(1, 0xe8b84a).setFillStyle(0xe8b84a, 0.25);
-    this.playerBody = this.add.sprite(0, 7, 'hero').setOrigin(0.5, HERO_FEET / HERO_H);
+    this.playerBody = this.add.sprite(0, 7, 'hero').setOrigin(0.5, (HERO_FEET + HERO_PAD.t) / FRAME_H);
     this.playerBody.play('idle-down');
     const name = this.add.text(0, 7 - HERO_FEET + 1, '[苍岭] 你', { fontFamily: FONT, fontSize: '7px', color: '#ffffff', stroke: '#000', strokeThickness: 2, resolution: 4 }).setOrigin(0.5);
     this.wolfBack = this.add.sprite(0, 7, 'mount-wolf').setOrigin(0.5, WOLF_FEET / WOLF_H).setVisible(false);
@@ -328,7 +328,7 @@ export class MapScene extends Phaser.Scene {
     const hero = paintHeroSheet(outfitOf(this.heroSkin));
     this.heroCanvas = hero.canvas;
     const tex = this.heroTex = this.textures.addCanvas('hero', hero.canvas)!;
-    for (const f of hero.frames) tex.add(f.name, 0, f.x, f.y, HERO_W, HERO_H);
+    for (const f of hero.frames) tex.add(f.name, 0, f.x, f.y, FRAME_W, FRAME_H);
     for (const a of HERO_ANIMS) {
       if (this.anims.exists(a.key)) continue;
       this.anims.create({
@@ -358,7 +358,7 @@ export class MapScene extends Phaser.Scene {
       if (this.textures.exists(key)) continue;
       const sheet = paintHeroSheet(o, undefined, NPC_ANIMS);
       const t = this.textures.addCanvas(key, sheet.canvas)!;
-      for (const f of sheet.frames) t.add(f.name, 0, f.x, f.y, HERO_W, HERO_H);
+      for (const f of sheet.frames) t.add(f.name, 0, f.x, f.y, FRAME_W, FRAME_H);
       for (const an of NPC_ANIMS) {
         this.anims.create({
           key: `${key}:${an.key}`, frameRate: an.rate * 0.8, repeat: -1,
@@ -395,7 +395,7 @@ export class MapScene extends Phaser.Scene {
     const v = Math.floor(hash(x, y, 99) * VARIANTS);
     const li = this.liquidIdx.get(g);
     if (li === undefined) return tileIndex(g, v);
-    const group = (k: number) => (GROUNDS[k] === 'ocean' ? 'water' : GROUNDS[k]);
+    const group = (k: number) => (GROUNDS[k] === 'ocean' || GROUNDS[k] === 'starwater' ? 'water' : GROUNDS[k]);
     const me = group(g);
     const land = (nx: number, ny: number) => nx >= 0 && ny >= 0 && nx < MAP_W && ny < MAP_H && group(groundIndex(nx, ny)) !== me;
     const mask = (land(x, y - 1) ? 1 : 0) | (land(x + 1, y) ? 2 : 0) | (land(x, y + 1) ? 4 : 0) | (land(x - 1, y) ? 8 : 0);
@@ -419,8 +419,9 @@ export class MapScene extends Phaser.Scene {
 
   private buildTown() {
     BUILDINGS.forEach((b, i) => {
-      const key = `bld-${i}`;
-      this.textures.addCanvas(key, paintBuilding(b.kind, b.w, b.h, i));
+      // 同样大小、同样风格的房子共用一张图（12080 有十座城，几百栋房子）
+      const key = `bld-${b.kind}-${b.w}x${b.h}-${b.theme ?? ''}-${i % 3}`;
+      if (!this.textures.exists(key)) this.textures.addCanvas(key, paintBuilding(b.kind, b.w, b.h, i % 3, b.theme));
       const bx = (b.x + b.w / 2) * T;
       const by = (b.y + b.h) * T;
       const img = this.add.image(bx, by, key).setOrigin(0.5, 1).setDepth(by + 1000);
@@ -432,6 +433,10 @@ export class MapScene extends Phaser.Scene {
       if (b.kind === 'tower') this.addGlow(bx, by - img.height + 12, 0xa070ff, 30);
       if (b.kind === 'smithy') this.addGlow(bx - 26, by - 10, 0xff7a2a, 26);
       if (b.kind === 'furnace') this.furnaceFx(bx + 1, by - 13);
+      if (b.kind === 'bonfire') this.furnaceFx(bx, by - 18);
+      if (b.kind === 'lighthouse') this.addGlow(bx, by - img.height + 14, 0xfff0a0, 46);
+      if (b.kind === 'crystaltower') { this.addGlow(bx, by - img.height * 0.6, 0xa080ff, 50); this.sparkle(bx, by - img.height * 0.6, 20); }
+      if (b.kind === 'lanterntower') this.addGlow(bx, by - img.height + 6, 0xffb060, 30);
       if (CHIMNEY[b.kind]) this.smoke(bx - img.width / 2 + img.width - 11, by - img.height + 2);
     });
   }
@@ -441,6 +446,7 @@ export class MapScene extends Phaser.Scene {
     this.addGlow(x, y, 0xff8a2a, 34).base = 0.8;
     this.time.addEvent({
       delay: 380, loop: true, callback: () => {
+        if (this.offCam(x, y)) return;
         const p = this.add.image(x + (Math.random() - 0.5) * 14, y + 4, 'p-ember').setDepth(D_PARTICLE);
         this.tweens.add({ targets: p, y: y - 10 - Math.random() * 14, x: p.x + (Math.random() - 0.5) * 16, alpha: 0, duration: 700 + Math.random() * 400, onComplete: () => p.destroy() });
       },
@@ -732,9 +738,16 @@ export class MapScene extends Phaser.Scene {
     });
   }
 
+  /** 离镜头远的烟、火星不生成（十座城几百个烟囱，屏幕外也一直冒烟太费） */
+  private offCam(x: number, y: number) {
+    const v = this.cameras.main.worldView;
+    return x < v.x - 120 || x > v.right + 120 || y < v.y - 120 || y > v.bottom + 160;
+  }
+
   private smoke(x: number, y: number) {
     this.time.addEvent({
       delay: 700, loop: true, callback: () => {
+        if (this.offCam(x, y)) return;
         const p = this.add.image(x + (Math.random() - 0.5) * 3, y, 'p-smoke').setDepth(D_SMOKE).setAlpha(0.7);
         this.tweens.add({ targets: p, y: y - 26, x: p.x + 8, alpha: 0, scale: 2.2, duration: 2600, onComplete: () => p.destroy() });
       },
@@ -744,6 +757,7 @@ export class MapScene extends Phaser.Scene {
   private sparkle(x: number, y: number, r: number) {
     this.time.addEvent({
       delay: 260, loop: true, callback: () => {
+        if (this.offCam(x, y)) return;
         const p = this.add.image(x + (Math.random() - 0.5) * r * 2, y + (Math.random() - 0.5) * r, 'p-spark').setDepth(D_SMOKE);
         this.tweens.add({ targets: p, y: p.y - 6, alpha: 0, duration: 700, onComplete: () => p.destroy() });
       },
@@ -1272,7 +1286,7 @@ export class MapScene extends Phaser.Scene {
   /** 镇上的人：走路时按方向播走路动画，停下来播待机 */
   private addVillager(kind: string, x: number, y: number, radius: number) {
     const key = `npc-${kind}`;
-    const spr = this.add.sprite(x * T + T / 2, y * T + T / 2 + 7, key).setOrigin(0.5, HERO_FEET / HERO_H).setDepth(y * T + 1000);
+    const spr = this.add.sprite(x * T + T / 2, y * T + T / 2 + 7, key).setOrigin(0.5, (HERO_FEET + HERO_PAD.t) / FRAME_H).setDepth(y * T + 1000);
     spr.play(`${key}:idle-down`);
     let i = 0;
     const wander = () => {

@@ -34,15 +34,23 @@ export function ramp(cols: string[]): string[] {
 
 export class Pix {
   data: (string | null)[];
+  /** 画图坐标的原点偏移：角色帧四周留白时，画法照旧按原来的坐标写（outline、canvas 不受影响） */
+  ox = 0;
+  oy = 0;
   constructor(public w: number, public h: number) {
     this.data = new Array(w * h).fill(null);
   }
   set(x: number, y: number, c: string | null) {
-    x = Math.round(x);
-    y = Math.round(y);
+    x = Math.round(x) + this.ox;
+    y = Math.round(y) + this.oy;
     if (x >= 0 && y >= 0 && x < this.w && y < this.h) this.data[y * this.w + x] = c;
   }
   get(x: number, y: number) {
+    x += this.ox;
+    y += this.oy;
+    return x >= 0 && y >= 0 && x < this.w && y < this.h ? this.data[y * this.w + x] : null;
+  }
+  private raw(x: number, y: number) {
     return x >= 0 && y >= 0 && x < this.w && y < this.h ? this.data[y * this.w + x] : null;
   }
   /** 只在已经有颜色的像素上画，用来加花纹 */
@@ -83,8 +91,8 @@ export class Pix {
     const add: number[] = [];
     for (let y = 0; y < this.h; y++) {
       for (let x = 0; x < this.w; x++) {
-        if (this.get(x, y)) continue;
-        if (this.get(x + 1, y) || this.get(x - 1, y) || this.get(x, y + 1) || this.get(x, y - 1)) add.push(y * this.w + x);
+        if (this.raw(x, y)) continue;
+        if (this.raw(x + 1, y) || this.raw(x - 1, y) || this.raw(x, y + 1) || this.raw(x, y - 1)) add.push(y * this.w + x);
       }
     }
     for (const i of add) this.data[i] = c;
@@ -95,8 +103,8 @@ export class Pix {
     const add: [number, string][] = [];
     for (let y = 0; y < this.h; y++) {
       for (let x = 0; x < this.w; x++) {
-        if (this.get(x, y)) continue;
-        const n = this.get(x, y - 1) || this.get(x - 1, y) || this.get(x + 1, y) || this.get(x, y + 1);
+        if (this.raw(x, y)) continue;
+        const n = this.raw(x, y - 1) || this.raw(x - 1, y) || this.raw(x + 1, y) || this.raw(x, y + 1);
         if (n) add.push([y * this.w + x, mix(n, c, k)]);
       }
     }

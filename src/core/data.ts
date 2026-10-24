@@ -2,20 +2,15 @@ import type {
   ActionDef, Buff, BuffKind, CombatStyle, Drop, EquipSlot, ItemCategory, ItemDef, ItemStack, LootTable, MonsterDef, RegionId, SkillGroup, SkillId, ToolSlot,
 } from './types';
 import { FORM_FAMILY, isAnimal, SPECIES, type Family, type Species } from './bestiary';
+import { doorOf, FACILITY_NAME, townAt, TOWNS, type Facility, type TownDef } from './towns';
 
 /*
  * 资源、装备、怪物都是正式内容，数值按公式批量生成；怪物设计表在 bestiary.ts。
  * 闭环：采集 → 仓库 → 生产 → 装备/消耗品 → 战斗 → 掉落 → 生产或卖钱。
  */
 
-/** 世界大小：1080 → 1480 → 2188（用户 10-22 嫌挤，两次要求扩大） */
-export const MAP_W = 8848;
-export const MAP_H = 8848;
-/**
- * 8848 大地图（用户 10-23）：原来 5088 的世界原样放在正中间这个方框里（格子尺寸不变，老地方之间走路时间不变），
- * 外面一圈是 8 个新区域
- */
-export const OLD_BOX = { x: 1880, y: 1880, size: 5088 };
+export { MAP_W, MAP_H, MID_BOX, OLD_BOX, at, atW, atF } from './geo';
+import { MAP_W, MAP_H, MID_BOX, OLD_BOX, at, atW, atF } from './geo';
 
 /** soon：占位技能，还没有内容（养殖，用户 10-23） */
 export interface SkillInfo { name: string; color: string; group: SkillGroup; desc: string; soon?: boolean }
@@ -66,6 +61,15 @@ export const REGIONS: Record<RegionId, { name: string; color: string }> = {
   desert: { name: '流沙大漠', color: '#dcb066' },
   alpine: { name: '云岭高山', color: '#8aa898' },
   crystal: { name: '晶簇荒原', color: '#6a52a0' },
+  // 12080 最外圈（用户 10-24 的新版世界地图）
+  hills: { name: '青岚丘陵', color: '#6aa878' },
+  vineisles: { name: '古藤群岛', color: '#3a7a4a' },
+  moonmire: { name: '腐月湿地', color: '#6a5a8a' },
+  archipelago: { name: '潮歌群岛', color: '#4ab8a8' },
+  frostpeak: { name: '寒星山脉', color: '#8aa0c8' },
+  ashcape: { name: '灰烬海角', color: '#4a3a3a' },
+  thunder: { name: '雷鸣断层', color: '#4a4a6a' },
+  starsea: { name: '星陨晶海', color: '#3a3a8a' },
 };
 
 // ---- 物品 ----
@@ -140,9 +144,17 @@ const NEW_FISH: [string, string, number, number, string][] = [
   ['abyss_bass', '深渊巨鲈', 96, 452, '深渊潮眼'], ['void_angler', '虚空鮟鱇', 102, 476, '深渊潮眼'], ['dragonfish', '古龙鱼', 110, 508, '龙渊'], ['starwhale', '星海鲸鲨', 120, 548, '龙渊'],
 ];
 for (const [id, name, lvl, heals] of NEW_FISH) FISH.push([id, name, lvl, heals]);
+/** 12080 外圈的新鱼（用户 10-24）：每个新群系、新港口一种，[id, 名字, 钓鱼等级, 回复, 产地说明, 配菜香料阶] */
+export const SEA_FISH: [string, string, number, number, string][] = [
+  ['hill_trout', '青岚溪鳟', 12, 66, '青岚丘陵的溪流'], ['vine_perch', '古藤鲈', 33, 172, '霜叶海湾'],
+  ['harbor_mackerel', '港湾鲭', 41, 230, '珊瑚港的栈桥'], ['moon_catfish', '月影鲶', 46, 246, '腐月湿地'],
+  ['tide_bream', '潮歌鲷', 50, 260, '碧潮圣礁'], ['aurora_salmon', '极光鲑', 74, 364, '极光冰湖'],
+  ['ash_shark', '灰鳍鲨', 86, 418, '灼风峡湾'], ['storm_eel', '雷鸣鳗', 104, 488, '苍白裂岸'], ['star_whale', '星陨鲸', 128, 582, '坠星环礁'],
+];
+for (const [id, name, lvl, heals] of SEA_FISH) FISH.push([id, name, lvl, heals]);
 export const fishTier = (lvl: number) => Math.max(0, [1, 10, 20, 30, 40, 55, 70, 95].filter((l) => lvl >= l).length - 1);
 for (const [id, name, lvl, heals] of FISH) {
-  const where = NEW_FISH.find((f) => f[0] === id)?.[4];
+  const where = (NEW_FISH.find((f) => f[0] === id) ?? SEA_FISH.find((f) => f[0] === id))?.[4];
   item(`raw_${id}`, `生${name}`, 'resource', Math.round(2 + lvl * 0.9), { tier: fishTier(lvl), desc: `钓鱼 ${lvl} 级可钓${where ? `，产自${where}` : ''}。直接烤熟能回血，也能做成料理。` });
   item(id, `烤${name}`, 'food', Math.round(4 + lvl * 1.4), { tier: fishTier(lvl), heals, desc: `最简单的做法，只回复生命，没有增益。` });
 }
@@ -467,9 +479,13 @@ const RANK_LOOT = { normal: 1, elite: 2, boss: 5 };
 /** 每个大类的基础攻击间隔 */
 const FAMILY_MS: Record<Family, number> = {
   beast: 2600, small: 2400, bird: 2400, bat: 2200, slime: 3000, insect: 2400, crab: 2800, serpent: 2600, reptile: 2800,
-  dragon: 3000, humanoid: 2600, undead: 2800, golem: 3400, spirit: 2400, plant: 3200, eye: 2800,
+  dragon: 3000, humanoid: 2600, undead: 2800, golem: 3400, spirit: 2400, plant: 3200, eye: 2800, aquatic: 2600,
 };
 
+/** 最外圈每个群系的默认特产材料 */
+const OUTER_MAT: Partial<Record<RegionId, MatLine>> = {
+  hills: 'spice', vineisles: 'resin', moonmire: 'resin', archipelago: 'crystal', frostpeak: 'crystal', thunder: 'crystal', ashcape: 'spice', starsea: 'crystal',
+};
 function speciesDrops(sp: Species, idx: number): Drop[] {
   const t = sp.tier;
   const n = t + 1;
@@ -496,6 +512,12 @@ function speciesDrops(sp: Species, idx: number): Drop[] {
   if (fam === 'undead' && sp.form !== 'lich') add(`${T.id}_arrow`, 5 * k, 0.2);
   if (fam === 'dragon') add(T.ore, 2 * k, 0.3);
   if (fam === 'serpent' && sp.form === 'worm') add(T.ore, k, 0.25);
+  // 最外圈的新生物掉本群系的特产材料（晶石、香料、树脂、羽毛），接上珍材坊的加工链（10-24）
+  if (sp.outer) {
+    const line: MatLine = fam === 'bird' || sp.form === 'moth' ? 'feather' : fam === 'plant' || fam === 'insect' ? 'resin'
+      : fam === 'golem' || fam === 'spirit' || fam === 'aquatic' ? 'crystal' : OUTER_MAT[sp.region] ?? 'spice';
+    add(`${line}_${n}`, sp.rank === 'normal' ? 1 : 2 * k, sp.rank === 'normal' ? 0.25 : 1);
+  }
   // 精英和首领：宝石、本阶装备、强化石
   if (sp.rank !== 'normal' || fam === 'dragon') add(GEM_FOR_TIER[t], 1, sp.rank === 'boss' ? 0.25 : sp.rank === 'elite' ? 0.03 : 0.01);
   if (sp.rank !== 'normal') {
@@ -785,6 +807,21 @@ NEW_FISH.forEach(([fish, fname, lvl, heals], k) => {
   });
   make(`cook_${id}`, name, 'cooking', level, [one(`raw_${fish}`), one(side.item, side.qty)], [one(id)], 1.4);
 });
+// 外圈新鱼的海味料理（用户 10-24）：生鱼 + 同阶香料，带增益
+const SEA_BUFF: BuffKind[] = ['def', 'atk', 'speed', 'str', 'xp', 'def', 'atk', 'str', 'xp'];
+SEA_FISH.forEach(([fish, fname, lvl, heals], k) => {
+  const t = fishTier(lvl);
+  const kind = SEA_BUFF[k];
+  const buff: Buff = { kind, pct: Math.round((BUFF_BASE[kind] * 1.3 + t * 0.012) * 100) / 100, ms: (15 + t * 3) * 60000 };
+  const id = `dish_${fish}`;
+  const name = `香煎${fname}`;
+  const level = lvl + 3;
+  item(id, name, 'food', Math.round((4 + lvl * 1.4) * 2.8), {
+    tier: t, heals: Math.round(heals * 1.4), buff,
+    desc: `外圈新鱼的海味做法。烹饪 ${level} 级，用生${fname}和${MAT_LINES.spice.names[t]}做成。回复 ${Math.round(heals * 1.4)} 生命；吃下后${buffText(buff)}。`,
+  });
+  make(`cook_${id}`, name, 'cooking', level, [one(`raw_${fish}`), one(`spice_${t + 1}`)], [one(id)], 1.5);
+});
 // 每阶一道宴席：两种鱼 + 兽肉 + 配菜，同时给两种增益里更强的那种（攻防兼顾的放在力量和防御轮换）
 const FEASTS: [string, BuffKind][] = [['渔家小宴', 'def'], ['溪谷全鱼宴', 'atk'], ['冰原围炉宴', 'xp'], ['沼泽猎人宴', 'str'], ['金沙海鲜宴', 'speed'], ['熔岩烧烤宴', 'str'], ['星光盛宴', 'atk'], ['龙渊御宴', 'xp']];
 FEASTS.forEach(([name, kind], t) => {
@@ -848,20 +885,22 @@ export interface MapNode {
   cave?: boolean;
   /** 暂未开放的建筑（用户 10-23：强化台先不开放） */
   closed?: boolean;
+  /** 海上的岛（用户 10-24：水路先不开放，以后做航行系统），走不到，动作和怪物都暂时用不了 */
+  sea?: boolean;
   /** 田地：能种哪几阶的作物（地块制种田） */
   farm?: number[];
   /** 传说石碑：传送点 */
   waystone?: boolean;
   /** 家园传送门：进家园岛屿 */
   portal?: boolean;
+  /** 12080 新城镇里的点位（城镇布局自己管地面，不用清空地） */
+  townId?: string;
 }
 export type SiteKind = 'islands' | 'bamboo' | 'saltflat' | 'crater' | 'fungal' | 'glacier' | 'obsidian' | 'starabyss'
-  | 'oasis' | 'mesa' | 'atoll' | 'crystalheart';
+  | 'oasis' | 'mesa' | 'atoll' | 'crystalheart'
+  // 12080 最外圈（10-24）
+  | 'terraces' | 'sunkenwood' | 'vineheart' | 'frostbay' | 'aurora' | 'thunderrift' | 'paleshore' | 'holyreef' | 'fjord' | 'starfall' | 'eclipse';
 
-/** 老地图（中间方框）里的相对坐标 */
-const at = (u: number, v: number) => ({ x: OLD_BOX.x + Math.round(u * (OLD_BOX.size - 1)), y: OLD_BOX.y + Math.round(v * (OLD_BOX.size - 1)) });
-/** 整张 8848 大地图的相对坐标（外圈新区域用） */
-const atW = (u: number, v: number) => ({ x: Math.round(u * (MAP_W - 1)), y: Math.round(v * (MAP_H - 1)) });
 
 /** 野外点位的等级范围直接取它所有动作的最低和最高等级 */
 const wild = (id: string, name: string, u: number, v: number, region: RegionId, sprite: NodeSprite, actions: string[], pond = false): MapNode => {
@@ -871,11 +910,16 @@ const wild = (id: string, name: string, u: number, v: number, region: RegionId, 
 /** 外圈新区域的点位 */
 const ring = (id: string, name: string, u: number, v: number, region: RegionId, sprite: NodeSprite, actions: string[], pond = false): MapNode =>
   ({ ...wild(id, name, 0, 0, region, sprite, actions, pond), ...atW(u, v) });
+/** 12080 最外圈新群系的点位（整张地图的相对坐标） */
+const band = (id: string, name: string, u: number, v: number, region: RegionId, sprite: NodeSprite, actions: string[], pond = false): MapNode =>
+  ({ ...wild(id, name, 0, 0, region, sprite, actions, pond), ...atF(u, v) });
 /** 洞窟入口：暂时没有内容 */
 const cave = (id: string, name: string, pos: { x: number; y: number }, region: RegionId): MapNode =>
   ({ id, name, ...pos, region, lv: [0, 0], sprite: 'cave', actions: [], cave: true });
 
 const site = (n: MapNode, kind: SiteKind, r: number): MapNode => ({ ...n, site: { kind, r } });
+/** 海岛上的地点：内容先放好，等航行系统开放 */
+const isle = (n: MapNode): MapNode => ({ ...n, sea: true, closed: true });
 
 /** 镇中心：原来 1080 地图上的 (518, 529)，按比例放到老地图方框里 */
 export const TOWN_CENTER = { x: OLD_BOX.x + Math.round((518 * OLD_BOX.size) / 1080), y: OLD_BOX.y + Math.round((529 * OLD_BOX.size) / 1080) };
@@ -890,6 +934,45 @@ export const TOWN2_CENTER = atW(0.1, 0.52);
 export const town2XY = (x: number, y: number) => ({ x: x + TOWN2_CENTER.x, y: y + TOWN2_CENTER.y });
 const town2 = (id: string, name: string, x: number, y: number, sprite: NodeSprite, actions: string[], extra: Partial<MapNode> = {}): MapNode =>
   ({ id, name, ...town2XY(x, y), region: 'savanna', lv: [1, 1], sprite, actions, town: true, ...extra });
+
+/** 新城镇的偷窃目标（集市里） */
+const TOWN_STEAL: Record<string, string[]> = {
+  fengmai: [steal('miller', '偷磨坊主', 12, 14, [{ item: 'wheat', qty: 3, chance: 0.3 }, { item: 'seed_corn', qty: 1, chance: 0.08 }])],
+  yandeng: [steal('lantern_maker', '偷灯匠', 35, 40, [{ item: 'iron_bar', qty: 1, chance: 0.15 }, { item: 'sapphire', qty: 1, chance: 0.02 }])],
+  coralport: [steal('sailor', '偷水手', 42, 50, [{ item: 'raw_tuna', qty: 2, chance: 0.2 }]), steal('captain', '偷船长', 65, 100, [{ item: 'ruby', qty: 1, chance: 0.03 }])],
+  crystalfort: [steal('crystal_monk', '偷晶修士', 90, 150, [{ item: 'crystal_7', qty: 1, chance: 0.12 }])],
+  voidruins: [steal('relic_hunter', '偷遗物猎人', 110, 220, [{ item: 'diamond', qty: 1, chance: 0.03 }, { item: 'crystal_8', qty: 1, chance: 0.1 }])],
+};
+/** 新城镇里外圈新鱼的钓点 */
+const TOWN_FISH: Record<string, string[]> = {
+  coralport: [fishAt('harbor_mackerel'), fishAt('squid', '_port'), fishAt('swordfish', '_port')],
+  forgotten: [fishAt('moon_catfish', '_walk'), fishAt('swamp_catfish', '_walk'), fishAt('bonefin', '_walk')],
+};
+const FACILITY_NODE: Record<Facility, () => Pick<MapNode, 'sprite' | 'actions' | 'opens'>> = {
+  bank: () => ({ sprite: 'bank', actions: [], opens: 'bank' }),
+  market: () => ({ sprite: 'market', actions: [] }),
+  smithy: () => ({ sprite: 'anvil', actions: filterIds('smith_') }),
+  furnace: () => ({ sprite: 'furnace', actions: filterIds('smelt_') }),
+  kitchen: () => ({ sprite: 'stove', actions: filterIds('cook_') }),
+  workshop: () => ({ sprite: 'bench', actions: filterIds('tan_').concat(filterIds('weave_'), filterIds('craft_')) }),
+  bowyer: () => ({ sprite: 'bowyer', actions: filterIds('plank_').concat(filterIds('fletch_')) }),
+  apothecary: () => ({ sprite: 'potion', actions: filterIds('brew_') }),
+  atelier: () => ({ sprite: 'atelier', actions: filterIds('rare_') }),
+};
+/** 一座新城镇的设施点位：每个带 fac 的建筑门口一个，另有家园传送门、码头钓点 */
+function townNodes(t: TownDef): MapNode[] {
+  const base = { region: t.region, lv: [1, 1] as [number, number], town: true, townId: t.id };
+  const out: MapNode[] = t.buildings.filter((bd) => bd.fac).map((bd) => {
+    const f = FACILITY_NODE[bd.fac!]();
+    return {
+      id: `${t.id}_${bd.fac}`, name: `${t.name}·${FACILITY_NAME[bd.fac!]}`, ...doorOf(t, bd), ...base, ...f,
+      actions: bd.fac === 'market' ? [...(TOWN_STEAL[t.id] ?? [])] : f.actions,
+    };
+  });
+  if (t.portal) out.push({ id: `${t.id}_portal`, name: `${t.name}·家园传送门`, ...townAt(t, ...t.portal), ...base, sprite: 'portal', actions: [], portal: true });
+  if (t.fish) out.push({ id: `${t.id}_pier`, name: `${t.name}·钓鱼栈桥`, ...townAt(t, ...t.fish), ...base, sprite: 'fish', actions: TOWN_FISH[t.id] ?? [] });
+  return out;
+}
 
 export const NODES: MapNode[] = [
   // 城镇：坐标与 world.ts 里的建筑对齐（建筑门口下方一格）
@@ -1051,6 +1134,61 @@ export const NODES: MapNode[] = [
   cave('cave_bat', '蝠影窟', atW(0.12, 0.14), 'autumn'),
   cave('cave_sunken', '沉海洞', atW(0.95, 0.55), 'tropic'),
   cave('cave_vein', '晶脉洞', atW(0.52, 0.95), 'crystal'),
+
+  // ---- 12080 最外圈（用户 10-24 的新版世界地图）：8 个新群系，每个 3-4 处资源点 + 1 处带首领的特色地点 ----
+  // 青岚丘陵 T2-T3（落霞城北边，刚出新手村的第二站）
+  site(band('hill_terrace', '青岚梯田', 0.06, 0.27, 'hills', 'boss', [cotton(1, '_terrace'), herb('fire_bloom', '_terrace'), mat('spice', 1, '_hill')]), 'terraces', 100),
+  band('hill_pines', '风岭松坡', 0.072, 0.409, 'hills', 'tree', [chop(2, '_hill'), hunt(1, '_hill'), mat('feather', 2, '_hill')]),
+  band('hill_quarry', '青石采场', 0.10, 0.215, 'hills', 'ore', [mine(1, '_hill'), mine(2, '_hill'), mat('crystal', 2, '_hill')]),
+  band('hill_brook', '岚溪', 0.11, 0.43, 'hills', 'fish', [fishAt('hill_trout'), fishAt('bighead', '_hill'), fishAt('catfish', '_hill')], true),
+  site(band('sunken_bay', '沉木海湾', 0.035, 0.56, 'hills', 'fish', [chop(4, '_sunken'), fishAt('squid', '_sunken'), fishAt('bass', '_sunken')], true), 'sunkenwood', 110),
+  // 古藤群岛 T4-T5（西北角的海上群岛）
+  isle(site(band('vine_heart', '古藤之心', 0.06, 0.07, 'vineisles', 'boss', [chop(4, '_vine2'), mat('resin', 4, '_vine2'), herb('flame_heart', '_vine2')]), 'vineheart', 110)),
+  site(band('frost_bay', '霜叶海湾', 0.21, 0.05, 'vineisles', 'fish', [fishAt('vine_perch'), fishAt('salmon', '_bay2'), chop(3, '_frostleaf')], true), 'frostbay', 110),
+  band('vine_isle', '藤蔓岛', 0.03, 0.19, 'vineisles', 'camp', [hunt(3, '_vineisle'), mat('feather', 4, '_vineisle'), cotton(4, '_vineisle')]),
+  band('drift_isle', '浮木岛', 0.14, 0.11, 'vineisles', 'tree', [chop(3, '_drift'), mat('resin', 3, '_drift')]),
+  // 腐月湿地 T5-T6（西南角）
+  site(band('eclipse_mire', '月蚀泥潭', 0.122, 0.819, 'moonmire', 'boss', [herb('moon_herb', '_eclipse'), chop(5, '_eclipse'), mat('resin', 5, '_eclipse')]), 'eclipse', 120),
+  band('moon_pool', '月影池', 0.053, 0.69, 'moonmire', 'fish', [fishAt('moon_catfish'), fishAt('eel', '_moon'), fishAt('ghostfish', '_moon')], true),
+  band('bog_hollow', '腐木洼', 0.12, 0.93, 'moonmire', 'camp', [hunt(5, '_bog'), cotton(5, '_bog'), mat('feather', 5, '_bog')]),
+  band('grave_moor', '遗骨荒冢', 0.236, 0.914, 'moonmire', 'camp', [chop(5, '_moor'), mine(5, '_moor'),
+    steal('mire_grave', '盗月沼古墓', 60, 90, [{ item: 'ruby', qty: 1, chance: 0.03 }])]),
+  // 潮歌群岛 T5（东边海上）
+  isle(site(band('holy_reef', '碧潮圣礁', 0.95, 0.52, 'archipelago', 'boss', [fishAt('tide_bream'), fishAt('tuna', '_reef2'), mat('crystal', 4, '_reef')]), 'holyreef', 110)),
+  band('song_isle', '潮歌岛', 0.94, 0.36, 'archipelago', 'camp', [mat('resin', 5, '_song'), cotton(5, '_song'), hunt(4, '_song')]),
+  isle(band('turtle_isle', '海龟岛', 0.955, 0.645, 'archipelago', 'fish', [fishAt('swordfish', '_isle2'), fishAt('grouper', '_isle2'), chop(4, '_isle2')], true)),
+  // 寒星山脉 T7（北边）
+  site(band('aurora_lake', '极光冰湖', 0.64, 0.06, 'frostpeak', 'boss', [fishAt('aurora_salmon'), fishAt('sturgeon', '_aurora'), herb('frost_lotus', '_aurora')], true), 'aurora', 120),
+  band('star_peak', '寒星峰', 0.426, 0.082, 'frostpeak', 'ore', [mine(6, '_peak2'), mine(7, '_peak2'), mat('crystal', 6, '_peak')]),
+  band('frost_pines', '冰杉林', 0.30, 0.07, 'frostpeak', 'tree', [chop(6, '_frostpeak'), chop(5, '_frostpeak'), hunt(6, '_frostpeak')]),
+  band('snow_eagle_cliff', '雪鹰崖', 0.53, 0.09, 'frostpeak', 'camp', [mat('feather', 6, '_frostpeak'), cotton(6, '_frostpeak')]),
+  // 雷鸣断层 T8（东北角）
+  site(band('thunder_rift', '雷鸣裂谷', 0.88, 0.065, 'thunder', 'boss', [mine(7, '_thunder'), mat('crystal', 7, '_thunder')]), 'thunderrift', 120),
+  site(band('pale_shore', '苍白裂岸', 0.882, 0.248, 'thunder', 'fish', [fishAt('storm_eel'), fishAt('thunder_shark', '_pale'), mine(6, '_pale')], true), 'paleshore', 110),
+  band('storm_mesa', '风暴台地', 0.80, 0.04, 'thunder', 'camp', [hunt(7, '_storm'), mat('feather', 7, '_storm'), cotton(7, '_storm')]),
+  band('iron_spires', '雷击铁林', 0.955, 0.075, 'thunder', 'tree', [chop(7, '_thunder'), chop(6, '_thunder')]),
+  // 灰烬海角 T7（东南角）
+  site(band('scorch_fjord', '灼风峡湾', 0.932, 0.823, 'ashcape', 'boss', [fishAt('ash_shark'), fishAt('flame_shark', '_fjord'), mine(6, '_fjord')], true), 'fjord', 130),
+  band('ash_dunes', '黑沙丘', 0.846, 0.946, 'ashcape', 'camp', [mat('spice', 6, '_ash'), mat('resin', 6, '_ash'), hunt(6, '_ash')]),
+  band('cinder_vents', '余烬喷口', 0.95, 0.955, 'ashcape', 'ore', [mine(5, '_vent'), mine(6, '_vent')]),
+  band('ember_grove', '余烬焦林', 0.918, 0.707, 'ashcape', 'tree', [chop(6, '_ember'), herb('flame_heart', '_ember')]),
+  // 星陨晶海 T8 以上（南边海上，终局区域）
+  isle(site(band('starfall', '坠星环礁', 0.44, 0.955, 'starsea', 'boss', [mine(7, '_starfall'), mat('crystal', 7, '_starfall'), fishAt('star_whale')]), 'starfall', 120)),
+  band('glow_isle', '晶光岛', 0.322, 0.9, 'starsea', 'camp', [mat('spice', 7, '_glow'), mat('resin', 7, '_glow'), cotton(7, '_glow')]),
+  band('tide_ruins', '潮汐遗迹', 0.553, 0.905, 'starsea', 'fish', [fishAt('starwhale', '_tide'), fishAt('dragonfish', '_tide'), herb('frost_lotus', '_tide')], true),
+
+  // 外圈的大型洞窟（先占位，以后开放）
+  cave('cave_hill', '青岚石窟', atF(0.05, 0.47), 'hills'),
+  isle(cave('cave_vine', '古藤根洞', atF(0.10, 0.04), 'vineisles')),
+  cave('cave_moon', '月蚀窟', atF(0.09, 0.79), 'moonmire'),
+  isle(cave('cave_tidal', '潮汐洞', atF(0.965, 0.44), 'archipelago')),
+  cave('cave_aurora', '寒星洞', atF(0.48, 0.03), 'frostpeak'),
+  cave('cave_thunder', '雷音窟', atF(0.90, 0.13), 'thunder'),
+  cave('cave_ember', '余烬洞', atF(0.90, 0.90), 'ashcape'),
+  cave('cave_star', '星陨深穴', atF(0.62, 0.975), 'starsea'),
+
+  // ---- 12080 的 8 座新城镇（布局在 towns.ts） ----
+  ...TOWNS.flatMap(townNodes),
 ];
 
 /**
@@ -1093,11 +1231,14 @@ export const WAYSTONES: MapNode[] = [
   stoneAt('town', '传说石碑·苍岭城', townXY(160, 181).x, townXY(160, 181).y, 'town', true),
   stoneAt('town2', '传说石碑·落霞城', town2XY(6, 4).x, town2XY(6, 4).y, 'savanna', true),
   ...(Object.keys(REGIONS) as RegionId[]).filter((r) => r !== 'town' && r !== 'savanna').flatMap((r) => {
-    const pool = NODES.filter((n) => n.region === r && !n.town && !n.cave && !n.site && n.actions.length);
+    const pool = NODES.filter((n) => n.region === r && !n.town && !n.cave && !n.site && !n.sea && n.actions.length);
     if (!pool.length) return [];
     const hub = pool.reduce((a, b) => (b.lv[0] < a.lv[0] ? b : a));
     return [stoneAt(r, `传说石碑·${REGIONS[r].name}`, hub.x + 6, hub.y + 2, r)];
   }),
+  // 12080（用户 10-24 要求规划传送石碑）：每座新城镇一座，每处带首领的特色地点旁边一座
+  ...TOWNS.map((t) => stoneAt(t.id, `传说石碑·${t.name}`, townAt(t, ...t.stone).x, townAt(t, ...t.stone).y, t.region, true)),
+  ...NODES.filter((n) => n.site && !n.sea).map((n) => stoneAt(`site_${n.id}`, `传说石碑·${n.name}`, n.x + 6, n.y + 2, n.region)),
 ];
 NODES.push(...WAYSTONES);
 
@@ -1146,7 +1287,7 @@ export const cropsOfField = (field: string) => {
 };
 
 const NODES_OF: Record<string, MapNode[]> = {};
-for (const n of NODES) for (const a of n.actions) (NODES_OF[a] ??= []).push(n);
+for (const n of NODES) if (!n.sea) for (const a of n.actions) (NODES_OF[a] ??= []).push(n);
 /** 能做这个动作的所有地点（两座城的同类建筑会重复） */
 export const nodesOfAction = (id: string | undefined): MapNode[] => (id ? NODES_OF[id] ?? [] : []);
 /** 动作所在地点；给了位置就挑离它最近的那个 */

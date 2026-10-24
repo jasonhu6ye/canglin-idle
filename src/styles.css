@@ -49,7 +49,7 @@ main { grid-area: main; position: relative; overflow: hidden; min-height: 0; }
 .panel { padding: 6px 9px; }
 .frame { padding: 8px 10px; }
 
-.go button, .go .btn-like, .tabs3 button, .opts button, .pill, .zoom-btns button, .x, .place, .slot, .cell, .skill-card, .node-list button, .modal .primary {
+.go button, .go .btn-like, .tabs3 button, .opts button, .pill, .zoom-btns button, .x, .place, .slot, .cell, .skill-card, .node-list button, .modal .primary, .pick-row button, .slot-picker .close, .hb-index button {
   background: linear-gradient(#4a3220, #33221a); border: 0; border-radius: 2px;
   box-shadow: 0 0 0 1px var(--edge), inset 0 1px 0 #7a5a36, inset 0 -2px 0 #1d130c;
 }
@@ -617,3 +617,26 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .tab-lock { z-index: 100; }
 .combat-info .good { color: #8ee08a; }
 
+
+/* 快速换装弹窗 */
+.slot-picker { width: min(420px, 100%); max-height: 82vh; }
+.slot-picker h3 { margin: 6px 0 0; font-size: 12px; font-weight: normal; letter-spacing: 0; }
+.pick-list { overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 4px; min-height: 0; }
+.pick-row { display: grid; grid-template-columns: 32px 1fr auto auto; gap: 6px; align-items: center; padding: 4px 6px; background: #1a110a; border: 1px solid #3a2616; }
+.pick-row.cur { border-color: var(--gold); }
+.pick-row.locked { opacity: 0.55; }
+.pick-row > div { display: flex; flex-direction: column; min-width: 0; }
+.pick-row > div small { font-size: 11px; }
+.pick-row button { padding: 6px 8px; font-size: 12px; }
+.pick-row .bad { color: #e06a5a; }
+.slot-picker .close { align-self: center; min-width: 120px; padding: 8px 12px; margin-top: 4px; }
+
+/* 攻略手册 */
+.handbook .hb-cat { margin: 10px 0 4px; font-size: 13px; color: var(--gold); }
+.hb-index { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
+.hb-index button { text-align: left; padding: 8px 10px; }
+.hb-body { line-height: 1.65; font-size: 13px; }
+.hb-body p { margin: 6px 0; }
+.hb-steps, .hb-list { margin: 6px 0; padding-left: 20px; }
+.hb-steps li, .hb-list li { margin: 3px 0; }
+.hb-tip { color: var(--gold); opacity: 0.9; }
