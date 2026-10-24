@@ -166,6 +166,11 @@ export interface CombatState {
   pDmg?: number;
   mSwings?: number;
   mDmg?: number;
+  /** 最近一次出手是不是暴击、触发了哪种武器特技（飘字用） */
+  pCrit?: boolean;
+  pArt?: string;
+  /** 对这只怪出手了几次（连斩、蓄力用） */
+  hitsOnThis?: number;
   /** 这一只怪打到现在拿了多少经验（击杀时记进战斗日志） */
   gain?: Partial<Record<SkillId, number>>;
 }
