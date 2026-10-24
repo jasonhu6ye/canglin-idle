@@ -1,7 +1,7 @@
 import { actionDuration, advance, buySeed, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour, openContainer, redeemCode, toggleMount, moveSpeed, rainBonus } from './sim';
 import { levelForXp, speedForLevel, XP_TABLE } from './xp';
 import type { GameState, SkillAction, TaskMode } from './types';
-import { ACTIONS, CROP_DEFS, FARM_NODES, nodeOfAction, plotsOf, standOf, travelMs, WATER_SPEEDUP } from './data';
+import { ACTIONS, ITEMS, CROP_DEFS, FARM_NODES, nodeOfAction, plotsOf, standOf, travelMs, WATER_SPEEDUP } from './data';
 import { fieldCounts, harvestAll, installSprinkler, plantAll, stepRain, tendPlot, waterAll } from './farm';
 import { isRaining } from './weather';
 
@@ -731,3 +731,28 @@ describe('界面传来的数量', () => {
   });
 });
 
+
+describe('读档保留', () => {
+  it('暂停状态和停工提示刷新后还在', () => {
+    let s = newGame(T0);
+    s = startNow(s, 'cook_minnow', { type: 'infinite' });
+    s.paused = true;
+    s.lastStop = { action: 'cook_minnow', reason: 'noInput', mode: { type: 'infinite' }, item: 'raw_minnow', at: T0 };
+    const m = migrate(JSON.parse(JSON.stringify(s)))!;
+    expect(m.paused).toBe(true);
+    expect(m.lastStop?.item).toBe('raw_minnow');
+  });
+});
+
+describe('补给带太多不会卡住', () => {
+  it('仓库里食物种类很多、设成全部带上，打怪照样能打，结算也不会卡', () => {
+    let s = newGame(T0, 1);
+    for (const id of Object.keys(ITEMS).filter((i) => ITEMS[i].heals).slice(0, 25)) s.bank[id] = 50;
+    s.settings.carryFood = -1;
+    s = startNow(s, 'fight_old_ram', { type: 'infinite' });
+    const t = performance.now();
+    const r = advance(s, T0 + HOUR).state;
+    expect(performance.now() - t).toBeLessThan(1500);
+    expect(r.stats.kills).toBeGreaterThan(0);
+  });
+});

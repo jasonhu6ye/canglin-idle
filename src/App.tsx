@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { ACTIONS, NODES, REGIONS, SKILLS } from './core/data';
 import type { RegionId, Summary, TaskEndReason } from './core/types';
 import { BOSS_BANNER, REGION_CHANGE } from './game/MapScene';
-import { store, useGame, useOffline } from './store';
+import { store, useGame, useInactive, useOffline } from './store';
 import { toggleMount } from './core/sim';
 import { ActionSheet, MonsterSheet } from './ui/ActionSheet';
 import { emitToGame, GameCanvas, onGameEvent } from './ui/GameCanvas';
@@ -117,6 +117,7 @@ function useWide() {
 export function App() {
   const s = useGame();
   const offline = useOffline();
+  const inactive = useInactive();
   const wide = useWide();
   const [tab, setTab] = useState<Tab>('game');
   const [node, setNode] = useState<string | null>(null);
@@ -295,6 +296,15 @@ export function App() {
       <Guide />
       <News />
       <UpdateBanner />
+      {inactive && (
+        <div className="modal-bg tab-lock">
+          <div className="modal frame">
+            <h2>游戏在另一个页面打开了</h2>
+            <p>为了不让两边的进度互相覆盖，这个页面已经暂停，不会再保存。</p>
+            <div className="go"><button className="primary" onClick={() => location.reload()}>在这个页面继续玩</button></div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

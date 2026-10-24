@@ -76,56 +76,87 @@ function rescaleLoc(loc: { x: number; y: number }, old: number) {
   return { x: p.x + OLD_BOX.x, y: p.y + OLD_BOX.y };
 }
 
+/** 读档用：数字、对象、数组不对就换成默认值（存档可能被改坏、或者是很老的版本） */
+const num = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
+const obj = <T,>(v: unknown): T | undefined => (v && typeof v === 'object' && !Array.isArray(v) ? (v as T) : undefined);
+const arr = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
+const okPos = (p: unknown): p is { x: number; y: number } => !!obj(p) && Number.isFinite((p as { x: number }).x) && Number.isFinite((p as { y: number }).y);
+const okMode = (m: unknown): m is TaskMode => {
+  const o = obj<{ type: string; count?: number; ms?: number }>(m);
+  return !!o && (o.type === 'infinite' || (o.type === 'count' && num(o.count, 0) >= 1) || (o.type === 'time' && num(o.ms, 0) > 0));
+};
+
 export function migrate(raw: unknown): GameState | null {
-  const s = raw as Omit<Partial<GameState>, "version"> & { version?: number };
-  if (!s || typeof s !== 'object' || ![1, 2, 3].includes(s.version ?? 0)) return null;
-  const fresh = newGame(s.lastTick ?? Date.now(), s.rng);
-  const keep = (rec: Record<string, number> | undefined) =>
-    Object.fromEntries(Object.entries(rec ?? {}).filter(([id, q]) => ITEMS[id] && Number.isFinite(q) && q >= 1).map(([id, q]) => [id, Math.floor(q)]));
+  const s = obj<Omit<Partial<GameState>, "version"> & { version?: number }>(raw);
+  if (!s || ![1, 2, 3].includes(s.version ?? 0)) return null;
+  const lastTick = num(s.lastTick, Date.now());
+  const fresh = newGame(lastTick, Number.isInteger(s.rng) ? s.rng : undefined);
+  const keep = (rec: unknown) =>
+    Object.fromEntries(Object.entries(obj<Record<string, number>>(rec) ?? {}).filter(([id, q]) => ITEMS[id] && Number.isFinite(q) && q >= 1).map(([id, q]) => [id, Math.floor(q)]));
   const equipment: GameState['equipment'] = {};
-  for (const [slot, id] of Object.entries(s.equipment ?? {})) {
-    if (id && ITEMS[id]?.equip?.slot === slot) equipment[slot as EquipSlot] = id;
+  for (const [slot, id] of Object.entries(obj<Record<string, string>>(s.equipment) ?? {})) {
+    if (typeof id === 'string' && ITEMS[id]?.equip?.slot === slot) equipment[slot as EquipSlot] = id;
   }
   // 采草药的动作 id 从 farm_ 改成 gather_（10-23 采集和种植彻底分开），旧队列照着改名
   const renamed = (id: string) => (!ACTIONS[id] && id.startsWith('farm_') && ACTIONS[`gather_${id.slice(5)}`] ? `gather_${id.slice(5)}` : id);
-  const queue = (s.queue ?? []).map((t) => ({ ...t, action: renamed(t.action) })).filter((t) => ACTIONS[t.action]);
+  const oldQueue = arr<GameState['queue'][number]>(s.queue).filter((t) => obj(t) && typeof t.action === 'string');
+  const queue = oldQueue.map((t) => ({ ...t, action: renamed(t.action) })).filter((t) => ACTIONS[t.action] && okMode(t.mode));
+  const sameTask = !!queue[0] && queue[0].action === oldQueue[0]?.action;
+  const xpIn = obj<Record<string, number>>(s.xp) ?? {};
+  const xp = { ...fresh.xp };
+  for (const k of Object.keys(xp) as SkillId[]) xp[k] = Math.max(0, num(xpIn[k], fresh.xp[k]));
+  // 采集从种植里拆出来（10-23）：旧存档的种植经验两边都保留
+  xp.gathering = Math.max(0, num(xpIn.gathering, num(xpIn.farming, 0)));
+  const bankIn = keep(s.bank);
+  const seenIn = obj<Record<string, 1>>(s.seen);
+  const farmIn = obj<GameState['farm']>(s.farm);
+  const oldSize = num(s.mapSize, 1080) > 0 ? num(s.mapSize, 1080) : 1080;
+  const sameMap = oldSize === MAP_W;
+  const travel = obj<NonNullable<GameState['travel']>>(s.travel);
+  const walk = obj<NonNullable<GameState['walk']>>(s.walk);
+  const combat = obj<NonNullable<GameState['combat']>>(s.combat);
+  const node0 = nodeOfAction(queue[0]?.action);
+  const hpMax = levelForXp(xp.hitpoints) * 10;
   return {
     ...fresh,
-    lastTick: s.lastTick ?? fresh.lastTick,
-    // 采集从种植里拆出来（10-23）：旧存档的种植经验两边都保留
-    xp: { ...fresh.xp, ...s.xp, gathering: s.xp?.gathering ?? s.xp?.farming ?? 0 },
-    hp: s.hp ?? fresh.hp,
+    lastTick,
+    xp,
+    hp: Math.min(hpMax, Math.max(1, num(s.hp, hpMax))),
     // 种植改成要种子：旧存档送 10 颗土豆种子
-    bank: farmRefund(s.farm, s.seen?.seed_potato ? keep(s.bank) : { ...keep(s.bank), seed_potato: (s.bank?.seed_potato ?? 0) + 10 }),
+    bank: farmRefund(farmIn, seenIn?.seed_potato ? bankIn : { ...bankIn, seed_potato: (bankIn.seed_potato ?? 0) + 10 }),
     bag: keep(s.bag),
     equipment,
     queue,
-    progressMs: queue[0] && queue[0].action === s.queue?.[0]?.action ? s.progressMs ?? 0 : 0,
-    combat: queue[0] && queue[0].action === s.queue?.[0]?.action ? s.combat ?? null : null,
-    settings: { ...fresh.settings, ...s.settings },
-    regenMs: s.regenMs ?? 0,
-    stats: { ...fresh.stats, ...s.stats },
+    progressMs: sameTask ? num(s.progressMs, 0) : 0,
+    // 走开暂停的任务刷新后还是暂停（以前读档会丢掉，角色自己跑回去干活）
+    paused: !!s.paused && queue.length > 0,
+    combat: sameTask && combat && Number.isFinite(combat.monsterHp) ? combat : null,
+    settings: { ...fresh.settings, ...obj<GameState['settings']>(s.settings) },
+    regenMs: Math.max(0, num(s.regenMs, 0)),
+    stats: { kills: Math.max(0, num(obj<GameState['stats']>(s.stats)?.kills, 0)), deaths: Math.max(0, num(obj<GameState['stats']>(s.stats)?.deaths, 0)) },
     // 旧存档没有位置：当作已经站在当前任务的地点
-    loc: s.loc ? rescaleLoc(s.loc, s.mapSize ?? 1080) : nodeOfAction(queue[0]?.action) ? standOf(nodeOfAction(queue[0]?.action)!) : fresh.loc,
+    loc: okPos(s.loc) ? rescaleLoc(s.loc, oldSize) : node0 ? standOf(node0) : fresh.loc,
     mapSize: MAP_W,
-    travel: (s.mapSize ?? 1080) === MAP_W ? s.travel ?? null : null,
-    walk: (s.mapSize ?? 1080) === MAP_W ? s.walk ?? null : null,
-    bestiary: s.bestiary ?? {},
-    quest: s.quest ?? { i: 0, n: 0 },
-    buffs: s.buffs ?? {},
+    // 路上的目的地改过名或删掉了就当没在走
+    travel: sameMap && travel && NODES.some((n) => n.id === travel.to) && num(travel.ms, -1) >= 0 && num(travel.total, -1) >= 0 ? travel : null,
+    walk: sameMap && walk && okPos(walk.from) && okPos(walk.to) && num(walk.ms, -1) >= 0 && num(walk.total, -1) >= 0 ? walk : null,
+    bestiary: Object.fromEntries(Object.entries(obj<Record<string, number>>(s.bestiary) ?? {}).filter(([, n]) => Number.isFinite(n) && n >= 0)),
+    lastStop: obj<NonNullable<GameState['lastStop']>>(s.lastStop) && ACTIONS[s.lastStop!.action] && okMode(s.lastStop!.mode) ? s.lastStop : null,
+    quest: obj<GameState['quest']>(s.quest) && Number.isInteger(s.quest!.i) && s.quest!.i >= 0 ? { i: s.quest!.i, n: Math.max(0, num(s.quest!.n, 0)) } : { i: 0, n: 0 },
+    buffs: Object.fromEntries(Object.entries(obj<GameState['buffs']>(s.buffs) ?? {}).filter(([, b]) => b && Number.isFinite(b.pct) && Number.isFinite(b.ms) && b.ms > 0)),
     mounted: !!s.mounted && !!equipment.mount,
-    redeemed: s.redeemed ?? [],
-    home: migrateHome(s.home),
-    sprinklers: (s.sprinklers ?? []).filter((id) => FARM_NODES.some((n) => n.id === id)),
-    waystones: [...new Set([WAYSTONE_HOME, ...(s.waystones ?? []).filter((id) => WAYSTONES.some((n) => n.id === id))])],
+    redeemed: arr<string>(s.redeemed).filter((c) => typeof c === 'string'),
+    home: migrateHome(obj(s.home)),
+    sprinklers: arr<string>(s.sprinklers).filter((id) => FARM_NODES.some((n) => n.id === id)),
+    waystones: [...new Set([WAYSTONE_HOME, ...arr<string>(s.waystones).filter((id) => WAYSTONES.some((n) => n.id === id))])],
     // 地块里种的作物改过名或删掉了就清掉
-    farm: Object.fromEntries(Object.entries(s.farm ?? {}).filter(([id, p]) => PLOT_BY_ID[id] && p && CROP_DEFS[p.crop])),
+    farm: Object.fromEntries(Object.entries(farmIn ?? {}).filter(([id, p]) => PLOT_BY_ID[id] && obj(p) && CROP_DEFS[p.crop] && Number.isFinite(p.at) && Number.isFinite(p.ripe))),
     // 栏位里的东西改过名或删掉了就丢掉，免得界面读不到物品
-    belt: Object.fromEntries(Object.entries(s.belt ?? {}).filter(([slot, b]) => b && ITEMS[b.id] && beltSlotOf(b.id) === slot && b.qty > 0)),
+    belt: Object.fromEntries(Object.entries(obj<NonNullable<GameState['belt']>>(s.belt) ?? {}).filter(([slot, b]) => b && ITEMS[b.id] && beltSlotOf(b.id) === slot && Number.isInteger(b.qty) && b.qty > 0)),
     // 旧存档：现在拥有的东西都算获得过
     seen: {
-      ...(s.seen ?? Object.fromEntries(
-        [...Object.keys(keep(s.bank)), ...Object.keys(keep(s.bag)), ...Object.values(equipment)].filter((id) => id && ITEMS[id]).map((id) => [id, 1 as const]),
+      ...(seenIn ?? Object.fromEntries(
+        [...Object.keys(bankIn), ...Object.keys(keep(s.bag)), ...Object.values(equipment)].filter((id) => id && ITEMS[id]).map((id) => [id, 1 as const]),
       )),
       seed_potato: 1,
     },
@@ -467,6 +498,12 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     return out;
   };
 
+  /** 存过一次仓库背包还是装不下这次的战利品：这次结算里不再为腾地方跑仓库（以前会每毫秒跑一趟，卡死页面） */
+  let roomGiveUp = false;
+  /** 带补给时给战利品留的格子 */
+  const lootRoom = () => (s.queue[0] ? Math.min(10, new Set(lootOf(ACTIONS[s.queue[0].action])).size) : 0);
+  const canCarry = (id: string) => (s.bag[id] ?? 0) > 0 || bagSlotsUsed(s.bag) + 1 + lootRoom() <= BAG_SLOTS;
+
   /** 背包满了：走回仓库，存下除食物和弹药外的东西，再走回来接着干。
    *  supply：开战前回仓库按设置拿食物和药水 */
   const stepBankTrip = (budget: number, supply = false): number => {
@@ -492,15 +529,19 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
           s.bank[id] = (s.bank[id] ?? 0) + q;
           delete s.bag[id];
         }
-        if (!pass && BAG_SLOTS - bagSlotsUsed(s.bag) >= 5) break;
+        // 食物、弹药留着；剩下的格子装得下这次的战利品就够了，装不下连食物也存
+        if (!pass && (s.queue[0] ? fits(lootOf(ACTIONS[s.queue[0].action])) : BAG_SLOTS - bagSlotsUsed(s.bag) >= 5)) break;
       }
       if (supply) {
         refillBelt();
-        carryFood();
+        // 弹药先拿：没弹药打不了，食物只是多带少带
         carryAmmo();
+        carryFood();
         s.queue[0].stocked = true;
       }
       sum.bankTrips++;
+      // 存完还是装不下（战利品种类比背包格子还多）：不再来回跑，多出来的直接进仓库
+      if (s.queue[0] && !fits(lootOf(ACTIONS[s.queue[0].action]))) roomGiveUp = true;
     }
     return Math.max(step, 1);
   };
@@ -626,7 +667,9 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     const style = weaponStyle(s);
     const ids = Object.keys(s.bank).filter((id) => ITEMS[id]?.ammo?.style === style).sort((a, b) => ITEMS[b].ammo!.power - ITEMS[a].ammo!.power);
     for (const id of ids) {
-      const n = Math.min(s.bank[id], bagRoomFor(s.bag, id));
+      // 背包里还没有弹药时第一种一定带上（有空格就行），不然会来回跑仓库
+      const first = !bestAmmo(s, style);
+      const n = first || canCarry(id) ? Math.min(s.bank[id], bagRoomFor(s.bag, id)) : 0;
       if (n <= 0) continue;
       s.bank[id] -= n;
       if (s.bank[id] <= 0) delete s.bank[id];
@@ -640,7 +683,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     let have = bagFood();
     const foods = Object.keys(s.bank).filter((id) => healOf(id) && (beltSlotOf(id) !== 'potion' || s.settings.carryPotion !== false)).sort((a, b) => healOf(b) - healOf(a));
     for (const id of foods) {
-      const n = Math.min(s.bank[id], target - have, bagRoomFor(s.bag, id));
+      const n = canCarry(id) ? Math.min(s.bank[id], target - have, bagRoomFor(s.bag, id)) : 0;
       if (n <= 0) continue;
       s.bank[id] -= n;
       if (s.bank[id] <= 0) delete s.bank[id];
@@ -824,7 +867,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     }
     // 新一轮开始前（采集一次 / 打下一只怪前）检查背包，装不下就先回仓库
     const between = a0.kind === 'skill' ? s.progressMs === 0 : !s.combat || s.combat.respawnMs > 0;
-    if (isBankId(s.travel?.to) || (between && !s.travel && !fits(lootOf(a0)))) {
+    if (isBankId(s.travel?.to) || (between && !s.travel && !roomGiveUp && !fits(lootOf(a0)))) {
       // 定时任务的时间也算上来回仓库的路
       const used = stepBankTrip(Math.min(dt, timeLeft(task)));
       dt -= used;

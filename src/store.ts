@@ -10,6 +10,9 @@ const TICK_MS = 200;
 const SAVE_EVERY_MS = 5000;
 /** 离开超过这么久才弹「离线收获」 */
 const OFFLINE_POPUP_MS = 60_000;
+/** 同时开了两个页面时，只有最后打开的那个能存档（不然两边互相覆盖，进度会倒退） */
+const OWNER_KEY = 'canglin-active-tab';
+const TAB_ID = Math.random().toString(36).slice(2);
 
 type Listener = () => void;
 type GainListener = (summary: Summary) => void;
@@ -57,7 +60,16 @@ class Store {
     this.emit();
   }
 
+  /** 游戏在另一个页面里打开了：这边停下，不再存档 */
+  inactive = false;
+
   constructor() {
+    try { localStorage.setItem(OWNER_KEY, TAB_ID); } catch { /* 存不了就不管多开 */ }
+    window.addEventListener('storage', (e) => {
+      if (e.key !== OWNER_KEY || !e.newValue || e.newValue === TAB_ID || this.inactive) return;
+      this.inactive = true;
+      this.emit();
+    });
     const loaded = load();
     const { state, summary } = advance(loaded, Date.now());
     this.state = state;
@@ -73,6 +85,7 @@ class Store {
   }
 
   private tick(fromBackground = false) {
+    if (this.inactive) return;
     const { state, summary } = advance(this.state, Date.now());
     this.state = state;
     this.absorb(summary);
@@ -86,6 +99,7 @@ class Store {
 
   /** 玩家操作：先结算到当前时刻再应用，避免丢进度 */
   dispatch(fn: (s: GameState) => GameState) {
+    if (this.inactive) return;
     const { state, summary } = advance(this.state, Date.now());
     this.absorb(summary);
     this.state = fn(state);
@@ -150,6 +164,7 @@ class Store {
   }
 
   save() {
+    if (this.inactive) return;
     this.lastSave = Date.now();
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify(this.state));
@@ -185,6 +200,10 @@ export const store = new Store();
 
 export function useGame(): GameState {
   return useSyncExternalStore(store.subscribe, () => store.state);
+}
+
+export function useInactive(): boolean {
+  return useSyncExternalStore(store.subscribe, () => store.inactive);
 }
 
 export function useOffline(): Summary | null {
