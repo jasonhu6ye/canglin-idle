@@ -86,12 +86,12 @@ function useRegion() {
 
 /** 开打首领：屏幕中间压一条红色横幅 */
 function useBossBanner() {
-  const [boss, setBoss] = useState<{ key: number; name: string } | null>(null);
+  const [boss, setBoss] = useState<{ key: number; name: string; world?: boolean } | null>(null);
   useEffect(() => {
     let key = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const off = onGameEvent(BOSS_BANNER, (name: string) => {
-      setBoss({ key: ++key, name });
+    const off = onGameEvent(BOSS_BANNER, (name: string, world?: boolean) => {
+      setBoss({ key: ++key, name, world });
       clearTimeout(timer);
       timer = setTimeout(() => setBoss(null), 2800);
     });
@@ -255,7 +255,7 @@ export function App() {
         </div>
         <BossBar s={s} />
         {banner && <div key={banner.key} className="region-banner">{REGIONS[banner.region].name}</div>}
-        {boss && <div key={`b${boss.key}`} className="boss-banner"><small>首领</small>{boss.name}</div>}
+        {boss && <div key={`b${boss.key}`} className={`boss-banner ${boss.world ? 'world' : ''}`}><small>{boss.world ? '☠ 世界首领 ☠' : '首领'}</small>{boss.name}</div>}
         <DayClock region={region} />
         <div className="toasts">
           {toasts.map((t) => <div key={t.id} className={`toast ${t.gold ? 'gold' : ''}`}>{t.text}</div>)}

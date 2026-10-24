@@ -3,7 +3,7 @@ import { CROPS, ITEMS, MONSTERS, TIERS, tierName } from '../core/data';
 const CROP_COLOR: Record<string, [string, string]> = Object.fromEntries(CROPS.map((c) => [c[0], [c[3], c[5]]]));
 import { resIconUrl } from '../game/resArt';
 import { equipIconUrl } from '../game/equipArt';
-import { bannerIconUrl, chestIconUrl, luckyBagIconUrl, trophyIconUrl } from '../game/lootArt';
+import { bannerIconUrl, chestIconUrl, luckyBagIconUrl, trophyIconUrl, worldChestIconUrl } from '../game/lootArt';
 import { openItem } from './itemOpen';
 import { wolfIconUrl } from '../game/wolfArt';
 import type { SkillId } from '../core/types';
@@ -963,6 +963,7 @@ function equipUrl(id: string): string | null {
 function lootUrl(id: string): string | null {
   const it = ITEMS[id];
   if (!it || it.tier === undefined) return null;
+  if (id.startsWith('worldchest_')) return worldChestIconUrl();
   if (it.boss) {
     const m = MONSTERS[it.boss];
     if (!m) return null;

@@ -74,7 +74,7 @@ describe('装备体系', () => {
 describe('怪物图鉴', () => {
   it('原 192 种 + 新地点 20 种生物和 8 个首领 + 外圈 70 种和 4 个首领，id 不重复，特性都有定义', () => {
     const base = SPECIES.filter((s) => !s.home);
-    const fresh = SPECIES.filter((s) => s.home && !s.ring && !s.outer);
+    const fresh = SPECIES.filter((s) => s.home && !s.ring && !s.outer && !s.world);
     const ring = SPECIES.filter((s) => s.ring);
     // 12080 最外圈（用户 10-24）：43 种新生物 + 8 个首领，每个新群系一个首领
     const outer = SPECIES.filter((s) => s.outer);
@@ -86,6 +86,19 @@ describe('怪物图鉴', () => {
     expect(ring.filter((s) => s.rank !== 'boss')).toHaveLength(70);
     expect(ring.filter((s) => s.rank === 'boss')).toHaveLength(4);
     for (const s of ring) expect(NODES.find((n) => n.id === s.home), s.id).toBeDefined();
+    // 世界首领（用户 10-24）：5 个，各住一个巢穴，必掉宝库
+    const world = SPECIES.filter((s) => s.world);
+    expect(world).toHaveLength(5);
+    for (const s of world) {
+      const lair = NODES.find((n) => n.id === s.home);
+      expect(lair?.world, s.id).toBe(true);
+      expect(lair!.actions).toContain(`fight_${s.id}`);
+      const m = MONSTERS[s.id];
+      expect(m.world).toBe(true);
+      const chest = m.drops.find((d) => d.item === `worldchest_${s.id}`);
+      expect(chest && (chest.chance ?? 1)).toBe(1);
+      expect(ITEMS[`worldchest_${s.id}`].opens).toBeDefined();
+    }
     expect(new Set(SPECIES.map((s) => s.name)).size, '名字不重复').toBe(SPECIES.length);
     expect(base).toHaveLength(192);
     expect(fresh.filter((s) => s.rank !== 'boss')).toHaveLength(20);

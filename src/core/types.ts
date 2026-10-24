@@ -122,6 +122,8 @@ export interface MonsterDef {
   respawnMs: number;
   drops: Drop[];
   art: { color: string; accent: string };
+  /** 世界首领：专属动画、大招（每第 4 下）和宝库掉落 */
+  world?: boolean;
 }
 
 export type RegionId = 'town' | 'snow' | 'highland' | 'coast' | 'lava' | 'abyss' | 'swamp' | 'woodland' | 'giantwood'

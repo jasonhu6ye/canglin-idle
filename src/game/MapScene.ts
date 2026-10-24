@@ -5,7 +5,9 @@ import { unlockWaystone, useWaystone, WAYSTONE_REACH, actionDuration, combatLeve
 import { pickSeed, plotGrowth, plotPhase, tendPlot } from '../core/farm';
 import { paintWaystone } from './waystoneArt';
 import { paintPortal, paintPortalSwirl, PORTAL_H } from './homeArt';
-import { MON_ANIMS, monsterFrameSize, paintMonsterSheet, type MonAnim } from './monsterArt';
+import { animsOf, monsterFrameSize, paintMonsterSheet, type MonAnim } from './monsterArt';
+import { paintSkull } from './skullArt';
+import { WORLD_SKILL } from '../core/bestiary';
 import { paintWolfSheet, wolfSaddle, WOLF_ANIMS, WOLF_FEET, WOLF_H, WOLF_W } from './wolfArt';
 import { FRAME_H, FRAME_W, HERO_ANIMS, HERO_FEET, HERO_PAD, NPC_ANIMS, NPC_OUTFITS, outfitOf, paintHeroSheet, type HeroDir } from './hero';
 import type { MonsterDef, RegionId, Summary } from '../core/types';
@@ -52,6 +54,8 @@ function spawnSpot(n: MapNode, i: number, total: number) {
 
 /** 首领在地图上额外放大 */
 const BOSS_SCALE = 1.35;
+/** 世界首领的图本身就画得很大（96×96），不再放大 */
+const monScale = (m: MonsterDef) => (m.world ? 1 : m.rank === 'boss' ? BOSS_SCALE : 1);
 const exactTrack = (id: string) => MONSTERS[id].rank === 'boss' || store.state.bestiary?.[id] !== undefined;
 
 /** 追踪：Boss 给准确的刷新点，其他怪只给附近一个大概位置 */
@@ -1111,6 +1115,10 @@ export class MapScene extends Phaser.Scene {
       this.add.zone(cx, cy - T * 2, T * 4, T * 4).setInteractive({ useHandCursor: true }).setData('node', n.id);
       return;
     }
+    if (n.world) {
+      this.addLair(n, cx, cy);
+      return;
+    }
     const img = this.add.image(cx, cy + T / 2, NODE_MARKER[n.sprite]).setOrigin(0.5, 1).setDepth(cy + T / 2 + 1000);
     img.setScale(boss ? 1.8 : 1.4);
     if (n.sprite === 'stove') this.tweens.add({ targets: img, scaleY: 1.12, yoyo: true, repeat: -1, duration: 300 });
@@ -1145,6 +1153,19 @@ export class MapScene extends Phaser.Scene {
     this.tweens.add({ targets: text, y: text.y - 2, yoyo: true, repeat: -1, duration: 900, ease: 'Sine.inOut' });
   }
 
+  /** 世界首领的巢穴：头顶飘一个红色骷髅头（用户 10-24），地上一圈暗红光，远远就能看到 */
+  private addLair(n: MapNode, cx: number, cy: number) {
+    if (!this.textures.exists('skullmark')) this.textures.addCanvas('skullmark', paintSkull(2));
+    const m = Object.values(MONSTERS).find((x) => x.world && n.actions.includes(`fight_${x.id}`));
+    const skull = this.add.image(cx, cy - 134, 'skullmark').setDepth(D_LABEL);
+    const halo = this.add.image(cx, cy - 134, 'glow').setTint(0xff2010).setBlendMode(Phaser.BlendModes.ADD).setDepth(D_LABEL - 1).setScale(1.1).setAlpha(0.7);
+    this.tweens.add({ targets: [skull, halo], y: cy - 140, yoyo: true, repeat: -1, duration: 1100, ease: 'Sine.inOut' });
+    this.tweens.add({ targets: halo, alpha: 0.3, scale: 1.4, yoyo: true, repeat: -1, duration: 800, ease: 'Sine.inOut' });
+    this.add.text(cx, cy - 154, `☠ 世界首领 ☠\n「${n.name}」${m ? `  Lv${m.level}` : ''}`, {
+      fontFamily: FONT, fontSize: '11px', color: '#ff6a5a', stroke: '#1a0404', strokeThickness: 4, resolution: 4, align: 'center',
+    }).setOrigin(0.5, 1).setDepth(D_LABEL);
+  }
+
   /** 标签上的等级范围按危险度上色，战斗等级变化时重画 */
   private updateLabels() {
     const cl = combatLevel(store.state);
@@ -1171,7 +1192,7 @@ export class MapScene extends Phaser.Scene {
     const sheet = paintMonsterSheet(m);
     const tex = this.textures.addCanvas(key, sheet.canvas)!;
     for (const f of sheet.frames) tex.add(f.name, 0, f.x, f.y, sheet.size, sheet.size);
-    for (const a of MON_ANIMS) {
+    for (const a of animsOf(m)) {
       this.anims.create({
         key: `${key}-${a.key}`, frameRate: a.rate, repeat: a.repeat,
         frames: Array.from({ length: a.frames }, (_, i) => ({ key, frame: `${a.key}-${i}` })),
@@ -1184,9 +1205,9 @@ export class MapScene extends Phaser.Scene {
     const key = this.monTex(m);
     const S = monsterFrameSize(m);
     // 原点放在脚底那一行
-    const spr = this.add.sprite(x, y, key, 'idle-0').setOrigin(0.5, (S - 3) / S);
+    const spr = this.add.sprite(x, y, key, 'idle-0').setOrigin(0.5, (S - (m.world ? 4 : 3)) / S);
     // 首领再放大一圈，更有压迫感（用户 10-23）
-    if (m.rank === 'boss') spr.setScale(BOSS_SCALE);
+    spr.setScale(monScale(m));
     // 点怪物弹出它的信息页
     spr.setInteractive({ useHandCursor: true }).setData('monster', `fight_${m.id}`);
     this.monSprites = this.monSprites.filter((x) => x.active);
@@ -1228,7 +1249,8 @@ export class MapScene extends Phaser.Scene {
   private spawnNode(n: MapNode) {
     const mons = n.actions.map((id) => ACTIONS[id]).filter((a) => a.kind === 'combat').map((a) => MONSTERS[(a as { monster: string }).monster]);
     mons.forEach((m, i) => {
-      const { x: ox, y: oy } = spawnSpot(n, i, mons.length);
+      // 世界首领就站在骷髅头标记正下方
+      const { x: ox, y: oy } = n.world ? { x: n.x, y: n.y + 1 } : spawnSpot(n, i, mons.length);
       const count = m.rank === 'normal' ? 2 : 1;
       for (let k = 0; k < count; k++) this.addMonWanderer(m, ox + k * 3, oy + (k ? 2 : 0), m.rank === 'boss' ? 2 : 4);
     });
@@ -1817,8 +1839,8 @@ export class MapScene extends Phaser.Scene {
 
   private addBar(spr: Phaser.GameObjects.Sprite, m: MonsterDef) {
     const boss = m.rank === 'boss';
-    const w = boss ? 64 : 18;
-    const h = boss ? 6 : 2;
+    const w = m.world ? 96 : boss ? 64 : 18;
+    const h = m.world ? 7 : boss ? 6 : 2;
     const bg = this.add.rectangle(0, 0, w + 2, h + 2, 0x1b120c).setStrokeStyle(boss ? 1.5 : 1, boss ? 0xe8b84a : 0x6b5132).setOrigin(0.5, 1);
     // 掉血时先掉红条，后面一截浅色残影慢慢跟上
     const trail = this.add.rectangle(0, 0, w, h, boss ? 0xffb08a : 0xfff0c0).setOrigin(0, 1);
@@ -1826,10 +1848,10 @@ export class MapScene extends Phaser.Scene {
     const bar: (typeof this.bars)[number] = { spr, m, bg, trail, fill, w, h, live: false, shown: 1 };
     if (boss) {
       // 首领：血条上方常驻名字，脚下一圈暗红光环和阴影
-      bar.label = this.add.text(0, 0, `首领 · ${m.name}  Lv${m.level}`, {
-        fontFamily: FONT, fontSize: '10px', color: '#ffd86a', stroke: '#2a0808', strokeThickness: 3, resolution: 4,
+      bar.label = this.add.text(0, 0, m.world ? `☠ 世界首领 · ${m.name}  Lv${m.level}` : `首领 · ${m.name}  Lv${m.level}`, {
+        fontFamily: FONT, fontSize: m.world ? '11px' : '10px', color: m.world ? '#ff7a6a' : '#ffd86a', stroke: '#2a0808', strokeThickness: 3, resolution: 4,
       }).setOrigin(0.5, 1);
-      const S = monsterFrameSize(m) * BOSS_SCALE;
+      const S = monsterFrameSize(m) * monScale(m) * (m.world ? 0.8 : 1);
       const shadow = this.add.ellipse(spr.x, spr.y, S * 0.9, S * 0.28, 0x000000, 0.35);
       const ring = this.add.ellipse(spr.x, spr.y, S * 1.1, S * 0.36).setStrokeStyle(1.5, 0xff4a2a, 0.8);
       const glow = this.add.image(spr.x, spr.y - S * 0.3, 'glow').setTint(0xc02010).setBlendMode(Phaser.BlendModes.ADD).setScale((S * 1.6) / 64).setAlpha(0.45);
@@ -1906,7 +1928,8 @@ export class MapScene extends Phaser.Scene {
     this.foeSeen = { hp: c.monsterHp, timer: c.monsterTimerMs, respawn: c.respawnMs, p: c.pSwings ?? 0, m: c.mSwings ?? 0 };
     if (!prev) return;
     if (this.foeSeen.p > prev.p) this.playerSwingFx(foe, m, c.pDmg ?? -1, !!c.pCrit);
-    if (this.foeSeen.m > prev.m) this.monsterSwingFx(c.mDmg ?? -1, c.mArt, foe);
+    const big = this.foeSeen.m > prev.m && c.mArt === 'world';
+    if (this.foeSeen.m > prev.m) this.monsterSwingFx(c.mDmg ?? -1, c.mArt, foe, m);
     if (c.respawnMs > 0 && prev.respawn <= 0) {
       this.playMon(foe, m, 'death');
       this.deathPuff(foe);
@@ -1915,7 +1938,8 @@ export class MapScene extends Phaser.Scene {
       this.playMon(foe, m, 'idle');
       this.tweens.add({ targets: foe, alpha: 1, duration: 300 });
     } else if (c.respawnMs <= 0) {
-      if (c.monsterTimerMs > prev.timer + 200) this.playMon(foe, m, 'attack', true);
+      if (big) this.playMon(foe, m, 'skill', true);
+      else if (c.monsterTimerMs > prev.timer + 200) this.playMon(foe, m, 'attack', true);
       else if (c.monsterHp < prev.hp) this.playMon(foe, m, 'hurt', true);
     }
   }
@@ -1966,13 +1990,15 @@ export class MapScene extends Phaser.Scene {
   }
 
   /** 怪物出手：打中主角就闪红、往后一顿、飘红字；没打中飘「闪避」 */
-  private monsterSwingFx(dmg: number, art?: string, foe?: Phaser.GameObjects.Sprite) {
+  private monsterSwingFx(dmg: number, art?: string, foe?: Phaser.GameObjects.Sprite, m?: MonsterDef) {
     const x = this.player.x;
     const y = this.player.y - 22;
     // 精英、首领的大招和首领狂怒：在怪头上喊出来
-    const shout = art === 'enrage' ? '狂怒！' : art === 'boss' ? MONSTER_MOVES.boss.name : art === 'elite' ? MONSTER_MOVES.elite.name : '';
+    const world = art === 'world' && m ? WORLD_SKILL[m.id] : undefined;
+    const shout = world ? `${world.name}！` : art === 'enrage' ? '狂怒！' : art === 'boss' ? MONSTER_MOVES.boss.name : art === 'elite' ? MONSTER_MOVES.elite.name : '';
+    if (world && foe?.active && m) this.worldSkillFx(m, foe);
     if (shout && foe?.active) {
-      this.popText(foe.x, foe.y - 30, shout, art === 'enrage' ? '#ff3a3a' : '#ff8a5a', art === 'elite' ? 8 : 10);
+      this.popText(foe.x, foe.y - (world ? 72 : 30), shout, world ? '#ff5a3a' : art === 'enrage' ? '#ff3a3a' : '#ff8a5a', world ? 13 : art === 'elite' ? 8 : 10);
       if (art !== 'elite' && dmg > 0) this.cameras.main.shake(160, 0.004);
     }
     if (dmg < 0) return this.popText(x - 4, y, '闪避', '#9ad8ff', 7);
@@ -1980,6 +2006,112 @@ export class MapScene extends Phaser.Scene {
     this.hitFlash(this.playerBody, -1, 0xff5040);
     this.popText(x - 4, y, `-${dmg}`, '#ff5a4a', 8);
     if (store.state.hp < maxHp(store.state) * 0.25) this.cameras.main.flash(120, 120, 0, 0);
+  }
+
+  /** 世界首领的大招：场景里再配一层特效，和精灵表里画好的大招动作一起播 */
+  private worldSkillFx(m: MonsterDef, foe: Phaser.GameObjects.Sprite) {
+    const px = this.player.x;
+    const py = this.player.y - 6;
+    const D = D_FLOAT - 2;
+    const glow = (x: number, y: number, tint: number, scale: number) =>
+      this.add.image(x, y, 'glow').setTint(tint).setBlendMode(Phaser.BlendModes.ADD).setDepth(D).setScale(scale);
+    const burst = (x: number, y: number, tint: number) => {
+      const h = this.add.image(x, y, 'fx-hit').setTint(tint).setDepth(D).setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({ targets: h, scale: 2.4, alpha: 0, angle: 60, duration: 320, onComplete: () => h.destroy() });
+      for (let k = 0; k < 5; k++) {
+        const a = Math.random() * Math.PI * 2;
+        const p = this.add.image(x, y, 'p-smoke').setDepth(D - 1).setAlpha(0.6).setScale(0.5);
+        this.tweens.add({ targets: p, x: x + Math.cos(a) * 10, y: y + Math.sin(a) * 4 - 3, alpha: 0, scale: 1.2, duration: 500, onComplete: () => p.destroy() });
+      }
+    };
+    switch (m.id) {
+      case 'wb_flame_dragon': {
+        // 天火流星：一串火球从天上斜着砸下来
+        for (let k = 0; k < 7; k++) {
+          const tx = px + (Math.random() - 0.5) * 40;
+          const ty = py + (Math.random() - 0.5) * 14;
+          const ball = glow(tx + 50, ty - 140, 0xff6a1a, 0.35).setAlpha(0);
+          this.tweens.add({
+            targets: ball, x: tx, y: ty, alpha: 1, delay: 300 + k * 120, duration: 360, ease: 'Quad.easeIn',
+            onUpdate: () => {
+              if (Math.random() < 0.4) return;
+              const e = this.add.image(ball.x, ball.y, 'p-spark').setTint(0xffc040).setDepth(D - 1).setBlendMode(Phaser.BlendModes.ADD);
+              this.tweens.add({ targets: e, alpha: 0, y: e.y - 4, duration: 260, onComplete: () => e.destroy() });
+            },
+            onComplete: () => { ball.destroy(); burst(tx, ty, 0xff8a2a); this.cameras.main.shake(80, 0.003); },
+          });
+        }
+        break;
+      }
+      case 'wb_soul_tree': {
+        // 噬魂缠根：脚下紫圈收紧，魂火从主角身上被吸回魔树
+        const ring = this.add.ellipse(px, this.player.y, 60, 20).setStrokeStyle(2, 0xc070ff, 0.9).setDepth(D);
+        this.tweens.add({ targets: ring, scaleX: 0.3, scaleY: 0.3, alpha: 0.2, duration: 700, ease: 'Quad.easeIn', onComplete: () => ring.destroy() });
+        for (let k = 0; k < 5; k++) {
+          const orb = glow(px + (Math.random() - 0.5) * 10, py - Math.random() * 10, 0xc070ff, 0.16);
+          this.tweens.add({
+            targets: orb, x: foe.x, y: foe.y - 40, delay: 500 + k * 110, duration: 600, ease: 'Sine.easeInOut',
+            onComplete: () => orb.destroy(),
+          });
+        }
+        break;
+      }
+      case 'wb_frost_colossus': {
+        // 永冬崩裂：冰刺从魔像脚下一路炸到主角身上，画面泛白
+        const n = 6;
+        for (let k = 0; k < n; k++) {
+          const q = (k + 1) / n;
+          const x = foe.x + (px - foe.x) * q;
+          const y = foe.y + (this.player.y - foe.y) * q;
+          this.time.delayedCall(350 + k * 70, () => {
+            const sp = glow(x, y - 6, 0xbfeaff, 0.12).setScale(0.08, 0.35);
+            this.tweens.add({ targets: sp, alpha: 0, scaleY: 0.5, duration: 450, onComplete: () => sp.destroy() });
+            burst(x, y - 2, 0xe0f8ff);
+          });
+        }
+        this.time.delayedCall(800, () => this.cameras.main.flash(180, 200, 230, 255));
+        break;
+      }
+      case 'wb_thunder_roc': {
+        // 天罚雷霆：三道闪电劈在主角附近
+        for (let k = 0; k < 3; k++) {
+          this.time.delayedCall(350 + k * 200, () => {
+            const g = this.add.graphics().setDepth(D).setBlendMode(Phaser.BlendModes.ADD);
+            const tx = px + (k - 1) * 14 + (Math.random() - 0.5) * 6;
+            let x = tx + (Math.random() - 0.5) * 20;
+            let y = py - 150;
+            const pts: [number, number][] = [[x, y]];
+            while (y < py) {
+              y = Math.min(py, y + 14 + Math.random() * 10);
+              x = y >= py ? tx : x + (Math.random() - 0.5) * 16;
+              pts.push([x, y]);
+            }
+            for (const [w, c, a] of [[5, 0xfff060, 0.45], [2, 0xffffff, 1]] as const) {
+              g.lineStyle(w, c, a).beginPath().moveTo(pts[0][0], pts[0][1]);
+              for (const [ax, ay] of pts.slice(1)) g.lineTo(ax, ay);
+              g.strokePath();
+            }
+            this.tweens.add({ targets: g, alpha: 0, duration: 260, onComplete: () => g.destroy() });
+            burst(tx, py, 0xfff060);
+            this.cameras.main.flash(70, 255, 250, 200);
+          });
+        }
+        break;
+      }
+      case 'wb_void_eye': {
+        // 虚无凝视：瞳孔射出一道粉紫光束打在主角身上
+        const ey = foe.y - 52;
+        const dx = px - foe.x;
+        const dy = py - ey;
+        const len = Math.hypot(dx, dy);
+        const beam = this.add.rectangle(foe.x, ey, len, 8, 0xff40a0, 0.75).setOrigin(0, 0.5).setRotation(Math.atan2(dy, dx))
+          .setBlendMode(Phaser.BlendModes.ADD).setDepth(D).setScale(1, 0);
+        const core = this.add.rectangle(foe.x, ey, len, 2, 0xffffff, 1).setOrigin(0, 0.5).setRotation(Math.atan2(dy, dx)).setDepth(D).setScale(1, 0);
+        this.tweens.add({ targets: [beam, core], scaleY: 1, delay: 380, duration: 120, yoyo: true, hold: 520, onComplete: () => { beam.destroy(); core.destroy(); } });
+        this.time.delayedCall(500, () => { burst(px, py, 0xff60c0); this.cameras.main.shake(200, 0.004); });
+        break;
+      }
+    }
   }
 
   /** 受击：整张图闪一下纯色，并往后退两像素再弹回 */
@@ -2325,15 +2457,15 @@ export class MapScene extends Phaser.Scene {
     if (!a || this.manual) return;
     if (a.kind === 'combat') {
       const m = MONSTERS[a.monster];
-      const gap = Math.max(14, monsterFrameSize(m) * (m.rank === 'boss' ? BOSS_SCALE : 1) * 0.55);
+      const gap = Math.max(14, monsterFrameSize(m) * monScale(m) * (m.world ? 0.4 : 0.55));
       this.foe = this.monSprite(m, this.player.x + gap, this.player.y + 7).setFlipX(true);
       this.foe.setDepth(this.foe.y + 1000);
       this.foeSeen = undefined;
       const bar = this.bars.find((b) => b.spr === this.foe);
       if (bar) bar.live = true;
       if (m.rank === 'boss') {
-        this.game.events.emit(BOSS_BANNER, m.name);
-        this.cameras.main.shake(300, 0.004);
+        this.game.events.emit(BOSS_BANNER, m.name, !!m.world);
+        this.cameras.main.shake(m.world ? 500 : 300, m.world ? 0.007 : 0.004);
       }
     }
     // 干活时侧身朝右（怪物也站在右边）；钓鱼朝着水

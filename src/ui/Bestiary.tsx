@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { ITEMS, MONSTERS, nodeOfAction, REGIONS, TIERS, tierName } from '../core/data';
-import { FAMILY_NAME, TRAITS, type Family, type TraitId } from '../core/bestiary';
+import { FAMILY_NAME, TRAITS, WORLD_SKILL, type Family, type TraitId } from '../core/bestiary';
 import type { GameState, MonsterDef } from '../core/types';
-import { MONSTER_DAMAGE_SCALE } from '../core/sim';
+import { MONSTER_DAMAGE_SCALE, WORLD_MOVE } from '../core/sim';
 import { monsterIconUrl } from '../game/monsterArt';
 import { Icon } from './icons';
 import { fmtNum } from './format';
@@ -37,7 +37,7 @@ export function Bestiary({ s }: { s: GameState }) {
   const kills = s.bestiary ?? {};
   const families = [...new Set(all.map((m) => m.family))] as Family[];
   const shown = all.filter((m) => (tier === 'all' || m.tier === tier) && (kind === 'all'
-    || (kind === 'creature' || kind === 'monster' ? m.kind === kind : kind === 'elite' || kind === 'boss' ? m.rank === kind : m.family === kind)));
+    || (kind === 'creature' || kind === 'monster' ? m.kind === kind : kind === 'world' ? !!m.world : kind === 'elite' || kind === 'boss' ? m.rank === kind : m.family === kind)));
   const got = all.filter((m) => kills[m.id]).length;
   return (
     <>
@@ -49,7 +49,7 @@ export function Bestiary({ s }: { s: GameState }) {
         ))}
       </div>
       <div className="chips-row">
-        {[['all', '全部'], ['creature', '生物'], ['monster', '怪物'], ['elite', '精英'], ['boss', '首领'], ...families.map((f) => [f, FAMILY_NAME[f]])].map(([k, name]) => (
+        {[['all', '全部'], ['creature', '生物'], ['monster', '怪物'], ['elite', '精英'], ['boss', '首领'], ['world', '世界首领'], ...families.map((f) => [f, FAMILY_NAME[f]])].map(([k, name]) => (
           <button key={k} className={`pill ${kind === k ? 'on' : ''}`} onClick={() => setKind(k)}>{name}</button>
         ))}
       </div>
@@ -75,8 +75,13 @@ export function MonsterDetail({ m, kills, reveal = false }: { m: MonsterDef; kil
     <div className="item-detail frame mon-detail">
       <div className="row1">
         <span className="with-icon"><MonsterIcon m={m} size={64} unknown={!kills && !reveal} /> <b>{m.name}</b></span>
-        <span className="muted">{tierName(m.tier)} · {m.level} 级 · {RANK_NAME[m.rank]}</span>
+        <span className="muted">{tierName(m.tier)} · {m.level} 级 · {m.world ? '世界首领' : RANK_NAME[m.rank]}</span>
       </div>
+      {m.world && WORLD_SKILL[m.id] && (
+        <span className="world-skill">
+          <b>☠ 世界首领</b> 专属大招「{WORLD_SKILL[m.id].name}」：{WORLD_SKILL[m.id].desc}。每 {WORLD_MOVE.every} 下出手放一次，伤害 ×{WORLD_MOVE.mult}。击败后 {Math.round(m.respawnMs / 60000)} 分钟才会再出现，必掉宝库。
+        </span>
+      )}
       <span className="muted">{m.kind === 'creature' ? '生物' : '怪物'} · {FAMILY_NAME[m.family as Family]} · 出没：{where}</span>
       {!reveal && node && <button className="primary" onClick={() => store.track(m.id)}>在地图上追踪</button>}
       {!kills && !reveal ? (

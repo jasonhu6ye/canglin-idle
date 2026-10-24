@@ -414,6 +414,9 @@ export const MONSTER_MOVES = {
   boss: { every: 5, mult: 2.2, name: '毁灭一击' },
 } as const;
 export const BOSS_ENRAGE = 0.3;
+/** 世界首领的专属大招（名字见 bestiary WORLD_SKILL）：每第 4 下，伤害 ×2.6 */
+export const WORLD_MOVE = { every: 4, mult: 2.6 } as const;
+const moveOf = (m: MonsterDef) => (m.rank === 'normal' ? undefined : m.world ? WORLD_MOVE : MONSTER_MOVES[m.rank]);
 
 /** 护甲套装效果：板甲每件减伤 3%，皮甲每件闪避 +2%，布甲每件暴击 +2% */
 export function armorPerks(s: GameState) {
@@ -461,7 +464,8 @@ export function combatEstimate(s: GameState, m: MonsterDef) {
   const killMs = m.hp / dps;
   const rage = m.traits.includes('berserk') ? 1.25 : 1;
   const venom = m.traits.includes('venom') ? Math.ceil(m.level / 8) : 0;
-  const move = m.rank === 'normal' ? 1 : 1 + (MONSTER_MOVES[m.rank].mult - 1) / MONSTER_MOVES[m.rank].every;
+  const mv = moveOf(m);
+  const move = mv ? 1 + (mv.mult - 1) / mv.every : 1;
   const mAvg = st.monsterMaxHit > 0 ? move * (m.rank === 'boss' ? 1.1 : 1) * st.monsterHit * (1 - st.dodge) * (((1 + st.monsterMaxHit * rage) / 2) * (1 - st.reduce) + venom) : 0;
   const taken = (mAvg / m.attackMs) * killMs;
   const hp = maxHp(s);
@@ -889,9 +893,9 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       const enraged = m.rank === 'boss' && c.monsterHp < m.hp * BOSS_ENRAGE;
       c.monsterTimerMs += enraged ? Math.round(m.attackMs * 0.7) : m.attackMs;
       if (enraged && !c.enraged) { c.enraged = true; c.mArt = 'enrage'; }
-      const move = m.rank === 'normal' ? undefined : MONSTER_MOVES[m.rank];
+      const move = moveOf(m);
       const big = !!move && ((c.mSwings ?? 0) + 1) % move.every === 0;
-      if (big) c.mArt = m.rank;
+      if (big) c.mArt = m.world ? 'world' : m.rank;
       else if (c.mArt !== 'enrage' || !enraged) c.mArt = undefined;
       if (has('regen')) c.monsterHp = Math.min(m.hp, c.monsterHp + Math.ceil(m.hp * 0.03));
       c.mSwings = (c.mSwings ?? 0) + 1;

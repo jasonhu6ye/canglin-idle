@@ -1,6 +1,7 @@
 import type { MonsterDef } from '../core/types';
 import { sizeOf, SIZE_PX, type Form } from '../core/bestiary';
 import { phash, Pix } from './pix';
+import { drawWorldFrame, WORLD_ANIMS, WORLD_SIZE } from './worldBossArt';
 
 /*
  * 怪物多帧动画：按外形分 16 个画法（四足兽、飞禽、虫、蛇、人形、魔像、亡灵、植物、魔眼……），
@@ -15,7 +16,8 @@ export const MON_ANIMS = [
   { key: 'hurt', frames: 4, rate: 12, repeat: 0 },
   { key: 'death', frames: 8, rate: 10, repeat: 0 },
 ] as const;
-export type MonAnim = (typeof MON_ANIMS)[number]['key'];
+/** skill：世界首领的大招动画（普通怪没有） */
+export type MonAnim = (typeof MON_ANIMS)[number]['key'] | 'skill';
 export const MON_FRAMES = MON_ANIMS.reduce((n, a) => n + a.frames, 0);
 
 interface Pose {
@@ -57,19 +59,19 @@ function rgb(hex: string): [number, number, number] {
 function hex([r, g, b]: number[]) {
   return `#${[r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('')}`;
 }
-const mix = (a: string, b: string, k: number) => {
+export const mix = (a: string, b: string, k: number) => {
   const x = rgb(a);
   const y = rgb(b);
   return hex(x.map((v, i) => v + (y[i] - v) * k));
 };
 /** 一个颜色变成四档明暗：暗、中、本色、亮 */
-function shades(c: string): string[] {
+export function shades(c: string): string[] {
   return [mix(c, '#140c10', 0.55), mix(c, '#140c10', 0.25), c, mix(c, '#ffffff', 0.4)];
 }
 
 // ---- 形状 ----
 
-function fillPoly(p: Pix, pts: [number, number][], c: string) {
+export function fillPoly(p: Pix, pts: [number, number][], c: string) {
   const ys = pts.map((q) => q[1]);
   for (let y = Math.floor(Math.min(...ys)); y <= Math.ceil(Math.max(...ys)); y++) {
     const xs: number[] = [];
@@ -82,7 +84,7 @@ function fillPoly(p: Pix, pts: [number, number][], c: string) {
     for (let i = 0; i + 1 < xs.length; i += 2) for (let x = Math.round(xs[i]); x <= Math.round(xs[i + 1]); x++) p.set(x, y, c);
   }
 }
-function ell(p: Pix, cx: number, cy: number, rx: number, ry: number, c: string) {
+export function ell(p: Pix, cx: number, cy: number, rx: number, ry: number, c: string) {
   for (let y = Math.floor(cy - ry); y <= cy + ry; y++) {
     for (let x = Math.floor(cx - rx); x <= cx + rx; x++) {
       const dx = (x + 0.5 - cx) / Math.max(rx, 0.5);
@@ -91,7 +93,7 @@ function ell(p: Pix, cx: number, cy: number, rx: number, ry: number, c: string) 
     }
   }
 }
-function limb(p: Pix, x0: number, y0: number, x1: number, y1: number, c: string, w = 1) {
+export function limb(p: Pix, x0: number, y0: number, x1: number, y1: number, c: string, w = 1) {
   const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1);
   for (let i = 0; i <= n; i++) {
     const x = x0 + ((x1 - x0) * i) / n;
@@ -1339,8 +1341,8 @@ function hydra(c: Ctx) {
   }
 }
 
-/** 受击闪白、死亡溶解 */
-function finish(c: Ctx) {
+/** 受击闪白、死亡溶解（世界首领的画法也用这一步收尾） */
+export function finish(c: Pick<Ctx, 'p' | 'rank' | 'g' | 'S' | 'A'> & { o: Pick<Pose, 'anim' | 't'> }) {
   const { p, o } = c;
   if (o.anim === 'hurt' && o.t < 0.5) {
     p.data = p.data.map((col) => (col ? mix(col, '#ffffff', 0.65) : col));
@@ -1362,10 +1364,15 @@ function finish(c: Ctx) {
 }
 
 export function monsterFrameSize(m: MonsterDef) {
+  if (m.world) return WORLD_SIZE;
   return SIZE_PX[sizeOf({ form: m.form as Form, rank: m.rank })];
 }
 
+/** 这种怪有哪些动画：世界首领多一套大招，帧数也多 */
+export const animsOf = (m: MonsterDef): readonly { key: MonAnim; frames: number; rate: number; repeat: number }[] => (m.world ? WORLD_ANIMS : MON_ANIMS);
+
 export function drawMonsterFrame(m: MonsterDef, anim: MonAnim, i: number): Pix {
+  if (m.world) return drawWorldFrame(m, anim, i);
   const S = monsterFrameSize(m);
   const n = MON_ANIMS.find((a) => a.key === anim)!.frames;
   const p = new Pix(S, S);
@@ -1382,13 +1389,14 @@ export function drawMonsterFrame(m: MonsterDef, anim: MonAnim, i: number): Pix {
 /** 整张精灵表：每种动画一行 */
 export function paintMonsterSheet(m: MonsterDef) {
   const S = monsterFrameSize(m);
-  const cols = Math.max(...MON_ANIMS.map((a) => a.frames));
+  const anims = animsOf(m);
+  const cols = Math.max(...anims.map((a) => a.frames));
   const canvas = document.createElement('canvas');
   canvas.width = cols * S;
-  canvas.height = MON_ANIMS.length * S;
+  canvas.height = anims.length * S;
   const ctx = canvas.getContext('2d')!;
   const frames: { name: string; x: number; y: number }[] = [];
-  MON_ANIMS.forEach((a, row) => {
+  anims.forEach((a, row) => {
     for (let i = 0; i < a.frames; i++) {
       ctx.drawImage(drawMonsterFrame(m, a.key, i).canvas(), i * S, row * S);
       frames.push({ name: `${a.key}-${i}`, x: i * S, y: row * S });

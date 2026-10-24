@@ -1,8 +1,8 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { MONSTERS, NODES, REGIONS, SKILLS, nodesOfAction } from '../core/data';
-import { SPECIES, TRAITS } from '../core/bestiary';
+import { SPECIES, TRAITS, WORLD_SKILL } from '../core/bestiary';
 import { FACILITY_NAME, TOWNS } from '../core/towns';
-import { BAG_SLOTS, BELT_CAP, POTION_AT } from '../core/sim';
+import { BAG_SLOTS, BELT_CAP, POTION_AT, WORLD_MOVE } from '../core/sim';
 import type { RegionId, SkillId } from '../core/types';
 import { FINE_POINTER } from './itemOpen';
 
@@ -190,12 +190,26 @@ const ARTICLES: Article[] = [
   {
     id: 'bosses', cat: '城镇和区域', title: '首领攻略',
     body: () => {
-      const bosses = Object.values(MONSTERS).filter((m) => m.rank === 'boss').sort((a, b) => a.level - b.level);
+      const bosses = Object.values(MONSTERS).filter((m) => m.rank === 'boss' && !m.world).sort((a, b) => a.level - b.level);
       return <>
         <P>首领血量大约是同级普通怪的 10 倍，每 5 下放一次毁灭一击，低于 30% 血会狂怒。建议战斗等级不低于首领等级，带满食物栏和药水栏，穿同阶的整套护甲。</P>
         <ul className="hb-list">
           {bosses.map((m) => <li key={m.id}><b>{m.name}</b> Lv{m.level} · {bossWhere(m.id)}{m.traits.length ? ` · ${m.traits.map((t) => TRAITS[t as keyof typeof TRAITS]?.name).join('、')}` : ''}</li>)}
         </ul>
+      </>;
+    },
+  },
+  {
+    id: 'worldboss', cat: '城镇和区域', title: '世界首领攻略',
+    body: () => {
+      const bosses = Object.values(MONSTERS).filter((m) => m.world).sort((a, b) => a.level - b.level);
+      return <>
+        <P>地图上头顶飘着红色骷髅头的地方住着世界首领，世界地图里选「世界首领」筛选就能看到全部五个。它们比普通首领强得多：血量是同级首领的 4 倍，攻防再高 15%，每 4 下放一次专属大招（伤害 ×{WORLD_MOVE.mult}），被打倒后要 2 分钟才会重新出现。</P>
+        <P>打赢必掉一个「宝库」，打开能拿到一大堆锭、宝石、强化石、珍材和首领宝藏；专属战利品 60%、首领宝藏 60%、战旗 6%，都比普通首领好拿。</P>
+        <ul className="hb-list">
+          {bosses.map((m) => <li key={m.id}><b>{m.name}</b> Lv{m.level} · {bossWhere(m.id)} · 大招「{WORLD_SKILL[m.id]?.name}」：{WORLD_SKILL[m.id]?.desc}</li>)}
+        </ul>
+        <Tip>战斗等级最好比世界首领高 10 级以上，带满食物和药水，穿整套同阶护甲（板甲减伤最稳）。开打前看一眼战前评估，掉血太快就先回去练。</Tip>
       </>;
     },
   },

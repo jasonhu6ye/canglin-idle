@@ -96,6 +96,8 @@ export interface Species {
   ring?: boolean;
   /** 12080 最外圈的新生物（10-24） */
   outer?: boolean;
+  /** 世界首领（用户 10-24）：地图上红色骷髅头标记，有专属动画、大招和传说掉落 */
+  world?: boolean;
 }
 
 // [id, 名字, 等级, 区域, 外形, 级别 n/e/b, 特性（空格分隔）, 主色, 点缀色]
@@ -520,6 +522,25 @@ const OUTER_ROWS: Row[] = [
   ['star_elemental', '星辉元素', 124, 'starsea', 'elemental', 'n', 'resist_magic weak_melee', '#4a4ab0', '#ffffff', 'starfall'],
   ['star_leviathan', '坠星海兽', 140, 'starsea', 'shark', 'b', 'tough fierce lifesteal', '#1a1a5a', '#80e0ff', 'starfall'],
 ];
+/**
+ * 世界首领（用户 10-24）：比普通首领强得多，各有一招专属大招和一套传说装备。
+ * 外形字段只决定种族大类（掉落），动画在 game/worldBossArt.ts 里单独画。
+ */
+const WORLD_ROWS: Row[] = [
+  ['wb_flame_dragon', '炎煌古龙', 50, 'lava', 'dragon', 'b', 'fierce tough armored', '#b8241a', '#ffb030', 'wb_flame_lair'],
+  ['wb_soul_tree', '噬魂魔树', 70, 'moonmire', 'treant', 'b', 'lifesteal regen tough', '#3a2a4a', '#c070ff', 'wb_soul_lair'],
+  ['wb_frost_colossus', '永冬巨像', 90, 'frostpeak', 'golem', 'b', 'armored tough slow', '#7aa8d8', '#e0f8ff', 'wb_frost_lair'],
+  ['wb_thunder_roc', '天罚雷鹏', 110, 'thunder', 'griffin', 'b', 'swift fierce evasive', '#34345e', '#fff060', 'wb_thunder_lair'],
+  ['wb_void_eye', '虚无魔眼', 135, 'starsea', 'eye', 'b', 'resist_magic lifesteal thorns', '#1a1030', '#ff40a0', 'wb_void_lair'],
+];
+/** 世界首领的专属大招：每第 4 下放一次，伤害 ×2.6 */
+export const WORLD_SKILL: Record<string, { name: string; desc: string }> = {
+  wb_flame_dragon: { name: '天火流星', desc: '振翅升空，喷出烈焰，天上落下一阵火流星' },
+  wb_soul_tree: { name: '噬魂缠根', desc: '地下钻出尖刺树根把人缠住，再吸走魂火' },
+  wb_frost_colossus: { name: '永冬崩裂', desc: '双拳砸地，冰刺一路从地底炸开' },
+  wb_thunder_roc: { name: '天罚雷霆', desc: '张开双翼，召下一道道落雷' },
+  wb_void_eye: { name: '虚无凝视', desc: '瞳孔聚光，射出一道撕裂空间的光束' },
+};
 const TIER_LEVELS = [1, 10, 20, 30, 40, 55, 70, 95];
 const tierOfLevel = (lvl: number) => TIER_LEVELS.filter((l) => lvl >= l).length - 1;
 
@@ -532,6 +553,7 @@ export const SPECIES: Species[] = [
   ...[T1, T2, T3, T4, T5, T6, T7, T8].map((rows, t) => [...rows, ...NEW_SPECIES[t]]).flatMap((rows, tier) => rows.map((r) => toSpecies(r, tier))),
   ...RING_ROWS.map((r) => ({ ...toSpecies(r, tierOfLevel(r[2])), ring: true })),
   ...OUTER_ROWS.map((r) => ({ ...toSpecies(r, tierOfLevel(r[2])), outer: true })),
+  ...WORLD_ROWS.map((r) => ({ ...toSpecies(r, tierOfLevel(r[2])), world: true })),
 ];
 
 /** 体型档（精英大一档，首领大两档） */

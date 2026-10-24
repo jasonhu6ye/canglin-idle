@@ -121,7 +121,7 @@ function NodeSheet({ s, node, onClose }: { s: GameState; node: MapNode; onClose:
                 <span className="row2">
                   {a.kind === 'combat' ? (
                     <>
-                      <span className={`diff ${a.difficulty}`}>{MONSTERS[a.monster].boss ? 'BOSS' : MONSTERS[a.monster].rank === 'elite' ? '精英' : a.difficulty}</span> {tierName(MONSTERS[a.monster].tier)} · {MONSTERS[a.monster].level} 级 · 生命 {fmtNum(MONSTERS[a.monster].hp)}
+                      <span className={`diff ${a.difficulty}`}>{MONSTERS[a.monster].world ? '世界首领' : MONSTERS[a.monster].boss ? 'BOSS' : MONSTERS[a.monster].rank === 'elite' ? '精英' : a.difficulty}</span> {tierName(MONSTERS[a.monster].tier)} · {MONSTERS[a.monster].level} 级 · 生命 {fmtNum(MONSTERS[a.monster].hp)}
                       <TraitChips m={MONSTERS[a.monster]} />
                     </>
                   ) : (

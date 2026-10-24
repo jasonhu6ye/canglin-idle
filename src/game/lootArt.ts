@@ -333,3 +333,16 @@ export function trophyIconUrl(col: string, acc: string, family: string): string 
   trophy(p, col, acc, family);
   return done(key, p);
 }
+
+/** 世界首领的宝库（用户 10-24）：精金首领宝箱的样子，染成血红，正面嵌一个骷髅头 */
+export function worldChestIconUrl(): string {
+  const key = 'chestworld';
+  const hit = cache.get(key);
+  if (hit) return hit;
+  const p = new Pix(20, 20);
+  chest(p, 7, true);
+  p.data = p.data.map((c) => (c ? mix(c, '#b01010', 0.55) : c));
+  const SK = ['.www.', 'wkwkw', 'wwwww', '.w.w.'];
+  SK.forEach((row, y) => [...row].forEach((ch, x) => ch !== '.' && p.set(8 + x, 11 + y, ch === 'w' ? '#f4e8d8' : '#1a0404')));
+  return done(key, p);
+}

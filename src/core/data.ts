@@ -1,7 +1,7 @@
 import type {
   ActionDef, Buff, BuffKind, CombatStyle, Drop, EquipSlot, ItemCategory, ItemDef, ItemStack, LootTable, MonsterDef, RegionId, SkillGroup, SkillId, ToolSlot,
 } from './types';
-import { FORM_FAMILY, isAnimal, SPECIES, type Family, type Species } from './bestiary';
+import { FORM_FAMILY, isAnimal, SPECIES, WORLD_SKILL, type Family, type Species } from './bestiary';
 import { doorOf, FACILITY_NAME, townAt, TOWNS, type Facility, type TownDef } from './towns';
 
 /*
@@ -403,6 +403,12 @@ const BOSS_TROPHY: Record<string, [string, string]> = {
   python_mother: ['蛇母之卵', '一颗没孵化的巨蛇卵，壳上有花纹。'],
   sandstorm_king: ['沙暴之翼', '沙暴之王的一片翅膜，薄得透光。'],
   crystal_sovereign: ['主宰晶冠', '晶簇主宰头顶的晶冠。'],
+  // 世界首领
+  wb_flame_dragon: ['炎煌逆鳞', '炎煌古龙喉下那片倒长的鳞，烫得握不住。'],
+  wb_soul_tree: ['噬魂树心', '噬魂魔树的树心，里面困着一团团魂火。'],
+  wb_frost_colossus: ['永冬之核', '永冬巨像胸口的冰核，周围的空气都会结霜。'],
+  wb_thunder_roc: ['天罚雷翎', '天罚雷鹏的尾翎，一直噼啪冒着电火花。'],
+  wb_void_eye: ['虚无晶瞳', '虚无魔眼的晶体瞳孔，盯着它看会头晕。'],
 };
 {
   const have = new Set(itemList.map((i) => i.id));
@@ -453,6 +459,22 @@ const BOSS_TROPHY: Record<string, [string, string]> = {
       tier: sp.tier, boss: sp.id, desc: `「${sp.name}」的专属战旗，极少掉落。装饰品，收集齐全部首领战旗是一份荣誉。`,
     });
   }
+}
+
+/** 世界首领的宝库（用户 10-24）：必掉，开出大量锭、宝石、强化石、珍材和首领宝藏。传说装备先不出，留到以后。 */
+for (const sp of SPECIES.filter((x) => x.world)) {
+  const t = tierForLevel(sp.level);
+  const n = t + 1;
+  const T = TIERS[t];
+  item(`worldchest_${sp.id}`, `${sp.name}的宝库`, 'loot', BAR_VALUE[t] * 80, {
+    tier: t, boss: sp.id, desc: `击败世界首领「${sp.name}」必掉的宝库，开出大量锭、宝石、强化石、珍材和首领宝藏。`,
+    opens: { coins: [BAR_VALUE[t] * 60, BAR_VALUE[t] * 150], rolls: 6, pool: [
+      { item: `${T.id}_bar`, min: 6, max: 15, w: 3 }, { item: `core_${n}`, min: 3, max: 8, w: 3 },
+      { item: GEM_FOR_TIER[t], min: 1, max: 3, w: 2.5 }, { item: ENH_FOR_TIER[t], min: 2, max: 4, w: 2.5 },
+      { item: `bosschest_${n}`, min: 1, max: 2, w: 2 }, { item: `chest_${n}`, min: 1, max: 2, w: 2 },
+      ...MAT_LINE_IDS.map((l) => ({ item: `${l}_${n}`, min: 5, max: 12, w: 1 })),
+    ] },
+  });
 }
 
 export const ITEMS: Record<string, ItemDef> = Object.fromEntries(itemList.map((i) => [i.id, i]));
@@ -528,6 +550,16 @@ function speciesDrops(sp: Species, idx: number): Drop[] {
   // 福袋、宝箱、首领宝藏、首领专属战利品和战旗（用户 10-23）
   if (sp.rank === 'normal') add(`luckybag_${n}`, 1, 0.004);
   if (sp.rank === 'elite') { add(`luckybag_${n}`, 1, 0.12); add(`chest_${n}`, 1, 0.04); }
+  // 世界首领：必掉宝库，战利品和战旗比普通首领好拿（传说装备用户 10-24 说先不出，留到以后）
+  if (sp.world) {
+    add(`worldchest_${sp.id}`, 1);
+    add(GEM_FOR_TIER[t], 2, 0.6);
+    add(`trophy_${sp.id}`, 1, 0.6);
+    add(`banner_${sp.id}`, 1, 0.06);
+    add(ENH_FOR_TIER[t], 2, 0.5);
+    add(`bosschest_${n}`, 1, 0.6);
+    return d;
+  }
   if (sp.rank === 'boss') {
     add(ENH_FOR_TIER[t], 1, 0.2);
     add(`luckybag_${n}`, 2, 0.5);
@@ -546,6 +578,8 @@ const monsterList: MonsterDef[] = SPECIES.map((sp, idx) => {
   let hp = refDps(L) * 15 * RANK_HP[sp.rank];
   if (tr.has('tough')) hp *= 1.3;
   if (tr.has('frail')) hp *= 0.75;
+  // 世界首领：血量再 ×4（约同级普通怪的 40 倍），伤害、防御各 +15%
+  if (sp.world) hp *= 4;
   let ms = FAMILY_MS[fam] + (sp.rank === 'boss' ? 400 : 0);
   if (tr.has('swift')) ms *= 0.75;
   if (tr.has('slow')) ms *= 1.25;
@@ -555,12 +589,14 @@ const monsterList: MonsterDef[] = SPECIES.map((sp, idx) => {
     hp: Math.round(hp),
     // 攻击值跟着同阶护甲一起涨，不然高阶护甲会让怪物几乎打不中
     attack: Math.round(((L + 8) * (1 + (1.6 * POWER[tierForLevel(L)]) / 64) - 8) * RANK_POW[sp.rank]),
-    defence: Math.round(L * RANK_POW[sp.rank] * (tr.has('armored') ? 1.4 : 1)),
-    maxHit: tr.has('passive') ? 0 : Math.max(1, Math.round(0.025 * refHp(L) * (ms / 1000) * RANK_HIT[sp.rank] * (tr.has('fierce') ? 1.25 : 1))),
+    defence: Math.round(L * RANK_POW[sp.rank] * (tr.has('armored') ? 1.4 : 1) * (sp.world ? 1.15 : 1)),
+    maxHit: tr.has('passive') ? 0 : Math.max(1, Math.round(0.025 * refHp(L) * (ms / 1000) * RANK_HIT[sp.rank] * (tr.has('fierce') ? 1.25 : 1) * (sp.world ? 1.15 : 1))),
     attackMs: Math.round(ms / 100) * 100,
-    respawnMs: (sp.rank === 'boss' ? 6000 : sp.rank === 'elite' ? 3000 : 1500) * (tr.has('pack') ? 0.5 : 1),
+    // 世界首领倒下后 2 分钟才重新出现
+    respawnMs: sp.world ? 120_000 : (sp.rank === 'boss' ? 6000 : sp.rank === 'elite' ? 3000 : 1500) * (tr.has('pack') ? 0.5 : 1),
     drops: speciesDrops(sp, idx),
     art: { color: sp.color, accent: sp.accent },
+    ...(sp.world ? { world: true } : {}),
   };
 });
 // 野怪掉同阶的种子：普通 2%、精英 6%、Boss 25% 一次 3 颗
@@ -861,7 +897,7 @@ const filterIds = (prefix: string) => actionList.filter((a) => a.id.startsWith(p
 
 export type NodeSprite =
   | 'ore' | 'tree' | 'fish' | 'herb' | 'camp' | 'boss' | 'anvil' | 'furnace' | 'stove' | 'bench' | 'bowyer' | 'potion' | 'enhance'
-  | 'market' | 'farm' | 'bank' | 'dummy' | 'cave' | 'atelier' | 'waystone' | 'portal';
+  | 'market' | 'farm' | 'bank' | 'dummy' | 'cave' | 'atelier' | 'waystone' | 'portal' | 'worldboss';
 
 export interface MapNode {
   id: string;
@@ -887,6 +923,8 @@ export interface MapNode {
   closed?: boolean;
   /** 海上的岛（用户 10-24：水路先不开放，以后做航行系统），走不到，动作和怪物都暂时用不了 */
   sea?: boolean;
+  /** 世界首领的巢穴（用户 10-24）：地图上红色骷髅头标记 */
+  world?: boolean;
   /** 田地：能种哪几阶的作物（地块制种田） */
   farm?: number[];
   /** 传说石碑：传送点 */
@@ -918,6 +956,9 @@ const cave = (id: string, name: string, pos: { x: number; y: number }, region: R
   ({ id, name, ...pos, region, lv: [0, 0], sprite: 'cave', actions: [], cave: true });
 
 const site = (n: MapNode, kind: SiteKind, r: number): MapNode => ({ ...n, site: { kind, r } });
+/** 世界首领的巢穴：只有一只世界首领，没有资源 */
+const lair = (id: string, name: string, x: number, y: number, region: RegionId): MapNode =>
+  ({ id, name, x, y, region, lv: [1, 1], sprite: 'worldboss', actions: [], world: true });
 /** 海岛上的地点：内容先放好，等航行系统开放 */
 const isle = (n: MapNode): MapNode => ({ ...n, sea: true, closed: true });
 
@@ -1176,6 +1217,13 @@ export const NODES: MapNode[] = [
   isle(site(band('starfall', '坠星环礁', 0.44, 0.955, 'starsea', 'boss', [mine(7, '_starfall'), mat('crystal', 7, '_starfall'), fishAt('star_whale')]), 'starfall', 120)),
   band('glow_isle', '晶光岛', 0.322, 0.9, 'starsea', 'camp', [mat('spice', 7, '_glow'), mat('resin', 7, '_glow'), cotton(7, '_glow')]),
   band('tide_ruins', '潮汐遗迹', 0.553, 0.905, 'starsea', 'fish', [fishAt('starwhale', '_tide'), fishAt('dragonfish', '_tide'), herb('frost_lotus', '_tide')], true),
+
+  // ---- 世界首领的巢穴（用户 10-24）：地图上红色骷髅头标记，各在一片群系的腹地 ----
+  lair('wb_flame_lair', '炎煌龙巢', 7640, 7060, 'lava'),
+  lair('wb_soul_lair', '噬魂古林', 2150, 10600, 'moonmire'),
+  lair('wb_frost_lair', '永冬冰原', 4400, 1250, 'frostpeak'),
+  lair('wb_thunder_lair', '天罚雷巅', 10150, 1500, 'thunder'),
+  lair('wb_void_lair', '虚无裂隙', 5900, 10500, 'starsea'),
 
   // 外圈的大型洞窟（先占位，以后开放）
   cave('cave_hill', '青岚石窟', atF(0.05, 0.47), 'hills'),
