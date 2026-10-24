@@ -11,6 +11,7 @@ import { doorOf, FACILITY_NAME, townAt, TOWNS, type Facility, type TownDef } fro
 
 export { MAP_W, MAP_H, MID_BOX, OLD_BOX, at, atW, atF } from './geo';
 import { MAP_W, MAP_H, MID_BOX, OLD_BOX, at, atW, atF } from './geo';
+import { APT_MAX, APT_MIN, COAT_NAME, COAT_RARE, coatOf, FOAL, FOAL_CHANCE, horseItem, RANCH } from './ranch';
 import { HW_ALTAR, HW_BOX, HW_POINT, HW_TIERS, hwTierOf } from './halloween';
 
 /** soon：占位技能，还没有内容（养殖，用户 10-23） */
@@ -23,7 +24,7 @@ export const SKILLS: Record<SkillId, SkillInfo> = {
   gathering: { name: '采集', color: '#7cc456', group: 'gather', desc: '用镰刀采棉花和草药，偶尔捡到野生种子' },
   farming: { name: '种植', color: '#c8a040', group: 'gather', desc: '在城镇附近的田里用锄头播种、收获作物，收成时会收回种子' },
   hunting: { name: '狩猎', color: '#b0703a', group: 'gather', desc: '在野外狩猎野兽，用刮皮刀剥取兽皮' },
-  husbandry: { name: '养殖', color: '#e0a8a0', group: 'gather', desc: '在牧场饲养鸡、羊、牛等家畜，收集鸡蛋、羊毛、牛奶', soon: true },
+  husbandry: { name: '养殖', color: '#e0a8a0', group: 'gather', desc: '在城镇畜牧站养小马崽，养大得到坐骑马；等级越高长得越快' },
   thieving: { name: '偷窃', color: '#8a7ab8', group: 'gather', desc: '从镇民和商队身上摸金币，失败会被晕眩' },
   cooking: { name: '烹饪', color: '#d4a03c', group: 'produce', desc: '把鱼和作物做成回血的食物' },
   smithing: { name: '锻造', color: '#c26a3a', group: 'produce', desc: '冶炼精炼锭，打造剑、长枪、匕首、板甲、工具和箭头' },
@@ -362,6 +363,15 @@ for (const j of JEWELS) {
 }
 
 /** 坐骑：测试服兑换码「中国人能飞」领取（用户 10-23 要求，名字用户改为 Chinese can fly） */
+// 坐骑马（用户 10-24）：畜牧站养大的小马崽，速度资质 50%-200% 随机，每个资质一种物品
+item(FOAL, '小马崽', 'misc', 0, { desc: '打败野马有几率得到。拿到城镇的畜牧站放进栏里养，大约 1 小时长成坐骑马，养殖等级越高长得越快。成年后才知道它的速度资质。' });
+for (let apt = APT_MIN; apt <= APT_MAX; apt++) {
+  const c = coatOf(apt);
+  item(horseItem(apt), `${COAT_NAME[c]}（资质 ${apt}%）`, 'gear', 0, {
+    desc: `畜牧站养大的${COAT_RARE[c]}坐骑马，速度资质 ${apt}%：骑乘时移动速度 +${apt}%。资质 50%-200% 随机，越高越稀有，毛色也不一样。`,
+    equip: { slot: 'mount', skill: 'hitpoints', level: 1, attack: 0, strength: 0, defence: 0, move: apt / 100 },
+  });
+}
 item('mount_danmark', 'Chinese can fly', 'gear', 0, {
   desc: '黑毛银鬃的巨狼，红眼，身上有旧伤疤。骑乘时移动速度 +160%。在「更多」页输入兑换码获得。',
   equip: { slot: 'mount', skill: 'hitpoints', level: 1, attack: 0, strength: 0, defence: 0, move: 1.6 },
@@ -524,6 +534,8 @@ function speciesDrops(sp: Species, idx: number): Drop[] {
   const fam = FORM_FAMILY[sp.form];
   const d: Drop[] = [{ item: 'coins', qty: Math.round(sp.level * 3 * (sp.rank === 'boss' ? 12 : sp.rank === 'elite' ? 3 : 1)) }];
   const add = (item: string, qty: number, chance?: number) => d.push(chance === undefined || chance >= 1 ? { item, qty } : { item, qty, chance });
+  // 野马：有几率掉小马崽
+  if (sp.horse) add(FOAL, 1, FOAL_CHANCE[sp.rank]);
   // 南瓜王：只掉南瓜礼盒（数量看难度）和金币
   if (sp.event) {
     add(HW_BOX, HW_TIERS[hwTierOf(sp.id)].boxes);
@@ -912,7 +924,7 @@ const filterIds = (prefix: string) => actionList.filter((a) => a.id.startsWith(p
 
 export type NodeSprite =
   | 'ore' | 'tree' | 'fish' | 'herb' | 'camp' | 'boss' | 'anvil' | 'furnace' | 'stove' | 'bench' | 'bowyer' | 'potion' | 'enhance'
-  | 'market' | 'farm' | 'bank' | 'dummy' | 'cave' | 'atelier' | 'waystone' | 'portal' | 'worldboss' | 'altar';
+  | 'market' | 'farm' | 'bank' | 'dummy' | 'cave' | 'atelier' | 'waystone' | 'portal' | 'worldboss' | 'altar' | 'ranch';
 
 export interface MapNode {
   id: string;
@@ -1053,6 +1065,8 @@ export const NODES: MapNode[] = [
     steal('noble', '偷贵族', 55, 80, [{ item: 'runic_bar', qty: 1, chance: 0.05 }]),
   ]),
   town('dummy', '训练场', 181, 182, 'dummy', [fight('dummy', '打稻草人')]),
+  // 畜牧站（用户 10-24）：养小马崽，长大得到坐骑马
+  town(RANCH, '畜牧站', 196, 194, 'ranch', []),
   // 万圣节活动祭坛（用户 10-24）：苍岭城东门外，和城镇在同一块地上
   { id: HW_ALTAR, name: '万圣节活动祭坛', ...townXY(207, 163), region: 'town', lv: [30, 120], sprite: 'altar', actions: [], event: true },
   // 城镇周围的四块田（用户 10-23 要求），每块种两阶作物

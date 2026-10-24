@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ACTIONS, BUFF_NAME, ITEMS } from '../core/data';
 import { rainBonus } from '../core/sim';
+import { aptOf } from '../core/ranch';
 import type { BuffKind, GameState, RegionId } from '../core/types';
 import { isRaining, RAIN_FISH } from '../core/weather';
 
@@ -8,7 +9,7 @@ import { isRaining, RAIN_FISH } from '../core/weather';
  * 增益栏（用户 10-23）：时钟左边一排像素小图标，料理增益、雨天钓鱼、骑乘；
  * 下面写剩余时间，点一下（电脑端悬停）看说明。
  */
-type IconKey = BuffKind | 'rain' | 'mount';
+type IconKey = BuffKind | 'rain' | 'mount' | 'horse';
 const PAL: Record<string, string> = {
   k: '#1a0f08', w: '#ffffff', g: '#e8b84a', G: '#a07020', r: '#e0503a', R: '#8a2a1e', b: '#6ac0ff', B: '#2a6ab0',
   s: '#c8ccd4', S: '#7a808a', n: '#8a5a30', N: '#5a3a1e', y: '#fff07a', p: '#c070ff', P: '#7030b0', e: '#7ad860', E: '#3a8a30',
@@ -21,6 +22,7 @@ const ART: Record<IconKey, string[]> = {
   speed: ['...gggg..', '..gyyyyg.', '.g.....g.', '..gyyyg..', '...gyg...', '..g.y.g..', '.g.yyy.g.', '..gyyyyg.', '...gggg..'],
   xp: ['....y....', '...yyy...', 'yyyywyyyy', '.yywwwyy.', '..yywyy..', '..yyyyy..', '.yyy.yyy.', '.yy...yy.', 'y.......y'],
   rain: ['....b....', '...bbb...', '..bbwbb..', '..bwbbb..', '...bbb...', '.........', '.B.eeE...', 'BBeeeeEk.', '.B.eeE...'],
+  horse: ['....NN...', '...NnnN..', '..NnnknN.', '.NnnnnnNN', 'NnnnnNnN.', 'NnwnN.NnN', '.NNN..NnN', '......NnN', '.....NnnN'],
   mount: ['.S.....S.', 'SsS...SsS', 'SssSSSssS', 'SskssskS.', 'SsssssssS', '.SsrwrsS.', '..SsssS..', '...SSS...', '.........'],
 };
 const urls: Partial<Record<IconKey, string>> = {};
@@ -38,7 +40,7 @@ function iconUrl(k: IconKey) {
   return (urls[k] = c.toDataURL());
 }
 
-const BORDER: Record<IconKey, string> = { atk: '#c5cad2', str: '#e0503a', def: '#6ac0ff', speed: '#e8b84a', xp: '#fff07a', rain: '#6ac0ff', mount: '#c070ff' };
+const BORDER: Record<IconKey, string> = { atk: '#c5cad2', str: '#e0503a', def: '#6ac0ff', speed: '#e8b84a', xp: '#fff07a', rain: '#6ac0ff', mount: '#c070ff', horse: '#c070ff' };
 
 interface Buff { key: string; icon: IconKey; name: string; value: string; time?: string; desc: string; dim?: boolean }
 
@@ -55,7 +57,7 @@ function buffsOf(s: GameState, region: RegionId, now: number): Buff[] {
   }
   if (s.mounted && s.equipment.mount) {
     const mv = ITEMS[s.equipment.mount]?.equip?.move ?? 0;
-    out.push({ key: 'mount', icon: 'mount', name: '骑乘', value: `+${Math.round(mv * 100)}%`, desc: `骑着${ITEMS[s.equipment.mount].name}：移动速度 +${Math.round(mv * 100)}%` });
+    out.push({ key: 'mount', icon: aptOf(s.equipment.mount) ? 'horse' : 'mount', name: '骑乘', value: `+${Math.round(mv * 100)}%`, desc: `骑着${ITEMS[s.equipment.mount].name}：移动速度 +${Math.round(mv * 100)}%` });
   }
   return out;
 }

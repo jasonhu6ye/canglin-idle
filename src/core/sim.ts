@@ -1,3 +1,4 @@
+import { APT_MAX, APT_MIN, FOAL, growMs, HORSE_XP, horseItem, RANCH, RANCH_PENS } from './ranch';
 import { HW_POINT, HW_TIERS, hwFight, hwOpen, hwTierOf, hwWait } from './halloween';
 import { ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAP_W, MID_BOX, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, planRoute, travelMs, type MapNode } from './data';
 import { nextRandom } from './rng';
@@ -1340,6 +1341,47 @@ export function summonPumpkin(prev: GameState, d: number, now: number): GameStat
   s.halloween = { summoned: d, last: now };
   s.lastStop = null;
   return s;
+}
+
+/** 畜牧站（用户 10-24）：站在旁边才能放小马崽、牵马 */
+export const RANCH_NODE = NODES.find((n) => n.id === RANCH)!;
+export const atRanch = (s: GameState) => nearNode(s, RANCH_NODE);
+const pensOf = (s: GameState) => Array.from({ length: RANCH_PENS }, (_, i) => s.ranch?.pens[i] ?? null);
+
+/** 把一匹小马崽放进空栏：先用背包里的，再用仓库里的 */
+export function placeFoal(prev: GameState, pen: number, now: number): GameState {
+  const pens = pensOf(prev);
+  if (!atRanch(prev) || pen < 0 || pen >= RANCH_PENS || pens[pen]) return prev;
+  const from = (prev.bag[FOAL] ?? 0) > 0 ? 'bag' : (prev.bank[FOAL] ?? 0) > 0 ? 'bank' : null;
+  if (!from) return prev;
+  const s = clone(prev);
+  const src = from === 'bag' ? s.bag : s.bank;
+  if (--src[FOAL] <= 0) delete src[FOAL];
+  pens[pen] = { start: now, ms: growMs(level(s, 'husbandry')) };
+  s.ranch = { pens };
+  return s;
+}
+
+/** 栏里的小马长大了没有（剩多少毫秒，0 = 可以牵走） */
+export const penLeft = (p: { start: number; ms: number }, now: number) => Math.max(0, p.start + p.ms - now);
+
+/** 牵走长大的马：这时才随机出速度资质（50%-200%），给养殖经验。返回新状态和资质 */
+export function collectHorse(prev: GameState, pen: number, now: number): [GameState, number] {
+  const pens = pensOf(prev);
+  const p = pens[pen];
+  if (!atRanch(prev) || !p || penLeft(p, now) > 0) return [prev, 0];
+  const s = clone(prev);
+  const [r, next] = nextRandom(s.rng);
+  s.rng = next;
+  const apt = APT_MIN + Math.floor(r * (APT_MAX - APT_MIN + 1));
+  const id = horseItem(apt);
+  if (bagRoomFor(s.bag, id) > 0) s.bag[id] = (s.bag[id] ?? 0) + 1;
+  else s.bank[id] = (s.bank[id] ?? 0) + 1;
+  s.seen[id] = 1;
+  s.xp.husbandry = (s.xp.husbandry ?? 0) + HORSE_XP;
+  pens[pen] = null;
+  s.ranch = { pens };
+  return [s, apt];
 }
 
 /** 点掉顶部的「任务停了」提示 */

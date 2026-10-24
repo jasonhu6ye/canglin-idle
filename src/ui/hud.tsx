@@ -4,14 +4,13 @@ import { QUESTS, questProgress, questText } from '../core/quests';
 import { actionDuration, beltSlotOf, combatEstimate, combatLevel, dismissStop, enqueue, rainBonus, isBankId, level, maxHp, removeTask, resumeWork, toggleMount, weaponStyle } from '../core/sim';
 import { jumpTo, producerOf } from './ActionSheet';
 import { openNodeSheet } from './itemOpen';
-import { wolfIconUrl } from '../game/wolfArt';
 import { openCombatLog } from './CombatLog';
 import type { GameState, SkillId, TaskEndReason } from '../core/types';
 import { HERO_PAD, HERO_W, outfitOf, paintHeroSheet } from '../game/hero';
 import { store } from '../store';
 import { emitToGame } from './GameCanvas';
 import { actionName, fmtNum, modeLabel } from './format';
-import { SkillIcon, TplIcon } from './icons';
+import { mountIconUrl, SkillIcon, TplIcon } from './icons';
 
 /** 顶栏头像：取当前外观正面站立帧的上半身 */
 const portraits = new Map<string, string>();
@@ -188,7 +187,7 @@ export function MapButtons({ s, onWorldMap }: { s: GameState; onWorldMap: () => 
     <div className="map-buttons">
       {mount && (
         <button className={`mount-btn ${s.mounted ? 'on' : ''}`} title={s.mounted ? '下坐骑 (R)' : '骑乘 (R)'} onClick={() => store.dispatch((g) => toggleMount(g))}>
-          <img src={wolfIconUrl()} width={30} height={30} alt="" draggable={false} />
+          <img src={mountIconUrl(mount)} width={30} height={30} alt="" draggable={false} />
           <small>{s.mounted ? '下骑' : '骑乘'}</small>
         </button>
       )}

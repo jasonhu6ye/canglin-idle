@@ -36,7 +36,7 @@ export type TraitId = keyof typeof TRAITS;
 /** 外形 → 种族大类（决定掉落和体型） */
 export const FORM_FAMILY = {
   wolf: 'beast', fox: 'beast', boar: 'beast', deer: 'beast', bear: 'beast', cat: 'beast', mammoth: 'beast', goat: 'beast',
-  lion: 'beast', rhino: 'beast', camel: 'beast', panther: 'beast', yak: 'beast', hyena: 'beast',
+  lion: 'beast', rhino: 'beast', camel: 'beast', panther: 'beast', yak: 'beast', hyena: 'beast', horse: 'beast',
   rabbit: 'small', rat: 'small', hen: 'small', frog: 'small',
   hawk: 'bird', griffin: 'bird', phoenix: 'bird', bat: 'bat',
   slime: 'slime', jellyfish: 'slime',
@@ -76,7 +76,7 @@ export const FORM_SIZE: Record<Form, number> = {
   bear: 3, orc: 3, yeti: 3, troll: 3, lich: 3, golem: 3, gargoyle: 3, treant: 3, griffin: 3, phoenix: 3, mammoth: 3, wyvern: 3,
   dragon: 4,
   hyena: 2, panther: 2, lion: 3, camel: 3, yak: 3, rhino: 3, jellyfish: 1, cactoid: 2,
-  octopus: 2, shark: 3, manta: 2, moth: 2, elemental: 2, hydra: 3,
+  octopus: 2, shark: 3, manta: 2, moth: 2, elemental: 2, hydra: 3, horse: 3,
 };
 
 export interface Species {
@@ -99,6 +99,8 @@ export interface Species {
   outer?: boolean;
   /** 世界首领（用户 10-24）：地图上红色骷髅头标记，有专属动画、大招和传说掉落 */
   world?: boolean;
+  /** 野马（用户 10-24）：会掉小马崽，拿去畜牧站养成坐骑 */
+  horse?: boolean;
   /** 活动限定（万圣节南瓜王）：只能在活动祭坛召唤 */
   event?: boolean;
 }
@@ -558,6 +560,12 @@ export const SPECIES: Species[] = [
   ...RING_ROWS.map((r) => ({ ...toSpecies(r, tierOfLevel(r[2])), ring: true })),
   ...OUTER_ROWS.map((r) => ({ ...toSpecies(r, tierOfLevel(r[2])), outer: true })),
   ...WORLD_ROWS.map((r) => ({ ...toSpecies(r, tierOfLevel(r[2])), world: true })),
+  // 野马（用户 10-24）：三个地方各一种，打败有几率掉小马崽
+  ...([
+    ['wild_horse', '金穗野马', 12, 'savanna', 'horse', 'n', 'swift', '#9a6232', '#3a2010', 'golden_plain'],
+    ['hill_horse', '青岚野马', 32, 'hills', 'horse', 'n', 'swift tough', '#5a4a46', '#e8e0d4', 'hill_pines'],
+    ['snow_horse', '雪鬃野马', 72, 'alpine', 'horse', 'e', 'swift tough evasive', '#dfe6ee', '#9ab4d0', 'cloud_slope'],
+  ] as Row[]).map((r): Species => ({ ...toSpecies(r, tierOfLevel(r[2])), horse: true })),
   // 万圣节南瓜王（用户 10-24）：5 档难度各一只，住在活动祭坛，召唤了才能打
   ...HW_TIERS.map((h, d): Species => ({
     ...toSpecies([hwBossId(d), `南瓜王·${h.name}`, h.lv, 'town', 'golem', 'b', d < 2 ? 'tough fierce' : d < 4 ? 'tough fierce lifesteal' : 'tough fierce lifesteal thorns', '#e8781a', ['#8a3ad8', '#3a9ae8', '#3ad87a', '#e83a4a', '#f0d040'][d], HW_ALTAR], tierOfLevel(h.lv)),

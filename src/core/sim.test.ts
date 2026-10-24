@@ -1,8 +1,10 @@
-import { actionDuration, advance, buySeed, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour, openContainer, redeemCode, toggleMount, moveSpeed, rainBonus, summonPumpkin } from './sim';
+import { actionDuration, advance, buySeed, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour, openContainer, redeemCode, toggleMount, moveSpeed, rainBonus, summonPumpkin, placeFoal, collectHorse, RANCH_NODE } from './sim';
 import { HW_BOX, HW_END, HW_POINT, HW_TIERS, hwFight } from './halloween';
+import { APT_MAX, APT_MIN, aptOf, FOAL, FOAL_MS, growMs, HORSE_XP } from './ranch';
+import { SPECIES } from './bestiary';
 import { levelForXp, speedForLevel, XP_TABLE } from './xp';
 import type { GameState, SkillAction, TaskMode } from './types';
-import { ACTIONS, ITEMS, CROP_DEFS, FARM_NODES, nodeOfAction, plotsOf, standOf, travelMs, WATER_SPEEDUP } from './data';
+import { MONSTERS, ACTIONS, ITEMS, CROP_DEFS, FARM_NODES, nodeOfAction, plotsOf, standOf, travelMs, WATER_SPEEDUP } from './data';
 import { fieldCounts, harvestAll, installSprinkler, plantAll, stepRain, tendPlot, waterAll } from './farm';
 import { isRaining } from './weather';
 
@@ -860,5 +862,56 @@ describe('万圣节南瓜王', () => {
     s = advance(s, T0 + 60_000).state;
     expect(s.queue.length).toBe(0);
     expect(s.lastStop?.reason).toBe('summon');
+  });
+});
+
+describe('畜牧站养马', () => {
+  const atRanch = () => {
+    const s = newGame(T0, 7);
+    s.loc = standOf(RANCH_NODE);
+    s.bag[FOAL] = 2;
+    s.bank[FOAL] = 1;
+    return s;
+  };
+  it('野马会掉小马崽', () => {
+    const horses = SPECIES.filter((x) => x.horse);
+    expect(horses.length).toBe(3);
+    for (const h of horses) expect(MONSTERS[h.id].drops.map((d) => d.item)).toContain(FOAL);
+  });
+  it('放进马栏：先用背包，栏满或不在畜牧站不能放；1 级要 1 小时，养殖等级越高越快', () => {
+    let s = placeFoal(atRanch(), 0, T0);
+    expect(s.bag[FOAL]).toBe(1);
+    expect(s.ranch?.pens[0]).toEqual({ start: T0, ms: FOAL_MS });
+    expect(placeFoal(s, 0, T0)).toBe(s);
+    const far = { ...atRanch(), loc: { x: 0, y: 0 } };
+    expect(placeFoal(far, 0, T0)).toBe(far);
+    s = placeFoal(placeFoal(s, 1, T0), 2, T0);
+    expect(s.bag[FOAL]).toBeUndefined();
+    expect(s.bank[FOAL]).toBeUndefined();
+    expect(growMs(50)).toBeLessThan(growMs(10));
+    expect(growMs(1000)).toBe(FOAL_MS * 0.4);
+  });
+  it('没长大不能牵走；长大后资质在 50-200 之间，给养殖经验，马能装备加移速', () => {
+    const s = placeFoal(atRanch(), 0, T0);
+    expect(collectHorse(s, 0, T0 + FOAL_MS - 1)[1]).toBe(0);
+    const apts = new Set<number>();
+    let g = s;
+    for (let i = 0; i < 40; i++) {
+      const [n, apt] = collectHorse(g, 0, T0 + FOAL_MS);
+      expect(apt).toBeGreaterThanOrEqual(APT_MIN);
+      expect(apt).toBeLessThanOrEqual(APT_MAX);
+      expect(n.xp.husbandry).toBe(HORSE_XP);
+      expect(n.ranch?.pens[0]).toBeNull();
+      const id = Object.keys(n.bag).find((k) => aptOf(k))!;
+      expect(aptOf(id)).toBe(apt);
+      expect(ITEMS[id].equip?.move).toBeCloseTo(apt / 100);
+      apts.add(apt);
+      g = { ...s, rng: n.rng };
+    }
+    expect(apts.size).toBeGreaterThan(10);
+  });
+  it('旧存档没有马栏也能读', () => {
+    const s = migrate(JSON.parse(JSON.stringify({ ...newGame(T0, 1), ranch: undefined })))!;
+    expect(placeFoal({ ...s, loc: standOf(RANCH_NODE), bag: { [FOAL]: 1 } }, 0, T0).ranch?.pens[0]?.ms).toBe(FOAL_MS);
   });
 });

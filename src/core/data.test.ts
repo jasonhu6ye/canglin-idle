@@ -39,6 +39,9 @@ describe('数据闭环', () => {
     for (const it of Object.values(ITEMS)) it.opens?.pool.forEach((e) => made.add(e.item));
     // 兑换码送的坐骑
     made.add('mount_danmark');
+    // 畜牧站养大的马；小马崽放进马栏
+    for (let a = 50; a <= 200; a++) made.add(`mount_horse_${a}`);
+    used.add('foal');
     // 种田：作物来自地块收获，种子种在地块里
     for (const c of Object.values(CROP_DEFS)) {
       c.outputs.forEach((o) => made.add(o.item));
@@ -75,7 +78,7 @@ describe('装备体系', () => {
 describe('怪物图鉴', () => {
   it('原 192 种 + 新地点 20 种生物和 8 个首领 + 外圈 70 种和 4 个首领，id 不重复，特性都有定义', () => {
     const base = SPECIES.filter((s) => !s.home);
-    const fresh = SPECIES.filter((s) => s.home && !s.ring && !s.outer && !s.world && !s.event);
+    const fresh = SPECIES.filter((s) => s.home && !s.ring && !s.outer && !s.world && !s.event && !s.horse);
     const ring = SPECIES.filter((s) => s.ring);
     // 12080 最外圈（用户 10-24）：43 种新生物 + 8 个首领，每个新群系一个首领
     const outer = SPECIES.filter((s) => s.outer);

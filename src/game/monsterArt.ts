@@ -1,3 +1,4 @@
+import { drawWildHorse } from './horseArt';
 import type { MonsterDef } from '../core/types';
 import { sizeOf, SIZE_PX, type Form } from '../core/bestiary';
 import { phash, Pix } from './pix';
@@ -1084,6 +1085,7 @@ function turtle(c: Ctx) {
 
 function draw(c: Ctx) {
   switch (c.form) {
+    case 'horse': return drawWildHorse(c.p, c.S, c.g, c.o.anim, c.o.t, c.m.art.color, c.m.art.accent);
     case 'rabbit': case 'rat': case 'hen': case 'frog': return small(c);
     case 'hawk': case 'phoenix': case 'bat': return flyer(c);
     case 'slime': case 'jellyfish': return slime(c);

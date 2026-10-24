@@ -259,6 +259,8 @@ export interface GameState {
   mounted?: boolean;
   /** 用过的兑换码，每个存档只能领一次 */
   redeemed?: string[];
+  /** 畜牧站的栏位：每栏一匹小马崽，start 放进去的时间，ms 要长多久（放进去时按养殖等级算好） */
+  ranch?: { pens: ({ start: number; ms: number } | null)[] };
   /** 万圣节活动：当前召唤出来的是第几档南瓜王（打赢就清掉）、上次召唤的时间 */
   halloween?: { summoned?: number; last?: number };
   /** 角色所在的格子（寻路的起点） */

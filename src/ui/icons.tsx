@@ -8,6 +8,11 @@ import { equipIconUrl } from '../game/equipArt';
 import { bannerIconUrl, chestIconUrl, luckyBagIconUrl, trophyIconUrl, worldChestIconUrl } from '../game/lootArt';
 import { openItem } from './itemOpen';
 import { wolfIconUrl } from '../game/wolfArt';
+import { foalIconUrl, horseIconUrl } from '../game/horseArt';
+import { aptOf, coatOf, FOAL } from '../core/ranch';
+
+/** 坐骑图标：马按毛色画，别的是狼 */
+export const mountIconUrl = (id: string) => (aptOf(id) ? horseIconUrl(coatOf(aptOf(id))) : wolfIconUrl());
 import type { SkillId } from '../core/types';
 
 /*
@@ -981,6 +986,8 @@ function lootUrl(id: string): string | null {
 export function itemImageUrl(item: string): string | undefined {
   if (!ITEMS[item]) return undefined;
   if (item === HW_BOX) return pumpkinBoxUrl();
+  if (item === FOAL) return foalIconUrl();
+  if (item.startsWith('mount_')) return mountIconUrl(item);
   if (item === HW_POINT) return pumpkinPointUrl();
   const res = resIconUrl(item) ?? equipUrl(item) ?? lootUrl(item);
   if (res) return res;
@@ -991,7 +998,8 @@ export function itemImageUrl(item: string): string | undefined {
 function BareIcon({ item, size }: { item: string; size: number }) {
   // 万圣节活动：南瓜礼盒、南瓜积分
   if (item === HW_BOX || item === HW_POINT) return <img className="icon" src={item === HW_BOX ? pumpkinBoxUrl() : pumpkinPointUrl()} width={size} height={size} alt="" draggable={false} />;
-  if (item.startsWith('mount_')) return <img className="icon" src={wolfIconUrl()} width={size} height={size} alt="" draggable={false} />;
+  if (item.startsWith('mount_')) return <img className="icon" src={mountIconUrl(item)} width={size} height={size} alt="" draggable={false} />;
+  if (item === FOAL) return <img className="icon" src={foalIconUrl()} width={size} height={size} alt="" draggable={false} />;
   const res = resIconUrl(item) ?? equipUrl(item) ?? lootUrl(item);
   if (res) {
     const tier = ITEMS[item].tier!;

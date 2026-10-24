@@ -10,6 +10,8 @@ import { paintSkull } from './skullArt';
 import { paintAltar } from './halloweenArt';
 import { WORLD_SKILL } from '../core/bestiary';
 import { paintWolfSheet, wolfSaddle, WOLF_ANIMS, WOLF_FEET, WOLF_H, WOLF_W } from './wolfArt';
+import { coatOf, horseKind, horseSaddle, HORSE_ANIMS, paintHorseSheet, paintFoal, paintRanch, PADDOCK_SPOTS, RANCH_H, RANCH_W } from './horseArt';
+import { aptOf, RANCH } from '../core/ranch';
 import { FRAME_H, FRAME_W, HERO_ANIMS, HERO_FEET, HERO_PAD, NPC_ANIMS, NPC_OUTFITS, outfitOf, paintHeroSheet, type HeroDir } from './hero';
 import type { MonsterDef, RegionId, Summary } from '../core/types';
 import { store } from '../store';
@@ -349,20 +351,7 @@ export class MapScene extends Phaser.Scene {
     }
     // 坐骑：每帧分后层和前层，骑手夹在中间
     // 名字别和怪物「狼」的贴图撞了
-    if (!this.textures.exists('mount-wolf')) {
-      const wolf = paintWolfSheet();
-      const wt = this.textures.addCanvas('mount-wolf', wolf.canvas)!;
-      for (const f of wolf.frames) wt.add(f.name, 0, f.x, f.y, WOLF_W, WOLF_H);
-    }
-    for (const a of WOLF_ANIMS) {
-      for (const layer of ['b', 'f']) {
-        if (this.anims.exists(`mount:${a.key}-${layer}`)) continue;
-        this.anims.create({
-          key: `mount:${a.key}-${layer}`, frameRate: a.rate, repeat: a.key === 'wolf-howl' ? 0 : -1,
-          frames: Array.from({ length: a.frames }, (_, i) => ({ key: 'mount-wolf', frame: `${a.key}-${i}-${layer}` })),
-        });
-      }
-    }
+    this.ensureMount('wolf');
     // 村民：和主角同样大小、同样画法
     for (const [kind, o] of Object.entries(NPC_OUTFITS)) {
       const key = `npc-${kind}`;
@@ -1131,6 +1120,10 @@ export class MapScene extends Phaser.Scene {
       this.addAltar(n, cx, cy);
       return;
     }
+    if (n.id === RANCH) {
+      this.addRanch(n, cx, cy);
+      return;
+    }
     const img = this.add.image(cx, cy + T / 2, NODE_MARKER[n.sprite]).setOrigin(0.5, 1).setDepth(cy + T / 2 + 1000);
     img.setScale(boss ? 1.8 : 1.4);
     if (n.sprite === 'stove') this.tweens.add({ targets: img, scaleY: 1.12, yoyo: true, repeat: -1, duration: 300 });
@@ -1177,6 +1170,34 @@ export class MapScene extends Phaser.Scene {
       fontFamily: FONT, fontSize: '9px', color: '#ffb050', stroke: '#1a0820', strokeThickness: 3, resolution: 4, align: 'center',
     }).setOrigin(0.5, 1).setDepth(D_LABEL);
     this.add.zone(cx, cy - 50, T * 6, T * 6).setInteractive({ useHandCursor: true }).setData('node', n.id);
+  }
+
+  /** 城镇畜牧站（用户 10-24）：马厩 + 马场，栏里有小马崽时马场里就站着小马，会抬头甩尾 */
+  private addRanch(n: MapNode, cx: number, cy: number) {
+    if (!this.textures.exists('ranch')) this.textures.addCanvas('ranch', paintRanch());
+    for (let f = 0; f < 24; f += 3) if (!this.textures.exists(`foal-${f}`)) this.textures.addCanvas(`foal-${f}`, paintFoal(f, 0, 32));
+    const S = 1.4;
+    const left = cx - (RANCH_W * S) / 2;
+    const top = cy + T / 2 - RANCH_H * S;
+    this.add.image(cx, cy + T / 2, 'ranch').setOrigin(0.5, 1).setScale(S).setDepth(cy + T / 2 + 1000);
+    const foals = PADDOCK_SPOTS.map(([x, y], i) => {
+      const img = this.add.image(left + x * S, top + y * S, 'foal-0').setOrigin(0.5, 1).setDepth(cy + T / 2 + 1001).setVisible(false);
+      if (i === 1) img.setFlipX(true);
+      return img;
+    });
+    let f = 0;
+    this.time.addEvent({
+      delay: 160, loop: true, callback: () => {
+        f = (f + 3) % 24;
+        const pens = store.state.ranch?.pens ?? [];
+        foals.forEach((img, i) => img.setVisible(!!pens[i]).setTexture(`foal-${(f + i * 9) % 24 - ((f + i * 9) % 24) % 3}`));
+      },
+    });
+    // 名字挂在马场栅栏上方，不压到北边的房子
+    this.add.text(left + 87 * S, top + 40 * S, `🐴 ${n.name}`, {
+      fontFamily: FONT, fontSize: '8px', color: '#ffe8b0', backgroundColor: '#1b120ccc', padding: { x: 3, y: 1 }, resolution: 4, align: 'center',
+    }).setOrigin(0.5, 1).setDepth(D_LABEL);
+    this.add.zone(cx, top + (RANCH_H * S) / 2, RANCH_W * S, RANCH_H * S).setInteractive({ useHandCursor: true }).setData('node', n.id);
   }
 
   /** 世界首领的巢穴：头顶飘一个红色骷髅头（用户 10-24），地上一圈暗红光，远远就能看到 */
@@ -2285,12 +2306,45 @@ export class MapScene extends Phaser.Scene {
 
   /** 骑手坐在狼背上的位置（相对脚底，侧面按朝右算） */
   private seat(dir: HeroDir) {
-    return dir === 'side' ? { x: -4, y: -16 } : dir === 'down' ? { x: 0, y: -19 } : { x: 0, y: -17 };
+    // 马背比狼背高
+    const up = this.mk === 'wolf' ? 0 : 5;
+    return dir === 'side' ? { x: -3, y: -16 - up } : dir === 'down' ? { x: 0, y: -19 - up } : { x: 0, y: -17 - up };
+  }
+
+  /** 当前坐骑的种类：狼 wolf，马按毛色 horse0…horse3（用户 10-24 加了坐骑马） */
+  private mk = 'wolf';
+  private mountKind(id = store.state.equipment.mount) {
+    const apt = aptOf(id);
+    return apt ? horseKind(coatOf(apt)) : 'wolf';
+  }
+  /** 第一次用到某种坐骑时才画它的精灵表；动画名 mount:<种类>-<动作>-<层> */
+  private ensureMount(kind: string) {
+    const tex = `mount-${kind}`;
+    if (this.textures.exists(tex)) return;
+    const horse = kind !== 'wolf';
+    const sheet = horse ? paintHorseSheet(Number(kind.slice(5))) : paintWolfSheet();
+    const t = this.textures.addCanvas(tex, sheet.canvas)!;
+    for (const f of sheet.frames) t.add(f.name, 0, f.x, f.y, WOLF_W, WOLF_H);
+    const list = horse ? HORSE_ANIMS : WOLF_ANIMS.map((a) => ({ ...a, key: a.key.slice(5) }));
+    for (const a of list) {
+      for (const layer of ['b', 'f']) {
+        const key = `mount:${kind}-${a.key}-${layer}`;
+        if (this.anims.exists(key)) continue;
+        this.anims.create({
+          key, frameRate: a.rate, repeat: a.key === 'howl' ? 0 : -1,
+          frames: Array.from({ length: a.frames }, (_, i) => ({ key: tex, frame: `${kind}-${a.key}-${i}-${layer}` })),
+        });
+      }
+    }
   }
 
   private playWolf(key: string) {
-    this.wolfBack.play(`mount:${key}-b`, true);
-    this.wolfFront.play(`mount:${key}-f`, true);
+    this.wolfBack.play(`mount:${this.mk}-${key}-b`, true);
+    this.wolfFront.play(`mount:${this.mk}-${key}-f`, true);
+  }
+  /** 坐骑在旁边等的时候离人多远（马比狼大） */
+  private get besideX() {
+    return this.mk === 'wolf' ? -22 : -26;
   }
 
   /** 按当前状态播放走路、待机动画（骑着时人和狼一起） */
@@ -2331,10 +2385,10 @@ export class MapScene extends Phaser.Scene {
       this.playerBody.anims.timeScale = this.wolfBack.anims.timeScale = this.wolfFront.anims.timeScale = ts;
       // 转向时接着当前的步子跑，不从第一帧重来
       const prev = this.wolfFront.anims.currentAnim?.key ?? '';
-      const p = prev.includes('wolf-run-') ? this.wolfFront.anims.getProgress() : 0;
-      const changed = !prev.includes(`wolf-run-${dir}`);
+      const p = prev.includes('-run-') ? this.wolfFront.anims.getProgress() : 0;
+      const changed = !prev.includes(`${this.mk}-run-${dir}`);
       this.playerBody.play(`ride-${dir}`, true);
-      this.playWolf(`wolf-run-${dir}`);
+      this.playWolf(`run-${dir}`);
       if (changed && p > 0) {
         for (const w of [this.wolfBack, this.wolfFront]) w.anims.setProgress(p);
       }
@@ -2345,7 +2399,7 @@ export class MapScene extends Phaser.Scene {
       this.idleAt = 0;
       this.playerBody.anims.timeScale = this.wolfBack.anims.timeScale = this.wolfFront.anims.timeScale = 1;
       this.playerBody.play(`rideidle-${dir}`, true);
-      this.playWolf(`wolf-idle-${dir}`);
+      this.playWolf(`idle-${dir}`);
     }
   }
 
@@ -2357,8 +2411,8 @@ export class MapScene extends Phaser.Scene {
     if (this.idleAt && !this.walker && !this.working && this.time.now >= this.idleAt) this.heroAnim('idle');
     if (this.mountMode !== 'ride') return;
     const name = (this.wolfFront.anims.currentFrame?.frame.name ?? '') as string;
-    const m = /^(wolf-[a-z]+-[a-z]+)-(\d+)-f$/.exec(name);
-    const dy = m ? wolfSaddle(m[1], +m[2]) : 0;
+    const m = /^([a-z]+\d?)-(.+)-(\d+)-f$/.exec(name);
+    const dy = !m ? 0 : m[1] === 'wolf' ? wolfSaddle(`wolf-${m[2]}`, +m[3]) : horseSaddle(m[2], +m[3]);
     const seat = this.seat(this.facing);
     this.playerBody.y = 7 + seat.y + dy;
   }
@@ -2372,9 +2426,9 @@ export class MapScene extends Phaser.Scene {
 
   /** 狼在主角左边坐着等 */
   private wolfSitBeside() {
-    for (const w of [this.wolfBack, this.wolfFront]) w.setVisible(true).setAlpha(1).setPosition(-22, 5).setFlipX(false);
+    for (const w of [this.wolfBack, this.wolfFront]) w.setVisible(true).setAlpha(1).setPosition(this.besideX, 5).setFlipX(false);
     this.wolfBack.anims.timeScale = this.wolfFront.anims.timeScale = 1;
-    this.playWolf('wolf-sit');
+    this.playWolf('sit');
     // 坐在旁边的狼整只画在人后面
     this.player.moveAbove(this.playerBody, this.wolfFront);
   }
@@ -2416,6 +2470,14 @@ export class MapScene extends Phaser.Scene {
       setSpeedMultiplier(mult);
     }
     if (this.mountBusy) return;
+    // 换了坐骑（狼换马、换了一匹马）：换精灵表，正在骑/在旁边等的话马上换成新的
+    const kind = this.mountKind();
+    if (kind !== this.mk) {
+      this.ensureMount(kind);
+      this.mk = kind;
+      if (this.mountMode === 'ride') { this.heroAnim(this.walker ? 'walk' : 'idle'); this.stepRider(); }
+      else if (this.mountMode === 'beside') this.wolfSitBeside();
+    }
     const want = st.mounted && st.equipment.mount ? (this.working ? 'beside' : 'ride') : 'none';
     if (want === this.mountMode) return;
     const from = this.mountMode;
@@ -2455,11 +2517,11 @@ export class MapScene extends Phaser.Scene {
     }
     if (from === 'none') {
       // 召唤：烟里冒出来，仰头长嚎一声
-      for (const w of wolves) w.setVisible(true).setAlpha(0).setPosition(-22, 7).setFlipX(false);
+      for (const w of wolves) w.setVisible(true).setAlpha(0).setPosition(this.besideX, 7).setFlipX(false);
       this.player.moveAbove(this.playerBody, this.wolfFront);
-      this.puff(-22, 0);
+      this.puff(this.besideX, 0);
       this.wolfBack.anims.timeScale = this.wolfFront.anims.timeScale = 1;
-      this.playWolf('wolf-howl');
+      this.playWolf('howl');
       this.tweens.add({ targets: wolves, alpha: 1, duration: 250 });
       this.time.delayedCall(want === 'ride' ? 900 : 700, () => {
         if (want === 'beside') return finish();
@@ -2470,7 +2532,7 @@ export class MapScene extends Phaser.Scene {
     if (from === 'beside' && want === 'ride') return this.mountUp(finish);
     // 骑着 → 开始干活：跳下来，狼走到旁边坐下
     this.heroName.setY(7 - HERO_FEET + 1);
-    this.tweens.add({ targets: wolves, x: -22, duration: 380 });
+    this.tweens.add({ targets: wolves, x: this.besideX, duration: 380 });
     this.hop(0, 7, finish);
   }
 
@@ -2480,7 +2542,7 @@ export class MapScene extends Phaser.Scene {
     this.playerBody.setPosition(0, 7);
     this.player.moveAbove(this.playerBody, this.wolfFront);
     this.wolfBack.anims.timeScale = this.wolfFront.anims.timeScale = 1;
-    this.playWolf('wolf-idle-side');
+    this.playWolf('idle-side');
     const seat = this.seat('side');
     this.hop(wx + seat.x, 7 + seat.y, () => {
       // 人和狼一起挪回容器原点（狼往前走一小步）

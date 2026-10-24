@@ -696,3 +696,25 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .hw-chip-main { flex: 1; text-align: left; background: none; border: 0; color: #ffe0b0; padding: 0; font-size: 12px; }
 .hw-chip-main b { color: #ffb050; }
 .hw-chip-go { flex: none; font-size: 11px; padding: 2px 8px; }
+/* 畜牧站（10-24） */
+.ranch-stats { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 8px 12px; font-size: 12px; background: rgba(110, 70, 30, 0.3); }
+.ranch-stats img { width: 18px; height: 18px; image-rendering: pixelated; vertical-align: -4px; }
+.ranch-stats b { color: #ffd070; }
+.ranch-stats .primary { margin-left: auto; }
+.ranch-pens { list-style: none; margin: 8px 12px; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.ranch-pens li { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 6px; border: 1px solid #6e4424; border-radius: 6px; background: linear-gradient(#3a2814, #2a1c0e); text-align: center; }
+.ranch-pens li.ready { border-color: #e8c050; box-shadow: 0 0 8px rgba(232, 192, 80, 0.5); }
+.ranch-pen-no { font-size: 11px; color: #e0c090; }
+.ranch-foal { image-rendering: pixelated; }
+.ranch-empty { width: 56px; height: 56px; display: grid; place-items: center; color: #7a6040; border: 1px dashed #6e4424; border-radius: 6px; }
+.ranch-bar { width: 100%; height: 6px; background: #1a1008; border-radius: 3px; overflow: hidden; }
+.ranch-bar i { display: block; height: 100%; background: linear-gradient(90deg, #6ab040, #c8e060); }
+.ranch-pens button { width: 100%; }
+.ranch-reveal { display: flex; gap: 10px; align-items: center; margin: 8px 12px; padding: 8px; border-radius: 6px; border: 1px solid #a08060; background: rgba(60, 40, 20, 0.6); cursor: pointer; animation: ranch-pop 0.4s ease-out; }
+.ranch-reveal img { width: 92px; image-rendering: pixelated; flex: none; }
+.ranch-reveal b { font-size: 15px; color: #ffe0a0; }
+.ranch-reveal.rare1 { border-color: #60a0ff; box-shadow: 0 0 10px rgba(96, 160, 255, 0.5); }
+.ranch-reveal.rare2 { border-color: #c070ff; box-shadow: 0 0 12px rgba(192, 112, 255, 0.6); }
+.ranch-reveal.rare3 { border-color: #ffc040; box-shadow: 0 0 16px rgba(255, 192, 64, 0.8); }
+@keyframes ranch-pop { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@media (max-width: 520px) { .ranch-pens { gap: 5px; margin: 8px; } .ranch-pens li { padding: 6px 3px; } }
