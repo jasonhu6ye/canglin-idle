@@ -480,8 +480,8 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   };
 
   /** 背包能不能把这些东西一起装下 */
-  const fits = (items: string[]) => {
-    const bag = { ...s.bag };
+  const fits = (items: string[], from: Record<string, number> = s.bag) => {
+    const bag = { ...from };
     for (const id of items) {
       if (bagRoomFor(bag, id) < 1) return false;
       bag[id] = (bag[id] ?? 0) + 1;
@@ -499,10 +499,21 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   };
 
   /** 存过一次仓库背包还是装不下这次的战利品：这次结算里不再为腾地方跑仓库（以前会每毫秒跑一趟，卡死页面） */
-  let roomGiveUp = false;
+  const isMyAmmo = (id: string) => !!ITEMS[id]?.ammo && ITEMS[id].ammo!.style === weaponStyle(s);
+  /** 存仓库也腾不出地方（背包里只剩当前弹药都装不下这次的战利品）：别跑了，多出来的直接进仓库。
+   *  以前用一次结算里的标记，界面每 0.2 秒结算一次，标记就没了，会一直来回跑 */
+  const bankWontHelp = (a: SkillAction | CombatAction) =>
+    !fits(lootOf(a), Object.fromEntries(Object.entries(s.bag).filter(([id]) => a.kind === 'combat' && isMyAmmo(id))));
   /** 带补给时给战利品留的格子 */
   const lootRoom = () => (s.queue[0] ? Math.min(10, new Set(lootOf(ACTIONS[s.queue[0].action])).size) : 0);
-  const canCarry = (id: string) => (s.bag[id] ?? 0) > 0 || bagSlotsUsed(s.bag) + 1 + lootRoom() <= BAG_SLOTS;
+  /** 带这种补给最多带多少：给战利品留出格子 */
+  const carryRoom = (id: string) => {
+    const stack = stackOf(id);
+    const held = s.bag[id] ?? 0;
+    const partial = held % stack ? stack - (held % stack) : 0;
+    const free = BAG_SLOTS - bagSlotsUsed(s.bag) - lootRoom();
+    return Math.min(bagRoomFor(s.bag, id), partial + Math.max(0, free) * stack);
+  };
 
   /** 背包满了：走回仓库，存下除食物和弹药外的东西，再走回来接着干。
    *  supply：开战前回仓库按设置拿食物和药水 */
@@ -526,6 +537,8 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       for (const pass of [false, true]) {
         for (const [id, q] of Object.entries(s.bag)) {
           if (!pass && keep(id)) continue;
+          // 当前武器的弹药永远不存回去（存了马上又要回来拿，来回跑）
+          if (pass && isMyAmmo(id)) continue;
           s.bank[id] = (s.bank[id] ?? 0) + q;
           delete s.bag[id];
         }
@@ -540,8 +553,6 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         s.queue[0].stocked = true;
       }
       sum.bankTrips++;
-      // 存完还是装不下（战利品种类比背包格子还多）：不再来回跑，多出来的直接进仓库
-      if (s.queue[0] && !fits(lootOf(ACTIONS[s.queue[0].action]))) roomGiveUp = true;
     }
     return Math.max(step, 1);
   };
@@ -669,7 +680,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     for (const id of ids) {
       // 背包里还没有弹药时第一种一定带上（有空格就行），不然会来回跑仓库
       const first = !bestAmmo(s, style);
-      const n = first || canCarry(id) ? Math.min(s.bank[id], bagRoomFor(s.bag, id)) : 0;
+      const n = Math.min(s.bank[id], first ? Math.max(carryRoom(id), Math.min(bagRoomFor(s.bag, id), stackOf(id))) : carryRoom(id));
       if (n <= 0) continue;
       s.bank[id] -= n;
       if (s.bank[id] <= 0) delete s.bank[id];
@@ -683,7 +694,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     let have = bagFood();
     const foods = Object.keys(s.bank).filter((id) => healOf(id) && (beltSlotOf(id) !== 'potion' || s.settings.carryPotion !== false)).sort((a, b) => healOf(b) - healOf(a));
     for (const id of foods) {
-      const n = canCarry(id) ? Math.min(s.bank[id], target - have, bagRoomFor(s.bag, id)) : 0;
+      const n = Math.min(s.bank[id], target - have, carryRoom(id));
       if (n <= 0) continue;
       s.bank[id] -= n;
       if (s.bank[id] <= 0) delete s.bank[id];
@@ -867,7 +878,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     }
     // 新一轮开始前（采集一次 / 打下一只怪前）检查背包，装不下就先回仓库
     const between = a0.kind === 'skill' ? s.progressMs === 0 : !s.combat || s.combat.respawnMs > 0;
-    if (isBankId(s.travel?.to) || (between && !s.travel && !roomGiveUp && !fits(lootOf(a0)))) {
+    if (isBankId(s.travel?.to) || (between && !s.travel && !fits(lootOf(a0)) && !bankWontHelp(a0))) {
       // 定时任务的时间也算上来回仓库的路
       const used = stepBankTrip(Math.min(dt, timeLeft(task)));
       dt -= used;

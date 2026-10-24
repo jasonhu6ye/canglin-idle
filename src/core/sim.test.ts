@@ -756,3 +756,19 @@ describe('补给带太多不会卡住', () => {
     expect(r.stats.kills).toBeGreaterThan(0);
   });
 });
+
+describe('弹药很多时不来回跑', () => {
+  it('界面每 0.2 秒结算一次，带满背包的箭也能正常打，不会存箭、拿箭来回跑', () => {
+    const bow = Object.keys(ITEMS).find((i) => ITEMS[i].equip?.style === 'ranged')!;
+    const arrows = Object.keys(ITEMS).filter((i) => ITEMS[i].ammo?.style === 'ranged').slice(0, 3);
+    let s = newGame(T0, 1);
+    s.equipment.weapon = bow;
+    for (const a of arrows) s.bank[a] = 3000;
+    s.settings.carryFood = 0;
+    s = startNow(s, 'fight_field_mouse', { type: 'infinite' });
+    let trips = 0;
+    for (let t = 200; t <= 600_000; t += 200) { const r = advance(s, T0 + t); s = r.state; trips += r.summary.bankTrips; }
+    expect(s.stats.kills).toBeGreaterThan(10);
+    expect(trips).toBeLessThan(4);
+  });
+});

@@ -7,6 +7,13 @@ import { useEffect, useState } from 'react';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-10-24-c', date: '10 月 24 日', title: '修复远程打怪来回跑仓库',
+    lines: [
+      '修复：用弓、弩、法杖打怪时，仓库里箭矢或符文很多，角色会把背包塞满，然后在怪和仓库之间来回跑（一趟存箭、一趟拿箭），一只都打不了。',
+      '现在带弹药和食物会给战利品留出格子；当前武器能用的弹药不会再被存回仓库。',
+    ],
+  },
+  {
     id: '2026-10-24-b', date: '10 月 24 日', title: '家园岛屿新增 60 种家具和建筑',
     lines: [
       '墙和门 +9：原木墙、深色木墙、带窗木墙、青苔石墙、大理石墙、树篱、铁栅栏、镶金大门、花拱门。',
