@@ -738,3 +738,18 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .guild .chat-box p.me b { color: #e8c878; }
 .guild .small-note { font-size: 12px; }
 .guild .cloud-prompt { border: 1px solid #e8c878; }
+
+/* 登录页（10-25） */
+.login-gate { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: #1b140f; overflow-y: auto; }
+.login-box { width: min(380px, 100%); padding: 18px 16px; display: flex; flex-direction: column; gap: 8px; }
+.login-box h1 { margin: 0 0 6px; text-align: center; color: #e8b84a; letter-spacing: 6px; font-size: 26px; }
+.login-box h2 { margin: 4px 0; font-size: 16px; }
+.login-box form { display: flex; flex-direction: column; gap: 8px; }
+.login-box input { background: #120b07; color: inherit; border: 1px solid var(--edge); border-radius: 2px; padding: 9px 10px; font: inherit; font-size: 16px; }
+.login-box .tabs-row .pill { flex: 1; }
+.login-box .err { color: #e86a5a; font-size: 13px; margin: 0; }
+.login-box .small { font-size: 12px; margin: 0; }
+.login-box .go { display: flex; gap: 8px; }
+.login-box .go button { flex: 1; }
+.create-stage { display: flex; gap: 12px; align-items: center; padding: 8px; background: #120b07; box-shadow: 0 0 0 1px var(--edge); }
+.create-stage p { margin: 4px 0 0; }

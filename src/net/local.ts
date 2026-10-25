@@ -9,6 +9,7 @@ import { GUILD_MAX, levelSnapshot } from './api';
 const KEY = 'canglin-net-local';
 
 interface Db {
+  session?: boolean;
   me: Profile | null;
   save: GameState | null;
   snap: ReturnType<typeof levelSnapshot> | null;
@@ -43,19 +44,22 @@ export class LocalApi implements OnlineApi {
     return g;
   }
 
-  me() { return this.db.me; }
-  async ready() { return this.db.me; }
-  async signIn(email: string) {
-    this.db.me ??= { id: uid(), name: email.split('@')[0].slice(0, 12) };
+  me() { return this.db.session ? this.db.me : null; }
+  signedIn() { return !!this.db.session; }
+  async ready() { return this.me(); }
+  async signIn(_email?: string, _pw?: string) {
+    this.db.session = true;
+    this.flush();
+    return this.me();
+  }
+  async signUp(_email?: string, _pw?: string) { return this.signIn(); }
+  async createProfile(name: string, outfit: string) {
+    if (!this.db.session) throw new Error('请先登录');
+    this.db.me = { id: uid(), name, outfit };
     this.flush();
     return this.db.me;
   }
-  async signUp(_email: string, _pw: string, name: string) {
-    this.db.me = { id: uid(), name };
-    this.flush();
-    return this.db.me;
-  }
-  async signOut() { this.db.me = null; this.flush(); }
+  async signOut() { this.db.session = false; this.flush(); }
   async rename(name: string) { this.need().name = name; this.flush(); }
 
   async pushSave(s: GameState) {

@@ -37,17 +37,19 @@ export class SupabaseApi implements OnlineApi {
 
   me() { return this.profile; }
 
-  /** 读档案；第一次登录时按注册时填的名字建档 */
+  private session = false;
+  signedIn() { return this.session; }
+
+  /** 读角色；账号还没建角色时是 null。网络出错时抛错 */
   private async loadProfile(): Promise<Profile | null> {
-    const { data: { user } } = await this.sb.auth.getUser();
-    if (!user) return (this.profile = null);
-    let p = ok(await this.sb.from('profiles').select('id,name,outfit,guild_id').eq('id', user.id).maybeSingle());
-    if (!p) {
-      const name = String(user.user_metadata?.name ?? user.email?.split('@')[0] ?? '冒险者').slice(0, 12);
-      p = ok(await this.sb.from('profiles').insert({ id: user.id, name }).select('id,name,outfit,guild_id').single());
-    }
+    const { data: { session } } = await this.sb.auth.getSession();
+    this.session = !!session;
+    if (!session) return (this.profile = null);
+    const p = ok(await this.sb.from('profiles').select('id,name,outfit,guild_id').eq('id', session.user.id).maybeSingle());
+    if (!p) return (this.profile = null);
     this.profile = { id: p.id, name: p.name, outfit: p.outfit ?? undefined, guildId: p.guild_id };
     await this.loadTag();
+    void this.sb.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', p.id);
     return this.profile;
   }
   private async loadTag() {
@@ -59,21 +61,26 @@ export class SupabaseApi implements OnlineApi {
 
   async signIn(email: string, password: string) {
     ok(await this.sb.auth.signInWithPassword({ email, password }));
-    const p = await this.loadProfile();
-    if (!p) throw new Error('登录失败');
-    return p;
+    return this.loadProfile();
   }
-  async signUp(email: string, password: string, name: string) {
-    const r = ok(await this.sb.auth.signUp({ email, password, options: { data: { name } } }));
+  async signUp(email: string, password: string) {
+    const r = ok(await this.sb.auth.signUp({ email, password }));
     if (!r.session) throw new Error('注册成功，请去邮箱点确认链接后再登录');
+    return this.loadProfile();
+  }
+  async createProfile(name: string, outfit: string) {
+    const { data: { session } } = await this.sb.auth.getSession();
+    if (!session) throw new Error('请先登录');
+    ok(await this.sb.from('profiles').insert({ id: session.user.id, name, outfit }));
     const p = await this.loadProfile();
-    if (!p) throw new Error('注册失败');
+    if (!p) throw new Error('创建角色失败');
     return p;
   }
   async signOut() {
     await this.sb.auth.signOut();
     this.profile = null;
-    this.world?.unsubscribe();
+    this.session = false;
+    if (this.world) void this.sb.removeChannel(this.world);
     this.world = null;
   }
   private need() {

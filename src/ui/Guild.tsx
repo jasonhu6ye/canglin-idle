@@ -3,7 +3,8 @@ import type { GameState, SkillId } from '../core/types';
 import { SKILLS } from '../core/data';
 import { store } from '../store';
 import { online, GUILD_COST, NAME_RE, TAG_RE, type Board, type ChatMsg, type Guild, type GuildMember, type GuildRole, type RankRow } from '../net';
-import { keepLocal, signIn, signOut, signUp, useCloud, useOnline } from '../net/sync';
+import { retry, signOut, useOnline } from '../net/sync';
+import { errText as baseErr } from './Login';
 
 /** 联机页（10-25 接 Supabase）：账号、排行榜、公会、聊天。G 键打开 */
 type Fn = () => void;
@@ -17,19 +18,9 @@ export const onOpenGuild = (f: Fn) => {
 type Tab = 'guild' | 'rank' | 'chat' | 'account';
 const TABS: [Tab, string][] = [['guild', '公会'], ['rank', '排行榜'], ['chat', '聊天'], ['account', '账号']];
 const ROLE: Record<GuildRole, string> = { leader: '会长', officer: '副会长', member: '成员' };
-/** 服务器的英文报错翻成玩家看得懂的话 */
-const ERRS: [RegExp, string][] = [
-  [/Failed to fetch|NetworkError|Load failed/i, '连不上服务器，请检查网络后再试'],
-  [/Invalid login credentials/i, '邮箱或密码不对'],
-  [/already registered/i, '这个邮箱已经注册过了，直接登录吧'],
-  [/profiles_name_key/, '这个名字已经有人用了'],
-  [/guilds_name_key/, '这个公会名已经有人用了'],
-  [/guilds_tag_key/, '这个会标已经有人用了'],
-  [/rate limit/i, '操作太频繁，请稍等一会儿'],
-];
 const errText = (e: unknown) => {
-  const m = e instanceof Error ? e.message : String(e);
-  return ERRS.find(([re]) => re.test(m))?.[1] ?? m;
+  const m = baseErr(e);
+  return /guilds_name_key/.test(m) ? '这个公会名已经有人用了' : /guilds_tag_key/.test(m) ? '这个会标已经有人用了' : m;
 };
 
 /** 异步按钮：转圈、出错显示 */
@@ -44,7 +35,7 @@ function useAct() {
 }
 
 export function GuildPanel({ s, onClose }: { s: GameState; onClose: () => void }) {
-  const { me, loading, cloudNewer } = useOnline();
+  const { me, phase } = useOnline();
   const [tab, setTab] = useState<Tab>('guild');
   const shown = !me && tab !== 'rank' ? 'account' : tab;
   return (
@@ -52,14 +43,13 @@ export function GuildPanel({ s, onClose }: { s: GameState; onClose: () => void }
       <div className="sheet-head">
         <button className="back" onClick={onClose}>‹ 返回</button>
         <h2>联机</h2>
-        <small className="muted">{loading ? '连接中…' : me ? `已登录：${me.name}` : '未登录，单机游玩中'}</small>
+        <small className="muted">{me ? `角色：${me.name}` : phase === 'offline' ? '离线游玩中' : ''}</small>
       </div>
       <div className="tabs-row">
         {TABS.map(([id, label]) => (
           <button key={id} className={`pill ${shown === id ? 'on' : ''}`} onClick={() => setTab(id)}>{label}</button>
         ))}
       </div>
-      {cloudNewer && <CloudPrompt cloud={cloudNewer} s={s} />}
       {shown === 'account' && <Account />}
       {shown === 'rank' && <Ranks />}
       {shown === 'guild' && me && <GuildTab s={s} />}
@@ -68,59 +58,39 @@ export function GuildPanel({ s, onClose }: { s: GameState; onClose: () => void }
   );
 }
 
-function CloudPrompt({ cloud, s }: { cloud: GameState; s: GameState }) {
-  const t = (x: number) => new Date(x).toLocaleString();
-  return (
-    <div className="frame guild-card cloud-prompt">
-      <div>
-        <b>云端有更新的存档</b>
-        <p className="muted">云端：{t(cloud.lastTick)}<br />本机：{t(s.lastTick)}</p>
-        <div className="go">
-          <button className="primary" onClick={useCloud}>用云端存档</button>
-          <button onClick={keepLocal}>保留本机（覆盖云端）</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function Account() {
   const { me } = useOnline();
-  const [mode, setMode] = useState<'in' | 'up'>('in');
-  const [email, setEmail] = useState('');
-  const [pw, setPw] = useState('');
-  const [name, setName] = useState('');
-  const { busy, err, run, setErr } = useAct();
-  if (me) {
+  const { busy, err, run } = useAct();
+  if (!me) {
     return (
       <div className="frame guild-card">
         <div>
-          <b>{me.name}</b>
-          <p className="muted">存档每分钟自动传到云端，换手机或电脑登录同一个账号就能接着玩。</p>
-          <div className="go"><button disabled={busy} onClick={() => run(signOut)}>退出登录</button></div>
+          <b>离线游玩中</b>
+          <p className="muted">刚才连不上服务器。连上后登录，进度会自动传到云端。</p>
+          <div className="go"><button className="primary" disabled={busy} onClick={() => run(retry)}>重新连接</button></div>
           {err && <p className="err">{err}</p>}
         </div>
       </div>
     );
   }
-  const submit = () => {
-    if (mode === 'up' && !NAME_RE.test(name)) { setErr('名字 2-12 个字，只能用文字、数字和下划线'); return; }
-    if (pw.length < 6) { setErr('密码至少 6 位'); return; }
-    void run(() => (mode === 'in' ? signIn(email.trim(), pw) : signUp(email.trim(), pw, name)));
-  };
   return (
-    <form className="frame account-form" onSubmit={(e) => { e.preventDefault(); submit(); }}>
-      <p className="muted">登录后可以云存档、上排行榜、加入公会、和其他玩家聊天。不登录也能照常单机玩。</p>
-      <div className="tabs-row">
-        <button type="button" className={`pill ${mode === 'in' ? 'on' : ''}`} onClick={() => setMode('in')}>登录</button>
-        <button type="button" className={`pill ${mode === 'up' ? 'on' : ''}`} onClick={() => setMode('up')}>注册</button>
+    <div className="frame guild-card">
+      <div>
+        <b>{me.name}</b>{me.guildTag && <small className="muted"> [{me.guildTag}]</small>}
+        <p className="muted">存档每分钟自动传到云端，换手机或电脑登录同一个账号就能接着玩。</p>
+        <div className="go">
+          <button disabled={busy} onClick={() => {
+            const n = prompt('新的角色名（2-12 个字）', me.name);
+            if (n && n !== me.name) {
+              if (!NAME_RE.test(n)) { alert('名字 2-12 个字，只能用文字、数字和下划线'); return; }
+              void run(() => online.rename(n));
+            }
+          }}>改名</button>
+          <button disabled={busy} onClick={() => confirm('退出登录？进度已经存在云端。') && void run(signOut)}>退出登录</button>
+        </div>
+        {err && <p className="err">{err}</p>}
       </div>
-      <input type="email" placeholder="邮箱" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-      <input type="password" placeholder="密码（至少 6 位）" autoComplete={mode === 'in' ? 'current-password' : 'new-password'} value={pw} onChange={(e) => setPw(e.target.value)} required />
-      {mode === 'up' && <input placeholder="角色名（别的玩家看到的）" maxLength={12} value={name} onChange={(e) => setName(e.target.value)} required />}
-      <button className="primary" disabled={busy}>{busy ? '请稍候…' : mode === 'in' ? '登录' : '注册并登录'}</button>
-      {err && <p className="err">{err}</p>}
-    </form>
+    </div>
   );
 }
 

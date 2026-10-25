@@ -89,10 +89,15 @@ export interface OnlineApi {
   readonly kind: string;
   /** 当前登录的玩家；没登录是 null，单机照常玩 */
   me(): Profile | null;
-  /** 读出上次的登录状态；之后 me() 才准 */
+  /** 已登录账号（可能还没建角色） */
+  signedIn(): boolean;
+  /** 读出上次的登录状态；之后 me() 才准。连不上服务器时抛错 */
   ready(): Promise<Profile | null>;
-  signIn(email: string, password: string): Promise<Profile>;
-  signUp(email: string, password: string, name: string): Promise<Profile>;
+  /** 登录/注册后返回角色；账号还没建角色时是 null */
+  signIn(email: string, password: string): Promise<Profile | null>;
+  signUp(email: string, password: string): Promise<Profile | null>;
+  /** 新账号建角色：起名、选外观 */
+  createProfile(name: string, outfit: string): Promise<Profile>;
   signOut(): Promise<void>;
   rename(name: string): Promise<void>;
 

@@ -1,58 +1,131 @@
 import { useEffect, useState } from 'react';
 import { store } from '../store';
+import { newGame, setSettings } from '../core/sim';
 import type { GameState } from '../core/types';
-import { online, type Profile } from './index';
+import { online } from './index';
 
-/** 登录状态和云存档：登录后每分钟把存档传一次，离开页面前也传；断网就等下次 */
+/**
+ * 账号和云存档（10-25 用户要求：进游戏要先登录 → 建角色 → 存档放云端）。
+ *
+ * 本机存档记着属于哪个账号（OWNER_KEY），还记着上次和云端对上时云端存档的时间（SYNCED_KEY）。
+ * 登录时：云端被别的设备更新过就用云端的，否则把本机的传上去。
+ * 游戏结算都在本机，断网照样挂机，连上后再传。
+ */
+const OWNER_KEY = 'canglin-save-owner';
+const SYNCED_KEY = 'canglin-save-synced';
 const PUSH_EVERY_MS = 60_000;
 
+export type Phase =
+  | 'loading'
+  /** 没登录 */
+  | 'login'
+  /** 登录了，还没建角色 */
+  | 'create'
+  /** 本机有登录前的进度、云端没有：问要不要带进这个账号 */
+  | 'adopt'
+  /** 连不上服务器 */
+  | 'error'
+  | 'play'
+  /** 连不上时选了先离线玩 */
+  | 'offline';
+
+let phase: Phase = 'loading';
+let lastPush = 0;
 type Fn = () => void;
 const fns = new Set<Fn>();
-const emit = () => fns.forEach((f) => f());
-let status: 'loading' | 'ready' = 'loading';
-let lastPush = 0;
-/** 登录时发现云端存档比本地新：等玩家选 */
-export let cloudNewer: GameState | null = null;
+const set = (p: Phase) => { phase = p; fns.forEach((f) => f()); };
 
-export async function pushNow() {
-  if (!online.me() || store.inactive) return;
-  lastPush = Date.now();
-  try { await online.pushSave(store.state); } catch { /* 连不上就下次再传 */ }
-}
-
-/** 刚登录：云端更新就让玩家选用哪个，否则把本地传上去 */
-async function afterLogin() {
-  try {
-    const cloud = await online.pullSave();
-    if (cloud && cloud.lastTick > store.state.lastTick + 60_000) cloudNewer = cloud;
-    else await pushNow();
-  } catch { /* 连不上就先单机 */ }
-  emit();
-}
+const ls = {
+  get: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
+  set: (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* 存不了就算了 */ } },
+};
+const xpSum = (s: GameState) => Object.values(s.xp).reduce((a, b) => a + b, 0);
+/** 比新开的档多了经验才算有进度（新档生命值本来就有经验） */
+const hasProgress = (s: GameState) => xpSum(s) > xpSum(newGame(0, 1));
 
 export function useOnline() {
-  const [, set] = useState(0);
+  const [, bump] = useState(0);
   useEffect(() => {
-    const f = () => set((n) => n + 1);
+    const f = () => bump((n) => n + 1);
     fns.add(f);
     return () => { fns.delete(f); };
   }, []);
-  return { me: online.me(), loading: status === 'loading', cloudNewer };
+  return { me: online.me(), phase };
 }
 
-export async function signIn(email: string, pw: string) { await online.signIn(email, pw); await afterLogin(); }
-export async function signUp(email: string, pw: string, name: string) { await online.signUp(email, pw, name); await afterLogin(); }
-export async function signOut() { await pushNow(); await online.signOut(); cloudNewer = null; emit(); }
-export function useCloud() { if (cloudNewer) store.replace(cloudNewer); }
-export function keepLocal() { cloudNewer = null; void pushNow(); emit(); }
-export const refresh = emit;
+export async function pushNow() {
+  const me = online.me();
+  if (!me || phase !== 'play' || store.inactive || ls.get(OWNER_KEY) !== me.id) return;
+  lastPush = Date.now();
+  const s = store.state;
+  try {
+    await online.pushSave(s);
+    ls.set(SYNCED_KEY, String(s.lastTick));
+  } catch { /* 连不上就下次再传 */ }
+}
+
+/** 换成这份存档（会刷新页面） */
+function adoptSave(s: GameState, ownerId: string) {
+  ls.set(OWNER_KEY, ownerId);
+  ls.set(SYNCED_KEY, String(s.lastTick));
+  store.replace(s);
+}
+
+/** 登录并有角色后：决定用本机还是云端的存档 */
+async function resolveSave() {
+  const me = online.me()!;
+  const owner = ls.get(OWNER_KEY);
+  const cloud = await online.pullSave();
+  if (cloud) {
+    const synced = Number(ls.get(SYNCED_KEY) ?? 0);
+    // 本机存档是这个账号的，且云端没被别的设备动过：继续用本机的
+    if (owner === me.id && cloud.lastTick <= synced + 1000) { set('play'); void pushNow(); return; }
+    adoptSave(cloud, me.id);
+    return;
+  }
+  if (owner === me.id) { set('play'); void pushNow(); return; }
+  if (!owner && hasProgress(store.state)) { set('adopt'); return; }
+  startFresh(me.outfit);
+}
+
+function startFresh(outfit?: string) {
+  const me = online.me()!;
+  let s = newGame(Date.now());
+  if (outfit) s = setSettings(s, { skin: outfit });
+  adoptSave(s, me.id);
+}
+
+async function afterAuth() {
+  if (!online.signedIn()) return set('login');
+  if (!online.me()) return set('create');
+  await resolveSave();
+}
+
+const wrap = async (f: () => Promise<unknown>) => {
+  try { await f(); } catch (e) { if (/fetch|network|load failed/i.test(String(e))) set('error'); throw e; }
+};
+export const signIn = (email: string, pw: string) => wrap(async () => { await online.signIn(email, pw); await afterAuth(); });
+export const signUp = (email: string, pw: string) => wrap(async () => { await online.signUp(email, pw); await afterAuth(); });
+export const createCharacter = (name: string, outfit: string) => wrap(async () => { await online.createProfile(name, outfit); await afterAuth(); });
+/** 本机登录前的进度：带进这个账号，或者从头开始 */
+export function adoptLocal(keep: boolean) {
+  const me = online.me()!;
+  if (keep) { ls.set(OWNER_KEY, me.id); set('play'); void pushNow(); }
+  else startFresh(me.outfit);
+}
+export async function signOut() {
+  await pushNow();
+  await online.signOut();
+  set('login');
+}
+export const playOffline = () => set('offline');
+export async function retry() {
+  set('loading');
+  try { await online.ready(); await afterAuth(); } catch { set('error'); }
+}
 
 export function startSync() {
-  void online.ready().then((p: Profile | null) => {
-    status = 'ready';
-    emit();
-    if (p) void afterLogin();
-  }).catch(() => { status = 'ready'; emit(); });
-  setInterval(() => { if (!cloudNewer && Date.now() - lastPush > PUSH_EVERY_MS) void pushNow(); }, 10_000);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && !cloudNewer) void pushNow(); });
+  void retry();
+  setInterval(() => { if (Date.now() - lastPush > PUSH_EVERY_MS) void pushNow(); }, 10_000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') void pushNow(); });
 }

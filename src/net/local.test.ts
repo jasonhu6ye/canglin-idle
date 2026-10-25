@@ -8,7 +8,9 @@ describe('LocalApi', () => {
   it('登录、上传存档、排行榜、公会一套走通', async () => {
     const api = new LocalApi(mem());
     expect(api.me()).toBeNull();
-    await api.signUp('a@b.c', 'x', '测试员');
+    expect(await api.signUp('a@b.c', 'x')).toBeNull();
+    expect(api.signedIn()).toBe(true);
+    await api.createProfile('测试员', 'ranger');
     await api.pushSave(newGame(0));
     const [row] = await api.leaderboard('total');
     expect(row.name).toBe('测试员');
