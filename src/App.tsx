@@ -13,6 +13,7 @@ import { BossBar, MapButtons, QuestCard, QueuePanel, StatusChips, TopBar } from 
 import { QUESTS, questText } from './core/quests';
 import { TplIcon } from './ui/icons';
 import { ItemPopup, LootReveal } from './ui/ItemPopup';
+import { Mailbox } from './ui/Mailbox';
 import { Guide, openGuide } from './ui/Guide';
 import { News } from './ui/News';
 import { HalloweenChip, HalloweenNotice } from './ui/Halloween';
@@ -72,7 +73,7 @@ function useToasts() {
     let id = 0;
     return store.onGain((s: Summary) => {
       const add: Toast[] = s.levelUps.map((l) => ({ id: ++id, text: tl`${SKILLS[l.skill].name} 升到 ${l.level} 级`, gold: true }));
-      for (const i of s.quests ?? []) add.push({ id: ++id, text: tl`新手任务完成：${questText(QUESTS[i])} · +${QUESTS[i].reward} 金币`, gold: true });
+      for (const i of s.quests ?? []) add.push({ id: ++id, text: tl`新手任务完成：${questText(QUESTS[i])} · ${QUESTS[i].reward} 金币奖励已发到邮箱`, gold: true });
       for (const e of s.taskEnds) add.push({ id: ++id, text: tl`${actionName(e.action)}：${END_TEXT[e.reason]}`, gold: false });
       if (!add.length) return;
       setToasts((t) => [...t, ...add].slice(-4));
@@ -359,6 +360,7 @@ function Game() {
       <TradePopup s={s} />
       <PartyInvitePopup />
       <ItemPopup s={s} />
+      <Mailbox s={s} />
       <LootReveal />
       <Guide />
       {!offline && <News />}

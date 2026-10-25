@@ -72,6 +72,22 @@ export interface ItemDef {
   };
 }
 
+/** 邮件种类：标题和正文按种类在界面上生成，换语言也能跟着变 */
+export type MailKind = 'hw_daily' | 'quest' | 'redeem' | 'hw_expired';
+export interface Mail {
+  id: number;
+  kind: MailKind;
+  at: number;
+  /** 附件；金币用 'coins' */
+  items: ItemStack[];
+  /** 种类需要的参数：任务序号、兑换码等 */
+  arg?: string;
+  read?: boolean;
+  claimed?: boolean;
+  /** 到这个时间自动删掉（万圣节礼物活动结束就没了） */
+  expires?: number;
+}
+
 export interface ItemStack {
   item: string;
   qty: number;
@@ -263,6 +279,12 @@ export interface GameState {
   mounted?: boolean;
   /** 用过的兑换码，每个存档只能领一次 */
   redeemed?: string[];
+  /** 邮箱（用户 10-25）：系统奖励都发到这里，领取后才进背包/仓库 */
+  mail?: Mail[];
+  /** 已经发过的系统邮件（比如某天的登录礼物），防止重复发 */
+  mailKeys?: string[];
+  /** 邮件编号计数 */
+  mailSeq?: number;
   /** 畜牧站的栏位：每栏一匹小马崽，start 放进去的时间，ms 要长多久（放进去时按养殖等级算好） */
   ranch?: { pens: ({ start: number; ms: number } | null)[] };
   /** 万圣节活动：当前召唤出来的是第几档南瓜王（打赢就清掉）、上次召唤的时间 */

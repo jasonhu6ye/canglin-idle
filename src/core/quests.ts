@@ -2,6 +2,7 @@ import { ITEMS, SKILLS } from './data';
 import type { GameState, SkillId, Summary } from './types';
 import { level } from './sim';
 import { baseOf } from './quality';
+import { sendMail } from './mail';
 import { tl } from '../i18n';
 
 /** 新手任务：一条线带新玩家走一遍采集 → 加工 → 打造 → 战斗（用户 10-22 要求） */
@@ -111,7 +112,8 @@ export function stepQuests(s: GameState, sum: Summary): QuestDef[] {
     else if (g.kind === 'kills') s.quest.n += Object.values(sum.kills).reduce((a, b) => a + b, 0);
     const have = stateGoal(s, q) ?? s.quest.n;
     if (have < g.n) break;
-    s.bank.coins = (s.bank.coins ?? 0) + q.reward;
+    // 奖励发到邮箱（用户 10-25）
+    sendMail(s, 'quest', [{ item: 'coins', qty: q.reward }], s.lastTick, { arg: String(s.quest.i) });
     done.push(q);
     s.quest = { i: s.quest.i + 1, n: 0 };
     // 同一批收获不重复算到下一个任务

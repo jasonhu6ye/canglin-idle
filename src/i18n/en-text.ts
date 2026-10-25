@@ -522,4 +522,8 @@ export const EN_TEXT: Record<string, string> = {
   '照常制作就行，每件随机出品质：T1 普通 60%、良好 26%、优秀 9.5%、史诗 3.2%、传说 1%、神话 0.3%，阶级越高高品质越难出。制作页每件装备下面都写着各品质的概率。': 'Just craft as usual and each piece rolls a quality: at T1 it is Common 60%, Fine 26%, Superior 9.5%, Epic 3.2%, Legendary 1%, Mythic 0.3%, and good rolls get rarer at higher tiers. Every recipe on the crafting page shows the odds.',
   '每座城镇仓库旁加了分解台：把仓库里不要的装备和工具分解成金币，给售价的 1.2 倍。可以一件件选，也能一键选上所有普通品质。': 'Every town now has a Salvage Bench by the bank: break down unwanted gear and tools for 1.2× their sell price. Pick items one by one, or select all Common gear in one tap.',
   '仓库页加了「整理」按钮，按分类、阶级、品质排好；同一件同品质的装备叠在一格。原有的装备都算普通品质。': 'The bank has a new Sort button that orders items by category, tier and quality. Identical gear of the same quality stacks in one slot. All gear you already had counts as Common.',
+  '新增邮箱，万圣节每天送礼盒': 'New mailbox, plus daily Halloween gifts',
+  '顶栏金币旁边加了邮箱（信封图标，红点是没读或没领的邮件）。新手任务奖励、兑换码奖励、活动礼物以后都发到邮箱，打开点「领取」或「一键领取」，东西进背包，放不下进仓库，金币进仓库。': 'There is now a mailbox next to your coins in the top bar (the envelope; the red dot counts unread or unclaimed mail). Starter quest rewards, redeem code rewards and event gifts now arrive there. Tap Claim or Claim all: items go to your bag, overflow goes to the bank, and coins go to the bank.',
+  '万圣节活动期间，每天上线都会收到 3 个南瓜礼盒。': 'During Halloween you receive 3 Pumpkin Gift Boxes every day you log in.',
+  '活动结束（11 月 1 日 0 点）后，背包、仓库和邮箱里没打开的南瓜礼盒会自动销毁，记得及时打开。': 'When the event ends (Nov 1, 00:00), unopened Pumpkin Gift Boxes in your bag, bank and mailbox disappear, so open them in time.',
 };

@@ -1,5 +1,6 @@
-import { actionDuration, advance, buySeed, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour, openContainer, redeemCode, toggleMount, moveSpeed, rainBonus, summonPumpkin, placeFoal, collectHorse, RANCH_NODE, salvage, salvageValue, sortBank, SALVAGE_NODES, SALVAGE_BONUS } from './sim';
+import { actionDuration, advance, buySeed, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour, openContainer, redeemCode, toggleMount, moveSpeed, rainBonus, summonPumpkin, placeFoal, collectHorse, RANCH_NODE, bagRoomFor, salvage, salvageValue, sortBank, SALVAGE_NODES, SALVAGE_BONUS } from './sim';
 import { baseOf, qid, qualityOdds, rollQuality } from './quality';
+import { claimMail, clearMail, HW_DAILY_BOXES, stepMail, unreadMail } from './mail';
 import { HW_BOX, HW_END, HW_POINT, HW_TIERS, hwFight } from './halloween';
 import { APT_MAX, APT_MIN, aptOf, FOAL, FOAL_MS, growMs, HORSE_XP } from './ranch';
 import { SPECIES } from './bestiary';
@@ -145,9 +146,11 @@ describe('离线结算', () => {
     s = enqueue(s, 'fight_reef_crab', { type: 'time', ms: 2 * HOUR });
     s = enqueue(s, 'chop_plain', { type: 'infinite' });
     const total = 8 * HOUR;
+    // 邮件时间只是显示用（任务奖励按结算到的时刻记），比较时去掉
+    const noAt = (g: GameState) => ({ ...g, mail: g.mail?.map((m) => ({ ...m, at: 0 })) });
     const once = advance(s, T0 + total).state;
     const many = chunked(s, total, 250);
-    expect(many).toEqual(once);
+    expect(noAt(many)).toEqual(noAt(once));
   });
 
   it('离线最多结算 24 小时', () => {
@@ -450,14 +453,18 @@ describe('集市', () => {
 });
 
 describe('新手任务', () => {
-  it('砍够 10 个原木就完成第一个任务并发金币', () => {
+  it('砍够 10 个原木就完成第一个任务，金币奖励发到邮箱', () => {
     let s = newGame(T0, 1);
     const coins = s.bank.coins ?? 0;
     s = startHere(s, 'chop_plain', { type: 'infinite' });
     const { state, summary } = advance(s, T0 + HOUR);
     expect(state.quest!.i).toBeGreaterThanOrEqual(1);
     expect(summary.quests).toContain(0);
-    expect(state.bank.coins).toBeGreaterThanOrEqual(coins + 30);
+    const m = state.mail!.find((x) => x.kind === 'quest' && x.arg === '0')!;
+    expect(m.items).toEqual([{ item: 'coins', qty: 30 }]);
+    const [after] = claimMail(state, 'all', bagRoomFor);
+    expect(after.bank.coins).toBeGreaterThanOrEqual(coins + 30);
+    expect(claimMail(after, 'all', bagRoomFor)[0]).toBe(after);
   });
 });
 
@@ -671,6 +678,8 @@ describe('坐骑和兑换码', () => {
     const r = redeemCode(s, ' 中国人能飞 ');
     expect(r.ok).toBe(true);
     s = r.state;
+    expect(s.bag.mount_danmark).toBeUndefined();
+    s = claimMail(s, s.mail![0].id, bagRoomFor)[0];
     expect(s.bag.mount_danmark).toBe(1);
     expect(redeemCode(s, '中国人能飞').ok).toBe(false);
     expect(toggleMount(s)).toBe(s);
@@ -1059,5 +1068,38 @@ describe('装备品质、分解台、仓库整理（10-25）', () => {
     expect(keys[0]).toBe('coins');
     expect(keys.indexOf(qid('wood_pickaxe', 2))).toBeLessThan(keys.indexOf('wood_pickaxe'));
     expect(keys.indexOf('wood_pickaxe')).toBeLessThan(keys.indexOf('raw_minnow'));
+  });
+});
+
+describe('邮箱（10-25）', () => {
+  it('万圣节期间每天上线送 3 个礼盒，同一天只送一次；领取进背包；活动结束礼盒全部销毁', () => {
+    const day1 = new Date(2026, 9, 26, 9).getTime();
+    let s = newGame(day1, 1);
+    s = stepMail(s, day1);
+    expect(s.mail).toHaveLength(1);
+    expect(s.mail![0].items).toEqual([{ item: HW_BOX, qty: HW_DAILY_BOXES }]);
+    expect(unreadMail(s)).toBe(1);
+    expect(stepMail(s, day1 + 3 * HOUR)).toBe(s);
+    s = stepMail(s, new Date(2026, 9, 27, 1).getTime());
+    expect(s.mail).toHaveLength(2);
+    s = claimMail(s, s.mail![1].id, bagRoomFor)[0];
+    expect(s.bag[HW_BOX]).toBe(HW_DAILY_BOXES);
+    s.bank[HW_BOX] = 5;
+    const after = stepMail(s, HW_END + 1000);
+    expect(after.bag[HW_BOX]).toBeUndefined();
+    expect(after.bank[HW_BOX]).toBeUndefined();
+    expect(after.mail!.some((m) => m.items.some((i) => i.item === HW_BOX))).toBe(false);
+    expect(after.mail!.some((m) => m.kind === 'hw_expired')).toBe(true);
+    expect(stepMail(after, HW_END + 2 * HOUR)).toBe(after);
+    expect(clearMail(after).mail!.every((m) => !m.claimed)).toBe(true);
+  });
+  it('邮件读档保留，坏数据丢掉', () => {
+    let s = stepMail(newGame(new Date(2026, 9, 26).getTime(), 1), new Date(2026, 9, 26).getTime());
+    const raw = JSON.parse(JSON.stringify(s));
+    raw.mail.push({ id: 'x' }, { id: 9, kind: 'quest', at: 1, items: [{ item: 'nope', qty: 1 }] });
+    s = migrate(raw)!;
+    expect(s.mail).toHaveLength(2);
+    expect(s.mail![1].items).toEqual([]);
+    expect(s.mailSeq).toBe(9);
   });
 });

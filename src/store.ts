@@ -2,6 +2,7 @@ import { leaveHome } from './core/home';
 import { useSyncExternalStore } from 'react';
 import { nodeOfAction } from './core/data';
 import { advance, LOG_CAP, migrate, newGame } from './core/sim';
+import { stepMail } from './core/mail';
 import type { CombatLogEntry, GameState, Summary } from './core/types';
 
 const SAVE_KEY = 'canglin-idle-save-v1';
@@ -78,7 +79,7 @@ class Store {
     });
     const loaded = load();
     const { state, summary } = advance(loaded, Date.now());
-    this.state = state;
+    this.state = stepMail(state, Date.now());
     this.absorb(summary);
     if (summary.elapsedMs >= OFFLINE_POPUP_MS) this.offline = summary;
     setInterval(() => this.tick(), TICK_MS);
@@ -93,7 +94,7 @@ class Store {
   private tick(fromBackground = false) {
     if (this.inactive) return;
     const { state, summary } = advance(this.state, Date.now());
-    this.state = state;
+    this.state = stepMail(state, Date.now());
     this.absorb(summary);
     if (fromBackground && summary.elapsedMs >= OFFLINE_POPUP_MS) this.offline = summary;
     else if (Object.keys(summary.items).length || summary.levelUps.length || summary.taskEnds.length || summary.deaths || summary.waystones?.length) {

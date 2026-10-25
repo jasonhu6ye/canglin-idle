@@ -27,6 +27,20 @@ const FIXED: Record<string, string> = {
 };
 
 const TPL: Record<string, string[]> = {
+  mail: [
+    '............',
+    '............',
+    'kkkkkkkkkkkk',
+    'kckbbbbbbkck',
+    'kbckbbbbkcbk',
+    'kbbckbbkcbbk',
+    'kbbbckkcbbbk',
+    'kbbbbrrbbbbk',
+    'kbbbbrrbbbbk',
+    'kaaaaaaaaaak',
+    'kkkkkkkkkkkk',
+    '............',
+  ],
   friends: [
     '............',
     '..kkk..kkk..',

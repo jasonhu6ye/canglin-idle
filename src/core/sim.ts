@@ -5,6 +5,7 @@ import { HW_POINT, HW_TIERS, hwFight, hwOpen, hwTierOf, hwWait } from './hallowe
 import { BAR_VALUE, TIERS, ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAP_W, MID_BOX, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, planRoute, travelMs, type MapNode } from './data';
 import { nextRandom } from './rng';
 import { stepQuests } from './quests';
+import { migrateMail, sendMail } from './mail';
 import { stepAutoFarm, stepRain } from './farm';
 import { homeCan, homeChest, migrateHome } from './home';
 import { isRaining, RAIN_FISH } from './weather';
@@ -152,6 +153,9 @@ export function migrate(raw: unknown): GameState | null {
     buffs: Object.fromEntries(Object.entries(obj<GameState['buffs']>(s.buffs) ?? {}).filter(([, b]) => b && Number.isFinite(b.pct) && Number.isFinite(b.ms) && b.ms > 0)),
     mounted: !!s.mounted && !!equipment.mount,
     redeemed: arr<string>(s.redeemed).filter((c) => typeof c === 'string'),
+    mail: migrateMail(s.mail),
+    mailKeys: arr<string>(s.mailKeys).filter((k) => typeof k === 'string'),
+    mailSeq: Math.max(0, num(s.mailSeq, 0), ...migrateMail(s.mail).map((m) => m.id)),
     home: migrateHome(obj(s.home)),
     sprinklers: arr<string>(s.sprinklers).filter((id) => FARM_NODES.some((n) => n.id === id)),
     waystones: [...new Set([WAYSTONE_HOME, ...arr<string>(s.waystones).filter((id) => WAYSTONES.some((n) => n.id === id))])],
@@ -274,12 +278,9 @@ export function redeemCode(prev: GameState, raw: string): { state: GameState; ms
   if (prev.redeemed?.includes(code)) return { state: prev, msg: tl('这个兑换码已经领过了'), ok: false };
   const s = clone(prev);
   s.redeemed = [...(s.redeemed ?? []), code];
-  for (const g of gifts) {
-    const n = Math.min(g.qty, bagRoomFor(s.bag, g.item));
-    if (n > 0) s.bag[g.item] = (s.bag[g.item] ?? 0) + n;
-    if (g.qty > n) s.bank[g.item] = (s.bank[g.item] ?? 0) + g.qty - n;
-  }
-  return { state: s, msg: tl`兑换成功：获得 ${gifts.map((g) => `${ITEMS[g.item].name}${g.qty > 1 ? ` ×${g.qty}` : ''}`).join(tl('、'))}`, ok: true };
+  // 奖励发到邮箱（用户 10-25）
+  sendMail(s, 'redeem', gifts.map((g) => ({ ...g })), s.lastTick, { arg: code });
+  return { state: s, msg: tl`兑换成功：${gifts.map((g) => `${ITEMS[g.item].name}${g.qty > 1 ? ` ×${g.qty}` : ''}`).join(tl('、'))} 已发到邮箱`, ok: true };
 }
 
 /** 某个工具栏位当前的速度加成 */

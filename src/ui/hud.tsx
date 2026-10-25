@@ -12,6 +12,7 @@ import { emitToGame } from './GameCanvas';
 import { actionName, fmtNum, modeLabel } from './format';
 import { mountIconUrl, SkillIcon, TplIcon } from './icons';
 import { tl } from '../i18n';
+import { MailButton } from './Mailbox';
 
 /** 顶栏头像：取当前外观正面站立帧的上半身 */
 const portraits = new Map<string, string>();
@@ -41,6 +42,7 @@ export function TopBar({ s }: { s: GameState }) {
         <SkillIcon skill="hitpoints" size={16} /> <span className="bar"><i style={{ width: `${hpPct}%` }} /></span> {s.hp}
       </span>
       <span className="coins" title={tl("金币")}><TplIcon tpl="coins" tint="#f0c850" size={16} /> {fmtNum(s.bank.coins ?? 0)}</span>
+      <MailButton s={s} />
     </header>
   );
 }
