@@ -110,12 +110,16 @@ export class SupabaseApi implements OnlineApi {
     this.need().name = name;
   }
 
-  async pushSave(s: GameState) {
+  async pushSave(s: GameState, device?: string) {
     const id = this.need().id;
     const snap = levelSnapshot(s);
-    ok(await this.sb.from('saves').upsert({ player_id: id, data: s, last_tick: s.lastTick, updated_at: new Date().toISOString() }));
+    ok(await this.sb.from('saves').upsert({ player_id: id, data: device ? { ...s, _device: device } : s, last_tick: s.lastTick, updated_at: new Date().toISOString() }));
     void this.sb.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', id);
     ok(await this.sb.from('ranks').upsert({ player_id: id, total: snap.total, combat: snap.combat, skills: snap.skills, xp: snap.xp, updated_at: new Date().toISOString() }));
+  }
+  async cloudHead() {
+    const r = ok(await this.sb.from('saves').select('last_tick, device:data->>_device').eq('player_id', this.need().id).maybeSingle()) as Row | null;
+    return r ? { tick: Number(r.last_tick), device: r.device ?? undefined } : null;
   }
   async pullSave() {
     const r = ok(await this.sb.from('saves').select('data').eq('player_id', this.need().id).maybeSingle());

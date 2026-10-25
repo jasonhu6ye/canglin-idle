@@ -336,15 +336,24 @@ function Game() {
       <ItemPopup s={s} />
       <LootReveal />
       <Guide />
-      <News />
+      {!offline && <News />}
       <HalloweenNotice />
       <UpdateBanner />
       {inactive && (
         <div className="modal-bg tab-lock">
           <div className="modal frame">
-            <h2>{tl('游戏在另一个页面打开了')}</h2>
-            <p>{tl('为了不让两边的进度互相覆盖，这个页面已经暂停，不会再保存。')}</p>
-            <div className="go"><button className="primary" onClick={() => location.reload()}>{tl('在这个页面继续玩')}</button></div>
+            {store.inactiveWhy === 'device' ? (
+              <>
+                <h2>{tl('这个账号在别的设备上玩过了')}</h2>
+                <p>{tl('别的设备或浏览器在这之后上传了更新的存档。为了不拿这边的旧进度盖掉它，这里已经暂停。点下面的按钮会读取云端最新的存档，并结算离开期间的收获。')}</p>
+              </>
+            ) : (
+              <>
+                <h2>{tl('游戏在另一个页面打开了')}</h2>
+                <p>{tl('为了不让两边的进度互相覆盖，这个页面已经暂停，不会再保存。')}</p>
+              </>
+            )}
+            <div className="go"><button className="primary" onClick={() => location.reload()}>{store.inactiveWhy === 'device' ? tl('读取最新存档，在这里继续') : tl('在这个页面继续玩')}</button></div>
           </div>
         </div>
       )}
