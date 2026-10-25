@@ -320,8 +320,10 @@ export interface GameState {
   lastStop?: { action: string; reason: TaskEndReason; mode: TaskMode; item?: string; at: number } | null;
   /** 副本洞口（10-25）：自己用钥匙开的，30 分钟后消失 */
   gates?: DungeonGate[];
-  /** 进过的洞口 id（每个洞口每人只能进一次，队友的洞口也算） */
+  /** 进过的洞口 id（通关（开了宝箱）的洞口 id，通关后不能再进） */
   gatesUsed?: string[];
+  /** 没通关就出来的副本进度（阵亡、离开、回城卷轴）：洞口没消失前再进接着打（用户 10-25） */
+  dgResume?: DungeonRun[];
   /** 上次开洞口的时间（冷却用） */
   lastGateAt?: number;
   /** 正在打的副本；不在副本里是 null */

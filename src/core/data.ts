@@ -315,7 +315,7 @@ KEY_TIERS.forEach((t) => {
 });
 export const SCROLL_TOWN = 'scroll_town';
 item(SCROLL_TOWN, tl('回城卷轴'), 'misc', 200, {
-  desc: tl('使用后选一座城镇，直接传送过去。在副本里用会直接离开副本（这一趟作废）。副本宝箱会开出来。'),
+  desc: tl('使用后选一座城镇，直接传送过去。在副本里用会直接离开副本（洞口没消失前还能回来接着打）。副本宝箱会开出来。'),
 });
 
 // ---- 装备 ----

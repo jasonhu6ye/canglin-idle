@@ -266,13 +266,25 @@ describe('打副本', () => {
     expect(gateBlock(s, g, 2, T0)).toBeNull();
   });
 
-  it('太弱会阵亡，被送回城，副本作废', () => {
+  it('太弱会阵亡被送回城；洞口没消失、没通关就能再进，接着上次的进度', () => {
     const s = newGame(T0, 1);
     s.loc = { x: 300, y: 300 };
-    const g = { ...gate('green', 7, 2, 5), x: 300, y: 300 };
-    const r = advance(enterDungeon(s, g, 1, T0), T0 + 30 * 60_000);
+    const g = { ...gate('green', 7, 2, 5), x: 300, y: 300, expires: T0 + 3600_000 };
+    const r = advance(enterDungeon(s, g, 1, T0), T0 + 20 * 60_000);
     expect(r.state.dungeon).toBeNull();
     expect(r.summary.deaths).toBeGreaterThan(0);
+    const back = { ...r.state, loc: { x: 300, y: 300 } };
+    expect(back.dgResume?.[0]?.gate.id).toBe(g.id);
+    expect(gateBlock(back, g, 1, T0 + 20 * 60_000)).toBeNull();
+    const again = enterDungeon(back, g, 1, T0 + 20 * 60_000);
+    expect(again.dungeon?.floor).toBe(back.dgResume![0].floor);
+    expect(again.dungeon?.idx).toBe(back.dgResume![0].idx);
+    expect(again.dungeon?.phase).toBe('walk');
+    expect(again.dgResume).toEqual([]);
+    // 离开也记进度；洞口消失后就进不去了
+    const left = leaveDungeon(again);
+    expect(left.dgResume?.length).toBe(1);
+    expect(gateBlock(left, g, 1, T0 + 3600_000)).toBeTruthy();
   });
 
   it('同级同阶装备打得动副本里的怪（含首领）', () => {

@@ -8,6 +8,13 @@ import { tl } from '../i18n';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-10-25-w', date: tl('10 月 25 日'), title: tl('副本可以重新进入'),
+    lines: [
+      tl('副本阵亡、点了离开或用了回城卷轴后，只要洞口还没消失、副本还没通关，就能再进去，接着上次的进度打，打死的怪不会复活。'),
+      tl('开了最后的宝箱才算通关，通关后这个洞口就不能再进了。'),
+    ],
+  },
+  {
     id: '2026-10-25-v', date: tl('10 月 25 日'), title: tl('副本洞口调整'),
     lines: [
       tl('洞口重新画成山洞的样子，蓝洞比绿洞大一圈；开洞口时会找够大的空地，不再压到房子上，也不会和别的洞口挤在一起。'),

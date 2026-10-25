@@ -155,7 +155,7 @@ function GateSheet({ s, gate, onClose }: { s: GameState; gate: DungeonGate; onCl
         <p>{gate.kind === 'green'
           ? tl('绿洞（单人地下副本）：1-4 层随机，一个人或组队都能进。')
           : tl('蓝洞（多人地下副本）：2-7 层随机，怪更强，必须组队才能进。队伍里每多一个人，你在蓝洞里伤害更高、受到的伤害更少。')}</p>
-        <p>{tl`洞口还有 ${left(gate.expires - Date.now())} 消失（已经在里面的人不受影响）。每个洞口每人只能进一次。`}</p>
+        <p>{tl`洞口还有 ${left(gate.expires - Date.now())} 消失（已经在里面的人不受影响）。通关（开了宝箱）后不能再进；没通关的话，阵亡或离开后可以再进来接着打。`}</p>
         <p className="muted">{tl('清完所有层的所有怪，最后一层首领守着的宝箱才能打开。层数越多宝箱品质越好。')}</p>
         <div className="dg-odds">
           {CHEST_NAMES().map((n, i) => <span key={i} style={{ color: CHEST_COLOR[i] }}>{n} {Math.round(odds[i])}%</span>)}
@@ -208,7 +208,7 @@ export function DungeonHud({ s }: { s: GameState }) {
         </div>
       )}
       {run.phase === 'open' && run.split && run.members && <TeamSplit run={run} />}
-      {confirm && <small className="warn">{tl('宝箱还没开，现在离开这一趟就作废了。再点一次确认离开。')}</small>}
+      {confirm && <small className="warn">{tl('宝箱还没开。洞口消失前可以再进来接着打（打死的怪不会复活）。再点一次确认离开。')}</small>}
       <button className={run.phase === 'open' ? 'pill primary' : 'pill'} onClick={leave}>{confirm ? tl('确认离开') : tl('离开副本')}</button>
     </div>
   );
@@ -282,7 +282,7 @@ export function TownScrollPicker({ onClose }: { onClose: () => void }) {
     <div className="center-pop-back" onClick={onClose}>
       <div className="center-pop frame" onClick={(e) => e.stopPropagation()}>
         <h2>{tl('回城卷轴：传送到哪座城镇？')}</h2>
-        {store.state.dungeon && <p className="warn">{tl('你在副本里，用了会直接离开副本，这一趟作废。')}</p>}
+        {store.state.dungeon && <p className="warn">{tl('你在副本里，用了会直接离开副本；洞口消失前还能回来接着打。')}</p>}
         <div className="dg-towns">
           {towns.map(({ b, name }) => <button key={b.id} onClick={() => go(b.id)}>{name}</button>)}
         </div>

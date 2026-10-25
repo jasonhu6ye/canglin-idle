@@ -869,4 +869,5 @@ export const EN_CORE: Record<string, string> = {
   "T{0} 强化石": "T{0} Enhancement Stone",
   "T{0} 强化石碎片": "T{0} Enhancement Shard",
   "T{0} 强化石的碎片。集齐 {1} 个，在背包或仓库里点「合成」得到 1 颗同阶强化石。副本里的怪和副本宝箱会掉。": "A shard of a T{0} enhancement stone. Collect {1} and tap \"Combine\" in your bag or bank to get 1 stone of the same tier. Drops from dungeon monsters and dungeon chests.",
+  "使用后选一座城镇，直接传送过去。在副本里用会直接离开副本（洞口没消失前还能回来接着打）。副本宝箱会开出来。": "Choose a town and teleport straight there. Using it inside a dungeon takes you out (you can come back and continue while the gate is still open). Found in dungeon chests.",
 };

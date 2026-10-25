@@ -174,6 +174,7 @@ export function migrate(raw: unknown): GameState | null {
     gates: arr<DungeonGate>(s.gates).filter((g) => obj(g) && (g.kind === 'green' || g.kind === 'blue') && TIERS[g.tier] && Number.isFinite(g.expires) && Number.isFinite(g.seed) && g.floors >= 1 && g.floors <= 7),
     gatesUsed: arr<string>(s.gatesUsed).filter((id) => typeof id === 'string').slice(-50),
     lastGateAt: Number.isFinite(s.lastGateAt) ? s.lastGateAt : undefined,
+    dgResume: arr<DungeonRun>(s.dgResume).filter((r) => r && r.gate && typeof r.gate.id === 'string' && Number.isFinite(r.floor) && Number.isFinite(r.idx)).slice(-5),
     dungeon: migrateRun(obj<DungeonRun>(s.dungeon)),
     sprinklers: arr<string>(s.sprinklers).filter((id) => FARM_NODES.some((n) => n.id === id)),
     waystones: [...new Set([WAYSTONE_HOME, ...arr<string>(s.waystones).filter((id) => WAYSTONES.some((n) => n.id === id))])],
@@ -933,7 +934,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
 
   /**
    * 副本（用户 10-25）：按停靠点推进，走路 → 打怪 → 走路……每层最后走到楼梯下一层，
-   * 最后一层打完首领走到宝箱旁等着开箱。阵亡就被送回城，这一趟作废。
+   * 最后一层打完首领走到宝箱旁等着开箱。阵亡就被送回城，进度记在 dgResume，洞口没消失前再进接着打。
    */
   const stepDungeon = (budget: number): number => {
     const run = s.dungeon!;
@@ -983,6 +984,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       sum.deaths++;
       log({ t: now - dt, kind: 'death', monster: m.id, xp: {}, items: {} });
       sum.dungeon = { ...(sum.dungeon ?? {}), dead: true };
+      keepDungeon(s);
       s.dungeon = null;
       s.combat = null;
       s.loc = { ...SPAWN_TILE };
@@ -1632,7 +1634,7 @@ export function openGate(prev: GameState, key: string, at: { x: number; y: numbe
 export function gateBlock(s: GameState, gate: DungeonGate, party: number, now = Date.now()): string | null {
   if (s.dungeon) return tl('已经在副本里了');
   if (gate.expires <= now) return tl('洞口已经消失了');
-  if (s.gatesUsed?.includes(gate.id)) return tl('这个洞口你已经进过了');
+  if (s.gatesUsed?.includes(gate.id)) return tl('这个洞口你已经通关了');
   if (gate.kind === 'blue' && party < 2) return tl('蓝洞必须组队才能进（队伍至少 2 人）');
   const p = walkPos(s);
   if (s.travel || s.home?.inside || Math.hypot(p.x - gate.x, p.y - gate.y) > GATE_REACH + 0.5) return tl('要站在洞口旁边才能进');
@@ -1651,10 +1653,18 @@ export function enterDungeon(prev: GameState, gate: DungeonGate, party: number, 
   s.travel = null;
   s.combat = null;
   s.mounted = false;
-  s.gatesUsed = [...(s.gatesUsed ?? []), gate.id].slice(-50);
-  const F = dungeonFloor(gate, 0);
-  s.dungeon = { gate: { ...gate }, floor: 0, idx: 0, phase: 'walk', ms: legMs(F, 0), total: legMs(F, 0), party: Math.max(1, party), kills: 0, started: now };
-  if (team && team.members.length > 1) {
+  // 之前没通关就出来过：接着上次的进度打（打死的怪不会复活）
+  const old = s.dgResume?.find((r) => r.gate.id === gate.id);
+  s.dgResume = s.dgResume?.filter((r) => r.gate.id !== gate.id && r.gate.expires > now);
+  if (old) {
+    const F = dungeonFloor(old.gate, old.floor);
+    const chest = old.phase === 'chest';
+    s.dungeon = { ...old, gate: { ...gate }, party: Math.max(1, party), phase: chest ? 'chest' : 'walk', ms: chest ? 0 : legMs(F, old.idx), total: chest ? 0 : legMs(F, old.idx) };
+  } else {
+    const F = dungeonFloor(gate, 0);
+    s.dungeon = { gate: { ...gate }, floor: 0, idx: 0, phase: 'walk', ms: legMs(F, 0), total: legMs(F, 0), party: Math.max(1, party), kills: 0, started: now };
+  }
+  if (team && team.members.length > 1 && !(old && s.dungeon.members)) {
     s.dungeon.members = [...team.members].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     s.dungeon.me = team.me;
   }
@@ -1715,10 +1725,18 @@ export function syncDungeon(prev: GameState, mate: { gate: string; floor: number
   return s;
 }
 
-/** 离开副本：回到洞口位置。宝箱没开就走，这一趟作废 */
+/** 没通关就出来时记下进度，洞口没消失前再进会接着打；通关（开了宝箱）后这个洞口就不能再进 */
+function keepDungeon(s: GameState) {
+  const r = s.dungeon;
+  if (!r || r.phase === 'open') return;
+  s.dgResume = [...(s.dgResume ?? []).filter((x) => x.gate.id !== r.gate.id), { ...r }].slice(-5);
+}
+
+/** 离开副本：回到洞口位置。宝箱没开就走，洞口还在的话可以再进来接着打 */
 export function leaveDungeon(prev: GameState): GameState {
   if (!prev.dungeon) return prev;
   const s = clone(prev);
+  keepDungeon(s);
   const g = s.dungeon!.gate;
   s.dungeon = null;
   s.combat = null;
@@ -1758,6 +1776,7 @@ export function openDungeonChest(prev: GameState): [GameState, Record<string, nu
   r.chest = q;
   r.loot = got;
   r.phase = 'open';
+  s.gatesUsed = [...(s.gatesUsed ?? []), r.gate.id].slice(-50);
   return [s, got];
 }
 
@@ -1805,6 +1824,7 @@ export function useTownScroll(prev: GameState, bankId: string): GameState {
   const src = from === 'bag' ? s.bag : s.bank;
   src[SCROLL_TOWN]--;
   if (src[SCROLL_TOWN] <= 0) delete src[SCROLL_TOWN];
+  keepDungeon(s);
   s.dungeon = null;
   s.combat = null;
   s.walk = null;
