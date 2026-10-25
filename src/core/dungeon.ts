@@ -452,3 +452,11 @@ export function teamChest(gate: DungeonGate, q: number, members: TeamMember[]) {
   won.forEach((ok, i) => { if (!ok) give(i, `enhshard_${gate.tier + 1}`, 2 + q * 2); });
   return { shares, rolls };
 }
+
+/** 组队进副本，怪物变强（用户 10-25）：每多一个人全属性 +5%，最多 +20% */
+export const mobBuff = (party: number) => Math.min(0.2, 0.05 * Math.max(0, party - 1));
+export function buffMob(m: MonsterDef, party: number): MonsterDef {
+  const k = 1 + mobBuff(party);
+  if (k === 1) return m;
+  return { ...m, hp: Math.round(m.hp * k), attack: Math.round(m.attack * k), defence: Math.round(m.defence * k), maxHit: Math.round(m.maxHit * k * 10) / 10 };
+}

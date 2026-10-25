@@ -90,7 +90,21 @@ export interface Presence {
   rally?: number;
   /** 开着的副本洞口（10-25），队友可以进同一个 */
   gates?: import('../core/types').DungeonGate[];
+  /** 在副本里（10-25 同步）：哪个洞口、第几层、进度、在副本里的像素位置和动作 */
+  dg?: DungeonPresence;
   at: number;
+}
+
+export interface DungeonPresence {
+  gate: string;
+  floor: number;
+  idx: number;
+  phase: string;
+  kills: number;
+  x: number;
+  y: number;
+  anim?: string;
+  flip?: boolean;
 }
 
 export type ChatChannel = 'world' | 'guild' | 'party' | 'private';

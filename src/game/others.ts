@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { levelSnapshot, online, type Presence } from '../net';
+import { levelSnapshot, online, type DungeonPresence, type Presence } from '../net';
 import { rallyTime } from '../net/social';
 import { maxHp } from '../core/sim';
 import type { GameState } from '../core/types';
@@ -17,6 +17,32 @@ const FONT = 'system-ui, sans-serif';
 const VIEW_TILES = 80;
 /** 自己的位置多久发一次（没变化时） */
 const KEEPALIVE_MS = 15_000;
+
+/** 把自己的位置、装备和等级发出去：格子变了、换了东西或隔了一阵才发；每半秒最多看一次。副本里带上 dg（大地图和副本场景都调） */
+let sent = { x: -1, y: -1, key: '', at: 0 };
+let checked = 0;
+export function publishSelf(st: GameState, x: number, y: number, work?: { anim: string; flip: boolean }, dg?: DungeonPresence) {
+  if (!online.me()) return;
+  const now = Date.now();
+  // 副本里位置变得快，队友要看得跟手一些
+  if (now - checked < (dg ? 300 : 500)) return;
+  checked = now;
+  const action = st.paused ? undefined : st.queue[0]?.action;
+  const mounted = st.mounted ? st.equipment.mount : undefined;
+  const snap = levelSnapshot(st);
+  const max = maxHp(st);
+  const hp = Math.max(0, Math.round(st.hp));
+  // 血量按 5% 一档比较，打怪时不用每下都发
+  const key = JSON.stringify([st.settings.skin, action, mounted, st.equipment, snap.total, snap.combat, Math.round((hp / max) * 20), rallyTime(), work?.anim, work?.flip, (st.gates ?? []).map((g) => g.id).join(),
+    dg && [dg.gate, dg.floor, dg.idx, dg.phase, dg.kills, dg.anim, dg.flip]]);
+  const px = dg ? dg.x / T : x;
+  const py = dg ? dg.y / T : y;
+  const moved = Math.abs(px - sent.x) + Math.abs(py - sent.y) >= (dg ? 1 : 2);
+  if (!moved && key === sent.key && now - sent.at < KEEPALIVE_MS) return;
+  sent = { x: px, y: py, key, at: now };
+  online.publishPresence({ x, y, outfit: st.settings.skin, action, mounted, equip: { ...st.equipment }, total: snap.total, combat: snap.combat, hp, maxHp: max, rally: rallyTime() || undefined, anim: work?.anim, flip: work?.flip, gates: st.gates?.length ? st.gates : undefined,
+    dg: dg ? { ...dg, x: Math.round(dg.x), y: Math.round(dg.y) } : undefined });
+}
 
 /** 同一格的站位：第 0 个是原位，往后排在左上、左下、更靠后 */
 const CROWD: [number, number][] = [[0, 0], [-6, -10], [-6, 10], [-14, 0], [-14, -14], [-14, 14], [-22, -6], [-22, 8]];
@@ -41,10 +67,8 @@ export class OtherPlayers {
   private others = new Map<string, Other>();
   private latest: Presence[] = [];
   private off: () => void;
-  private sent = { x: -1, y: -1, key: '', at: 0 };
-  private checked = 0;
-
-  constructor(private scene: Phaser.Scene) {
+  /** place：这个人画在哪（像素，脚底），不画就返回 null。默认是大地图：按格子摆，在副本里的人不画 */
+  constructor(private scene: Phaser.Scene, private place?: (p: Presence) => { x: number; y: number; anim?: string; flip?: boolean } | null) {
     this.off = online.onPresence((all) => { this.latest = all; });
   }
 
@@ -72,23 +96,8 @@ export class OtherPlayers {
     return key;
   }
 
-  /** 把自己的位置、装备和等级发出去：格子变了、换了东西或隔了一阵才发；每半秒最多看一次 */
   publish(st: GameState, x: number, y: number, work?: { anim: string; flip: boolean }) {
-    if (!online.me()) return;
-    const now = Date.now();
-    if (now - this.checked < 500) return;
-    this.checked = now;
-    const action = st.paused ? undefined : st.queue[0]?.action;
-    const mounted = st.mounted ? st.equipment.mount : undefined;
-    const snap = levelSnapshot(st);
-    const max = maxHp(st);
-    const hp = Math.max(0, Math.round(st.hp));
-    // 血量按 5% 一档比较，打怪时不用每下都发
-    const key = JSON.stringify([st.settings.skin, action, mounted, st.equipment, snap.total, snap.combat, Math.round((hp / max) * 20), rallyTime(), work?.anim, work?.flip, (st.gates ?? []).map((g) => g.id).join()]);
-    const moved = Math.abs(x - this.sent.x) + Math.abs(y - this.sent.y) >= 2;
-    if (!moved && key === this.sent.key && now - this.sent.at < KEEPALIVE_MS) return;
-    this.sent = { x, y, key, at: now };
-    online.publishPresence({ x, y, outfit: st.settings.skin, action, mounted, equip: { ...st.equipment }, total: snap.total, combat: snap.combat, hp, maxHp: max, rally: rallyTime() || undefined, anim: work?.anim, flip: work?.flip, gates: st.gates?.length ? st.gates : undefined });
+    publishSelf(st, x, y, work);
   }
 
   /** 换坐骑或上下坐骑：坐骑两层精灵，人夹在中间 */
@@ -145,19 +154,26 @@ export class OtherPlayers {
     // 同一格上一起干活、打怪的人各站各的位置（自己占第 0 个位置），远程往后站（用户 10-25）
     const crowd = new Map<string, number>();
     crowd.set(`${Math.round(near.x)},${Math.round(near.y)}`, 1);
-    for (const p of this.latest) {
-      if (Math.abs(p.x - near.x) > VIEW_TILES || Math.abs(p.y - near.y) > VIEW_TILES) continue;
-      seen.add(p.playerId);
-      let tx = p.x * T + T / 2, ty = p.y * T + T / 2 + 7;
+    const onMap = (p: Presence) => {
+      if (p.dg) return null;
+      if (Math.abs(p.x - near.x) > VIEW_TILES || Math.abs(p.y - near.y) > VIEW_TILES) return null;
+      let x = p.x * T + T / 2, y = p.y * T + T / 2 + 7;
       if (p.anim) {
         const cell = `${p.x},${p.y}`;
         const i = crowd.get(cell) ?? 0;
         crowd.set(cell, i + 1);
         const [ox, oy] = CROWD[i % CROWD.length];
         const w = /^fight-(\w+)-ready$/.exec(p.anim)?.[1] as FightWeapon | undefined;
-        tx += ox - (w ? (FIGHT_RANGE[w] ?? 0) * T : 0);
-        ty += oy;
+        x += ox - (w ? (FIGHT_RANGE[w] ?? 0) * T : 0);
+        y += oy;
       }
+      return { x, y, anim: p.anim, flip: p.flip };
+    };
+    for (const p of this.latest) {
+      const at = (this.place ?? onMap)(p);
+      if (!at) continue;
+      seen.add(p.playerId);
+      const tx = at.x, ty = at.y;
       const key = this.sheet(p.outfit);
       let o = this.others.get(p.playerId);
       if (o && o.key !== key) { o.box.destroy(); o = undefined; }
@@ -174,8 +190,8 @@ export class OtherPlayers {
       o.name.setText(p.guildTag ? `[${p.guildTag}] ${p.name}` : p.name);
       o.tx = tx; o.ty = ty;
       this.setMount(o, p.mounted ? mountKindOf(p.mounted) : undefined);
-      o.anim = p.anim && this.scene.anims.exists(`${key}:${p.anim}`) ? p.anim : undefined;
-      if (o.anim) o.flip = !!p.flip;
+      o.anim = at.anim && this.scene.anims.exists(`${key}:${at.anim}`) ? at.anim : undefined;
+      if (o.anim) o.flip = !!at.flip;
     }
     for (const [id, o] of this.others) {
       if (!seen.has(id)) { o.box.destroy(); this.others.delete(id); continue; }

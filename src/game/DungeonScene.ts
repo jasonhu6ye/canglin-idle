@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { MONSTERS } from '../core/data';
-import { DG_TILE_MS, dungeonFloor, type DgFloor, type DgStop } from '../core/dungeon';
+import { buffMob, DG_TILE_MS, dungeonFloor, type DgFloor, type DgStop } from '../core/dungeon';
 import { baseOf } from '../core/quality';
 import { combatStats } from '../core/sim';
 import type { DungeonRun, MonsterDef } from '../core/types';
@@ -11,11 +11,15 @@ import { paintDgChest, paintDgDecor, paintDgFloor, paintDgWall, paintStairs, the
 import { FIGHT, FIGHT_RANGE, fightWeapon, FRAME_H, HERO_FEET, HERO_PAD } from './hero';
 import { animsOf, monsterFrameSize, paintMonsterSheet } from './monsterArt';
 import { T } from './tiles';
+import { OtherPlayers, publishSelf } from './others';
 
 /** 场景 → 界面：点了宝箱（界面去开箱、弹战利品） */
 export const DG_CHEST = 'dg-chest';
 /** 场景 → 界面：飘一条提示 */
 export const DG_MSG = 'dg-msg';
+
+/** 组队站位：[横向错开, 往后退]（像素） */
+const SLOTS: [number, number][] = [[0, 0], [-11, 4], [11, 4], [-6, 14], [6, 14]];
 
 const FONT = '"PingFang SC","Microsoft YaHei",sans-serif';
 const D_FLOAT = 9e5;
@@ -50,6 +54,8 @@ export class DungeonScene extends Phaser.Scene {
   private seenAt = 0;
   private seen?: { idx: number; floor: number; p: number; m: number; hp: number };
   private anim = '';
+  /** 同一个副本、同一层的队友（10-25 同步） */
+  private mates?: OtherPlayers;
 
   create() {
     this.cameras.main.setBackgroundColor('#06060a');
@@ -67,7 +73,14 @@ export class DungeonScene extends Phaser.Scene {
     this.input.mouse?.disableContextMenu();
     this.unsub.push(store.subscribe(() => this.onStore()));
     this.events.on('wake', () => this.arrive());
-    const cleanup = () => { this.unsub.forEach((u) => u()); this.unsub = []; };
+    this.mates = new OtherPlayers(this, (p) => {
+      const run = store.state.dungeon;
+      const d = p.dg;
+      if (!run || !d || d.gate !== run.gate.id || d.floor !== run.floor) return null;
+      if (run.members && !run.members.some((m) => m.id === p.playerId)) return null;
+      return { x: d.x, y: d.y, anim: d.anim, flip: d.flip };
+    });
+    const cleanup = () => { this.unsub.forEach((u) => u()); this.unsub = []; this.mates?.destroy(); };
     this.events.once('shutdown', cleanup);
     this.events.once('destroy', cleanup);
     this.arrive();
@@ -303,13 +316,28 @@ export class DungeonScene extends Phaser.Scene {
       k = r;
       if (r >= want) break;
     }
-    return { x: (st.x + dx * k) * T + T / 2, y: (st.y + dy * k) * T + T / 2, dx: -dx || 1 };
+    // 组队：每个人按名单顺序错开站，不叠在一起（队友那边也按同样的规则算）
+    const [side, back] = SLOTS[this.slot() % SLOTS.length];
+    const x = (st.x + dx * k) * T + T / 2 - dx * back + dy * side;
+    const y = (st.y + dy * k) * T + T / 2 - dy * back + (dx ? side : 0);
+    return { x, y, dx: -dx || 1 };
+  }
+
+  /** 自己在队伍名单里排第几（单人是 0） */
+  private slot() {
+    const run = store.state.dungeon;
+    return Math.max(0, run?.members?.findIndex((m) => m.id === run.me) ?? 0);
   }
 
   private faceLeft = false;
-  update() {
+  update(_t: number, delta: number) {
     const run = store.state.dungeon;
     if (!run || !this.F) return;
+    this.mates?.step(delta, { x: 0, y: 0 });
+    publishSelf(store.state, run.gate.x, run.gate.y, undefined, {
+      gate: run.gate.id, floor: run.floor, idx: run.idx, phase: run.phase, kills: run.kills,
+      x: this.player.x, y: this.player.y + 7, anim: this.anim.startsWith('fight-') ? `fight-${this.weapon()}-ready` : this.anim, flip: this.body.flipX,
+    });
     const p = this.heroPos();
     if (!p) return;
     const moving = run.phase === 'walk' && (Math.abs(p.x - this.player.x) > 0.05 || Math.abs(p.y - this.player.y) > 0.05);
@@ -342,8 +370,9 @@ export class DungeonScene extends Phaser.Scene {
     // 精英、首领头顶血条
     const c = store.state.combat;
     for (const [i, spr] of this.mobs) {
-      const m = MONSTERS[this.F.stops[i].monster!];
-      if (!m || (m.rank === 'normal' && i !== run.idx)) continue;
+      const m0 = MONSTERS[this.F.stops[i].monster!];
+      if (!m0 || (m0.rank === 'normal' && i !== run.idx)) continue;
+      const m = buffMob(m0, run.party);
       let g = this.bars.get(i);
       if (!g) { g = this.add.graphics().setDepth(D_FLOAT - 6); this.bars.set(i, g); }
       const hp = i === run.idx && c && run.phase === 'fight' ? c.monsterHp : m.hp;

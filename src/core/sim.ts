@@ -4,7 +4,7 @@ import { baseOf, qid, rollQuality } from './quality';
 import { HW_POINT, HW_TIERS, hwFight, hwOpen, hwTierOf, hwWait } from './halloween';
 import { BAR_VALUE, KEY_SHOP, keyOf, OLD_ENH, SCROLL_TOWN, SHARD_PER_STONE, TIERS, ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAP_W, MID_BOX, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, planRoute, travelMs, type MapNode } from './data';
 import { nextRandom } from './rng';
-import { coopMates, COOP_DEF, COOP_DMG, dungeonFloor, GATE_MS, GATE_REACH, legMs, rollChest, rollChestQuality, rollFloors, teamChest, teamChestQuality, type TeamMember } from './dungeon';
+import { buffMob, coopMates, COOP_DEF, COOP_DMG, dungeonFloor, GATE_MS, GATE_REACH, legMs, rollChest, rollChestQuality, rollFloors, teamChest, teamChestQuality, type TeamMember } from './dungeon';
 import { partySize } from './party';
 import { stepQuests } from './quests';
 import { migrateMail, sendMail } from './mail';
@@ -960,8 +960,9 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       }
       return Math.max(step, 1);
     }
-    // 打怪：和野外一样的出手、命中、伤害规则，没有刷新
-    const m = MONSTERS[stop.monster!];
+    // 打怪：和野外一样的出手、命中、伤害规则，没有刷新；组队时怪物按人数变强
+    const m0 = MONSTERS[stop.monster!];
+    const m = m0 && buffMob(m0, run.party);
     if (!m) {
       run.idx++;
       run.phase = 'walk';
@@ -1645,6 +1646,60 @@ export function enterDungeon(prev: GameState, gate: DungeonGate, party: number, 
   if (team && team.members.length > 1) {
     s.dungeon.members = [...team.members].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     s.dungeon.me = team.me;
+  }
+  return s;
+}
+
+/**
+ * 组队同步（用户 10-25）：队友在同一个洞口里打得比自己靠前，就把自己的进度拉上去，
+ * 队友已经清掉的怪这边也算清掉，按人数分到这些怪的战斗经验（掉落归动手的人）。
+ * 进度只往前走，所以离线时自己接着打、上线后再和队友对齐都不会乱。
+ */
+export function syncDungeon(prev: GameState, mate: { gate: string; floor: number; idx: number; phase: string }): GameState {
+  const run = prev.dungeon;
+  if (!run || run.gate.id !== mate.gate || run.phase === 'open') return prev;
+  if (!(mate.floor >= 0 && mate.floor < run.gate.floors && mate.idx >= 0)) return prev;
+  const ahead = mate.floor > run.floor || (mate.floor === run.floor && mate.idx > run.idx) || ((mate.phase === 'chest' || mate.phase === 'open') && run.phase !== 'chest');
+  if (!ahead) return prev;
+  const s = clone(prev);
+  const r = s.dungeon!;
+  const share = Math.max(1, r.members?.length ?? r.party);
+  // 跳过去的这些怪：按人数分经验
+  let f = r.floor;
+  let i = r.idx;
+  const end = (mate.phase === 'chest' || mate.phase === 'open') ? Infinity : mate.idx;
+  while (f < mate.floor || (f === mate.floor && i < end)) {
+    const F = dungeonFloor(r.gate, f);
+    const st = F.stops[i];
+    if (!st) break;
+    if (st.kind === 'mob' && st.monster) {
+      const m = MONSTERS[st.monster];
+      if (m) {
+        const style = combatStats(s, m).style;
+        const xp = m.hp / share;
+        s.xp[style] += Math.round(xp);
+        s.xp.defence += Math.round(xp / 3);
+        s.xp.hitpoints += Math.round(xp / 3);
+        r.kills++;
+        if (m.rank === 'boss' && F.chest && r.chest === undefined) r.chest = isTeam(r) ? teamChestQuality(r.gate) : rollChestQuality(r.gate.kind, r.gate.floors, 0.5);
+      }
+    }
+    if (st.kind === 'stairs') { f++; i = 0; continue; }
+    if (st.kind === 'chest') break;
+    i++;
+  }
+  s.combat = null;
+  r.floor = f;
+  const F = dungeonFloor(r.gate, f);
+  const st = F.stops[i];
+  if (!st || st.kind === 'chest' && (mate.phase === 'chest' || mate.phase === 'open')) {
+    r.idx = Math.min(i, F.stops.length - 1);
+    r.phase = 'chest';
+    r.ms = r.total = 0;
+  } else {
+    r.idx = i;
+    r.phase = 'walk';
+    r.ms = r.total = legMs(F, i);
   }
   return s;
 }

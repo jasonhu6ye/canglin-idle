@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { ITEMS, KEY_SHOP, MONSTERS, NODES, type MapNode } from '../core/data';
-import { CHEST_COLOR, chestOdds, coopMates, COOP_DEF, COOP_DMG, dungeonFloor, GATE_REACH, totalMobs } from '../core/dungeon';
+import { CHEST_COLOR, chestOdds, mobBuff, coopMates, COOP_DEF, COOP_DMG, dungeonFloor, GATE_REACH, totalMobs } from '../core/dungeon';
 import { allGates, setSharedGates } from '../core/gateShare';
 import { partySize } from '../core/party';
-import { atShop, buyKey, enterDungeon, gateBlock, leaveDungeon, openDungeonChest, TOWN_BANKS, useTownScroll, walkPos } from '../core/sim';
+import { syncDungeon, atShop, buyKey, enterDungeon, gateBlock, leaveDungeon, openDungeonChest, TOWN_BANKS, useTownScroll, walkPos } from '../core/sim';
 import type { DungeonGate, GameState } from '../core/types';
 import { DG_CHEST } from '../game/DungeonScene';
 import { GATE_CLICK, GATE_OPENED } from '../game/MapScene';
@@ -48,9 +48,26 @@ export function useSharedGates() {
   useEffect(() => { setSharedGates(list); }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
+/**
+ * 副本组队同步（用户 10-25）：同一个洞口里的队友打得比自己靠前，就把自己的进度拉上去
+ * （队友清掉的怪这边也算清掉）。队友的位置和动作在副本场景里画。
+ */
+function useDungeonSync() {
+  useEffect(() => online.onPresence((all) => {
+    const run = store.state.dungeon;
+    if (!run?.members) return;
+    for (const p of all) {
+      const d = p.dg;
+      if (!d || d.gate !== run.gate.id || !run.members.some((m) => m.id === p.playerId)) continue;
+      if (syncDungeon(store.state, d) !== store.state) store.dispatch((g) => syncDungeon(g, d));
+    }
+  }), []);
+}
+
 /** 地图上点了洞口、刚开了洞口 */
 export function DungeonPopups({ s }: { s: GameState }) {
   useSharedGates();
+  useDungeonSync();
   const [gateId, setGateId] = useState<string | null>(null);
   const [opened, setOpened] = useState<DungeonGate | null | undefined>(undefined);
   const [msg, setMsg] = useState('');
@@ -173,6 +190,7 @@ export function DungeonHud({ s }: { s: GameState }) {
       <span className="bar wide"><i style={{ width: `${(run.kills / Math.max(1, total)) * 100}%` }} /></span>
       <small>{tl`已清 ${run.kills}/${total} 只`} · {status}</small>
       {(run.phase === 'walk' || run.phase === 'fight') && <small className="muted">{tl('自动打怪中：会自己清完每层、下楼，退出游戏也接着打')}</small>}
+      {run.party > 1 && <small className="warn">{tl`组队 ${run.party} 人：副本怪物全属性 +${Math.round(mobBuff(run.party) * 100)}%`}</small>}
       {mates > 0 && <small className="gold">{tl`队友协战 ${mates} 人：伤害 +${Math.round(COOP_DMG * mates * 100)}%，受伤 -${Math.round(COOP_DEF * mates * 100)}%`}</small>}
       {run.phase === 'chest' && <button className="pill primary" onClick={openChest}>{tl('打开宝箱')}</button>}
       {run.phase === 'open' && run.loot && (

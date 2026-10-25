@@ -638,4 +638,11 @@ export const EN_TEXT: Record<string, string> = {
   "已停止跟随队长": "Stopped following the leader",
   "跟随队长中（点击停止）": "Following leader (tap to stop)",
   "跟随队长": "Follow leader",
+  "组队 {0} 人：副本怪物全属性 +{1}%": "Party of {0}: dungeon monsters +{1}% all stats",
+  "组队进的副本全队同步：能看到同一层的队友，谁先清掉的怪大家都算清掉，按人数分战斗经验，晚进来的人直接赶上进度。队伍每多一个人，副本怪物全属性 +5%，最多 +20%。": "Party dungeons are synced: you see teammates on the same floor, a monster cleared by anyone counts for everyone with combat XP shared by party size, and late joiners catch up instantly. Each extra party member gives dungeon monsters +5% all stats, up to +20%.",
+  "副本组队同步": "Party dungeon sync",
+  "蓝洞和组队进的绿洞现在全队同步：在副本里能看到同一层的队友在走、在打怪，大地图上不再显示在副本里的人。": "Blue dungeons and party green dungeons are now synced: you can see teammates walking and fighting on the same floor, and players inside dungeons no longer show on the world map.",
+  "全队进度合在一起：谁先清掉的怪，大家那边都算清掉，并按人数分到这只怪的战斗经验（掉落归动手的人）。晚进来的队友会直接赶上全队的进度。": "Shared progress: a monster cleared by anyone counts as cleared for everyone, with its combat XP split by party size (drops go to whoever fought it). Teammates who enter late catch up with the party's progress.",
+  "组队进副本时怪物会变强：队伍每多一个人，副本怪物全属性 +5%，最多 +20%。": "Monsters get stronger in party dungeons: +5% all stats per extra party member, up to +20%.",
+  "组队打怪时每个人按队伍顺序错开站位，不再叠在一起。": "Party members now take staggered positions in fights instead of stacking.",
 };

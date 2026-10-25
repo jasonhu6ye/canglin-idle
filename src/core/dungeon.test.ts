@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ITEMS, MONSTERS, TIERS, keyId } from './data';
-import { chestOdds, dungeonFloor, rollChest, rollFloors, teamChest, totalMobs } from './dungeon';
-import { advance, combatEstimate, enterDungeon, gateBlock, leaveDungeon, migrate, newGame, openDungeonChest, openGate, useTownScroll } from './sim';
+import { buffMob, chestOdds, dungeonFloor, mobBuff, rollChest, rollFloors, teamChest, totalMobs } from './dungeon';
+import { advance, combatEstimate, enterDungeon, syncDungeon, gateBlock, leaveDungeon, migrate, newGame, openDungeonChest, openGate, useTownScroll } from './sim';
 import { nextRandom } from './rng';
 import { XP_TABLE } from './xp';
 import type { DungeonGate, GameState } from './types';
@@ -152,6 +152,46 @@ describe('组队宝箱掷点分配', () => {
     const t = teamChest(g, s2.dungeon!.chest!, team);
     expect(got).toEqual(t.shares[1]);
     expect(s2.dungeon!.split).toEqual(t.shares);
+  });
+});
+
+describe('副本组队同步', () => {
+  const team = [{ id: 'a', name: '甲' }, { id: 'b', name: '乙' }];
+  it('队友打得靠前就把自己拉上去，清掉的怪算上、分到经验；只往前不往后', () => {
+    let s = strong(4);
+    s.loc = { x: 300, y: 300 };
+    const g = { ...gate('green', 4, 3, 77), x: 300, y: 300 };
+    s = enterDungeon(s, g, 2, T0, { members: team, me: 'a' });
+    const xp0 = Object.values(s.xp).reduce((a, b) => a + b, 0);
+    const F0 = dungeonFloor(g, 0);
+    const s1 = syncDungeon(s, { gate: g.id, floor: 1, idx: 2, phase: 'walk' });
+    const mobs0 = F0.stops.filter((x) => x.kind === 'mob').length;
+    const mobs1 = dungeonFloor(g, 1).stops.slice(0, 2).filter((x) => x.kind === 'mob').length;
+    expect(s1.dungeon!.floor).toBe(1);
+    expect(s1.dungeon!.idx).toBe(2);
+    expect(s1.dungeon!.kills).toBe(mobs0 + mobs1);
+    expect(Object.values(s1.xp).reduce((a, b) => a + b, 0)).toBeGreaterThan(xp0);
+    // 往回的不理
+    expect(syncDungeon(s1, { gate: g.id, floor: 0, idx: 5, phase: 'walk' })).toBe(s1);
+    // 别的洞口不理
+    expect(syncDungeon(s1, { gate: 'x', floor: 2, idx: 1, phase: 'walk' })).toBe(s1);
+    // 队友到了宝箱：自己也能开箱
+    const s2 = syncDungeon(s1, { gate: g.id, floor: 2, idx: 0, phase: 'chest' });
+    expect(s2.dungeon!.phase).toBe('chest');
+    expect(s2.dungeon!.kills).toBe(totalMobs(g));
+    expect(s2.dungeon!.chest).toBeGreaterThanOrEqual(0);
+    expect(openDungeonChest(s2)[1].coins).toBeGreaterThan(0);
+  });
+
+  it('组队时怪物每多一人全属性 +5%，最多 +20%', () => {
+    expect(mobBuff(1)).toBe(0);
+    expect(mobBuff(2)).toBeCloseTo(0.05);
+    expect(mobBuff(5)).toBeCloseTo(0.2);
+    expect(mobBuff(8)).toBeCloseTo(0.2);
+    const m = MONSTERS[dungeonFloor(gate('blue', 4, 3, 5), 0).stops.find((x) => x.monster)!.monster!];
+    const b = buffMob(m, 3);
+    expect(b.hp).toBe(Math.round(m.hp * 1.1));
+    expect(b.attack).toBe(Math.round(m.attack * 1.1));
   });
 });
 
