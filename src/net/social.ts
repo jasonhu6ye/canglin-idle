@@ -81,6 +81,11 @@ export function openChat(channel?: ChatChannel, to?: string | null) {
   st.unread[st.channel] = 0;
   emit();
 }
+let rallyAt = 0;
+/** 队长召集：跟着位置一起发出去，队友收到后自动寻路过来 */
+export function sendRally() { rallyAt = Date.now(); emit(); }
+export const rallyTime = () => rallyAt;
+
 export function closeChat() { st.open = false; emit(); }
 
 /** 某个频道里要显示的消息（私聊只看和当前好友的） */

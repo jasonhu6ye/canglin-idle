@@ -24,6 +24,10 @@ function ok(r: { data: any; error: { message: string } | null }): any {
   return r.data;
 }
 
+/** 轮询别人位置的间隔、自己写位置的最短间隔（45 秒没更新算下线，在 SQL 里） */
+const POLL_MS = 4000;
+const WRITE_MS = 3000;
+
 export class SupabaseApi implements OnlineApi {
   readonly kind = 'supabase';
   private sb: SupabaseClient;
@@ -31,6 +35,13 @@ export class SupabaseApi implements OnlineApi {
   private world: RealtimeChannel | null = null;
   private presenceFns = new Set<(all: Presence[]) => void>();
   private lastPresence: Omit<Presence, 'playerId' | 'name' | 'at'> | null = null;
+  /** 两路来源：Realtime presence（快）和 positions 表轮询（实时连不上也能看到人） */
+  private rtSeen = new Map<string, Presence>();
+  private dbSeen = new Map<string, Presence>();
+  private rt_: 'connecting' | 'ok' | 'failed' = 'connecting';
+  private poller: ReturnType<typeof setInterval> | null = null;
+  private wroteAt = 0;
+  private writeTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(url: string, key: string) {
     this.sb = createClient(url, key, { auth: { persistSession: true, storageKey: 'canglin-auth' } });
@@ -84,6 +95,11 @@ export class SupabaseApi implements OnlineApi {
     if (this.world) void this.sb.removeChannel(this.world);
     this.world = null;
     this.count_ = null;
+    if (this.poller) clearInterval(this.poller);
+    if (this.writeTimer) clearTimeout(this.writeTimer);
+    this.poller = this.writeTimer = null;
+    this.rtSeen.clear(); this.dbSeen.clear(); this.byId.clear(); this.ids_ = new Set();
+    this.lastPresence = null;
   }
   private need() {
     if (!this.profile) throw new Error(tl('请先登录'));
@@ -201,28 +217,78 @@ export class SupabaseApi implements OnlineApi {
     return Math.round(performance.now() - t);
   }
 
-  /** 世界频道：在线玩家位置走 Realtime presence，不进数据库 */
+  /** 实时连接状态，「更多」页显示 */
+  realtimeStatus() { return this.profile ? this.rt_ : 'off'; }
+
+  /** 世界频道：在线玩家位置走 Realtime presence；同时开轮询，实时连不上也能看到人 */
   private channel() {
     const me = this.need();
+    if (!this.poller) {
+      this.poller = setInterval(() => void this.pollPositions(), POLL_MS);
+      void this.pollPositions();
+    }
     if (this.world) return this.world;
     const ch = this.sb.channel('world', { config: { presence: { key: me.id } } });
     ch.on('presence', { event: 'sync' }, () => {
-      const all: Presence[] = [];
-      for (const [, metas] of Object.entries(ch.presenceState<Presence>())) if (metas[0]) all.push(metas[0]);
-      this.count_ = all.length;
-      this.ids_ = new Set(all.map((p) => p.playerId));
-      this.byId = new Map(all.map((p) => [p.playerId, p]));
-      const others = all.filter((p) => p.playerId !== me.id);
-      this.presenceFns.forEach((f) => f(others));
-    }).subscribe((status) => {
-      if (status === 'SUBSCRIBED' && this.lastPresence) this.publishPresence(this.lastPresence);
+      this.rtSeen = new Map();
+      for (const [, metas] of Object.entries(ch.presenceState<Presence>())) if (metas[0]) this.rtSeen.set(metas[0].playerId, metas[0]);
+      this.mergePresence();
+    }).subscribe((status, err) => {
+      if (status === 'SUBSCRIBED') {
+        this.rt_ = 'ok';
+        if (this.lastPresence) this.publishPresence(this.lastPresence);
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        this.rt_ = 'failed';
+        if (err) console.warn('realtime', status, err);
+      }
     });
     return (this.world = ch);
+  }
+  /** 两路合起来，同一个人取更新的那条 */
+  private mergePresence() {
+    const me = this.profile;
+    if (!me) return;
+    const all = new Map(this.dbSeen);
+    for (const [id, p] of this.rtSeen) { const d = all.get(id); if (!d || (p.at ?? 0) >= (d.at ?? 0)) all.set(id, p); }
+    if (this.lastPresence) all.set(me.id, this.mine(this.lastPresence));
+    this.count_ = Math.max(1, all.size);
+    this.ids_ = new Set([...all.keys(), me.id]);
+    this.byId = all;
+    const others = [...all.values()].filter((p) => p.playerId !== me.id);
+    this.presenceFns.forEach((f) => f(others));
+  }
+  private async pollPositions() {
+    const me = this.profile;
+    if (!me) return;
+    // 用服务器时间判断谁在线，玩家电脑时钟不准也没关系
+    const { data, error } = await this.sb.rpc('online_positions');
+    if (error) { console.warn('positions', error.message); return; }
+    this.dbSeen = new Map();
+    for (const r of (data ?? []) as Row[]) {
+      if (!r.data || typeof r.data !== 'object') continue;
+      this.dbSeen.set(r.player_id, { ...r.data, playerId: r.player_id, at: Date.parse(r.updated_at) });
+    }
+    this.mergePresence();
+  }
+  private mine(p: Omit<Presence, 'playerId' | 'name' | 'at'>): Presence {
+    const me = this.need();
+    return { ...p, playerId: me.id, pid: me.pid, name: me.name, guildTag: me.guildTag, at: Date.now() };
   }
   publishPresence(p: Omit<Presence, 'playerId' | 'name' | 'at'>) {
     if (!this.profile) return;
     this.lastPresence = p;
-    void this.channel().track({ ...p, playerId: this.profile.id, pid: this.profile.pid, name: this.profile.name, guildTag: this.profile.guildTag, at: Date.now() });
+    void this.channel().track(this.mine(p));
+    // 写数据库不用那么勤：最多每 WRITE_MS 一次，最后一次一定写上
+    const wait = this.wroteAt + WRITE_MS - Date.now();
+    if (wait <= 0) void this.writePosition();
+    else if (!this.writeTimer) this.writeTimer = setTimeout(() => { this.writeTimer = null; void this.writePosition(); }, wait);
+  }
+  private async writePosition() {
+    if (!this.profile || !this.lastPresence) return;
+    this.wroteAt = Date.now();
+    const { playerId: _id, at: _at, ...data } = this.mine(this.lastPresence);
+    const { error } = await this.sb.rpc('put_position', { p_data: data });
+    if (error) console.warn('positions', error.message);
   }
   onPresence(f: (all: Presence[]) => void) {
     this.presenceFns.add(f);
@@ -249,9 +315,13 @@ export class SupabaseApi implements OnlineApi {
     const ch = this.sb.channel(`chat-${Math.random().toString(36).slice(2)}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat' }, (e) => f(toChat(e.new as Row)))
       .subscribe();
-    void this.sb.from('chat').select('*').order('at', { ascending: false }).limit(50)
-      .then((r) => (r.data ?? []).reverse().forEach((m) => f(toChat(m))));
-    return () => { void this.sb.removeChannel(ch); };
+    let last = 0;
+    const pull = () => void this.sb.from('chat').select('*').gt('id', last).order('id', { ascending: false }).limit(50)
+      .then((r) => (r.data ?? []).reverse().forEach((m) => { last = Math.max(last, Number(m.id)); f(toChat(m)); }));
+    pull();
+    // 实时连不上时每 5 秒拉一次新消息
+    const t = setInterval(() => { if (this.rt_ !== 'ok') pull(); }, 5000);
+    return () => { clearInterval(t); void this.sb.removeChannel(ch); };
   }
 
   async friends(): Promise<Friend[]> {
@@ -288,10 +358,16 @@ export class SupabaseApi implements OnlineApi {
   async inviteParty(playerId: string) { ok(await this.sb.rpc('invite_party', { p_to: playerId })); }
   async answerParty(partyId: string, accept: boolean) { ok(await this.sb.rpc('answer_party', { p_party: partyId, p_accept: accept })); }
   async leaveParty() { ok(await this.sb.rpc('leave_party')); }
+  async kickParty(playerId: string) { ok(await this.sb.rpc('kick_party', { p_player: playerId })); }
+  async promoteParty(playerId: string) { ok(await this.sb.rpc('promote_party', { p_player: playerId })); }
+  async disbandParty() { ok(await this.sb.rpc('disband_party')); }
   onSocial(f: () => void) {
     const ch = this.sb.channel(`social-${Math.random().toString(36).slice(2)}`);
     for (const table of ['friends', 'party_invites', 'party_members', 'trades']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, () => f());
     ch.subscribe();
-    return () => { void this.sb.removeChannel(ch); };
+    // 实时连不上时每 15 秒刷新一次好友、队伍、交易；连得上也每分钟兜底一次
+    let n = 0;
+    const t = setInterval(() => { n++; if (this.rt_ !== 'ok' || n % 4 === 0) f(); }, 15_000);
+    return () => { clearInterval(t); void this.sb.removeChannel(ch); };
   }
 }

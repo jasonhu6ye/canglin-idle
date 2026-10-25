@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { levelSnapshot, online, type Presence } from '../net';
+import { rallyTime } from '../net/social';
+import { maxHp } from '../core/sim';
 import type { GameState } from '../core/types';
 import { FRAME_H, FRAME_W, HERO_ANIMS, HERO_FEET, HERO_PAD, outfitOf, paintHeroSheet } from './hero';
 import { T } from './tiles';
@@ -68,11 +70,14 @@ export class OtherPlayers {
     const action = st.paused ? undefined : st.queue[0]?.action;
     const mounted = st.mounted ? st.equipment.mount : undefined;
     const snap = levelSnapshot(st);
-    const key = JSON.stringify([st.settings.skin, action, mounted, st.equipment, snap.total, snap.combat]);
+    const max = maxHp(st);
+    const hp = Math.max(0, Math.round(st.hp));
+    // 血量按 5% 一档比较，打怪时不用每下都发
+    const key = JSON.stringify([st.settings.skin, action, mounted, st.equipment, snap.total, snap.combat, Math.round((hp / max) * 20), rallyTime()]);
     const moved = Math.abs(x - this.sent.x) + Math.abs(y - this.sent.y) >= 2;
     if (!moved && key === this.sent.key && now - this.sent.at < KEEPALIVE_MS) return;
     this.sent = { x, y, key, at: now };
-    online.publishPresence({ x, y, outfit: st.settings.skin, action, mounted, equip: { ...st.equipment }, total: snap.total, combat: snap.combat });
+    online.publishPresence({ x, y, outfit: st.settings.skin, action, mounted, equip: { ...st.equipment }, total: snap.total, combat: snap.combat, hp, maxHp: max, rally: rallyTime() || undefined });
   }
 
   step(delta: number, near: { x: number; y: number }) {

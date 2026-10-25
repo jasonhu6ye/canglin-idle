@@ -4,6 +4,7 @@ import { online, type Presence } from '../net';
 import { refreshSocial, useSocial } from '../net/social';
 import { tl } from '../i18n';
 import { openChatPage } from './ChatDock';
+import { emitToGame } from './GameCanvas';
 import { actionName } from './format';
 import { Icon } from './icons';
 import { errText } from './Login';
@@ -27,6 +28,8 @@ export function PlayerPopup({ playerId, onClose }: { playerId: string; onClose: 
   if (!p) return null;
   const f = st.friends.find((x) => x.playerId === playerId);
   const friend = !!f?.accepted;
+  const mate = !!st.party?.members.some((m) => m.playerId === playerId);
+  const lead = st.party?.leader === online.me()?.id;
   const run = async (fn: () => Promise<unknown>, ok: string) => {
     setBusy(true); setMsg('');
     try { await fn(); await refreshSocial(); setMsg(ok); } catch (e) { setMsg(errText(e)); } finally { setBusy(false); }
@@ -69,11 +72,14 @@ export function PlayerPopup({ playerId, onClose }: { playerId: string; onClose: 
           </ul>
         )}
         <div className="go pp-actions">
+          <button className="primary" onClick={() => { emitToGame('walktile', p.x, p.y); onClose(); }}>{tl('寻路过去')}</button>
+          {mate && lead && <button disabled={busy} onClick={() => confirm(tl`把队长转给 ${p.name}？`) && void run(() => online.promoteParty(playerId), tl`${p.name} 现在是队长了`)}>{tl('转让队长')}</button>}
+          {mate && lead && <button disabled={busy} onClick={() => confirm(tl`把 ${p.name} 踢出队伍？`) && void run(async () => { await online.kickParty(playerId); onClose(); }, '')}>{tl('踢出队伍')}</button>}
           {!f && p.pid && <button className="primary" disabled={busy} onClick={() => run(() => online.addFriend(p.pid!), tl('好友申请已发送，等对方同意'))}>{tl('加好友')}</button>}
           {f && !f.accepted && f.incoming && <button className="primary" disabled={busy} onClick={() => run(() => online.answerFriend(playerId, true), tl('已经是好友了'))}>{tl('同意好友申请')}</button>}
           {f && !f.accepted && !f.incoming && <button disabled>{tl('等对方同意')}</button>}
           <button disabled={!friend} title={friend ? '' : needFriend} onClick={() => { openChatPage('private', playerId); onClose(); }}>{tl('私聊')}</button>
-          <button disabled={!friend || busy} title={friend ? '' : needFriend} onClick={() => run(() => online.inviteParty(playerId), tl`已邀请 ${p.name} 组队，等对方同意`)}>{tl('邀请组队')}</button>
+          {!mate && <button disabled={!friend || busy} title={friend ? '' : needFriend} onClick={() => run(() => online.inviteParty(playerId), tl`已邀请 ${p.name} 组队，等对方同意`)}>{tl('邀请组队')}</button>}
           <button disabled={!friend || busy} title={friend ? '' : needFriend}
             onClick={() => run(async () => { openTrade(await online.startTrade(playerId)); onClose(); }, '')}>{tl('交易')}</button>
         </div>

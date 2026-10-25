@@ -80,6 +80,11 @@ export interface Presence {
   total?: number;
   combat?: number;
   equip?: Partial<Record<string, string>>;
+  /** 血量（队伍栏用） */
+  hp?: number;
+  maxHp?: number;
+  /** 队长发起召集的时间（毫秒），队友看到就寻路过来 */
+  rally?: number;
   at: number;
 }
 
@@ -182,6 +187,10 @@ export interface OnlineApi {
   inviteParty(playerId: string): Promise<void>;
   answerParty(partyId: string, accept: boolean): Promise<void>;
   leaveParty(): Promise<void>;
+  /** 队长：踢人、转让队长、解散 */
+  kickParty(playerId: string): Promise<void>;
+  promoteParty(playerId: string): Promise<void>;
+  disbandParty(): Promise<void>;
   trades(): Promise<Trade[]>;
   /** 和好友开一笔交易（已有没结束的就返回那一笔） */
   startTrade(playerId: string): Promise<string>;
@@ -196,6 +205,8 @@ export interface OnlineApi {
   onlineIds(): Set<string>;
   /** 全服在线人数（还没连上时是 null） */
   onlineCount(): number | null;
+  /** 实时连接状态：ok 正常，failed 连不上（靠轮询同步），off 没开联机 */
+  realtimeStatus(): 'connecting' | 'ok' | 'failed' | 'off';
   /** 到服务器跑一个来回要多少毫秒 */
   ping(): Promise<number>;
   /** 好友申请、组队邀请、队伍成员有变化 */

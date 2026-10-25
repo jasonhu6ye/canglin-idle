@@ -285,6 +285,30 @@ export class MapScene extends Phaser.Scene {
       if (opens && this.walker && this.walker !== old) this.arrive = onArrive;
     });
     this.game.events.on('walkto', onWalkTo);
+    // 走到某个格子旁边（去找队友、队长召集；用户 10-25），远路一样顺路用石碑
+    const onWalkTile = awake((x: number, y: number) => {
+      const at = { x: Math.round(x), y: Math.round(y) };
+      const dest = [{ x: at.x + 1, y: at.y }, { x: at.x - 1, y: at.y }, { x: at.x, y: at.y + 1 }, { x: at.x, y: at.y - 1 }, at]
+        .find((t) => isWalkable(t.x, t.y));
+      if (!dest) return;
+      const r: Route = planRoute(store.state.waystones, this.playerTile(), dest, moveSpeed(store.state));
+      if (r.via) {
+        const A = WAYSTONES.find((w) => w.id === r.via![0])!;
+        const a = standTile(A);
+        const old = this.walker;
+        this.moveTo(a.x, a.y);
+        if (!this.walker || this.walker === old) return;
+        this.float(tl`顺路去${A.name}传送`, '#8ae8ff');
+        this.arrive = () => {
+          this.stoneJump(r.via![1]);
+          this.time.delayedCall(500, () => this.moveTo(dest.x, dest.y));
+        };
+        return;
+      }
+      this.moveTo(dest.x, dest.y);
+    });
+    this.game.events.on('walktile', onWalkTile);
+    this.unsub.push(() => this.game.events.off('walktile', onWalkTile));
     this.takeWalk = () => {
       const id = store.pendingWalk;
       if (!id) return;
