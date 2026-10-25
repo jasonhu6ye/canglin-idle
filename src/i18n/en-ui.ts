@@ -732,4 +732,9 @@ export const EN_UI: Record<string, string> = {
   '地点 ': 'Locations ',
   '点地图上的地点或下面的列表选任务，右下角 ▦ 打开世界地图': 'Pick a task by tapping a location on the map or in the list below. ▦ at the bottom right opens the world map',
   '{0}当前 {1} 级，灰色的是还没到等级的地点。': '{0} is level {1}. Greyed-out spots need a higher level.',
+  '已开始：{0}': 'Started: {0}',
+  '已加入队列：{0}': 'Queued: {0}',
+  '制作页面不再自动关闭': 'The crafting page now stays open',
+  '在建筑和资源点页面点「立即开始」或「加入队列」后，页面会停在原处，分类、阶级和选中的配方都保留，可以接着做下一件，按「返回」才关闭。': 'After you tap Start now or Add to queue on a building or resource page, the page stays where it is, with your category, tier and selected recipe intact, so you can keep going. Tap Back to close it.',
+  '关掉再打开同一个地点，也会回到上次选的分类、阶级和配方。': 'Reopening the same place brings back the category, tier and recipe you picked last time.',
 };

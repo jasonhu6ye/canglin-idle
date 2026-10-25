@@ -56,23 +56,29 @@ export function ActionSheet({ s, nodeId, onClose }: { s: GameState; nodeId: stri
   return <NodeSheet s={s} node={node} onClose={onClose} />;
 }
 
+/** 每个地点上次选的分类、阶级和配方：关掉再打开还停在原处（用户 10-25） */
+const sheetMemo = new Map<string, { cat: string; tier: number | 'all'; selected: string | null }>();
+
 function NodeSheet({ s, node, onClose }: { s: GameState; node: MapNode; onClose: () => void }) {
   // 从别的配方跳过来：直接选中要做的那个（用户 10-23）
   const focus = store.focusAction && node.actions.includes(store.focusAction) ? store.focusAction : null;
   // 家园岛上的制作台：人在岛上就算站在旁边
   const isHome = node.id.startsWith('home_');
   const near = (g: GameState) => (isHome ? !!g.home?.inside : nearNode(g, node));
-  const [selected, setSelectedRaw] = useState<string | null>(focus);
-  const [cat, setCat] = useState<string>('all');
-  const [tier, setTier] = useState<number | 'all'>('all');
+  const memo = sheetMemo.get(node.id);
+  const [selected, setSelectedRaw] = useState<string | null>(focus ?? memo?.selected ?? null);
+  const [cat, setCat] = useState<string>(focus ? 'all' : memo?.cat ?? 'all');
+  const [tier, setTier] = useState<number | 'all'>(focus ? 'all' : memo?.tier ?? 'all');
+  useEffect(() => { sheetMemo.set(node.id, { cat, tier, selected }); }, [node.id, cat, tier, selected]);
   const setSelected = (id: string | null) => {
     store.focusAction = null;
     setSelectedRaw(id);
   };
   const list = useRef<HTMLUListElement>(null);
   useEffect(() => {
+    const at = focus ?? memo?.selected;
+    if (at) list.current?.querySelector(`[data-id="${at}"]`)?.scrollIntoView({ block: 'center' });
     if (!focus) return;
-    list.current?.querySelector(`[data-id="${focus}"]`)?.scrollIntoView({ block: 'center' });
     // 已经站在这里了，选中就算用掉了
     if (!node.town || near(store.state)) store.focusAction = null;
   }, [node.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -149,7 +155,7 @@ function NodeSheet({ s, node, onClose }: { s: GameState; node: MapNode; onClose:
       {node.closed && <p className="muted pad">{node.sea ? tl`${node.name}在海上的岛屿，要等以后的航行系统开放才能去，敬请期待。` : tl`${node.name}暂未开放，敬请期待。`}</p>}
       {node.cave && <p className="muted pad">{tl('大型洞窟入口。里面的内容还在筹备，暂未开放，敬请期待。')}</p>}
       {!all.length && !node.cave && !node.closed && <p className="muted pad">{tl('这里是怪物出没的地方。点地图上的怪物或生物，就能查看它的信息并开打。')}</p>}
-      {all.length > 0 && <TaskConfig s={s} action={selected} onDone={onClose} far={node.town && !near(s) ? node : undefined} />}
+      {all.length > 0 && <TaskConfig s={s} action={selected} onDone={onClose} stay far={node.town && !near(s) ? node : undefined} />}
     </div>
   );
 }
@@ -249,7 +255,14 @@ export function MonsterSheet({ s, actionId, onClose }: { s: GameState; actionId:
 }
 
 /** 次数/时间/无限 + 战斗设置 + 开始按钮 */
-function TaskConfig({ s, action: selected, onDone, far }: { s: GameState; action: string | null; onDone: () => void; far?: MapNode }) {
+function TaskConfig({ s, action: selected, onDone, far, stay }: { s: GameState; action: string | null; onDone: () => void; far?: MapNode; stay?: boolean }) {
+  // 地点页面开工后不关页面（用户 10-25：做完一件还要接着选下一件），只在按钮上方提示一下
+  const [flash, setFlash] = useState<{ text: string; n: number } | null>(null);
+  useEffect(() => {
+    if (!flash) return;
+    const t = setTimeout(() => setFlash(null), 2500);
+    return () => clearTimeout(t);
+  }, [flash]);
   const [modeType, setModeType] = useState<TaskMode['type']>('infinite');
   const [count, setCount] = useState(50);
   // 做装备、工具默认只做 1 件（用户 10-23）
@@ -266,7 +279,9 @@ function TaskConfig({ s, action: selected, onDone, far }: { s: GameState; action
   const go = (now: boolean) => {
     if (!selected) return;
     store.dispatch((g) => (now ? startNow(g, selected, mode()) : enqueue(g, selected, mode())));
-    onDone();
+    if (!stay) return onDone();
+    const name = ACTIONS[selected].name;
+    setFlash((f) => ({ text: now ? tl`已开始：${name}` : tl`已加入队列：${name}`, n: (f?.n ?? 0) + 1 }));
   };
   const queueFull = s.queue.length >= MAX_QUEUE;
   return (
@@ -338,6 +353,7 @@ function TaskConfig({ s, action: selected, onDone, far }: { s: GameState; action
           <button onClick={() => { store.requestWalk(far.id); onDone(); }}>{tl`寻路去${far.name}`}</button>
         </div>
       )}
+      {flash && <div key={flash.n} className="go-flash">✓ {flash.text}</div>}
       <div className="go">
         <button className="primary" disabled={!selected || !!far} onClick={() => go(true)}>{tl('立即开始')}</button>
         <button disabled={!selected || queueFull} onClick={() => go(false)}>

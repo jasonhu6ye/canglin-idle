@@ -8,6 +8,13 @@ import { tl } from '../i18n';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-10-25-h', date: tl('10 月 25 日'), title: tl('制作页面不再自动关闭'),
+    lines: [
+      tl('在建筑和资源点页面点「立即开始」或「加入队列」后，页面会停在原处，分类、阶级和选中的配方都保留，可以接着做下一件，按「返回」才关闭。'),
+      tl('关掉再打开同一个地点，也会回到上次选的分类、阶级和配方。'),
+    ],
+  },
+  {
     id: '2026-10-25-g', date: tl('10 月 25 日'), title: tl('组队经验加成：每个队员 +5%'),
     lines: [
       tl('组队时所有技能经验增加：队伍每个人 +5%，2 人 +10%，5 人满队 +25%。左上角增益栏能看到当前加成。'),
