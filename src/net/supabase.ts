@@ -47,7 +47,13 @@ export class SupabaseApi implements OnlineApi {
       p = ok(await this.sb.from('profiles').insert({ id: user.id, name }).select('id,name,outfit,guild_id').single());
     }
     this.profile = { id: p.id, name: p.name, outfit: p.outfit ?? undefined, guildId: p.guild_id };
+    await this.loadTag();
     return this.profile;
+  }
+  private async loadTag() {
+    if (!this.profile) return;
+    const id = this.profile.guildId;
+    this.profile.guildTag = id ? (await this.sb.from('guilds').select('tag').eq('id', id).maybeSingle()).data?.tag : undefined;
   }
   async ready() { return this.loadProfile(); }
 
@@ -102,9 +108,14 @@ export class SupabaseApi implements OnlineApi {
     const r = await this.sb.from('guild_members').select('player_id', { count: 'exact', head: true }).eq('guild_id', guildId);
     return r.count ?? 0;
   }
-  async guild(id?: string) {
+  async guild(id?: string): Promise<Guild | null> {
     const gid = id ?? this.profile?.guildId;
     if (!gid) return null;
+    if (!id && this.profile) {
+      // 可能被踢了或公会解散了：以服务器为准
+      const r = ok(await this.sb.from('profiles').select('guild_id').eq('id', this.profile.id).single());
+      if (r.guild_id !== gid) { this.profile.guildId = r.guild_id; await this.loadTag(); return this.guild(); }
+    }
     const g = ok(await this.sb.from('guilds').select('*').eq('id', gid).maybeSingle());
     return g ? toGuild(g, await this.count(gid)) : null;
   }
@@ -117,15 +128,18 @@ export class SupabaseApi implements OnlineApi {
   async createGuild(name: string, tag: string) {
     const id = ok(await this.sb.rpc('create_guild', { p_name: name, p_tag: tag })) as string;
     this.need().guildId = id;
+    await this.loadTag();
     return (await this.guild(id))!;
   }
   async joinGuild(id: string) {
     ok(await this.sb.rpc('join_guild', { p_guild: id }));
     this.need().guildId = id;
+    await this.loadTag();
   }
   async leaveGuild() {
     ok(await this.sb.rpc('leave_guild'));
     this.need().guildId = null;
+    this.need().guildTag = undefined;
   }
   async guildMembers(id: string): Promise<GuildMember[]> {
     const rows = ok(await this.sb.from('guild_members')
@@ -164,7 +178,7 @@ export class SupabaseApi implements OnlineApi {
   publishPresence(p: Omit<Presence, 'playerId' | 'name' | 'at'>) {
     if (!this.profile) return;
     this.lastPresence = p;
-    void this.channel().track({ ...p, playerId: this.profile.id, name: this.profile.name, at: Date.now() });
+    void this.channel().track({ ...p, playerId: this.profile.id, name: this.profile.name, guildTag: this.profile.guildTag, at: Date.now() });
   }
   onPresence(f: (all: Presence[]) => void) {
     this.presenceFns.add(f);

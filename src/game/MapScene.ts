@@ -21,6 +21,8 @@ import { paintBuilding, paintCave, paintDot, paintGlow, paintProp, paintWindmill
 import { DPR } from './dpr';
 import { paintResNode, resGlow, resOf, type ResKind } from './resArt';
 import { NODE_MARKER, paintSprite, SPRITE_VARIANTS, SPRITES } from './sprites';
+import { OtherPlayers } from './others';
+import { online } from '../net';
 import { animateTileset, liquidIndex, paintTileset, T, TILESET, tileIndex, VARIANTS } from './tiles';
 import {
   BUILDINGS, CHUNK, FIELDS, findPath, GROUNDS, groundIndex, hash, isWalkable, LIQUIDS, propsInChunk, reachableNear, regionAt, SPAWN, standTile,
@@ -155,6 +157,7 @@ export class MapScene extends Phaser.Scene {
   private lastCombatLevel = -1;
   private frame = 0;
   private amb!: Ambience;
+  private others!: OtherPlayers;
 
   constructor() {
     super('map');
@@ -190,6 +193,7 @@ export class MapScene extends Phaser.Scene {
 
     this.setupCamera();
     this.amb = new Ambience(this);
+    this.others = new OtherPlayers(this);
     this.currentAction = task?.action;
     this.travelTo = store.state.travel?.to;
     if (task && store.state.paused) this.manual = true;
@@ -298,7 +302,7 @@ export class MapScene extends Phaser.Scene {
     document.addEventListener('visibilitychange', onVis);
     this.unsub.push(() => document.removeEventListener('visibilitychange', onVis));
     // 切到别的标签时整个游戏被销毁，只会触发 destroy，不会触发 shutdown
-    const cleanup = () => { this.unsub.forEach((u) => u()); this.unsub = []; this.amb.destroy(); };
+    const cleanup = () => { this.unsub.forEach((u) => u()); this.unsub = []; this.amb.destroy(); this.others.destroy(); };
     this.events.once('shutdown', cleanup);
     this.events.once('destroy', cleanup);
 
@@ -891,6 +895,15 @@ export class MapScene extends Phaser.Scene {
     this.updateParticles();
     playerPos.x = Math.floor(this.player.x / T);
     playerPos.y = Math.floor(this.player.y / T);
+    this.others.step(delta, playerPos);
+    this.others.publish({
+      x: playerPos.x, y: playerPos.y, outfit: store.state.settings.skin, action: store.state.paused ? undefined : store.state.queue[0]?.action,
+      mounted: store.state.mounted ? store.state.equipment.mount : undefined,
+    });
+    // 登录后头顶显示自己的名字
+    const me = online.me();
+    const label = me ? (me.guildTag ? `[${me.guildTag}] ${me.name}` : me.name) : '[苍岭] 你';
+    if (this.heroName.text !== label) this.heroName.setText(label);
   }
 
   // ---- 区域氛围 ----

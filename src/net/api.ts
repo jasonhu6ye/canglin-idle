@@ -12,6 +12,7 @@ export interface Profile {
   /** 衣橱外观 id，别的玩家看到的样子 */
   outfit?: string;
   guildId?: string | null;
+  guildTag?: string;
 }
 
 /** 排行榜：总等级 = 所有技能等级之和；也可以按单个技能或战斗等级排 */

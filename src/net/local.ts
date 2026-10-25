@@ -85,6 +85,7 @@ export class LocalApi implements OnlineApi {
     this.db.guilds.push(g);
     this.db.members[g.id] = [{ playerId: me.id, name: me.name, role: 'leader', totalLevel: this.db.snap?.total ?? 0, weekly: 0, lastSeen: Date.now() }];
     me.guildId = g.id;
+    me.guildTag = tag;
     this.flush();
     return g;
   }
@@ -96,6 +97,7 @@ export class LocalApi implements OnlineApi {
     (this.db.members[id] ??= []).push({ playerId: me.id, name: me.name, role: 'member', totalLevel: this.db.snap?.total ?? 0, weekly: 0, lastSeen: Date.now() });
     g.members++;
     me.guildId = id;
+    me.guildTag = g.tag;
     this.flush();
   }
   async leaveGuild() {
@@ -104,6 +106,7 @@ export class LocalApi implements OnlineApi {
     g.members--;
     if (g.members <= 0) this.db.guilds = this.db.guilds.filter((x) => x !== g);
     me.guildId = null;
+    me.guildTag = undefined;
     this.flush();
   }
   async guildMembers(id: string) { return this.db.members[id] ?? []; }
