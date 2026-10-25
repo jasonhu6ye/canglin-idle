@@ -5,6 +5,7 @@ import { store, useGame } from '../store';
 import { MonsterIcon } from './Bestiary';
 import { fmtNum } from './format';
 import { Icon, SkillIcon } from './icons';
+import { tl } from '../i18n';
 
 /**
  * 日志（用户 10-23 要求）：固定在左下角的小窗，可以展开、收起；高度不变，翻页看。
@@ -29,20 +30,20 @@ const clock = (t: number) => {
 };
 
 type View = 'all' | 'fight' | 'work' | 'stats';
-const VIEWS: [View, string][] = [['all', '全部'], ['fight', '战斗'], ['work', '采集制作'], ['stats', '统计']];
+const VIEWS: [View, string][] = [['all', tl('全部')], ['fight', tl('战斗')], ['work', tl('采集制作')], ['stats', tl('统计')]];
 type StatTab = 'xp' | 'items' | 'kills' | 'work';
-const STAT_TABS: [StatTab, string][] = [['xp', '经验'], ['items', '物品'], ['kills', '击杀'], ['work', '采集制作']];
+const STAT_TABS: [StatTab, string][] = [['xp', tl('经验')], ['items', tl('物品')], ['kills', tl('击杀')], ['work', tl('采集制作')]];
 const isFight = (e: CombatLogEntry) => e.kind === 'kill' || e.kind === 'death';
 
 /** 翻页条 */
 function Pager({ page, pages, onPage }: { page: number; pages: number; onPage: (p: number) => void }) {
   return (
     <div className="log-pager">
-      <button disabled={page <= 0} onClick={() => onPage(0)} title="最新一页">«</button>
-      <button disabled={page <= 0} onClick={() => onPage(page - 1)}>‹ 上一页</button>
+      <button disabled={page <= 0} onClick={() => onPage(0)} title={tl("最新一页")}>«</button>
+      <button disabled={page <= 0} onClick={() => onPage(page - 1)}>{tl('‹ 上一页')}</button>
       <span>{page + 1} / {pages}</span>
-      <button disabled={page >= pages - 1} onClick={() => onPage(page + 1)}>下一页 ›</button>
-      <button disabled={page >= pages - 1} onClick={() => onPage(pages - 1)} title="最早一页">»</button>
+      <button disabled={page >= pages - 1} onClick={() => onPage(page + 1)}>{tl('下一页 ›')}</button>
+      <button disabled={page >= pages - 1} onClick={() => onPage(pages - 1)} title={tl("最早一页")}>»</button>
     </div>
   );
 }
@@ -68,16 +69,16 @@ export function CombatLog({ onClose }: { onClose: () => void }) {
           {STAT_TABS.map(([id, name]) => <button key={id} className={stat === id ? 'on' : ''} onClick={() => { setStat(id); setPage(0); }}>{name}</button>)}
         </div>
         <ul className="log-list stats">
-          {rows.length === 0 && <li className="muted">还没有记录</li>}
+          {rows.length === 0 && <li className="muted">{tl('还没有记录')}</li>}
           {rows.slice(p * PAGE, p * PAGE + PAGE).map((r) => (
             <li key={r.key}>
               <span className="with-icon log-what">{r.icon} {r.name}</span>
               <b>{r.value}</b>
-              {span > 60_000 && <small className="muted">约 {fmtNum(Math.round(r.rate / (span / 3_600_000)))}/小时</small>}
+              {span > 60_000 && <small className="muted">{tl`约 ${fmtNum(Math.round(r.rate / (span / 3_600_000)))}/小时`}</small>}
             </li>
           ))}
         </ul>
-        <p className="log-foot muted">统计最近 {all.length} 条记录{span > 0 ? `（${clock(all[0].t)} 起）` : ''}</p>
+        <p className="log-foot muted">{tl`统计最近 ${all.length} 条记录${span > 0 ? tl`（${clock(all[0].t)} 起）` : ''}`}</p>
       </>
     );
   } else {
@@ -87,13 +88,13 @@ export function CombatLog({ onClose }: { onClose: () => void }) {
     body = (
       <>
         <ul className="log-list">
-          {list.length === 0 && <li className="muted">还没有记录。去打怪或者采集吧！</li>}
+          {list.length === 0 && <li className="muted">{tl('还没有记录。去打怪或者采集吧！')}</li>}
           {list.slice(p * PAGE, p * PAGE + PAGE).map((e, i) => <Entry key={`${e.t}-${i}`} e={e} />)}
         </ul>
         <p className="log-foot">
           {all.length > 0 && (confirm
-            ? <><button className="danger" onClick={() => { store.clearLog(); setConfirm(false); }}>确定清空</button> <button onClick={() => setConfirm(false)}>取消</button></>
-            : <button className="link" onClick={() => setConfirm(true)}>清空日志</button>)}
+            ? <><button className="danger" onClick={() => { store.clearLog(); setConfirm(false); }}>{tl('确定清空')}</button> <button onClick={() => setConfirm(false)}>{tl('取消')}</button></>
+            : <button className="link" onClick={() => setConfirm(true)}>{tl('清空日志')}</button>)}
         </p>
       </>
     );
@@ -101,11 +102,11 @@ export function CombatLog({ onClose }: { onClose: () => void }) {
   return (
     <div className="log-dock frame">
       <div className="log-head">
-        <b className="gold">日志</b>
+        <b className="gold">{tl('日志')}</b>
         <span className="log-tabs">
           {VIEWS.map(([id, name]) => <button key={id} className={view === id ? 'on' : ''} onClick={() => { setView(id); setPage(0); }}>{name}</button>)}
         </span>
-        <button className="fold" onClick={onClose} title="收起 (L)">收起 ▾</button>
+        <button className="fold" onClick={onClose} title={tl("收起 (L)")}>{tl('收起 ▾')}</button>
       </div>
       <div className="log-body">{body}</div>
       <Pager page={Math.min(page, pages - 1)} pages={pages} onPage={setPage} />
@@ -122,7 +123,7 @@ function statRows(all: CombatLogEntry[], tab: StatTab): StatRow[] {
     const xp: Partial<Record<SkillId, number>> = {};
     for (const e of all) for (const [k, v] of Object.entries(e.xp) as [SkillId, number][]) xp[k] = (xp[k] ?? 0) + v;
     for (const [k, v] of Object.entries(xp) as [SkillId, number][]) {
-      rows.push({ key: k, icon: <SkillIcon skill={k} size={16} />, name: SKILLS[k].name, value: `+${fmtNum(v)} 经验`, rate: v, sort: v });
+      rows.push({ key: k, icon: <SkillIcon skill={k} size={16} />, name: SKILLS[k].name, value: tl`+${fmtNum(v)} 经验`, rate: v, sort: v });
     }
   } else if (tab === 'items') {
     const items: Record<string, number> = {};
@@ -142,7 +143,7 @@ function statRows(all: CombatLogEntry[], tab: StatTab): StatRow[] {
     for (const [id, r] of Object.entries(n)) {
       const m = MONSTERS[id];
       if (!m) continue;
-      rows.push({ key: id, icon: <MonsterIcon m={m} size={16} />, name: m.name, value: `击败 ${r.k}${r.d ? ` · 阵亡 ${r.d}` : ''}`, rate: r.k, sort: r.k + r.d });
+      rows.push({ key: id, icon: <MonsterIcon m={m} size={16} />, name: m.name, value: tl`击败 ${r.k}${r.d ? tl` · 阵亡 ${r.d}` : ''}`, rate: r.k, sort: r.k + r.d });
     }
   } else {
     const n: Record<string, { ok: number; fail: number }> = {};
@@ -156,12 +157,12 @@ function statRows(all: CombatLogEntry[], tab: StatTab): StatRow[] {
     for (const [id, r] of Object.entries(n)) {
       const crop = id.startsWith('crop:') ? CROP_DEFS[id.slice(5)] : undefined;
       if (crop) {
-        rows.push({ key: id, icon: <SkillIcon skill="farming" size={16} />, name: `收获${crop.name}`, value: `${r.ok} 格`, rate: r.ok, sort: r.ok });
+        rows.push({ key: id, icon: <SkillIcon skill="farming" size={16} />, name: tl`收获${crop.name}`, value: tl`${r.ok} 格`, rate: r.ok, sort: r.ok });
         continue;
       }
       const a = ACTIONS[id];
       if (!a || a.kind !== 'skill') continue;
-      rows.push({ key: id, icon: <SkillIcon skill={a.skill} size={16} />, name: a.name, value: `${r.ok} 次${r.fail ? ` · 失手 ${r.fail}` : ''}`, rate: r.ok, sort: r.ok + r.fail });
+      rows.push({ key: id, icon: <SkillIcon skill={a.skill} size={16} />, name: a.name, value: tl`${r.ok} 次${r.fail ? tl` · 失手 ${r.fail}` : ''}`, rate: r.ok, sort: r.ok + r.fail });
     }
   }
   return rows.sort((a, b) => b.sort - a.sort);
@@ -186,7 +187,7 @@ function Entry({ e }: { e: CombatLogEntry }) {
     return (
       <li className="work">
         <time>{clock(e.t)}</time>
-        <span className="with-icon log-what"><SkillIcon skill="farming" size={14} /> 收获{c.name}{(e.n ?? 1) > 1 && ` ${e.n} 格`}{e.auto && <em className="muted"> 自动</em>}</span>
+        <span className="with-icon log-what"><SkillIcon skill="farming" size={14} />{tl` 收获${c.name}`}{(e.n ?? 1) > 1 && tl` ${e.n} 格`}{e.auto && <em className="muted">{tl(' 自动')}</em>}</span>
         <Gains e={e} />
       </li>
     );
@@ -197,26 +198,26 @@ function Entry({ e }: { e: CombatLogEntry }) {
     return (
       <li className={e.kind === 'fail' ? 'fail' : 'work'}>
         <time>{clock(e.t)}</time>
-        <span className="with-icon log-what"><SkillIcon skill={a.skill} size={14} /> {a.name}{e.kind === 'fail' && <em className="warn"> 失手</em>}</span>
+        <span className="with-icon log-what"><SkillIcon skill={a.skill} size={14} /> {a.name}{e.kind === 'fail' && <em className="warn">{tl(' 失手')}</em>}</span>
         <Gains e={e} />
       </li>
     );
   }
   const m = MONSTERS[e.monster ?? ''];
   if (!m) return null;
-  const rank = m.rank === 'boss' ? '首领 ' : m.rank === 'elite' ? '精英 ' : '';
+  const rank = m.rank === 'boss' ? tl('首领 ') : m.rank === 'elite' ? tl('精英 ') : '';
   if (e.kind === 'death') {
     return (
       <li className="death">
         <time>{clock(e.t)}</time>
-        <span className="with-icon log-what"><MonsterIcon m={m} size={14} /> 被 {rank}{m.name} 击败，回城复活</span>
+        <span className="with-icon log-what"><MonsterIcon m={m} size={14} />{tl` 被 ${rank}${m.name} 击败，回城复活`}</span>
       </li>
     );
   }
   return (
     <li>
       <time>{clock(e.t)}</time>
-      <span className="with-icon log-what"><MonsterIcon m={m} size={14} /> 击败 <b className={m.rank !== 'normal' ? 'gold' : ''}>{rank}{m.name}</b></span>
+      <span className="with-icon log-what"><MonsterIcon m={m} size={14} />{tl(' 击败 ')}<b className={m.rank !== 'normal' ? 'gold' : ''}>{rank}{m.name}</b></span>
       <Gains e={e} />
     </li>
   );

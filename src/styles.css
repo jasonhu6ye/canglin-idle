@@ -282,6 +282,8 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
   .tabbar button span { white-space: nowrap; }
   /* 面板最窄（约 1366 宽以下）时七个标签挤不下：图标缩小、字小一号，免得两个字折成两行 */
   @media (max-width: 1500px) { .tabbar button { gap: 3px; font-size: 12px; } .tabbar button img { width: 16px; height: 16px; } .tabbar kbd { display: none; } }
+  /* 英文标签更长：横排放不下，改成图标在上、文字在下 */
+  html[lang="en"] .tabbar button { flex-direction: column; gap: 1px; font-size: 11px; padding: 5px 0 6px; }
   .tabbar kbd { position: absolute; top: 2px; right: 4px; font: 9px/1 system-ui, sans-serif; color: var(--muted); opacity: 0.7; }
   .tabbar .help-btn { flex: 0 0 34px; font-size: 15px; font-weight: 700; color: var(--gold); }
   .tabbar .fold-btn { flex: 0 0 30px; font-size: 16px; font-weight: 700; color: var(--gold); }
@@ -758,3 +760,5 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .login-box .go button { flex: 1; }
 .create-stage { display: flex; gap: 12px; align-items: center; padding: 8px; background: #120b07; box-shadow: 0 0 0 1px var(--edge); }
 .create-stage p { margin: 4px 0 0; }
+.lang-row button { flex: 1; padding: 7px 10px; font-size: 13px; }
+html[lang="en"] .login-box h1 { letter-spacing: 2px; }

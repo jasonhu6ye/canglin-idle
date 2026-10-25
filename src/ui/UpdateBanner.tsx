@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { tl } from '../i18n';
 
 /** 发现线上有新版本时提示刷新：GitHub Pages 的页面会被缓存一阵，手机上尤其容易看到旧版 */
 export function UpdateBanner() {
@@ -24,5 +25,5 @@ export function UpdateBanner() {
     u.searchParams.set('v', next);
     location.replace(u.toString());
   };
-  return <button className="update-banner" onClick={reload}>游戏有新版本，点这里刷新</button>;
+  return <button className="update-banner" onClick={reload}>{tl('游戏有新版本，点这里刷新')}</button>;
 }

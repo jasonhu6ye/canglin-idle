@@ -11,6 +11,7 @@ import type {
   CombatLogEntry,
   BeltSlot, BuffKind, CombatAction, CombatStyle, EquipSlot, GameState, MonsterDef, SkillAction, SkillId, Summary, Task, TaskEndReason, TaskMode,
 } from './types';
+import { tl } from '../i18n';
 
 /** 离线收益上限 24 小时 */
 export const OFFLINE_CAP_MS = 24 * 60 * 60 * 1000;
@@ -237,19 +238,19 @@ const CODES: Record<string, { item: string; qty: number }[]> = {
 };
 /** 解锁衣橱外观的兑换码（外观本身在 game/hero.ts 的 OUTFITS，用 code 字段对上） */
 const SKIN_CODES: Record<string, string> = {
-  为爱发电: '衣橱新外观：南瓜提灯人、幽蓝南瓜、白发魔骑、红黑小丑、骸骨术士',
+  为爱发电: tl('衣橱新外观：南瓜提灯人、幽蓝南瓜、白发魔骑、红黑小丑、骸骨术士'),
 };
 export function redeemCode(prev: GameState, raw: string): { state: GameState; msg: string; ok: boolean } {
   const code = raw.trim();
   if (SKIN_CODES[code]) {
-    if (prev.redeemed?.includes(code)) return { state: prev, msg: '这个兑换码已经领过了', ok: false };
+    if (prev.redeemed?.includes(code)) return { state: prev, msg: tl('这个兑换码已经领过了'), ok: false };
     const s = clone(prev);
     s.redeemed = [...(s.redeemed ?? []), code];
-    return { state: s, msg: `兑换成功：解锁${SKIN_CODES[code]}，去「更多 → 衣橱」换上`, ok: true };
+    return { state: s, msg: tl`兑换成功：解锁${SKIN_CODES[code]}，去「更多 → 衣橱」换上`, ok: true };
   }
   const gifts = CODES[code];
-  if (!gifts) return { state: prev, msg: '兑换码无效', ok: false };
-  if (prev.redeemed?.includes(code)) return { state: prev, msg: '这个兑换码已经领过了', ok: false };
+  if (!gifts) return { state: prev, msg: tl('兑换码无效'), ok: false };
+  if (prev.redeemed?.includes(code)) return { state: prev, msg: tl('这个兑换码已经领过了'), ok: false };
   const s = clone(prev);
   s.redeemed = [...(s.redeemed ?? []), code];
   for (const g of gifts) {
@@ -257,7 +258,7 @@ export function redeemCode(prev: GameState, raw: string): { state: GameState; ms
     if (n > 0) s.bag[g.item] = (s.bag[g.item] ?? 0) + n;
     if (g.qty > n) s.bank[g.item] = (s.bank[g.item] ?? 0) + g.qty - n;
   }
-  return { state: s, msg: `兑换成功：获得 ${gifts.map((g) => `${ITEMS[g.item].name}${g.qty > 1 ? ` ×${g.qty}` : ''}`).join('、')}`, ok: true };
+  return { state: s, msg: tl`兑换成功：获得 ${gifts.map((g) => `${ITEMS[g.item].name}${g.qty > 1 ? ` ×${g.qty}` : ''}`).join(tl('、'))}`, ok: true };
 }
 
 /** 某个工具栏位当前的速度加成 */
@@ -413,8 +414,8 @@ function hitChance(attackRoll: number, defenceRoll: number): number {
 
 /** 怪物的招式：精英每第 6 下「重击」×1.6；首领每第 5 下「毁灭一击」×2.2，血量低于 30% 进入「狂怒」出手快 30% */
 export const MONSTER_MOVES = {
-  elite: { every: 6, mult: 1.6, name: '重击' },
-  boss: { every: 5, mult: 2.2, name: '毁灭一击' },
+  elite: { every: 6, mult: 1.6, name: tl('重击') },
+  boss: { every: 5, mult: 2.2, name: tl('毁灭一击') },
 } as const;
 export const BOSS_ENRAGE = 0.3;
 /** 世界首领的专属大招（名字见 bestiary WORLD_SKILL）：每第 4 下，伤害 ×2.6 */
@@ -481,7 +482,7 @@ export function combatEstimate(s: GameState, m: MonsterDef) {
   const taken = killMs === Infinity ? Infinity : (mAvg / m.attackMs) * killMs;
   const hp = maxHp(s);
   const ratio = taken / hp;
-  const rating = killMs === Infinity ? '打不动' : ratio < 0.2 ? '轻松' : ratio < 0.5 ? '适中' : ratio < 1 ? '危险' : '很难';
+  const rating = killMs === Infinity ? tl('打不动') : ratio < 0.2 ? tl('轻松') : ratio < 0.5 ? tl('适中') : ratio < 1 ? tl('危险') : tl('很难');
   // 新怪刷出来后要等一整次出手间隔才打第一下
   const perHour = 3_600_000 / (killMs + swing + (m.respawnMs ?? RESPAWN_MS));
   return { killMs, taken, rating, perHour, swing };

@@ -26,31 +26,32 @@ import { BagPanel, BankPanel, CharacterPanel, MorePanel, NodeList, OfflineModal,
 import { WorldMap } from './ui/WorldMap';
 import { HomeHud } from './ui/HomeUI';
 import { homeNode } from './core/home';
+import { tl } from './i18n';
 
 type Tab = 'game' | 'char' | 'bag' | 'bank' | 'skills' | 'guild' | 'more';
 /** 电脑端快捷键说明（用户 10-23 要求优化电脑端操作） */
 const SHORTCUTS: [string, string][] = [
-  ['WASD / 方向键', '走路'], ['鼠标右键', '点地面走过去，按住一直朝光标走'], ['鼠标左键', '点地点、怪物查看信息或攻击；拖动移动镜头'], ['滚轮 / + -', '缩放地图'],
-  ['空格', '镜头回到角色'], ['M', '世界地图'], ['G', '公会'], ['R', '骑上 / 下坐骑（坐骑栏有坐骑时）'], ['L', '日志（战斗掉落、采集制作产出和经验）'], ['Tab', '打开 / 关闭背包'], ['左键物品图标', '查看物品详情'], ['右键物品', '背包里穿上或放进补给栏，身上的卸下，仓库的取到背包'], ['1 - 7', '打开右侧面板，再按一次同一个收起'], ['Esc', '关闭当前页面，再按一次收起右侧面板'], ['?', '显示 / 隐藏这份说明'],
+  [tl('WASD / 方向键'), tl('走路')], [tl('鼠标右键'), tl('点地面走过去，按住一直朝光标走')], [tl('鼠标左键'), tl('点地点、怪物查看信息或攻击；拖动移动镜头')], [tl('滚轮 / + -'), tl('缩放地图')],
+  [tl('空格'), tl('镜头回到角色')], ['M', tl('世界地图')], ['G', tl('公会')], ['R', tl('骑上 / 下坐骑（坐骑栏有坐骑时）')], ['L', tl('日志（战斗掉落、采集制作产出和经验）')], ['Tab', tl('打开 / 关闭背包')], [tl('左键物品图标'), tl('查看物品详情')], [tl('右键物品'), tl('背包里穿上或放进补给栏，身上的卸下，仓库的取到背包')], ['1 - 7', tl('打开右侧面板，再按一次同一个收起')], ['Esc', tl('关闭当前页面，再按一次收起右侧面板')], ['?', tl('显示 / 隐藏这份说明')],
 ];
 
 const TABS: { id: Tab; icon: [string, string]; label: string }[] = [
-  { id: 'game', icon: ['sword', '#c5cad2'], label: '游戏' },
-  { id: 'char', icon: ['helm', '#c5cad2'], label: '角色' },
-  { id: 'bag', icon: ['bag', '#a07a50'], label: '背包' },
-  { id: 'bank', icon: ['coins', '#f0c850'], label: '仓库' },
-  { id: 'skills', icon: ['gem', '#e8b84a'], label: '技能' },
-  { id: 'guild', icon: ['shield', '#7a8ab8'], label: '公会' },
-  { id: 'more', icon: ['rune', '#9a9aa8'], label: '更多' },
+  { id: 'game', icon: ['sword', '#c5cad2'], label: tl('游戏') },
+  { id: 'char', icon: ['helm', '#c5cad2'], label: tl('角色') },
+  { id: 'bag', icon: ['bag', '#a07a50'], label: tl('背包') },
+  { id: 'bank', icon: ['coins', '#f0c850'], label: tl('仓库') },
+  { id: 'skills', icon: ['gem', '#e8b84a'], label: tl('技能') },
+  { id: 'guild', icon: ['shield', '#7a8ab8'], label: tl('公会') },
+  { id: 'more', icon: ['rune', '#9a9aa8'], label: tl('更多') },
 ];
 
 const END_TEXT: Record<TaskEndReason, string> = {
-  complete: '完成',
-  noInput: '材料不足，已停止',
-  death: '你阵亡了，战斗停止',
-  level: '等级不够，已跳过',
-  noAmmo: '弹药用完了，战斗停止',
-  summon: '南瓜王已经离开（要先在活动祭坛召唤）',
+  complete: tl('完成'),
+  noInput: tl('材料不足，已停止'),
+  death: tl('你阵亡了，战斗停止'),
+  level: tl('等级不够，已跳过'),
+  noAmmo: tl('弹药用完了，战斗停止'),
+  summon: tl('南瓜王已经离开（要先在活动祭坛召唤）'),
 };
 
 type Toast = { id: number; text: string; gold: boolean };
@@ -60,9 +61,9 @@ function useToasts() {
   useEffect(() => {
     let id = 0;
     return store.onGain((s: Summary) => {
-      const add: Toast[] = s.levelUps.map((l) => ({ id: ++id, text: `${SKILLS[l.skill].name} 升到 ${l.level} 级`, gold: true }));
-      for (const i of s.quests ?? []) add.push({ id: ++id, text: `新手任务完成：${questText(QUESTS[i])} · +${QUESTS[i].reward} 金币`, gold: true });
-      for (const e of s.taskEnds) add.push({ id: ++id, text: `${actionName(e.action)}：${END_TEXT[e.reason]}`, gold: false });
+      const add: Toast[] = s.levelUps.map((l) => ({ id: ++id, text: tl`${SKILLS[l.skill].name} 升到 ${l.level} 级`, gold: true }));
+      for (const i of s.quests ?? []) add.push({ id: ++id, text: tl`新手任务完成：${questText(QUESTS[i])} · +${QUESTS[i].reward} 金币`, gold: true });
+      for (const e of s.taskEnds) add.push({ id: ++id, text: tl`${actionName(e.action)}：${END_TEXT[e.reason]}`, gold: false });
       if (!add.length) return;
       setToasts((t) => [...t, ...add].slice(-4));
       setTimeout(() => setToasts((t) => t.filter((x) => !add.includes(x))), 3500);
@@ -269,7 +270,7 @@ function Game() {
         </div>
         <BossBar s={s} />
         {banner && <div key={banner.key} className="region-banner">{REGIONS[banner.region].name}</div>}
-        {boss && <div key={`b${boss.key}`} className={`boss-banner ${boss.world === 'event' ? 'world event' : boss.world ? 'world' : ''}`}><small>{boss.world === 'event' ? '🎃 万圣节限定首领 🎃' : boss.world ? '☠ 世界首领 ☠' : '首领'}</small>{boss.name}</div>}
+        {boss && <div key={`b${boss.key}`} className={`boss-banner ${boss.world === 'event' ? 'world event' : boss.world ? 'world' : ''}`}><small>{boss.world === 'event' ? tl('🎃 万圣节限定首领 🎃') : boss.world ? tl('☠ 世界首领 ☠') : tl('首领')}</small>{boss.name}</div>}
         <DayClock region={region} />
         <div className="toasts">
           {toasts.map((t) => <div key={t.id} className={`toast ${t.gold ? 'gold' : ''}`}>{t.text}</div>)}
@@ -278,16 +279,16 @@ function Game() {
       {side && <aside className={`side ${worldMap ? 'wide-map' : ''}`}>{side}</aside>}
       <nav className="tabbar">
         {TABS.map((t, i) => (
-          <button key={t.id} className={tab === t.id && !worldMap && showSide ? 'on' : ''} title={`${t.label}（快捷键 ${i + 1}）`}
+          <button key={t.id} className={tab === t.id && !worldMap && showSide ? 'on' : ''} title={tl`${t.label}（快捷键 ${i + 1}）`}
             onClick={() => pickTab(t.id)}>
             <TplIcon tpl={t.icon[0]} tint={t.icon[1]} size={22} />
             <span>{t.label}</span>
             {wide && <kbd>{i + 1}</kbd>}
           </button>
         ))}
-        {wide && <button className="help-btn" title="快捷键说明（?）" onClick={() => setHelp((v) => !v)}>?</button>}
+        {wide && <button className="help-btn" title={tl("快捷键说明（?）")} onClick={() => setHelp((v) => !v)}>?</button>}
         {wide && (
-          <button className="fold-btn" title={panelOpen ? '收起面板（Esc）' : '展开面板'} onClick={() => setPanelOpen((v) => !v)}>
+          <button className="fold-btn" title={panelOpen ? tl('收起面板（Esc）') : tl('展开面板')} onClick={() => setPanelOpen((v) => !v)}>
             {panelOpen ? '»' : '«'}
           </button>
         )}
@@ -295,11 +296,11 @@ function Game() {
       {help && (
         <div className="item-popup" onClick={() => setHelp(false)}>
           <div className="item-popup-body frame shortcuts" onClick={(e) => e.stopPropagation()}>
-            <h2>电脑端操作</h2>
+            <h2>{tl('电脑端操作')}</h2>
             <table><tbody>{SHORTCUTS.map(([k, d]) => <tr key={k}><td><kbd>{k}</kbd></td><td>{d}</td></tr>)}</tbody></table>
             <div className="go">
-              <button onClick={() => { setHelp(false); openGuide(); }}>新手指引</button>
-              <button className="primary" onClick={() => setHelp(false)}>知道了</button>
+              <button onClick={() => { setHelp(false); openGuide(); }}>{tl('新手指引')}</button>
+              <button className="primary" onClick={() => setHelp(false)}>{tl('知道了')}</button>
             </div>
           </div>
         </div>
@@ -314,9 +315,9 @@ function Game() {
       {inactive && (
         <div className="modal-bg tab-lock">
           <div className="modal frame">
-            <h2>游戏在另一个页面打开了</h2>
-            <p>为了不让两边的进度互相覆盖，这个页面已经暂停，不会再保存。</p>
-            <div className="go"><button className="primary" onClick={() => location.reload()}>在这个页面继续玩</button></div>
+            <h2>{tl('游戏在另一个页面打开了')}</h2>
+            <p>{tl('为了不让两边的进度互相覆盖，这个页面已经暂停，不会再保存。')}</p>
+            <div className="go"><button className="primary" onClick={() => location.reload()}>{tl('在这个页面继续玩')}</button></div>
           </div>
         </div>
       )}

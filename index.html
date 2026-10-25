@@ -18,6 +18,18 @@
       <i style="width:140px;height:4px;background:#3a2a1a;overflow:hidden;display:block"><i style="display:block;width:40%;height:100%;background:#e8b84a;animation:ld 1.2s ease-in-out infinite alternate"></i></i>
       <style>@keyframes ld{from{margin-left:0}to{margin-left:60%}}</style>
     </div></div>
+    <script>
+      // 英文语言包：加载画面也换成英文（语言选择存在 canglin-lang）
+      try {
+        if (localStorage.getItem("canglin-lang") === "en") {
+          document.documentElement.lang = "en";
+          document.title = "Canglin Idle";
+          var ld = document.querySelector("#root b"), tip = document.querySelector("#root span");
+          if (ld) { ld.textContent = "Canglin Idle"; ld.style.letterSpacing = "2px"; }
+          if (tip) tip.textContent = "Generating the world map. The first load takes a few seconds…";
+        }
+      } catch (e) {}
+    </script>
     <script type="module" src="/src/main.tsx"></script>
     <script>
       // iOS Safari 忽略 user-scalable=no，这里拦掉双指缩放整页

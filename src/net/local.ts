@@ -1,6 +1,7 @@
 import type { GameState } from '../core/types';
 import type { Board, ChatMsg, Guild, GuildMember, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { GUILD_MAX, levelSnapshot } from './api';
+import { tl } from '../i18n';
 
 /**
  * 本地假后端：数据放 localStorage，只有你自己。用来在后端接好前把排行榜和公会界面做出来、跑测试。
@@ -35,12 +36,12 @@ export class LocalApi implements OnlineApi {
     try { this.storage.setItem(KEY, JSON.stringify(this.db)); } catch { /* 存不了就算了 */ }
   }
   private need() {
-    if (!this.db.me) throw new Error('请先登录');
+    if (!this.db.me) throw new Error(tl('请先登录'));
     return this.db.me;
   }
   private myGuild() {
     const g = this.db.guilds.find((x) => x.id === this.db.me?.guildId);
-    if (!g) throw new Error('还没加入公会');
+    if (!g) throw new Error(tl('还没加入公会'));
     return g;
   }
 
@@ -54,7 +55,7 @@ export class LocalApi implements OnlineApi {
   }
   async signUp(_email?: string, _pw?: string) { return this.signIn(); }
   async createProfile(name: string, outfit: string) {
-    if (!this.db.session) throw new Error('请先登录');
+    if (!this.db.session) throw new Error(tl('请先登录'));
     this.db.me = { id: uid(), name, outfit };
     this.flush();
     return this.db.me;
@@ -84,7 +85,7 @@ export class LocalApi implements OnlineApi {
   async searchGuilds(q: string) { return this.db.guilds.filter((g) => g.name.includes(q) || g.tag.includes(q)); }
   async createGuild(name: string, tag: string) {
     const me = this.need();
-    if (me.guildId) throw new Error('已经在公会里了');
+    if (me.guildId) throw new Error(tl('已经在公会里了'));
     const g: Guild = { id: uid(), name, tag, notice: '', level: 1, xp: 0, members: 1, maxMembers: GUILD_MAX, open: true };
     this.db.guilds.push(g);
     this.db.members[g.id] = [{ playerId: me.id, name: me.name, role: 'leader', totalLevel: this.db.snap?.total ?? 0, weekly: 0, lastSeen: Date.now() }];
@@ -96,8 +97,8 @@ export class LocalApi implements OnlineApi {
   async joinGuild(id: string) {
     const me = this.need();
     const g = this.db.guilds.find((x) => x.id === id);
-    if (!g) throw new Error('公会不存在');
-    if (g.members >= g.maxMembers) throw new Error('公会满员了');
+    if (!g) throw new Error(tl('公会不存在'));
+    if (g.members >= g.maxMembers) throw new Error(tl('公会满员了'));
     (this.db.members[id] ??= []).push({ playerId: me.id, name: me.name, role: 'member', totalLevel: this.db.snap?.total ?? 0, weekly: 0, lastSeen: Date.now() });
     g.members++;
     me.guildId = id;

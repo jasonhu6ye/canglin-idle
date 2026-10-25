@@ -11,6 +11,7 @@ import { store } from '../store';
 import { fmtNum } from './format';
 import { emitToGame, onGameEvent } from './GameCanvas';
 import { Icon, itemImageUrl } from './icons';
+import { tl } from '../i18n';
 
 homeIcons.url = itemImageUrl;
 
@@ -21,23 +22,23 @@ export function PortalSheet({ s, node, onClose }: { s: GameState; node: MapNode;
   return (
     <div className="sheet portal-sheet">
       <div className="sheet-head">
-        <button className="back" onClick={onClose}>‹ 返回</button>
+        <button className="back" onClick={onClose}>{tl('‹ 返回')}</button>
         <h2>{node.name}</h2>
-        <small className="muted">通往你自己的家园岛屿</small>
+        <small className="muted">{tl('通往你自己的家园岛屿')}</small>
       </div>
       <div className="pad">
-        <p>穿过传送门就到了你的家园岛屿：一座 {homeSize(s)}×{homeSize(s)} 格的海岛，可以自己盖墙、铺地板、摆家具，造一座自己的房子。</p>
+        <p>{tl`穿过传送门就到了你的家园岛屿：一座 ${homeSize(s)}×${homeSize(s)} 格的海岛，可以自己盖墙、铺地板、摆家具，造一座自己的房子。`}</p>
         <ul className="portal-tips">
-          <li>岛上能放灶台、熔炉、铁砧、工作台、制弓台、药剂台，站在岛上就能直接干活。</li>
-          <li>放一个储物箱，岛上就能存取仓库，干活背包满了也直接存进去。</li>
-          <li>首领的战旗和战利品可以摆出来当装饰。</li>
-          <li>岛上做不了的任务（采集、打怪），点「继续工作」会自己从传送门出来去做。</li>
+          <li>{tl('岛上能放灶台、熔炉、铁砧、工作台、制弓台、药剂台，站在岛上就能直接干活。')}</li>
+          <li>{tl('放一个储物箱，岛上就能存取仓库，干活背包满了也直接存进去。')}</li>
+          <li>{tl('首领的战旗和战利品可以摆出来当装饰。')}</li>
+          <li>{tl('岛上做不了的任务（采集、打怪），点「继续工作」会自己从传送门出来去做。')}</li>
         </ul>
-        {things > 0 && <p className="muted">岛上已经摆了 {things} 件东西。</p>}
+        {things > 0 && <p className="muted">{tl`岛上已经摆了 ${things} 件东西。`}</p>}
         <div className="go">
           {here
-            ? <button className="primary" onClick={() => { store.dispatch(enterHome); onClose(); }}>进入家园岛屿</button>
-            : <button className="primary" onClick={() => { store.requestWalk(node.id); onClose(); }}>寻路去{node.name}</button>}
+            ? <button className="primary" onClick={() => { store.dispatch(enterHome); onClose(); }}>{tl('进入家园岛屿')}</button>
+            : <button className="primary" onClick={() => { store.requestWalk(node.id); onClose(); }}>{tl`寻路去${node.name}`}</button>}
         </div>
       </div>
     </div>
@@ -79,21 +80,21 @@ export function HomeHud({ s }: { s: GameState }) {
   return (
     <>
       <div className="home-bar">
-        <b>家园岛屿</b> <small className="muted">{homeSize(s)}×{homeSize(s)}</small>
-        <button className={`pill ${open ? 'on' : ''}`} onClick={() => (open ? close() : setOpen(true))}>{open ? '收起建造' : '建造'}</button>
-        <button className="pill" onClick={() => { close(); store.dispatch(leaveHome); }}>回城</button>
+        <b>{tl('家园岛屿')}</b> <small className="muted">{homeSize(s)}×{homeSize(s)}</small>
+        <button className={`pill ${open ? 'on' : ''}`} onClick={() => (open ? close() : setOpen(true))}>{open ? tl('收起建造') : tl('建造')}</button>
+        <button className="pill" onClick={() => { close(); store.dispatch(leaveHome); }}>{tl('回城')}</button>
       </div>
       {msg && <div className="home-msg">{msg}</div>}
       {open && (
         <div className="home-build frame">
           <div className="chips-row">
             {BUILD_CATS.map((c) => <button key={c.id} className={`pill ${cat === c.id ? 'on' : ''}`} onClick={() => setCat(c.id)}>{c.name}</button>)}
-            <button className={`pill danger ${tool?.kind === 'demolish' ? 'on' : ''}`} onClick={() => setTool(tool?.kind === 'demolish' ? null : { kind: 'demolish' })}>拆除</button>
+            <button className={`pill danger ${tool?.kind === 'demolish' ? 'on' : ''}`} onClick={() => setTool(tool?.kind === 'demolish' ? null : { kind: 'demolish' })}>{tl('拆除')}</button>
           </div>
           <p className="muted small">
-            {tool?.kind === 'demolish' ? '点（或拖过）要拆的东西，材料全部退回仓库。'
-              : tool ? `点地面放置${buildDef(tool.id)?.name ?? ''}${buildDef(tool.id)?.wall || buildDef(tool.id)?.cat === 'floor' ? '，按住拖动能连续铺' : ''}。${'ontouchstart' in window ? '两指拖动移动镜头' : '右键取消'}。`
-                : '选一件东西，再点岛上的空地放下。材料先用仓库、再用背包。'}
+            {tool?.kind === 'demolish' ? tl('点（或拖过）要拆的东西，材料全部退回仓库。')
+              : tool ? tl`点地面放置${buildDef(tool.id)?.name ?? ''}${buildDef(tool.id)?.wall || buildDef(tool.id)?.cat === 'floor' ? tl('，按住拖动能连续铺') : ''}。${'ontouchstart' in window ? tl('两指拖动移动镜头') : tl('右键取消')}。`
+                : tl('选一件东西，再点岛上的空地放下。材料先用仓库、再用背包。')}
           </p>
           <ul className="build-list">
             {list.map((d) => {
@@ -113,19 +114,19 @@ export function HomeHud({ s }: { s: GameState }) {
                 </li>
               );
             })}
-            {!list.length && <li className="muted">仓库和背包里还没有首领战旗或战利品。</li>}
+            {!list.length && <li className="muted">{tl('仓库和背包里还没有首领战旗或战利品。')}</li>}
           </ul>
           {up && cat === 'struct' && (
             <div className="home-up">
-              <b>扩建岛屿</b> {HOME_SIZES[lv]}×{HOME_SIZES[lv]} → {HOME_SIZES[lv + 1]}×{HOME_SIZES[lv + 1]}
+              <b>{tl('扩建岛屿')}</b> {HOME_SIZES[lv]}×{HOME_SIZES[lv]} → {HOME_SIZES[lv + 1]}×{HOME_SIZES[lv + 1]}
               <span className="bl-cost">
                 <span className={(s.bank.coins ?? 0) >= up.coins ? '' : 'warn'}><Icon item="coins" size={14} info={false} />{fmtNum(up.coins)}</span>
                 {up.items.map((c) => <span key={c.item} className={have(s, c.item) >= c.qty ? '' : 'warn'}><Icon item={c.item} size={14} info={false} />{c.qty}<small>/{fmtNum(have(s, c.item))}</small></span>)}
               </span>
-              <button className="pill on" disabled={(s.bank.coins ?? 0) < up.coins || !affordable(s, up.items)} onClick={() => store.dispatch(upgradeHome)}>扩建</button>
+              <button className="pill on" disabled={(s.bank.coins ?? 0) < up.coins || !affordable(s, up.items)} onClick={() => store.dispatch(upgradeHome)}>{tl('扩建')}</button>
             </div>
           )}
-          <div className="go"><button onClick={close}>完成</button></div>
+          <div className="go"><button onClick={close}>{tl('完成')}</button></div>
         </div>
       )}
     </>

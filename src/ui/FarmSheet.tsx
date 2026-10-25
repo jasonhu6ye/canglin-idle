@@ -8,6 +8,7 @@ import type { GameState } from '../core/types';
 import { store } from '../store';
 import { fmtNum } from './format';
 import { Icon } from './icons';
+import { tl } from '../i18n';
 
 /**
  * 田地面板（地块制种田，用户 10-23 要求像星露谷那样，也能快捷种）：
@@ -15,7 +16,7 @@ import { Icon } from './icons';
  */
 const dur = (ms: number) => {
   const m = Math.ceil(ms / 60000);
-  return m >= 60 ? `${Math.floor(m / 60)} 小时 ${m % 60} 分` : `${m} 分钟`;
+  return m >= 60 ? tl`${Math.floor(m / 60)} 小时 ${m % 60} 分` : tl`${m} 分钟`;
 };
 
 export function FarmSheet({ s, nodeId, onClose }: { s: GameState; nodeId: string; onClose: () => void }) {
@@ -36,9 +37,9 @@ export function FarmSheet({ s, nodeId, onClose }: { s: GameState; nodeId: string
   return (
     <div className="sheet farm-sheet">
       <div className="sheet-head">
-        <button className="back" onClick={onClose}>‹ 返回</button>
+        <button className="back" onClick={onClose}>{tl('‹ 返回')}</button>
         <h2>{node.name}</h2>
-        <small className="muted">{REGIONS[node.region].name} · {node.farm!.map(tierName).join('、')} 作物 · {plots.length} 格地</small>
+        <small className="muted">{tl`${REGIONS[node.region].name} · ${node.farm!.map(tierName).join(tl('、'))} 作物 · ${plots.length} 格地`}</small>
       </div>
 
       <div className="farm-grid" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
@@ -48,7 +49,7 @@ export function FarmSheet({ s, nodeId, onClose }: { s: GameState; nodeId: string
           const g = plot ? plotGrowth(plot, now) : 0;
           return (
             <i key={p.id} className={`fp ${ph} ${plot?.water ? 'wet' : ''} ${pick === p.id ? 'sel' : ''}`} onClick={() => setPick(pick === p.id ? null : p.id)}
-              title={plot ? `${CROP_DEFS[plot.crop]?.name} · ${ph === 'ripe' ? '可以收获' : `${Math.floor(g * 100)}%，约 ${dur(plot.ripe - now)}${plot.water ? ' · 浇过水' : ' · 没浇水'}`}` : '空地'}>
+              title={plot ? `${CROP_DEFS[plot.crop]?.name} · ${ph === 'ripe' ? tl('可以收获') : tl`${Math.floor(g * 100)}%，约 ${dur(plot.ripe - now)}${plot.water ? tl(' · 浇过水') : tl(' · 没浇水')}`}` : tl('空地')}>
               {plot && <span className={`fp-ic ${ph === 'ripe' ? '' : g < 0.5 ? 'young' : 'half'}`}><Icon item={g < 0.5 && ph !== 'ripe' ? `seed_${plot.crop}` : plot.crop} size={20} /></span>}
               {plot && ph !== 'ripe' && <b style={{ width: `${Math.max(6, g * 100)}%` }} />}
               {plot?.fert && <em className={`fp-fert f${plot.fert}`} />}
@@ -58,32 +59,30 @@ export function FarmSheet({ s, nodeId, onClose }: { s: GameState; nodeId: string
       </div>
       {pick && <PlotDetail s={s} id={pick} now={now} />}
       <FieldCrops s={s} nodeId={nodeId} now={now} />
-      <p className="farm-stat">
-        空地 <b>{n.empty}</b> · 生长中 <b>{n.growing}</b>{n.dry > 0 && <span className="muted">（{n.dry} 格没浇水）</span>} · 可收获 <b className={n.ripe ? 'gold' : ''}>{n.ripe}</b>
-        {n.next < Infinity && <span className="muted"> · 下一格约 {dur(n.next)}后熟</span>}
+      <p className="farm-stat">{tl('空地 ')}<b>{n.empty}</b>{tl(' · 生长中 ')}<b>{n.growing}</b>{n.dry > 0 && <span className="muted">{tl`（${n.dry} 格没浇水）`}</span>}{tl(' · 可收获 ')}<b className={n.ripe ? 'gold' : ''}>{n.ripe}</b>
+        {n.next < Infinity && <span className="muted">{tl` · 下一格约 ${dur(n.next)}后熟`}</span>}
       </p>
 
       {!near && (
         <div className="go far-bank">
-          <span className="muted">要站在田里才能种地（作物不在旁边也照样长）</span>
-          <button onClick={() => { store.requestWalk(nodeId); onClose(); }}>寻路去{node.name}</button>
+          <span className="muted">{tl('要站在田里才能种地（作物不在旁边也照样长）')}</span>
+          <button onClick={() => { store.requestWalk(nodeId); onClose(); }}>{tl`寻路去${node.name}`}</button>
         </div>
       )}
 
       <div className="farm-btns">
-        <button className="primary" disabled={!near || !chosen || !seeds || !n.empty} onClick={() => chosen && store.farm((g, t) => plantAll(g, nodeId, chosen, t))}>
-          种满 <small>{chosen ? `${CROP_DEFS[chosen].name} ×${Math.min(seeds, n.empty)}` : '没有种子'}</small>
+        <button className="primary" disabled={!near || !chosen || !seeds || !n.empty} onClick={() => chosen && store.farm((g, t) => plantAll(g, nodeId, chosen, t))}>{tl('种满 ')}<small>{chosen ? `${CROP_DEFS[chosen].name} ×${Math.min(seeds, n.empty)}` : tl('没有种子')}</small>
         </button>
-        <button disabled={!near || !n.dry} onClick={() => store.farm((g, t) => waterAll(g, nodeId, t))}>浇水 <small>{n.dry} 格</small></button>
-        <button disabled={!near || !n.ripe} onClick={() => store.farm((g, t) => harvestAll(g, nodeId, t))}>收获 <small>{n.ripe} 格</small></button>
+        <button disabled={!near || !n.dry} onClick={() => store.farm((g, t) => waterAll(g, nodeId, t))}>{tl('浇水 ')}<small>{tl`${n.dry} 格`}</small></button>
+        <button disabled={!near || !n.ripe} onClick={() => store.farm((g, t) => harvestAll(g, nodeId, t))}>{tl('收获 ')}<small>{tl`${n.ripe} 格`}</small></button>
       </div>
       <FarmGear s={s} nodeId={nodeId} near={near} />
       <label className="farm-auto">
         <input type="checkbox" checked={auto} onChange={(e) => store.dispatch((g) => setSettings(g, { autoFarm: { ...g.settings.autoFarm, [nodeId]: e.target.checked } }))} />
-        <span><b>自动补种</b> <small className="muted">熟了自动收进仓库，再种同一种（种子先用背包、再用仓库），离线也照样</small></span>
+        <span><b>{tl('自动补种')}</b> <small className="muted">{tl('熟了自动收进仓库，再种同一种（种子先用背包、再用仓库），离线也照样')}</small></span>
       </label>
 
-      <h3 className="farm-h">选种子</h3>
+      <h3 className="farm-h">{tl('选种子')}</h3>
       <ul className="action-list">
         {crops.map((c) => {
           const lock = farmLv < c.level;
@@ -94,21 +93,16 @@ export function FarmSheet({ s, nodeId, onClose }: { s: GameState; nodeId: string
               <span className="act-body">
                 <span className="row1">
                   <b>{c.name}</b>
-                  <span className="xph">每格 {fmtNum(c.xp)} 经验</span>
+                  <span className="xph">{tl`每格 ${fmtNum(c.xp)} 经验`}</span>
                 </span>
-                <span className="row2">
-                  种植 {c.level} 级 · 约 {dur(growMs(s, c.id, fertLv(s, nodeId)))}成熟（浇水快 {WATER_SPEEDUP * 100}%）· 收 2-3 个
-                  {' · '}<span className={have ? '' : 'warn'}><Icon item={`seed_${c.id}`} size={14} /> 种子 {fmtNum(have)}</span>
+                <span className="row2">{tl`种植 ${c.level} 级 · 约 ${dur(growMs(s, c.id, fertLv(s, nodeId)))}成熟（浇水快 ${WATER_SPEEDUP * 100}%）· 收 2-3 个`}{' · '}<span className={have ? '' : 'warn'}><Icon item={`seed_${c.id}`} size={14} />{tl` 种子 ${fmtNum(have)}`}</span>
                 </span>
               </span>
             </li>
           );
         })}
       </ul>
-      <p className="muted pad small">
-        也可以直接点地图上的地块：空地种下、长着的浇水、熟了收获。收获时 80% 收回种子，偶尔变异出下一种作物的种子。
-        种子不够可以去集市的种子摊买。
-      </p>
+      <p className="muted pad small">{tl('也可以直接点地图上的地块：空地种下、长着的浇水、熟了收获。收获时 80% 收回种子，偶尔变异出下一种作物的种子。 种子不够可以去集市的种子摊买。')}</p>
     </div>
   );
 }
@@ -117,13 +111,12 @@ export function FarmSheet({ s, nodeId, onClose }: { s: GameState; nodeId: string
 function PlotDetail({ s, id, now }: { s: GameState; id: string; now: number }) {
   const p = s.farm?.[id];
   const no = Number(id.split(':')[1]) + 1;
-  if (!p) return <p className="farm-detail">第 {no} 格 · 空地，在地图上点它就能播种</p>;
+  if (!p) return <p className="farm-detail">{tl`第 ${no} 格 · 空地，在地图上点它就能播种`}</p>;
   const c = CROP_DEFS[p.crop];
   const ripe = plotPhase(p, now) === 'ripe';
   return (
-    <p className="farm-detail">
-      第 {no} 格 · <Icon item={p.crop} size={14} /> <b>{c?.name}</b> ·{' '}
-      {ripe ? <b className="gold">熟了，可以收获</b> : <>长到 {Math.floor(plotGrowth(p, now) * 100)}% · 约 {dur(p.ripe - now)}后熟 · {p.water ? '已浇水' : <span className="warn">没浇水</span>}{p.fert && ` · 施了${p.fert === 2 ? '高级' : '普通'}肥料`}</>}
+    <p className="farm-detail">{tl`第 ${no} 格 · `}<Icon item={p.crop} size={14} /> <b>{c?.name}</b> ·{' '}
+      {ripe ? <b className="gold">{tl('熟了，可以收获')}</b> : <>{tl`长到 ${Math.floor(plotGrowth(p, now) * 100)}% · 约 ${dur(p.ripe - now)}后熟 · `}{p.water ? tl('已浇水') : <span className="warn">{tl('没浇水')}</span>}{p.fert && tl` · 施了${p.fert === 2 ? tl('高级') : tl('普通')}肥料`}</>}
     </p>
   );
 }
@@ -150,11 +143,11 @@ function FieldCrops({ s, nodeId, now }: { s: GameState; nodeId: string; now: num
         <li key={id}>
           <Icon item={id} size={24} />
           <span>
-            <b>{CROP_DEFS[id]?.name}</b> <span className="muted">× {e.n} 格</span>
+            <b>{CROP_DEFS[id]?.name}</b> <span className="muted">{tl`× ${e.n} 格`}</span>
             <small>
-              {e.ripe > 0 && <b className="gold">{e.ripe} 格可收获 </b>}
-              {e.next < Infinity && <span className="muted">最快 {dur(e.next)}后熟</span>}
-              {e.dry > 0 && <span className="warn"> · {e.dry} 格没浇水</span>}
+              {e.ripe > 0 && <b className="gold">{tl`${e.ripe} 格可收获 `}</b>}
+              {e.next < Infinity && <span className="muted">{tl`最快 ${dur(e.next)}后熟`}</span>}
+              {e.dry > 0 && <span className="warn">{tl` · ${e.dry} 格没浇水`}</span>}
             </small>
           </span>
         </li>
@@ -179,25 +172,25 @@ function FarmGear({ s, nodeId, near }: { s: GameState; nodeId: string; near: boo
   const rain = isRaining(node.region);
   return (
     <div className="farm-gear">
-      {rain && <p className="rain-note">🌧 正在下雨，田里的作物自动算浇过水</p>}
+      {rain && <p className="rain-note">{tl('🌧 正在下雨，田里的作物自动算浇过水')}</p>}
       <div className="row-fert">
-        <span>施肥</span>
-        <button className={`pill ${!fert ? 'on' : ''}`} onClick={() => setFert('')}>不施</button>
+        <span>{tl('施肥')}</span>
+        <button className={`pill ${!fert ? 'on' : ''}`} onClick={() => setFert('')}>{tl('不施')}</button>
         {(['fert_basic', 'fert_rich'] as const).map((id, i) => (
           <button key={id} className={`pill ${fert === id ? 'on' : ''}`} onClick={() => setFert(id)} title={ITEMS[id].desc}>
-            <Icon item={id} size={14} /> {ITEMS[id].name} <small>×{fmtNum(fertCount(s, id))}</small> <small className="muted">快 {FERT_SPEEDUP[i + 1] * 100}%{i ? '、多收 1 个' : ''}</small>
+            <Icon item={id} size={14} /> {ITEMS[id].name} <small>×{fmtNum(fertCount(s, id))}</small> <small className="muted">{tl`快 ${FERT_SPEEDUP[i + 1] * 100}%${i ? tl('、多收 1 个') : ''}`}</small>
           </button>
         ))}
       </div>
-      {fert && !fertCount(s, fert) && <p className="warn small">{ITEMS[fert].name}用完了，种下的不会施肥。在工坊能做。</p>}
+      {fert && !fertCount(s, fert) && <p className="warn small">{tl`${ITEMS[fert].name}用完了，种下的不会施肥。在工坊能做。`}</p>}
       <div className="row-fert">
-        <span>洒水器</span>
-        {has ? <b className="gold">已安装 · 新种的自动浇水</b> : (
+        <span>{tl('洒水器')}</span>
+        {has ? <b className="gold">{tl('已安装 · 新种的自动浇水')}</b> : (
           <>
             <button className="pill" disabled={!near || !kits} onClick={() => store.farm((g, t) => installSprinkler(g, nodeId, t))}>
-              <Icon item="sprinkler" size={14} /> 安装 <small>有 {kits} 个</small>
+              <Icon item="sprinkler" size={14} />{tl(' 安装 ')}<small>{tl`有 ${kits} 个`}</small>
             </button>
-            {!kits && <small className="muted">在铁匠铺打造（锻造 20 级）</small>}
+            {!kits && <small className="muted">{tl('在铁匠铺打造（锻造 20 级）')}</small>}
           </>
         )}
       </div>

@@ -1,0 +1,158 @@
+/** 联机（账号、云存档、排行榜、公会、聊天）和 10-25 优化的英文 */
+export const EN_ONLINE: Record<string, string> = {
+  // 战斗评估
+  '每次攻击回复生命（普通 3%、精英 1.5%、首领 0.6%、世界首领 0.3%）': 'Heals on every attack (3% normal, 1.5% elite, 0.6% boss, 0.3% world boss)',
+  '打不动': 'Too tough',
+  ' · 它回血比你的输出还快，先提升等级和装备': ' · It heals faster than you can hurt it. Level up and gear up first',
+  ' · 评估：{0}': ' · Estimate: {0}',
+  '打不动（回血比你的输出快）': 'Too tough (heals faster than your damage)',
+  '{0}（约 {1} 秒，掉血约 {2}）': '{0} (about {1}s, lose about {2} HP)',
+  '点「去做」打开树林的页面，原木已经选好了，点「立即开始」角色会自己走过去砍树，之后一直自动进行，你可以去干别的。':
+    'Tap "Go" to open the woods. Logs are already selected, so just tap "Start now" and your character walks over and keeps chopping on their own while you do something else.',
+
+  // 地点列表
+  '养马': 'Horse breeding',
+  '买卖': 'Buy & sell',
+  '传说石碑': 'Waystone',
+
+  // 联机后端报错
+  '请先登录': 'Please log in first',
+  '还没加入公会': "You're not in a guild yet",
+  '已经在公会里了': "You're already in a guild",
+  '公会不存在': 'That guild no longer exists',
+  '公会满员了': 'That guild is full',
+  '注册成功，请去邮箱点确认链接后再登录': "You're signed up! Check your email for the confirmation link, then log in.",
+  '创建角色失败': "Couldn't create your character",
+
+  // 公会 / 联机页
+  '排行榜': 'Leaderboard',
+  '聊天': 'Chat',
+  '账号': 'Account',
+  '这个公会名已经有人用了': 'That guild name is taken',
+  '这个会标已经有人用了': 'That guild tag is taken',
+  '联机': 'Online',
+  '角色：{0}': 'Character: {0}',
+  '离线游玩中': 'Playing offline',
+  '刚才连不上服务器。连上后登录，进度会自动传到云端。': "Couldn't reach the server. Log in once you're back online and your progress will upload automatically.",
+  '重新连接': 'Reconnect',
+  '存档每分钟自动传到云端，换手机或电脑登录同一个账号就能接着玩。': 'Your save uploads to the cloud every minute. Log in with the same account on any phone or computer to pick up where you left off.',
+  '新的角色名（2-12 个字）': 'New character name (2-12 characters)',
+  '名字 2-12 个字，只能用文字、数字和下划线': 'Names are 2-12 characters: letters, numbers and underscores only',
+  '改名': 'Rename',
+  '退出登录？进度已经存在云端。': 'Log out? Your progress is safe in the cloud.',
+  '退出登录': 'Log out',
+  '我的排名：第 {0} 名 · {1} 级': 'Your rank: #{0} · Lv {1}',
+  '读取中…': 'Loading…',
+  '还没有人上榜，登录后就会出现。': 'Nobody on the board yet. Log in and you will show up here.',
+  'Lv{0} · {1}/{2} 人': 'Lv{0} · {1}/{2} members',
+  '会长还没写公告': "The guild leader hasn't posted a message yet",
+  '公会公告（200 字以内）': 'Guild message (up to 200 characters)',
+  '改公告': 'Update message',
+  '总等级 {0}': 'Total level {0}',
+  '把会长转给 {0}？': 'Make {0} the guild leader?',
+  '把 {0} 移出公会？': 'Remove {0} from the guild?',
+  '踢出': 'Kick',
+  '你是会长，退出后会长自动传给副会长或最早入会的成员。确定退出？': "You're the leader. If you leave, leadership passes to an officer or the longest-standing member. Leave anyway?",
+  '确定退出公会？': 'Leave the guild?',
+  '退出公会': 'Leave guild',
+  '公会任务、公会仓库和公会加成下一步开放。': 'Guild quests, a guild bank and guild perks are coming next.',
+  '公会名 2-12 个字': 'Guild names are 2-12 characters',
+  '会标 2-4 个字': 'Guild tags are 2-4 characters',
+  '仓库里金币不够 {0}': 'You need {0} coins in your bank',
+  '加入一个公会，和其他玩家一起聊天、做公会任务、冲排行榜。': 'Join a guild to chat with other players, take on guild quests and climb the leaderboard together.',
+  '加入公会': 'Join a guild',
+  '搜索公会名或会标': 'Search by guild name or tag',
+  '搜索': 'Search',
+  '还没有公会，来创建第一个吧': 'No guilds yet. Be the first to found one!',
+  '加入': 'Join',
+  '创建公会 ': 'Found a guild ',
+  '需要 {0} 金币（仓库有 {1}）': 'Costs {0} coins (you have {1} in the bank)',
+  '公会名': 'Guild name',
+  '会标': 'Tag',
+  '创建': 'Create',
+  '世界': 'World',
+  '还没有消息': 'No messages yet',
+  '：{0}': ': {0}',
+  '说点什么（200 字以内）': 'Say something (up to 200 characters)',
+  '发送': 'Send',
+
+  // 登录页
+  '连不上服务器，请检查网络后再试': "Can't reach the server. Check your connection and try again.",
+  '邮箱或密码不对': 'Wrong email or password',
+  '这个邮箱已经注册过了，直接登录吧': 'That email is already registered. Just log in.',
+  '这个名字已经有人用了，换一个吧': 'That name is taken. Try another one.',
+  '邮箱格式不对': "That doesn't look like a valid email",
+  '操作太频繁，请稍等一会儿': 'Too many attempts. Please wait a moment.',
+  '苍岭放置': 'Canglin Idle',
+  '正在连接服务器…': 'Connecting to the server…',
+  '连不上服务器。可能是网络不好，稍后再试。': "Can't reach the server. Your connection may be spotty, so try again in a bit.",
+  '重试': 'Retry',
+  '先离线玩': 'Play offline',
+  '离线玩的进度存在这台设备上，下次连上后会自动传到云端。': "Offline progress stays on this device and uploads to the cloud the next time you're connected.",
+  '密码至少 6 位': 'Passwords need at least 6 characters',
+  '两次输入的密码不一样': "The passwords don't match",
+  '登录': 'Log in',
+  '注册账号': 'Sign up',
+  '邮箱': 'Email',
+  '密码（至少 6 位）': 'Password (at least 6 characters)',
+  '再输一次密码': 'Confirm password',
+  '请稍候…': 'Please wait…',
+  '注册': 'Sign up',
+  '存档保存在云端，换手机或电脑登录同一个账号就能接着玩。': 'Your save lives in the cloud. Log in with the same account on any phone or computer to keep playing.',
+  '创建角色': 'Create your character',
+  '角色名（2-12 个字，其他玩家能看到）': 'Character name (2-12 characters, visible to other players)',
+  '进入苍岭': 'Enter Canglin',
+  '外观以后可以在「更多 → 衣橱」里换。': 'You can change your look any time under More → Wardrobe.',
+  '这台设备上有以前的进度': 'Found existing progress on this device',
+  '要把它带进这个账号吗？带进去后会上传到云端，以后在别的设备登录也能接着玩。': 'Bring it into this account? It will be uploaded to the cloud so you can keep playing on other devices.',
+  '带入现有进度': 'Keep my progress',
+  '确定从头开始？这台设备上以前的进度会被新角色覆盖。': 'Start fresh? The progress on this device will be replaced by your new character.',
+  '从头开始': 'Start fresh',
+
+  // 攻略手册
+  '联机：账号、排行榜和公会': 'Online: accounts, leaderboards and guilds',
+  '进游戏要先登录。新玩家用邮箱注册，再创建角色：起一个别的玩家能看到的名字，选一套基础外观。按 G 或点底部「公会」打开联机页，可以改名、退出登录。':
+    'You log in before playing. New players sign up with an email, then create a character: pick a name other players will see and choose a starting look. Press G or tap "Guild" at the bottom to open the online page, where you can rename or log out.',
+  '云存档：存档每分钟自动上传一次，关页面时也会传。换设备登录同一个账号，会自动用最新的那份。游戏进度都在你自己的设备上结算，断网也能继续挂机，连不上服务器时可以先离线玩，连上后再补传。':
+    'Cloud saves: your save uploads every minute and again when you close the page. Log in on another device and the newest save is used automatically. Progress is calculated on your own device, so idling keeps going without a connection. If the server is down, play offline and it will catch up once you reconnect.',
+  '排行榜：可以按总等级、战斗等级或任意一个技能看排名，同级再比经验。': 'Leaderboards: rank by total level, combat level or any single skill. Ties are broken by XP.',
+  '公会：创建要 {0} 金币（从仓库扣），最多 30 人。会长能任命副会长、转让会长；会长和副会长能改公告、踢人（副会长只能踢普通成员）。会长退出时自动传给副会长或最早入会的成员。':
+    'Guilds: founding one costs {0} coins (taken from your bank) and holds up to 30 members. The leader can promote officers and hand over leadership. Leaders and officers can edit the guild message and kick members (officers can only kick regular members). If the leader leaves, leadership passes to an officer or the longest-standing member.',
+  '聊天和其他玩家：聊天有世界和公会两个频道。地图上能看到附近在线的玩家，头顶有名字和会标。': 'Chat and other players: there are World and Guild channels. Nearby online players appear on the map with their name and guild tag overhead.',
+  '公会任务、公会仓库和公会加成会在后续更新里开放。': 'Guild quests, a guild bank and guild perks are coming in a future update.',
+  '怪物的「再生」每次出手回血：普通怪 3%、精英 1.5%、首领 0.6%、世界首领 0.3%；战前评估已经算上了再生和吸血，显示「打不动」就先去提升等级和装备。':
+    'Monsters with Regeneration heal on every attack: 3% for normal, 1.5% for elite, 0.6% for bosses and 0.3% for world bosses. The fight estimate already accounts for regeneration and lifesteal, so if it says "Too tough", level up and improve your gear first.',
+
+  // 更新公告
+  '联机上线：账号、云存档、排行榜、公会和聊天': 'Online play is live: accounts, cloud saves, leaderboards, guilds and chat',
+  '账号系统：进游戏先登录。新玩家用邮箱注册，然后创建角色：起一个角色名（不能和别人重名），从 5 套基础外观里挑一套。':
+    'Accounts: log in before playing. New players sign up with an email, then create a character with a unique name and one of 5 starting looks.',
+  '这台设备上以前的进度：第一次登录时可以选「带入现有进度」，不会丢。': 'Your existing progress on this device is safe: choose "Keep my progress" the first time you log in.',
+  '云存档：存档每分钟自动传到云端，换手机或电脑登录同一个账号就能接着玩。服务器连不上时可以先离线玩，连上后自动补传。':
+    'Cloud saves: your save uploads every minute, so you can switch between phone and computer on the same account. If the server is unreachable, play offline and it will sync once you reconnect.',
+  '按 G 或点底部「公会」打开联机页，可以改名、退出登录。': 'Press G or tap "Guild" at the bottom to open the online page, where you can rename or log out.',
+  '排行榜：总等级、战斗等级和每个技能都有单独的榜。': 'Leaderboards: separate boards for total level, combat level and every skill.',
+  '公会：花 10000 金币创建公会（名字加 2-4 个字的会标），或搜索加入别人的公会。会长可以任命副会长、转让会长、踢人、改公告。':
+    'Guilds: found one for 10,000 coins (a name plus a 2-4 character tag), or search for one to join. Leaders can promote officers, hand over leadership, kick members and edit the guild message.',
+  '聊天：世界频道和公会频道。地图上也能看到附近在线的其他玩家走来走去，头顶显示名字和会标。': 'Chat: World and Guild channels. You can also see nearby online players wandering the map, with their name and guild tag overhead.',
+  '全面优化：更省电、更流畅，修好打不死的首领': 'Big optimization pass: smoother, easier on your battery, and no more unkillable bosses',
+  '修好：带「再生」的首领（蘑菇女王、九头蛇、树精王、潮汐女王、噬魂魔树等 11 个）以前每次出手回 3% 血，回得比同级玩家打得还快，永远打不死。现在再生按体型递减：普通怪 3%、精英 1.5%、首领 0.6%、世界首领 0.3%。':
+    'Fixed: 11 bosses with Regeneration (Mushroom Queen, Marsh Hydra, the Soul-Eater Tree and more) used to heal 3% on every attack, faster than a same-level player could damage them, so they could never die. Regeneration now scales down with size: 3% normal, 1.5% elite, 0.6% boss, 0.3% world boss.',
+  '战前评估把怪物的再生和吸血也算进去了；真打不动时会直接告诉你「打不动」，不会再显示一个打不完的时间。':
+    'The fight estimate now accounts for regeneration and lifesteal. If you really can\'t win, it simply says "Too tough" instead of showing a time that never ends.',
+  '性能：水面、岩浆的动画以前每 0.2 秒把几百个格子逐像素重画一遍，占了游戏三成的运算，现在只算一次再复用，手机更省电、不容易发烫；进游戏也快了 1-2 秒。':
+    'Performance: water and lava used to redraw hundreds of tiles pixel by pixel every 0.2 seconds, eating about 30% of the game\'s work. Now they are drawn once and reused, so phones run cooler and use less battery, and loading is 1-2 seconds faster.',
+  '新手任务点「去做」会直接选好要做的动作，点「立即开始」就行。': 'Tapping "Go" on a starter quest now pre-selects the right task. Just tap "Start now".',
+  '新玩家第一次进游戏时，万圣节公告不会再和新手指引叠在一起弹出。': "New players no longer get the Halloween notice stacked on top of the beginner's guide.",
+  '电脑端：Esc 能关掉公告、新手指引、开箱结果等弹窗；右侧面板较窄时，顶部标签的文字不会再折成两行。':
+    'Desktop: Esc now closes the news, the guide, loot results and other popups. Tab labels no longer wrap onto two lines when the side panel is narrow.',
+  '地点列表里外圈 8 座新城镇的设施会显示正确的城名（以前都写成落霞城），畜牧站写明「养马」，集市写明「买卖」。':
+    'The location list now shows the right town for facilities in the 8 outer towns (they all used to say Duskhaven). The Ranch is labeled "Horse breeding" and markets "Buy & sell".',
+  '角色站在地点旁干活时，地点名牌会自动变淡，不再挡住角色的名字；手机横屏时任务提示自动收起，不再挡住画面。':
+    "Location labels fade while your character is working beside them, so they don't cover your name. On phones in landscape, the quest tip collapses so it doesn't block the view.",
+  '图鉴：仓库和背包里已有的东西都算「获得过」（以前导入的存档可能漏记）。': 'Collection: everything in your bank and bag now counts as discovered (imported saves could miss some before).',
+
+  // 只在中文分支用到
+  '{0}亿': '{0}亿',
+  '{0}万': '{0}万',
+};

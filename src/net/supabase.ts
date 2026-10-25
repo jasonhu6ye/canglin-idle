@@ -2,6 +2,7 @@ import { createClient, type RealtimeChannel, type SupabaseClient } from '@supaba
 import type { GameState } from '../core/types';
 import type { Board, ChatMsg, Guild, GuildMember, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { levelSnapshot } from './api';
+import { tl } from '../i18n';
 
 /** Supabase 实现（10-25 用户选定）。表和权限见 supabase/schema.sql */
 
@@ -65,15 +66,15 @@ export class SupabaseApi implements OnlineApi {
   }
   async signUp(email: string, password: string) {
     const r = ok(await this.sb.auth.signUp({ email, password }));
-    if (!r.session) throw new Error('注册成功，请去邮箱点确认链接后再登录');
+    if (!r.session) throw new Error(tl('注册成功，请去邮箱点确认链接后再登录'));
     return this.loadProfile();
   }
   async createProfile(name: string, outfit: string) {
     const { data: { session } } = await this.sb.auth.getSession();
-    if (!session) throw new Error('请先登录');
+    if (!session) throw new Error(tl('请先登录'));
     ok(await this.sb.from('profiles').insert({ id: session.user.id, name, outfit }));
     const p = await this.loadProfile();
-    if (!p) throw new Error('创建角色失败');
+    if (!p) throw new Error(tl('创建角色失败'));
     return p;
   }
   async signOut() {
@@ -84,7 +85,7 @@ export class SupabaseApi implements OnlineApi {
     this.world = null;
   }
   private need() {
-    if (!this.profile) throw new Error('请先登录');
+    if (!this.profile) throw new Error(tl('请先登录'));
     return this.profile;
   }
   async rename(name: string) {
@@ -195,7 +196,7 @@ export class SupabaseApi implements OnlineApi {
 
   async sendChat(channel: ChatMsg['channel'], text: string) {
     const me = this.need();
-    if (channel === 'guild' && !me.guildId) throw new Error('还没加入公会');
+    if (channel === 'guild' && !me.guildId) throw new Error(tl('还没加入公会'));
     ok(await this.sb.from('chat').insert({
       channel, guild_id: channel === 'guild' ? me.guildId : null, player_id: me.id, name: me.name, text: text.slice(0, 200),
     }));
