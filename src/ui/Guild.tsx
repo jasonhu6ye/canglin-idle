@@ -1,3 +1,4 @@
+import { useSticky } from './sticky';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GameState, SkillId } from '../core/types';
 import { SKILLS } from '../core/data';
@@ -102,7 +103,7 @@ const BOARDS: [Board, string][] = [['total', tl('总等级')], ['combat', tl('�
 
 function Ranks() {
   const { me } = useOnline();
-  const [board, setBoard] = useState<Board>('total');
+  const [board, setBoard] = useSticky<Board>('rank.board', 'total');
   const [rows, setRows] = useState<RankRow[] | null>(null);
   const [mine, setMine] = useState<RankRow | null>(null);
   const [err, setErr] = useState('');

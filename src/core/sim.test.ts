@@ -983,3 +983,15 @@ describe('组队经验加成', () => {
     expect(run()).toBe(base);
   });
 });
+
+describe('回仓库存东西', () => {
+  it('采集时背包满了回仓库，食物也一起存掉；打怪时食物留在身上', () => {
+    const s0 = newGame(T0, 4);
+    const food = Object.keys(ITEMS).find((id) => ITEMS[id].heals && ITEMS[id].category === 'food')!;
+    let s = startHere(s0, 'mine_stone', { type: 'infinite' });
+    s.bag = { [food]: 500, copper_ore: 100 * 20 };
+    s = advance(s, T0 + 30 * 60_000).state;
+    expect(s.bag[food] ?? 0).toBe(0);
+    expect(s.bank[food]).toBe(500);
+  });
+});

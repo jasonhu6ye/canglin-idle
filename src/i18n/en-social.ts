@@ -159,4 +159,5 @@ export const EN_SOCIAL: Record<string, string> = {
   '修复离线收益被旧进度盖掉': 'Fixed offline rewards being overwritten by older progress',
   '同一个账号在两台设备（或两个浏览器）上开着时，留在后台的那边会拿旧进度把云端更新的存档盖掉，看起来就像离线收益没了。现在发现别处传过更新的存档，这边会先停下，点按钮读取最新存档后再结算离开期间的收获。': 'When the same account was open on two devices (or two browsers), the one left in the background could overwrite the newer cloud save with older progress, which looked like lost offline rewards. Now, if a newer save was uploaded elsewhere, this side pauses first; tap the button to load the latest save and then collect what you earned while away.',
   '离线收获的弹窗会先弹出来，不再被更新公告挡住。': 'The while-you-were-away summary now shows first instead of being hidden behind the update notes.',
+  '{0} 项': '{0} items',
 };

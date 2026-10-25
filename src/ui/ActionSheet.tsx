@@ -75,7 +75,8 @@ function NodeSheet({ s, node, onClose }: { s: GameState; node: MapNode; onClose:
   };
   const list = useRef<HTMLUListElement>(null);
   useEffect(() => {
-    const at = focus ?? memo?.selected;
+    // 从别处跳过来才滚到选中的配方；平时回到上次滚到的位置（App 记着）
+    const at = focus;
     if (at) list.current?.querySelector(`[data-id="${at}"]`)?.scrollIntoView({ block: 'center' });
     if (!focus) return;
     // 已经站在这里了，选中就算用掉了

@@ -1,5 +1,6 @@
+import { useSticky } from './sticky';
 import { useEffect, useState, type ReactNode } from 'react';
-import { ACTIONS, BUFF_NAME, buffText, cropsOfField, WAYSTONES, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, type MapNode } from '../core/data';
+import { ACTIONS, BUFF_NAME, buffText, cropsOfField, nodesOfAction, WAYSTONES, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, type MapNode } from '../core/data';
 import {
   atBank, atMarket, nearestBank, nearestMarket, BAG_SLOTS, BELT_CAP, beltSlotOf, eat, fromBelt, POTION_AT, toBelt, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, armorPerks, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip, openContainer,
   weaponStyle, buffPct, levelSpeed, maxHp, moveSpeed, playerAttackMs,
@@ -159,7 +160,7 @@ function ItemGrid({ items, sel, onSel, onAct, empty = 0, split = false }: { item
 }
 
 export function BankPanel({ s }: { s: GameState }) {
-  const [cat, setCat] = useState<ItemCategory | 'all'>('all');
+  const [cat, setCat] = useSticky<ItemCategory | 'all'>('bank.cat', 'all');
   const [sel, setSel] = useState<string | null>(null);
   const all = Object.entries(s.bank).filter(([id]) => id !== 'coins' && ITEMS[id]);
   const items = all.filter(([id]) => cat === 'all' || ITEMS[id].category === cat);
@@ -394,7 +395,7 @@ export function BagPanel({ s }: { s: GameState }) {
       <div className="bag-meter"><i style={{ width: `${(used / BAG_SLOTS) * 100}%` }} /></div>
       <ItemGrid items={items} sel={sel} onSel={setSel} onAct={(id) => store.dispatch((g) => quickUse(g, id))} empty={Math.max(0, BAG_SLOTS - used)} split />
       {sel && <ItemDetail s={s} id={sel} from="bag" />}
-      {items.length > 0 && <button className="primary" disabled={!atBank(s)} onClick={() => store.dispatch(depositLoot)}>{tl('全部存入仓库（保留食物）')}</button>}
+      {items.length > 0 && <button className="primary" disabled={!atBank(s)} onClick={() => store.dispatch(depositLoot)}>{tl('全部存入仓库')}</button>}
       {items.length > 0 && !atBank(s) && <FarFromBank />}
       <div className="opts">
         <span className="lbl">{tl('开战自动从仓库带食物')}</span>
@@ -404,7 +405,7 @@ export function BagPanel({ s }: { s: GameState }) {
           </button>
         ))}
       </div>
-      <p className="muted">{tl('开战前背包里的食物不够设定数量，会先回仓库拿；战斗只吃背包里的食物。阵亡后回城复活，自动走回去接着打，连死 3 次才停。采集、制作和打怪的产出先放进背包；背包满了，角色会自动走回仓库存好（食物留在身上），再走回去接着干。制作时材料先用背包里的，不够再用仓库的。手动把东西在背包和仓库之间搬，要先走到城镇的仓库旁边。')}</p>
+      <p className="muted">{tl('开战前背包里的食物不够设定数量，会先回仓库拿；战斗只吃背包里的食物。阵亡后回城复活，自动走回去接着打，连死 3 次才停。采集、制作和打怪的产出先放进背包；背包满了，角色会自动走回仓库存好（打怪时食物留在身上，采集制作时食物也一起存），再走回去接着干。制作时材料先用背包里的，不够再用仓库的。手动把东西在背包和仓库之间搬，要先走到城镇的仓库旁边。')}</p>
     </div>
   );
 }
@@ -420,7 +421,7 @@ function whereToTrain(skill: SkillId): { node: MapNode; min: number; max: number
 }
 
 export function SkillsPanel({ s, onPick }: { s: GameState; onPick: (nodeId: string) => void }) {
-  const [open, setOpen] = useState<SkillId | null>(null);
+  const [open, setOpen] = useSticky<SkillId | null>('skills.open', null);
   const total = (Object.keys(SKILLS) as SkillId[]).reduce((n, k) => n + level(s, k), 0);
   return (
     <div className="page">
@@ -505,7 +506,7 @@ const MONSTER_COUNT = (() => {
 const LANG_TITLE = '语言 · Language'; // i18n-ignore
 
 export function MorePanel({ s }: { s: GameState }) {
-  const [page, setPage] = useState<'codex' | 'wardrobe' | 'book' | 'rank' | 'settings' | null>(null);
+  const [page, setPage] = useSticky<'codex' | 'wardrobe' | 'book' | 'rank' | 'settings' | null>('more.page', null);
   const close = () => setPage(null);
   if (page === 'codex') return <Codex s={s} onClose={close} />;
   if (page === 'book') return <Handbook onClose={close} />;
@@ -582,6 +583,24 @@ function SettingsPage({ s, onClose }: { s: GameState; onClose: () => void }) {
         <button className="back" onClick={onClose}>{tl('‹ 返回')}</button>
         <h2>{tl('设置')}</h2>
       </div>
+      <h3>{tl('补给')}</h3>
+      <div className="opts">
+        <span className="lbl">{tl('开战自动从仓库带食物')}</span>
+        {[0, 20, 50, 100, -1].map((n) => (
+          <button key={n} className={s.settings.carryFood === n ? 'on' : ''} onClick={() => store.dispatch((g) => setSettings(g, { carryFood: n }))}>
+            {n < 0 ? tl('全部') : n === 0 ? tl('不带') : n}
+          </button>
+        ))}
+      </div>
+      <div className="opts">
+        <span className="lbl">{tl('带药水')}</span>
+        {[true, false].map((v) => (
+          <button key={String(v)} className={(s.settings.carryPotion !== false) === v ? 'on' : ''} onClick={() => store.dispatch((g) => setSettings(g, { carryPotion: v }))}>
+            {v ? tl('带') : tl('不带')}
+          </button>
+        ))}
+      </div>
+      <p className="muted small-note">{tl('只有打怪前才会回仓库拿食物和药水；走路、寻路去队友身边、采集和制作都不会带。选「不带」就完全不回仓库拿。')}</p>
       <h3>{tl('账号')}</h3>
       <AccountSettings />
       <h3>{tl('存档备份')}</h3>
@@ -802,7 +821,7 @@ const splitTown = (name: string): [string, string] | null => {
 const townName = (n: MapNode) => (n.region === 'town' ? tl('主城') : n.waystone ? n.name.replace(tl('石碑·'), '') : splitTown(n.name)?.[0] ?? tl('落霞城'));
 
 export function NodeList({ s, onPick }: { s: GameState; onPick: (id: string) => void }) {
-  const [tabId, setTabId] = useState('town');
+  const [tabId, setTabId] = useSticky('nodes.tab', 'town');
   const tab = NODE_TABS.find((t) => t.id === tabId)!;
   let rows: { key: string; id: string; name: string; sub: string; lv?: string; dim?: boolean }[] = [];
   if (tab.id === 'town') {
@@ -827,9 +846,32 @@ export function NodeList({ s, onPick }: { s: GameState; onPick: (id: string) => 
       const lo = Math.min(...lv);
       const hi = Math.max(...lv);
       const lock = level(s, tab.skill!) < lo;
-      return [{ key: n.id, id: n.id, name: n.name, sub: `${n.town ? townName(n) : REGIONS[n.region].name} · ${lv.length} ${n.farm ? tl('种作物') : tl('项')}`, lv: lo === hi ? tl`${lo} 级` : tl`${lo}-${hi} 级`, dim: lock, lo }];
+      return [{ key: n.id, id: n.id, name: n.name, sub: `${n.town ? townName(n) : REGIONS[n.region].name} · ${n.farm ? cropsOfField(n.id).map((c) => c.name).join(tl('、')) : tl`${lv.length} 项`}`, lv: lo === hi ? tl`${lo} 级` : tl`${lo}-${hi} 级`, dim: lock, lo }];
     }).sort((a, b) => a.lo - b.lo);
   }
+  // 采矿、伐木、钓鱼、采集、狩猎、偷窃：按资源列出来，下面写它在哪些地点（用户 10-25：不用一个个点进地点找）
+  const byRes = !!tab.skill && tab.skill !== 'farming';
+  // 同一种资源在不同地点是不同的动作：按产出物品合并成一行
+  const res: { key: string; name: string; item?: string; skill: SkillId; level: number; spots: { action: string; node: MapNode }[] }[] = [];
+  if (byRes) {
+    const by = new Map<string, (typeof res)[number]>();
+    for (const a of Object.values(ACTIONS)) {
+      if (a.kind !== 'skill' || a.skill !== tab.skill) continue;
+      const nodes = nodesOfAction(a.id).filter((n) => !n.closed);
+      if (!nodes.length) continue;
+      const out = a.outputs.find((o) => !o.chance && o.item !== 'coins')?.item;
+      const key = out ?? a.name;
+      let r = by.get(key);
+      if (!r) by.set(key, (r = { key, name: out ? ITEMS[out].name : a.name, item: out, skill: a.skill, level: a.level, spots: [] }));
+      r.level = Math.min(r.level, a.level);
+      for (const n of nodes) if (!r.spots.some((x) => x.node.id === n.id)) r.spots.push({ action: a.id, node: n });
+    }
+    res.push(...[...by.values()].sort((a, b) => a.level - b.level));
+  }
+  const goRes = (actionId: string, nodeId: string) => {
+    store.focusAction = actionId;
+    onPick(nodeId);
+  };
   return (
     <div className="page node-page">
       <h2>{tl('地点 ')}<small className="muted">{tl('点地图上的地点或下面的列表选任务，右下角 ▦ 打开世界地图')}</small></h2>
@@ -841,8 +883,31 @@ export function NodeList({ s, onPick }: { s: GameState; onPick: (id: string) => 
         ))}
       </div>
       {tab.skill && <p className="muted">{tl`${SKILLS[tab.skill].name}当前 ${level(s, tab.skill)} 级，灰色的是还没到等级的地点。`}</p>}
+      {byRes && (
+        <ul className="res-list">
+          {res.map((a) => {
+            const lock = level(s, a.skill) < a.level;
+            return (
+              <li key={a.key} className={lock ? 'dim' : ''}>
+                <div className="res-head">
+                  {a.item ? <Icon item={a.item} size={26} /> : <SkillIcon skill={a.skill} size={22} />}
+                  <b>{a.name}</b>
+                  <small className="muted">{tl`${a.level} 级`}{tl` · ${a.spots.length} 处`}</small>
+                </div>
+                <div className="res-spots">
+                  {a.spots.map(({ action, node: n }) => (
+                    <button key={n.id} onClick={() => goRes(action, n.id)}>
+                      {n.name}<small className="muted"> · {n.town ? townName(n) : REGIONS[n.region].name}</small>
+                    </button>
+                  ))}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
       <ul className="node-list grid2">
-        {rows.map((r) => (
+        {!byRes && rows.map((r) => (
           <li key={r.key}>
             <button onClick={() => onPick(r.id)} className={r.dim ? 'cave' : ''}>
               <span className="row1"><b>{r.name}</b>{r.lv && <small className="muted">{r.lv}</small>}</span>

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { scrollMemo } from './ui/sticky';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { ACTIONS, NODES, REGIONS, SKILLS } from './core/data';
 import type { RegionId, Summary, TaskEndReason } from './core/types';
 import { BOSS_BANNER, REGION_CHANGE } from './game/MapScene';
@@ -259,6 +260,30 @@ function Game() {
     if (store.pendingWalk) { setTab('game'); setNode(null); setMonster(null); setWorldMap(false); }
   }), []);
 
+  // 每个页面记住滚动位置，切走再回来停在原处（用户 10-25）
+  const asideRef = useRef<HTMLElement>(null);
+  const viewKey = worldMap ? 'map' : tab === 'game' ? (monster ? `m:${monster}` : node ? `n:${node}` : 'nodes') : tab;
+  const viewRef = useRef(viewKey);
+  viewRef.current = viewKey;
+  useEffect(() => {
+    const el = asideRef.current;
+    if (!el) return;
+    const onScroll = (e: Event) => {
+      const t = e.target as HTMLElement;
+      if (t instanceof HTMLElement && el.contains(t)) scrollMemo.set(viewRef.current, t.scrollTop);
+    };
+    el.addEventListener('scroll', onScroll, true);
+    return () => el.removeEventListener('scroll', onScroll, true);
+  });
+  useLayoutEffect(() => {
+    const top = scrollMemo.get(viewKey);
+    const el = asideRef.current?.firstElementChild as HTMLElement | null;
+    if (!el || !top) return;
+    // 滚动的可能是页面本身，也可能是里面的配方列表
+    const box = el.scrollHeight > el.clientHeight ? el : (el.querySelector('.action-list') as HTMLElement | null) ?? el;
+    box.scrollTop = top;
+  }, [viewKey, nodeSeq]);
+
   let side: ReactNode = null;
   const showSide = !wide || panelOpen;
   if (worldMap) side = <WorldMap s={s} onClose={() => setWorldMap(false)} onOpenNode={openNode} />;
@@ -299,7 +324,7 @@ function Game() {
           {toasts.map((t) => <div key={t.id} className={`toast ${t.gold ? 'gold' : ''}`}>{t.text}</div>)}
         </div>
       </main>
-      {side && <aside className={`side ${worldMap ? 'wide-map' : ''}`}>{side}</aside>}
+      {side && <aside ref={asideRef} className={`side ${worldMap ? 'wide-map' : ''}`}>{side}</aside>}
       <nav className="tabbar">
         {TABS.map((t, i) => (
           <button key={t.id} className={tab === t.id && !worldMap && showSide ? 'on' : ''} title={tl`${t.label}（快捷键 ${i + 1}）`}

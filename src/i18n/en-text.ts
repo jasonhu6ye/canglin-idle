@@ -499,4 +499,10 @@ export const EN_TEXT: Record<string, string> = {
   '箭、符文、箭头、箭杆和它们的配方一起删掉；存档里剩下的这些东西按原价折成金币，存进了仓库。': 'Arrows, runes, arrowheads, shafts and their recipes have all been removed. Any you still had were converted to coins at their old value and deposited in your bank.',
   '装备短弓、长弓、弩时获得经验，不用带箭': 'Gain XP by fighting with a shortbow, longbow or crossbow. No arrows needed.',
   '装备法杖时获得经验，不用带符文': 'Gain XP by fighting with a staff. No runes needed.',
+  '地点页按资源列出，页面停在原处': 'Places listed by resource, and pages remember where you were',
+  '「游戏」页的采矿、伐木、钓鱼、采集、狩猎、偷窃改成按资源列出：每种矿、木头、鱼下面直接写它在哪些地点，点地点就走过去并选好这一项，不用再一个个点进地点去找。种植页的田地也直接写出能种哪些作物。': 'Mining, Woodcutting, Fishing, Gathering, Hunting and Thieving on the Game page are now listed by resource. Each ore, log or fish shows the places it can be found; tap a place to head there with that task already selected, instead of opening places one by one. Farm fields now list the crops they can grow.',
+  '各个页面都会停在原处：切到别的页面再回来，分类、筛选、展开的子页面和滚动位置都保持上次的样子。': 'Pages now stay where you left them. Switch away and come back, and your category, filters, open sub-page and scroll position are all as you left them.',
+  '采集、制作时背包满了回仓库，食物也一起存掉，不会再被食物占满背包；打怪时食物照旧留在身上。「全部存入仓库」按钮也会把食物存进去。': 'When your bag fills up while gathering or crafting, food is now deposited too, so it no longer clogs your bag. In combat you still keep your food. The Deposit all button now stores food as well.',
+  '「更多 → 设置」加了补给设置：开战带多少食物、带不带药水。只有打怪前才会回仓库拿，寻路去队友身边不会带。': 'More → Settings now has supply options: how much food to bring into a fight and whether to bring potions. Supplies are only fetched before a fight, never when traveling to a party member.',
+  '物品详情里的「来源」可以直接点：点哪一行就自动寻路过去，到了自动打开地点并选好这一项；怪物掉落的会追踪那只怪。': 'Sources in item details are now clickable. Tap one to auto-travel there; on arrival the place opens with that task selected. For monster drops, it tracks that monster.',
 };

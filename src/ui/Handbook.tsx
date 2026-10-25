@@ -1,3 +1,4 @@
+import { useSticky } from './sticky';
 import { GUILD_COST } from '../net/api';
 import { useMemo, useState, type ReactNode } from 'react';
 import { MONSTERS, NODES, REGIONS, SKILLS, nodesOfAction } from '../core/data';
@@ -276,7 +277,7 @@ const ARTICLES: Article[] = [
 const CATS = [...new Set(ARTICLES.map((a) => a.cat))];
 
 export function Handbook({ onClose }: { onClose: () => void }) {
-  const [sel, setSel] = useState<string | null>(null);
+  const [sel, setSel] = useSticky<string | null>('book.sel', null);
   const art = useMemo(() => ARTICLES.find((a) => a.id === sel), [sel]);
   if (art) {
     return (
