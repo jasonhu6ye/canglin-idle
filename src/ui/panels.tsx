@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { ACTIONS, BUFF_NAME, buffText, cropsOfField, WAYSTONES, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, type MapNode } from '../core/data';
 import {
   atBank, atMarket, nearestBank, nearestMarket, BAG_SLOTS, BELT_CAP, beltSlotOf, eat, fromBelt, POTION_AT, toBelt, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, armorPerks, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip, openContainer,
-  weaponStyle, bestAmmo, buffPct, levelSpeed, maxHp, moveSpeed, playerAttackMs,
+  weaponStyle, buffPct, levelSpeed, maxHp, moveSpeed, playerAttackMs,
   redeemCode, toggleMount,
 } from '../core/sim';
 import type { BuffKind, EquipSlot, GameState, ItemCategory, SkillId, Summary } from '../core/types';
@@ -41,7 +41,7 @@ export const TOOL_SLOTS: [EquipSlot, string, SkillId][] = [
 const STYLE_NAME = { melee: tl('近战'), ranged: tl('远程'), magic: tl('魔法') };
 
 const CATEGORIES: [ItemCategory | 'all', string][] = [
-  ['all', tl('全部')], ['resource', tl('资源')], ['material', tl('材料')], ['food', tl('食物')], ['potion', tl('药水')], ['ammo', tl('弹药')],
+  ['all', tl('全部')], ['resource', tl('资源')], ['material', tl('材料')], ['food', tl('食物')], ['potion', tl('药水')],
   ['gear', tl('装备')], ['tool', tl('工具')], ['loot', tl('战利品')], ['deco', tl('装饰')], ['misc', tl('其他')],
 ];
 
@@ -71,7 +71,6 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
       </div>
       {item.heals && <span>{tl`回复 ${item.heals} 生命`}{item.buff && <b className="gold"> · {buffText(item.buff)}</b>}</span>}
       {item.desc && <span className="muted">{item.desc}</span>}
-      {item.ammo && <span>{tl`${item.ammo.style === 'ranged' ? tl('箭矢') : tl('符文')} · 威力 +${item.ammo.power}`}</span>}
       {e && (
         <span className={canEquip ? '' : 'warn'}>
           {e.move ? tl`坐骑 · 骑乘时移动速度 +${Math.round(e.move * 100)}%` : tl`需要${SKILLS[e.skill].name} ${e.level} 级`}
@@ -313,12 +312,10 @@ function Attributes({ s }: { s: GameState }) {
   const b = playerBonuses(s, style);
   const lvl = level(s, style);
   const weapon = ITEMS[s.equipment.weapon ?? '']?.equip;
-  const ammo = bestAmmo(s, style, true);
-  const ammoPow = ammo ? ITEMS[ammo.id].ammo!.power : 0;
   const atkBuff = buffPct(s, 'atk');
   const strBuff = buffPct(s, 'str');
   const defBuff = buffPct(s, 'def');
-  const maxHit = Math.max(1, Math.round((((lvl + 8) * (b.strength + ammoPow + 64)) / 64) * (1 + strBuff)));
+  const maxHit = Math.max(1, Math.round((((lvl + 8) * (b.strength + 64)) / 64) * (1 + strBuff)));
   const atkMs = playerAttackMs(s);
   const pct = (x: number) => `${Math.round(x * 100)}%`;
   const buffs = Object.entries(s.buffs ?? {}) as [BuffKind, { pct: number; ms: number }][];
@@ -343,13 +340,13 @@ function Attributes({ s }: { s: GameState }) {
   return (
     <>
       {WIDE()
-        ? <h2>{tl('属性 ')}<small className="muted">{tl('数值来自等级、装备、弹药和料理增益')}</small></h2>
+        ? <h2>{tl('属性 ')}<small className="muted">{tl('数值来自等级、装备和料理增益')}</small></h2>
         : <h2 className="fold-h" onClick={toggle}>{tl('属性 ')}<small className="muted">{tl('收起 ▾')}</small></h2>}
       <ul className="attr-list">
         {row(tl('生命'), `${s.hp}/${maxHp(s)}`, tl`生命等级 ${level(s, 'hitpoints')} ×10`)}
         {row(tl('战斗方式'), STYLE_NAME[style], weapon ? ITEMS[s.equipment.weapon!].name : tl('空手'))}
         {row(tl('攻击加成'), `+${b.attack}`, <>{tl('装备')}{atkBuff > 0 && <>{tl` · 料理命中 +${pct(atkBuff)}`}</>}{tl` · ${STYLE_NAME[style]}等级 ${lvl}`}</>)}
-        {row(tl('力量加成'), `+${b.strength + ammoPow}`, <>{tl`装备 +${b.strength}`}{ammoPow > 0 && <>{tl` · 弹药 +${ammoPow}`}</>}{strBuff > 0 && <>{tl` · 料理伤害 +${pct(strBuff)}`}</>}</>)}
+        {row(tl('力量加成'), `+${b.strength}`, <>{tl`装备 +${b.strength}`}{strBuff > 0 && <>{tl` · 料理伤害 +${pct(strBuff)}`}</>}</>)}
         {row(tl('最高伤害'), maxHit, tl`${STYLE_NAME[style]}等级 ${lvl} 和力量加成算出`)}
         {row(tl('攻击间隔'), tl`${(atkMs / 1000).toFixed(1)} 秒`, weapon ? tl('看武器种类：匕首快、长枪和弩慢') : tl('默认'))}
         {(() => {
@@ -397,7 +394,7 @@ export function BagPanel({ s }: { s: GameState }) {
       <div className="bag-meter"><i style={{ width: `${(used / BAG_SLOTS) * 100}%` }} /></div>
       <ItemGrid items={items} sel={sel} onSel={setSel} onAct={(id) => store.dispatch((g) => quickUse(g, id))} empty={Math.max(0, BAG_SLOTS - used)} split />
       {sel && <ItemDetail s={s} id={sel} from="bag" />}
-      {items.length > 0 && <button className="primary" disabled={!atBank(s)} onClick={() => store.dispatch(depositLoot)}>{tl('全部存入仓库（保留食物和弹药）')}</button>}
+      {items.length > 0 && <button className="primary" disabled={!atBank(s)} onClick={() => store.dispatch(depositLoot)}>{tl('全部存入仓库（保留食物）')}</button>}
       {items.length > 0 && !atBank(s) && <FarFromBank />}
       <div className="opts">
         <span className="lbl">{tl('开战自动从仓库带食物')}</span>
@@ -407,7 +404,7 @@ export function BagPanel({ s }: { s: GameState }) {
           </button>
         ))}
       </div>
-      <p className="muted">{tl('开战前背包里的食物不够设定数量，会先回仓库拿；战斗只吃背包里的食物。阵亡后回城复活，自动走回去接着打，连死 3 次才停。采集、制作和打怪的产出先放进背包；背包满了，角色会自动走回仓库存好（食物和弹药留在身上），再走回去接着干。制作时材料先用背包里的，不够再用仓库的。手动把东西在背包和仓库之间搬，要先走到城镇的仓库旁边。')}</p>
+      <p className="muted">{tl('开战前背包里的食物不够设定数量，会先回仓库拿；战斗只吃背包里的食物。阵亡后回城复活，自动走回去接着打，连死 3 次才停。采集、制作和打怪的产出先放进背包；背包满了，角色会自动走回仓库存好（食物留在身上），再走回去接着干。制作时材料先用背包里的，不够再用仓库的。手动把东西在背包和仓库之间搬，要先走到城镇的仓库旁边。')}</p>
     </div>
   );
 }
@@ -762,7 +759,7 @@ export function OfflineModal({ sum }: { sum: Summary }) {
         {sum.levelUps.length > 0 && (
           <p className="gold">{tl`升级：${finalLevels(sum).map(([k, l]) => tl`${SKILLS[k].name} → ${l} 级`).join(tl('、'))}`}</p>
         )}
-        {kills > 0 && <p>{tl`击败 ${kills} 只怪物`}{sum.foodEaten > 0 && tl`，吃掉 ${sum.foodEaten} 份食物`}{sum.ammoUsed > 0 && tl`，用掉 ${sum.ammoUsed} 发弹药`}</p>}
+        {kills > 0 && <p>{tl`击败 ${kills} 只怪物`}{sum.foodEaten > 0 && tl`，吃掉 ${sum.foodEaten} 份食物`}</p>}
         {sum.deaths > 0 && <p className="warn">{tl`阵亡 ${sum.deaths} 次${sum.taskEnds.some((t) => t.reason === 'death') ? tl('，连续阵亡太多次，战斗已停止') : tl('，每次都回城复活后走回去接着打')}`}</p>}
         {sum.bankTrips > 0 && <p className="muted">{tl`背包满了回仓库存东西 ${sum.bankTrips} 次`}</p>}
         {sum.quests && sum.quests.length > 0 && <p className="gold">{tl`完成新手任务 ${sum.quests.length} 个`}</p>}

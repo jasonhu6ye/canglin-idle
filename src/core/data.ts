@@ -28,14 +28,14 @@ export const SKILLS: Record<SkillId, SkillInfo> = {
   husbandry: { name: tl('养殖'), color: '#e0a8a0', group: 'gather', desc: tl('在城镇畜牧站养小马崽，养大得到坐骑马；等级越高长得越快') },
   thieving: { name: tl('偷窃'), color: '#8a7ab8', group: 'gather', desc: tl('从镇民和商队身上摸金币，失败会被晕眩') },
   cooking: { name: tl('烹饪'), color: '#d4a03c', group: 'produce', desc: tl('把鱼和作物做成回血的食物') },
-  smithing: { name: tl('锻造'), color: '#c26a3a', group: 'produce', desc: tl('冶炼精炼锭，打造剑、长枪、匕首、板甲、工具和箭头') },
-  fletching: { name: tl('制弓'), color: '#a8944a', group: 'produce', desc: tl('加工木材，制作短弓、长弓、弩、鱼竿和箭') },
+  smithing: { name: tl('锻造'), color: '#c26a3a', group: 'produce', desc: tl('冶炼精炼锭，打造剑、长枪、匕首、板甲和工具') },
+  fletching: { name: tl('制弓'), color: '#a8944a', group: 'produce', desc: tl('加工木材，制作短弓、长弓、弩和鱼竿') },
   herblore: { name: tl('药剂'), color: '#4ab89a', group: 'produce', desc: tl('用草药调配治疗药水') },
-  crafting: { name: tl('工艺'), color: '#b87a9a', group: 'produce', desc: tl('鞣制皮革、纺织布料，制作皮甲、布甲、法杖、符文和首饰') },
+  crafting: { name: tl('工艺'), color: '#b87a9a', group: 'produce', desc: tl('鞣制皮革、纺织布料，制作皮甲、布甲、法杖和首饰') },
   enhancing: { name: tl('强化'), color: '#e8d04a', group: 'produce', desc: tl('制作强化石（装备强化系统待开放）') },
   melee: { name: tl('近战'), color: '#c84a4a', group: 'combat', desc: tl('装备剑、长枪、匕首时获得经验') },
-  ranged: { name: tl('远程'), color: '#6ab84a', group: 'combat', desc: tl('装备短弓、长弓、弩时获得经验，消耗箭') },
-  magic: { name: tl('魔法'), color: '#5a7ae8', group: 'combat', desc: tl('装备法杖时获得经验，消耗符文') },
+  ranged: { name: tl('远程'), color: '#6ab84a', group: 'combat', desc: tl('装备短弓、长弓、弩时获得经验，不用带箭') },
+  magic: { name: tl('魔法'), color: '#5a7ae8', group: 'combat', desc: tl('装备法杖时获得经验，不用带符文') },
   defence: { name: tl('防御'), color: '#7a8ab8', group: 'combat', desc: tl('任何战斗都会获得，决定能穿的护甲') },
   hitpoints: { name: tl('生命'), color: '#d0566b', group: 'combat', desc: tl('任何战斗都会获得，每级 10 点生命上限') },
 };
@@ -109,7 +109,7 @@ export const tierName = (i: number) => `T${i + 1}`;
 export const tierForLevel = (level: number) => TIERS.reduce((best, t, i) => (t.level <= level ? i : best), 0);
 const POWER = [5, 10, 17, 25, 34, 45, 58, 72];
 const TOOL_SPEED = [0.04, 0.08, 0.12, 0.16, 0.2, 0.24, 0.28, 0.32];
-const BAR_VALUE = [5, 12, 30, 60, 120, 250, 520, 1000];
+export const BAR_VALUE = [5, 12, 30, 60, 120, 250, 520, 1000];
 const RES_VALUE = [2, 5, 12, 25, 50, 100, 200, 400];
 
 // 四类分阶资源，同阶同价
@@ -228,23 +228,20 @@ TIERS.forEach((t, i) => {
   item(`plank_${i + 1}`, tl`${isEn ? t.woodName.replace(/ ?Log$/, '') : t.woodName}板材`.trim(), 'material', RES_VALUE[i] * 3, { tier: i });
   item(`leather_${i + 1}`, tl('皮革'), 'material', RES_VALUE[i] * 3, { tier: i });
   item(`cloth_${i + 1}`, tl('布料'), 'material', RES_VALUE[i] * 3, { tier: i });
-  item(`${t.id}_arrowhead`, tl`${t.metal}箭头`, 'material', Math.ceil(BAR_VALUE[i] / 12), { tier: i });
-  item(`${t.id}_arrow`, tl`${t.metal}箭`, 'ammo', Math.ceil(BAR_VALUE[i] / 8), { tier: i, ammo: { style: 'ranged', power: Math.round(POWER[i] / 2) } });
-  item(`${t.id}_rune`, tl`${t.rune}符文`, 'ammo', Math.ceil(BAR_VALUE[i] / 8), { tier: i, ammo: { style: 'magic', power: Math.round(POWER[i] / 2) } });
 });
-item('shaft', tl('箭杆'), 'material', 1);
+// 箭和符文（弹药）10-25 用户要求删掉：远程、魔法不再耗弹药，原来弹药的威力并进了弓弩法杖
 
 /**
  * 新资源线（用户 10-23 要求几十种 T1-T8 新材料）：晶石、香料、树脂、羽毛，各 8 阶共 32 种。
  * T1 在老地图城镇附近，T2-T8 在 8848 外圈的新区域。用途都在落霞城的珍材坊：
- * 晶石 + 树脂 + 布料 → 晶能符文；羽毛 + 树脂 + 箭杆 + 箭头 → 羽箭；香料 + 兽肉 → 香料料理
+ * 香料 + 兽肉 → 香料料理；晶石、树脂、羽毛原来做符文和箭，弹药 10-25 删掉后暂时只能卖钱
  */
 export type MatLine = 'crystal' | 'spice' | 'resin' | 'feather';
 export const MAT_LINES: Record<MatLine, { name: string; skill: SkillId; verb: string; names: string[]; desc: string }> = {
-  crystal: { name: tl('晶石'), skill: 'mining', verb: tl('开采'), names: [tl('石英'), tl('紫晶'), tl('黄晶'), tl('碧玉'), tl('蓝晶'), tl('星辉晶'), tl('日耀晶'), tl('虚空晶')], desc: tl('从岩缝里敲下来的晶石，能把魔力存进符文里') },
+  crystal: { name: tl('晶石'), skill: 'mining', verb: tl('开采'), names: [tl('石英'), tl('紫晶'), tl('黄晶'), tl('碧玉'), tl('蓝晶'), tl('星辉晶'), tl('日耀晶'), tl('虚空晶')], desc: tl('从岩缝里敲下来的晶石，能卖不少钱') },
   spice: { name: tl('香料'), skill: 'gathering', verb: tl('采摘'), names: [tl('薄荷叶'), tl('野茴香'), tl('肉桂皮'), tl('丁香'), tl('豆蔻'), tl('藏红花'), tl('雪域花椒'), tl('虚空星椒')], desc: tl('晒干的香草和香料，和兽肉一起做成料理') },
-  resin: { name: tl('树脂'), skill: 'woodcutting', verb: tl('割取'), names: [tl('松脂'), tl('桦胶'), tl('枫脂'), tl('琥珀脂'), tl('龙血脂'), tl('烈阳脂'), tl('霜华脂'), tl('白玉脂')], desc: tl('割开树皮流出的树脂，做箭和符文时用来粘合') },
-  feather: { name: tl('羽毛'), skill: 'hunting', verb: tl('收集'), names: [tl('雀羽'), tl('鸦羽'), tl('鹰羽'), tl('鹤羽'), tl('孔雀羽'), tl('雷鸟羽'), tl('冰凰羽'), tl('天凤羽')], desc: tl('鸟巢边捡到的羽毛，装在箭尾上箭飞得更稳') },
+  resin: { name: tl('树脂'), skill: 'woodcutting', verb: tl('割取'), names: [tl('松脂'), tl('桦胶'), tl('枫脂'), tl('琥珀脂'), tl('龙血脂'), tl('烈阳脂'), tl('霜华脂'), tl('白玉脂')], desc: tl('割开树皮流出的树脂，能卖不少钱') },
+  feather: { name: tl('羽毛'), skill: 'hunting', verb: tl('收集'), names: [tl('雀羽'), tl('鸦羽'), tl('鹰羽'), tl('鹤羽'), tl('孔雀羽'), tl('雷鸟羽'), tl('冰凰羽'), tl('天凤羽')], desc: tl('鸟巢边捡到的羽毛，能卖不少钱') },
 };
 export const MAT_LINE_IDS = Object.keys(MAT_LINES) as MatLine[];
 const SPICE_DISH = [tl('薄荷烤肉'), tl('茴香炖肉'), tl('肉桂烤排'), tl('丁香焖肉'), tl('豆蔻咖喱'), tl('藏红花炖肉'), tl('花椒爆肉'), tl('星椒龙排')];
@@ -257,14 +254,6 @@ TIERS.forEach((t, i) => {
       tier: i, desc: tl`${L.desc}。${SKILLS[L.skill].name} ${t.level} 级可${L.verb}。`,
     });
   }
-  const crys = MAT_LINES.crystal.names[i];
-  const fea = MAT_LINES.feather.names[i];
-  item(`crystal_rune_${n}`, tl`${crys}符文`, 'ammo', Math.ceil(BAR_VALUE[i] / 5), {
-    tier: i, ammo: { style: 'magic', power: Math.round((POWER[i] / 2) * 1.3) }, desc: tl`嵌了${crys}的符文，比同阶普通符文威力高三成。`,
-  });
-  item(`feather_arrow_${n}`, tl`${fea}箭`, 'ammo', Math.ceil(BAR_VALUE[i] / 5), {
-    tier: i, ammo: { style: 'ranged', power: Math.round((POWER[i] / 2) * 1.3) }, desc: tl`箭尾装了${fea}，比同阶普通箭威力高三成。`,
-  });
 });
 
 // 强化石（占位）
@@ -313,11 +302,11 @@ export const EQUIP_TYPES: EquipType[] = [
   W('spear', tl('长枪'), 'melee', 'smithing', [['bar', 2], ['plank', 1]], 3, 0.8, 1.4, 3000, 'melee'),
   W('dagger', tl('匕首'), 'melee', 'smithing', [['bar', 1]], 0, 1.25, 0.65, 2000, 'melee'),
   // 远程：皮革 + 加工木材
-  W('shortbow', tl('短弓'), 'ranged', 'fletching', [['plank', 2], ['leather', 1]], 1, 1.0, 0.6, 2200, 'ranged'),
-  W('longbow', tl('长弓'), 'ranged', 'fletching', [['plank', 3], ['leather', 1]], 4, 1.25, 0.8, 2800, 'ranged'),
-  W('crossbow', tl('弩'), 'ranged', 'fletching', [['plank', 3], ['leather', 2]], 6, 0.85, 1.3, 3400, 'ranged'),
+  W('shortbow', tl('短弓'), 'ranged', 'fletching', [['plank', 2], ['leather', 1]], 1, 1.0, 1.1, 2200, 'ranged'),
+  W('longbow', tl('长弓'), 'ranged', 'fletching', [['plank', 3], ['leather', 1]], 4, 1.25, 1.3, 2800, 'ranged'),
+  W('crossbow', tl('弩'), 'ranged', 'fletching', [['plank', 3], ['leather', 2]], 6, 0.85, 1.8, 3400, 'ranged'),
   // 魔法：加工木材 + 布料
-  W('staff', tl('法杖'), 'magic', 'crafting', [['plank', 2], ['cloth', 1]], 4, 1.0, 0.6, 2400, 'magic'),
+  W('staff', tl('法杖'), 'magic', 'crafting', [['plank', 2], ['cloth', 1]], 4, 1.0, 1.1, 2400, 'magic'),
   // 护甲：头、身、脚、手
   ...A('plate', [tl('板甲头盔'), tl('板甲胸甲'), tl('板甲战靴'), tl('板甲护手')], 'bar', 'smithing', 2.0, 0, 0.25, 'melee'),
   ...A('leather', [tl('皮帽'), tl('皮甲'), tl('皮靴'), tl('皮手套')], 'leather', 'crafting', 1.4, 0.5, 0, 'ranged'),
@@ -444,11 +433,9 @@ const BOSS_TROPHY: Record<string, [string, string]> = {
       ]) },
     });
     item(`chest_${n}`, CHEST_NAME[t], 'loot', v * 10, {
-      tier: t, desc: tl('精英和首领守着的宝箱，里面有锭、弹药、宝石，运气好有本阶装备。'),
+      tier: t, desc: tl('精英和首领守着的宝箱，里面有锭、宝石、强化石，运气好有本阶装备。'),
       opens: { coins: [v * 6, v * 15], rolls: 3, pool: pick([
         { item: `${T.id}_bar`, min: 2, max: 5, w: 4 }, { item: `core_${n}`, min: 1, max: 3, w: 3 },
-        { item: `${T.id}_rune`, min: 10, max: 25, w: 1.5 }, { item: `${T.id}_arrow`, min: 10, max: 25, w: 1.5 },
-        { item: `crystal_rune_${n}`, min: 5, max: 15, w: 1 }, { item: `feather_arrow_${n}`, min: 5, max: 15, w: 1 },
         { item: GEM_FOR_TIER[t], min: 1, max: 1, w: 1.5 }, { item: ENH_FOR_TIER[t], min: 1, max: 2, w: 1.5 },
         { item: `luckybag_${n}`, min: 1, max: 1, w: 2 }, ...gearPool(1.5),
       ]) },
@@ -556,8 +543,6 @@ function speciesDrops(sp: Species, idx: number): Drop[] {
   if (fam === 'insect') add(`cotton_${n}`, 2 * k, 0.3);
   if (fam === 'humanoid') { add(`cotton_${n}`, k, 0.25); add(`cloth_${n}`, 1, 0.1); }
   if (fam === 'crab' || sp.form === 'eel' || sp.form === 'frog' || sp.form === 'croc' || sp.form === 'turtle') add(FISH_FOR_TIER[t], k, 0.3);
-  if (fam === 'spirit' || fam === 'eye' || sp.form === 'lich' || sp.form === 'cultist' || sp.form === 'imp') add(`${T.id}_rune`, 5 * k, 0.3);
-  if (fam === 'undead' && sp.form !== 'lich') add(`${T.id}_arrow`, 5 * k, 0.2);
   if (fam === 'dragon') add(T.ore, 2 * k, 0.3);
   if (fam === 'serpent' && sp.form === 'worm') add(T.ore, k, 0.25);
   // 最外圈的新生物掉本群系的特产材料（晶石、香料、树脂、羽毛），接上珍材坊的加工链（10-24）
@@ -757,12 +742,7 @@ TIERS.forEach((t, i) => {
     make(`${prefix[e.maker]}_${id}`, ITEMS[id].name, e.maker, lvl + e.plus, inputs, [one(id)], Math.max(1, qty * 0.8));
   }
   // 弹药
-  make(`smith_${t.id}_arrowhead`, tl`${t.metal}箭头 ×15`, 'smithing', lvl, [one(`${t.id}_bar`)], [one(`${t.id}_arrowhead`, 15)]);
-  make(`fletch_${t.id}_arrow`, tl`${t.metal}箭 ×10`, 'fletching', lvl, [one('shaft', 10), one(`${t.id}_arrowhead`, 10)], [one(`${t.id}_arrow`, 10)], 1.5);
-  make(`craft_${t.id}_rune`, tl`${t.rune}符文 ×5`, 'crafting', lvl, [one(t.ore), one(`cloth_${n}`)], [one(`${t.id}_rune`, 5)]);
 });
-make('fletch_shaft', tl('箭杆 ×15'), 'fletching', 1, [one('plank_1')], [one('shaft', 15)]);
-make('fletch_shaft_birch', tl('箭杆 ×25'), 'fletching', 10, [one('plank_2')], [one('shaft', 25)]);
 
 for (const j of JEWELS) {
   const inputs = [one(j.bar), one(j.gem)];
@@ -912,9 +892,6 @@ TIERS.forEach((t, i) => {
     tier: i, heals, buff, desc: tl`兽肉用${MAT_LINES.spice.names[i]}腌过再烤。烹饪 ${lvl} 级，在落霞城珍材坊做。回复 ${heals} 生命；吃下后${buffText(buff)}。`,
   });
   make(`rare_cook_${n}`, SPICE_DISH[i], 'cooking', lvl, [one(`meat_${n}`), one(`spice_${n}`, 2)], [one(id)], 1.6);
-  make(`rare_rune_${n}`, tl`${MAT_LINES.crystal.names[i]}符文 ×8`, 'crafting', lvl, [one(`crystal_${n}`), one(`resin_${n}`), one(`cloth_${n}`)], [one(`crystal_rune_${n}`, 8)], 1.4);
-  make(`rare_arrow_${n}`, tl`${MAT_LINES.feather.names[i]}箭 ×10`, 'fletching', lvl,
-    [one('shaft', 10), one(`${t.id}_arrowhead`, 10), one(`feather_${n}`, 2), one(`resin_${n}`)], [one(`feather_arrow_${n}`, 10)], 1.8);
 });
 // 料理物品定义在 ITEMS 建好之后，补登记进去
 for (const it of itemList) ITEMS[it.id] ??= it;

@@ -1,7 +1,7 @@
 import { partyXpPct } from './party';
 import { APT_MAX, APT_MIN, FOAL, growMs, HORSE_XP, horseItem, RANCH, RANCH_PENS } from './ranch';
 import { HW_POINT, HW_TIERS, hwFight, hwOpen, hwTierOf, hwWait } from './halloween';
-import { ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAP_W, MID_BOX, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, planRoute, travelMs, type MapNode } from './data';
+import { BAR_VALUE, TIERS, ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAP_W, MID_BOX, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, planRoute, travelMs, type MapNode } from './data';
 import { nextRandom } from './rng';
 import { stepQuests } from './quests';
 import { stepAutoFarm, stepRain } from './farm';
@@ -112,7 +112,7 @@ export function migrate(raw: unknown): GameState | null {
   for (const k of Object.keys(xp) as SkillId[]) xp[k] = Math.max(0, num(xpIn[k], fresh.xp[k]));
   // 采集从种植里拆出来（10-23）：旧存档的种植经验两边都保留
   xp.gathering = Math.max(0, num(xpIn.gathering, num(xpIn.farming, 0)));
-  const bankIn = keep(s.bank);
+  const bankIn = ammoRefund(keep(s.bank), [obj<Record<string, number>>(s.bank), obj<Record<string, number>>(s.bag)]);
   const seenIn = obj<Record<string, 1>>(s.seen);
   const farmIn = obj<GameState['farm']>(s.farm);
   const oldSize = num(s.mapSize, 1080) > 0 ? num(s.mapSize, 1080) : 1080;
@@ -170,6 +170,25 @@ export function migrate(raw: unknown): GameState | null {
 }
 
 /** 田从 56 格减到 24 格（用户 10-23）：去掉的格子里种着的作物，按一次收成放进仓库（2 个作物 + 1 颗种子） */
+/** 箭和符文 10-25 删掉了：旧存档里的弹药和箭头、箭杆按原价折成金币存进仓库 */
+function ammoRefund(bank: Record<string, number>, olds: (Record<string, number> | undefined)[]): Record<string, number> {
+  const tier = (id: string) => {
+    const n = id.match(/_(\d)$/);
+    if (n) return Number(n[1]) - 1;
+    return TIERS.findIndex((t) => id.startsWith(`${t.id}_`));
+  };
+  let coins = 0;
+  for (const rec of olds) for (const [id, q] of Object.entries(rec ?? {})) {
+    if (ITEMS[id] || !Number.isFinite(q) || q < 1) continue;
+    const t = tier(id);
+    const div = id === 'shaft' ? 0 : /^(crystal_rune|feather_arrow)_\d$/.test(id) ? 5 : /_arrowhead$/.test(id) ? 12 : /_(arrow|rune)$/.test(id) ? 8 : -1;
+    if (div < 0 || (div > 0 && t < 0)) continue;
+    coins += Math.floor(q) * (div ? Math.ceil(BAR_VALUE[t] / div) : 1);
+  }
+  if (coins > 0) bank.coins = (bank.coins ?? 0) + coins;
+  return bank;
+}
+
 function farmRefund(farm: GameState['farm'], bank: Record<string, number>): Record<string, number> {
   for (const [id, p] of Object.entries(farm ?? {})) {
     if (PLOT_BY_ID[id] || !p || !CROP_DEFS[p.crop]) continue;
@@ -391,21 +410,6 @@ export function bestFood(s: GameState, from: Record<string, number> = s.bag): st
   return best;
 }
 
-/** 当前武器能用的最好的弹药。战斗里只用背包的；withBank 用来估算（开战前会回仓库补） */
-export function bestAmmo(s: GameState, style = weaponStyle(s), withBank = false): { id: string; inBag: boolean } | undefined {
-  if (style === 'melee') return undefined;
-  let best: { id: string; inBag: boolean } | undefined;
-  for (const [store, inBag] of [[s.bag, true], [s.bank, false]] as const) {
-    if (!inBag && !withBank) continue;
-    for (const [id, qty] of Object.entries(store)) {
-      const a = ITEMS[id]?.ammo;
-      if (!a || a.style !== style || qty <= 0) continue;
-      if (!best || a.power > ITEMS[best.id].ammo!.power) best = { id, inBag };
-    }
-  }
-  return best;
-}
-
 /** RuneScape 式命中率：攻击值与防御值对抗 */
 function hitChance(attackRoll: number, defenceRoll: number): number {
   return attackRoll > defenceRoll
@@ -440,15 +444,13 @@ export function combatStats(s: GameState, m: MonsterDef) {
   const style = weaponStyle(s);
   const lvl = level(s, style);
   const b = playerBonuses(s, style);
-  const ammo = bestAmmo(s, style, true);
-  const strength = b.strength + (ammo ? ITEMS[ammo.id].ammo!.power : 0);
+  const strength = b.strength;
   const has = (t: string) => m.traits.includes(t);
   // 抗性和弱点只影响对应战斗方式的伤害
   const dmgMult = (has(`resist_${style}`) ? 0.7 : 1) * (has(`weak_${style}`) ? 1.3 : 1);
   const perks = armorPerks(s);
   return {
     style,
-    ammo: ammo?.id,
     crit: 0.05 + perks.crit,
     critMult: 1.5,
     dodge: perks.dodge,
@@ -569,11 +571,9 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   };
 
   /** 存过一次仓库背包还是装不下这次的战利品：这次结算里不再为腾地方跑仓库（以前会每毫秒跑一趟，卡死页面） */
-  const isMyAmmo = (id: string) => !!ITEMS[id]?.ammo && ITEMS[id].ammo!.style === weaponStyle(s);
-  /** 存仓库也腾不出地方（背包里只剩当前弹药都装不下这次的战利品）：别跑了，多出来的直接进仓库。
+  /** 存仓库也腾不出地方（空背包都装不下这次的战利品）：别跑了，多出来的直接进仓库。
    *  以前用一次结算里的标记，界面每 0.2 秒结算一次，标记就没了，会一直来回跑 */
-  const bankWontHelp = (a: SkillAction | CombatAction) =>
-    !fits(lootOf(a), Object.fromEntries(Object.entries(s.bag).filter(([id]) => a.kind === 'combat' && isMyAmmo(id))));
+  const bankWontHelp = (a: SkillAction | CombatAction) => !fits(lootOf(a), {});
   /** 带补给时给战利品留的格子 */
   const lootRoom = () => (s.queue[0] ? Math.min(12, Math.max(8, new Set(lootOf(ACTIONS[s.queue[0].action])).size + 3)) : 0);
   /** 带这种补给最多带多少：给战利品留出格子 */
@@ -603,22 +603,18 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     if (s.travel.ms <= 0) {
       s.loc = dest;
       s.travel = null;
-      const keep = (id: string) => healOf(id) > 0 || !!ITEMS[id]?.ammo;
+      const keep = (id: string) => healOf(id) > 0;
       for (const pass of [false, true]) {
         for (const [id, q] of Object.entries(s.bag)) {
           if (!pass && keep(id)) continue;
-          // 当前武器的弹药永远不存回去（存了马上又要回来拿，来回跑）
-          if (pass && isMyAmmo(id)) continue;
           s.bank[id] = (s.bank[id] ?? 0) + q;
           delete s.bag[id];
         }
-        // 食物、弹药留着；剩下的格子装得下这次的战利品就够了，装不下连食物也存
+        // 食物留着；剩下的格子装得下这次的战利品就够了，装不下连食物也存
         if (!pass && (s.queue[0] ? fits(lootOf(ACTIONS[s.queue[0].action])) : BAG_SLOTS - bagSlotsUsed(s.bag) >= 5)) break;
       }
       if (supply) {
         refillBelt();
-        // 弹药先拿：没弹药打不了，食物只是多带少带
-        carryAmmo();
         carryFood();
         s.queue[0].stocked = true;
       }
@@ -741,23 +737,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   const bagFood = () => Object.entries(s.bag).reduce((n, [id, q]) => n + (healOf(id) && beltSlotOf(id) !== 'potion' ? q : 0), 0) + (s.belt?.food?.qty ?? 0);
   /** 背包里的食物不够设定数量，仓库里又有：要先回仓库拿 */
   const needSupply = () =>
-    beltNeeds() || (bagFood() < foodTarget() && Object.keys(s.bank).some((id) => healOf(id) > 0 && bagRoomFor(s.bag, id) > 0))
-    || (!bestAmmo(s) && !!bestAmmo(s, weaponStyle(s), true));
-
-  /** 在仓库旁把当前武器能用的弹药全部带上，好的先拿 */
-  const carryAmmo = () => {
-    const style = weaponStyle(s);
-    const ids = Object.keys(s.bank).filter((id) => ITEMS[id]?.ammo?.style === style).sort((a, b) => ITEMS[b].ammo!.power - ITEMS[a].ammo!.power);
-    for (const id of ids) {
-      // 背包里还没有弹药时第一种一定带上（有空格就行），不然会来回跑仓库
-      const first = !bestAmmo(s, style);
-      const n = Math.min(s.bank[id], first ? Math.max(carryRoom(id), Math.min(bagRoomFor(s.bag, id), stackOf(id))) : carryRoom(id));
-      if (n <= 0) continue;
-      s.bank[id] -= n;
-      if (s.bank[id] <= 0) delete s.bank[id];
-      addBag(id, n);
-    }
-  };
+    beltNeeds() || (bagFood() < foodTarget() && Object.keys(s.bank).some((id) => healOf(id) > 0 && bagRoomFor(s.bag, id) > 0));
 
   /** 在仓库旁按设置把食物和药水补进背包，好的先拿 */
   const carryFood = () => {
@@ -853,20 +833,6 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     const st = combatStats(s, m);
 
     if (c.playerTimerMs <= 0) {
-      if (st.style !== 'melee') {
-        const ammo = bestAmmo(s, st.style);
-        if (!ammo) {
-          // 背包打空了：仓库还有就回去补，没有才停
-          if (bestAmmo(s, st.style, true)) {
-            s.combat = null;
-            task.stocked = false;
-            return step;
-          }
-          return endTask('noAmmo'), step;
-        }
-        addBag(ammo.id, -1);
-        sum.ammoUsed++;
-      }
       c.playerTimerMs += playerAttackMs(s);
       c.pSwings = (c.pSwings ?? 0) + 1;
       c.pDmg = -1;
@@ -1245,12 +1211,12 @@ export function toBank(prev: GameState, item: string, qty: number): GameState {
   return s;
 }
 
-/** 背包里除了食物和弹药，全部存进仓库 */
+/** 背包里除了食物，全部存进仓库 */
 export function depositLoot(prev: GameState): GameState {
   if (!atBank(prev)) return prev;
   const s = clone(prev);
   for (const [id, q] of Object.entries(s.bag)) {
-    if (healOf(id) > 0 || ITEMS[id]?.ammo) continue;
+    if (healOf(id) > 0) continue;
     s.bank[id] = (s.bank[id] ?? 0) + q;
     delete s.bag[id];
   }

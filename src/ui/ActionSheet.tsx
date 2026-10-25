@@ -5,7 +5,7 @@ import { MonsterDetail, MonsterIcon, TraitChips } from './Bestiary';
 import { useEffect, useRef, useState } from 'react';
 import { ACTIONS, nodeOfAction, ITEMS, MONSTERS, NODES, REGIONS, SEED_PRICE, SEED_SHOP, SKILLS, tierName } from '../core/data';
 import {
-  actionDuration, atMarket, bestAmmo, bestFood, buySeed, combatEstimate, combatStats, enqueue, level, MAX_QUEUE, nearNode, setSettings, startNow, weaponStyle, xpPerHour,
+  actionDuration, atMarket, bestFood, buySeed, combatEstimate, combatStats, enqueue, level, MAX_QUEUE, nearNode, setSettings, startNow, weaponStyle, xpPerHour,
 } from '../core/sim';
 import type { ActionDef, GameState, SkillAction, TaskMode } from '../core/types';
 import type { MapNode } from '../core/data';
@@ -23,7 +23,7 @@ const COUNTS = [1, 10, 50, 100, 500];
 const TIMES = [10, 30, 60, 240];
 const THRESHOLDS = [0.25, 0.5, 0.75];
 /** 配方分类（用户 10-23：用分类和阶级筛选代替「点击展开更多」） */
-const CATS = [tl('武器'), tl('护甲'), tl('首饰'), tl('工具'), tl('弹药'), tl('锭'), tl('板材·皮革·布料'), tl('料理'), tl('药水'), tl('强化石'), tl('其他')] as const;
+const CATS = [tl('武器'), tl('护甲'), tl('首饰'), tl('工具'), tl('锭'), tl('板材·皮革·布料'), tl('料理'), tl('药水'), tl('强化石'), tl('其他')] as const;
 function catOf(a: ActionDef): (typeof CATS)[number] {
   if (a.kind !== 'skill') return tl('其他');
   const id = a.outputs[0]?.item ?? '';
@@ -34,7 +34,6 @@ function catOf(a: ActionDef): (typeof CATS)[number] {
   if (slot === 'head' || slot === 'body' || slot === 'feet' || slot === 'hands') return tl('护甲');
   if (slot === 'ring' || slot === 'neck') return tl('首饰');
   if (it.category === 'tool') return tl('工具');
-  if (it.ammo || id.includes('arrowhead')) return tl('弹药');
   if (id.endsWith('_bar')) return tl('锭');
   if (/^(plank|leather|cloth)_\d$/.test(id)) return tl('板材·皮革·布料');
   if (it.category === 'food') return tl('料理');
@@ -368,7 +367,6 @@ function CombatInfo({ s, monster }: { s: GameState; monster: string }) {
   const m = MONSTERS[monster];
   const st = combatStats(s, m);
   const food = bestFood(s) ?? bestFood(s, s.bank);
-  const ammo = bestAmmo(s, weaponStyle(s), true);
   const foodCount = [s.bank, s.bag].reduce((n, rec) => n + Object.entries(rec).reduce((m, [id, q]) => m + (ITEMS[id]?.heals ? q : 0), 0), 0);
   return (
     <span className="combat-info">
@@ -384,9 +382,6 @@ function CombatInfo({ s, monster }: { s: GameState; monster: string }) {
             : <span className={cls}>{tl('评估：')}<b>{e.rating}</b>{tl` · 每只约 ${Math.max(1, Math.round(e.killMs / 1000))} 秒、掉血约 ${Math.round(e.taken)} · 每小时约 ${fmtNum(Math.floor(e.perHour))} 只`}<small className="muted">{tl('（不算回仓库的路）')}</small></span>}
         </>;
       })()}
-      {st.style !== 'melee' && (
-        <span className={ammo ? '' : 'warn'}>{ammo ? tl`弹药：${ITEMS[ammo.id].name}${ammo.inBag ? '' : tl('（在仓库，开战前回去拿）')}` : tl`没有${st.style === 'ranged' ? tl('箭') : tl('符文')}！会立刻停止`}</span>
-      )}
       <span className={food ? '' : 'warn'}>{food ? tl`食物：最好的是${ITEMS[food].name}，共 ${fmtNum(foodCount)} 份` : tl('没有食物！挂机可能阵亡')}</span>
     </span>
   );

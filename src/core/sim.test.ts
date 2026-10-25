@@ -260,18 +260,26 @@ describe('背包与战斗方式', () => {
     expect(s.bag.minnow).toBe(2400);
   });
 
-  it('远程没有箭就停止，有箭会消耗并练远程', () => {
-    let s = newGame(T0, 2);
-    s.equipment.weapon = 'wood_shortbow';
-    const none = advance(startHere(s, 'fight_dummy', { type: 'infinite' }), T0 + 10_000);
-    expect(none.summary.taskEnds[0].reason).toBe('noAmmo');
-    s.bank.wood_arrow = 20;
-    const { state, summary } = advance(startHere(s, 'fight_dummy', { type: 'infinite' }), T0 + HOUR);
-    expect(summary.ammoUsed).toBe(20);
-    expect(state.bank.wood_arrow).toBeUndefined();
-    expect(summary.xp.ranged).toBeGreaterThan(0);
-    expect(summary.xp.melee).toBeUndefined();
-    expect(summary.taskEnds[0].reason).toBe('noAmmo');
+  it('远程和魔法不用带弹药，直接打并练对应技能（弹药 10-25 删掉）', () => {
+    for (const [weapon, skill] of [['wood_shortbow', 'ranged'], ['wood_staff', 'magic']] as const) {
+      const s = newGame(T0, 2);
+      s.equipment.weapon = weapon;
+      const { summary } = advance(startHere(s, 'fight_dummy', { type: 'infinite' }), T0 + HOUR);
+      expect(summary.taskEnds).toEqual([]);
+      expect(summary.xp[skill]).toBeGreaterThan(0);
+      expect(summary.xp.melee).toBeUndefined();
+    }
+  });
+
+  it('旧存档里的箭和符文折成金币存进仓库', () => {
+    const old = { ...newGame(T0, 1), bank: { wood_arrow: 80, runic_rune: 10, crystal_rune_3: 5, coins: 0 }, bag: { copper_arrowhead: 24, shaft: 30 } };
+    const s = migrate(JSON.parse(JSON.stringify(old)))!;
+    expect(s.bank.wood_arrow).toBeUndefined();
+    expect(s.bag.shaft).toBeUndefined();
+    // 80×1 + 10×32 + 5×6 + 24×1 + 30×1
+    expect(s.bank.coins).toBe(80 + 10 * 32 + 5 * 6 + 24 + 30);
+    // 再读一次不会重复退钱
+    expect(migrate(JSON.parse(JSON.stringify(s)))!.bank.coins).toBe(s.bank.coins);
   });
 
   it('等级加速前快后慢', () => {

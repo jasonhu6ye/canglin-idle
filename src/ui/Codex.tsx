@@ -22,7 +22,6 @@ const TYPES: { id: string; name: string; test: (it: ItemDef) => boolean }[] = [
   { id: 'armor', name: tl('护甲'), test: (it) => ['head', 'body', 'feet', 'hands'].includes(it.equip?.slot ?? '') },
   { id: 'jewel', name: tl('首饰'), test: (it) => it.equip?.slot === 'ring' || it.equip?.slot === 'neck' },
   { id: 'tool', name: tl('工具'), test: (it) => it.category === 'tool' },
-  { id: 'ammo', name: tl('弹药'), test: (it) => it.category === 'ammo' },
   { id: 'food', name: tl('食物·药水'), test: (it) => it.category === 'food' || it.category === 'potion' },
   { id: 'loot', name: tl('宝箱·福袋·战利品'), test: (it) => it.category === 'loot' },
   { id: 'deco', name: tl('首领战旗'), test: (it) => it.category === 'deco' },
@@ -159,7 +158,6 @@ export function CodexDetail({ s, id, reveal = false }: { s: GameState; id: strin
         <span className="muted">{tl`用法：放进食物栏或背包，战斗中血量低于设定的进食阈值时自动吃${it.buff ? tl('，吃下后获得限时增益') : ''}。`}</span>
       )}
       {it.desc && <span className="muted">{it.desc}</span>}
-      {it.ammo && <span>{tl`${it.ammo.style === 'ranged' ? tl('箭矢') : tl('符文')} · 威力 +${it.ammo.power}`}</span>}
       {e && (
         <span>
           {e.move ? tl`坐骑 · 骑乘时移动速度 +${Math.round(e.move * 100)}%` : tl`需要${SKILLS[e.skill].name} ${e.level} 级`}
