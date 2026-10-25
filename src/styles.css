@@ -879,3 +879,32 @@ html[lang="en"] .login-box h1 { letter-spacing: 2px; }
 .src-go { display: flex; justify-content: space-between; gap: 8px; width: 100%; text-align: left; background: none; border: 0; padding: 2px 0; color: var(--muted, #b8a888); font-size: inherit; cursor: pointer; }
 .src-go b { color: #8ae8ff; font-weight: normal; white-space: nowrap; }
 .src-go:hover span { color: #fff3c4; text-decoration: underline; }
+/* 装备品质（10-25）：白/绿/蓝/紫/金/红 */
+.qual { position: relative; display: inline-block; border-radius: 4px; box-shadow: inset 0 0 0 2px var(--qc), 0 0 6px -1px var(--qc); background: radial-gradient(circle, transparent 55%, color-mix(in srgb, var(--qc) 35%, transparent)); }
+.qual.q1 { --qc: #5ad05a; } .qual.q2 { --qc: #4a9aff; } .qual.q3 { --qc: #b060ff; } .qual.q4 { --qc: #ffb020; } .qual.q5 { --qc: #ff4040; }
+.qn1 { color: #5ad05a !important; } .qn2 { color: #4a9aff !important; } .qn3 { color: #c080ff !important; } .qn4 { color: #ffb020 !important; } .qn5 { color: #ff5050 !important; }
+.qual.q5 { animation: qual-myth 1.6s ease-in-out infinite; }
+@keyframes qual-myth { 50% { box-shadow: inset 0 0 0 2px var(--qc), 0 0 12px 1px var(--qc); } }
+.q-odds { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 2px; }
+.q-chip { padding: 0 5px; border-radius: 3px; background: rgba(0, 0, 0, 0.35); color: #e8e8e8; }
+.q-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.q-table td { padding: 2px 4px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+.q-table td:last-child { text-align: right; white-space: nowrap; }
+.q-table tr.cur { background: rgba(255, 220, 120, 0.1); }
+.qn0 { color: #e8e8e8; }
+
+/* 分解台（10-25） */
+.salv-got { color: #8fe07a; font-weight: bold; }
+.salv-quick { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 12px 6px; }
+.salv-list { display: flex; flex-direction: column; gap: 4px; padding: 0 12px 70px; }
+.salv-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; background: rgba(40, 28, 18, 0.55); border: 1px solid transparent; }
+.salv-row.on { border-color: #e8b84a; background: rgba(90, 60, 20, 0.55); }
+.salv-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; font-size: 12px; }
+.salv-info b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.salv-qty { display: flex; align-items: center; gap: 4px; }
+.salv-qty > button:not(.pill) { width: 26px; height: 26px; }
+.salv-qty span { min-width: 22px; text-align: center; }
+.salv-foot { position: sticky; bottom: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; background: #1b120cf0; border-top: 1px solid #5a3a22; font-size: 13px; }
+.salv-foot b { color: #ffd070; }
+.bank-head { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.bank-head .sort-btn { margin-left: auto; }

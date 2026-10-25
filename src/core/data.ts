@@ -1,6 +1,7 @@
 import type {
   ActionDef, Buff, BuffKind, CombatStyle, Drop, EquipSlot, ItemCategory, ItemDef, ItemStack, LootTable, MonsterDef, RegionId, SkillGroup, SkillId, ToolSlot,
 } from './types';
+import { QUALITY_NAME, QUALITY_STAT, QUALITY_SPEED, QUALITY_VALUE, qid } from './quality';
 import { FORM_FAMILY, isAnimal, SPECIES, WORLD_SKILL, type Family, type Species } from './bestiary';
 import { doorOf, FACILITY_NAME, townAt, TOWNS, type Facility, type TownDef } from './towns';
 
@@ -483,6 +484,23 @@ item(HW_BOX, tl('南瓜礼盒'), 'loot', 0, {
   opens: { coins: [80, 240], rolls: 1, pool: [{ item: HW_POINT, min: 8, max: 15, w: 1 }] },
 });
 
+// 装备和工具的品质（用户 10-25）：每件装备再生成 5 个品质版本，属性和价格按品质放大；普通版名字也带「普通·」
+for (const it of itemList.filter((x) => x.equip && !x.equip.move)) {
+  const base = { ...it, equip: { ...it.equip! } };
+  for (let q = 0; q < QUALITY_NAME.length; q++) {
+    const e = base.equip;
+    const def: ItemDef = {
+      ...base, id: qid(base.id, q), name: tl`${QUALITY_NAME[q]}·${base.name}`, value: Math.round(base.value * QUALITY_VALUE[q]), quality: q, baseName: base.name,
+      equip: {
+        ...e, attack: Math.round(e.attack * QUALITY_STAT[q]), strength: Math.round(e.strength * QUALITY_STAT[q]), defence: Math.round(e.defence * QUALITY_STAT[q]),
+        speed: e.speed ? Math.round(e.speed * QUALITY_SPEED[q] * 1000) / 1000 : undefined,
+      },
+    };
+    if (q === 0) Object.assign(it, def);
+    else itemList.push(def);
+  }
+}
+
 export const ITEMS: Record<string, ItemDef> = Object.fromEntries(itemList.map((i) => [i.id, i]));
 
 // ---- 怪物与生物 ----
@@ -902,7 +920,7 @@ const filterIds = (prefix: string) => actionList.filter((a) => a.id.startsWith(p
 
 export type NodeSprite =
   | 'ore' | 'tree' | 'fish' | 'herb' | 'camp' | 'boss' | 'anvil' | 'furnace' | 'stove' | 'bench' | 'bowyer' | 'potion' | 'enhance'
-  | 'market' | 'farm' | 'bank' | 'dummy' | 'cave' | 'atelier' | 'waystone' | 'portal' | 'worldboss' | 'altar' | 'ranch';
+  | 'market' | 'farm' | 'bank' | 'dummy' | 'cave' | 'atelier' | 'waystone' | 'portal' | 'worldboss' | 'altar' | 'ranch' | 'salvage';
 
 export interface MapNode {
   id: string;
@@ -920,6 +938,8 @@ export interface MapNode {
   pond?: boolean;
   /** 打开仓库而不是任务列表 */
   opens?: 'bank';
+  /** 分解台：分解仓库里的装备换金币 */
+  salvage?: boolean;
   /** 5088 大地图新增的特色地点：自带一片地貌、专属生物和首领，地图上标大字地名（用户 10-23） */
   site?: { kind: SiteKind; r: number };
   /** 大型洞窟入口（用户 10-23：先占位，以后开放） */
@@ -1249,6 +1269,21 @@ export const NODES: MapNode[] = [
   // ---- 12080 的 8 座新城镇（布局在 towns.ts） ----
   ...TOWNS.flatMap(townNodes),
 ];
+
+/** 分解台（用户 10-25）：每座城镇仓库旁一个，把仓库里的装备、工具分解成金币。位置挑仓库附近空着的路面 */
+export const SALVAGE_SPOTS: Record<string, [number, number]> = {
+  bank: [-4, 3], bank2: [-4, 4], fengmai_bank: [4, 4], xueai_bank: [-5, 4], yandeng_bank: [4, 3], coralport_bank: [4, 3],
+  ashcamp_bank: [4, 3], crystalfort_bank: [4, 3], forgotten_bank: [8, -15], voidruins_bank: [3, 4],
+};
+for (const b of NODES.filter((n) => n.opens === 'bank')) {
+  const d = SALVAGE_SPOTS[b.id];
+  if (!d) continue;
+  const town = b.id === 'bank' ? '' : b.id === 'bank2' ? tl('落霞城') : TOWNS.find((t) => `${t.id}_bank` === b.id)?.name ?? '';
+  NODES.push({
+    id: `salvage_${b.id}`, name: town ? tl`${town}·分解台` : tl('分解台'), x: b.x + d[0], y: b.y + d[1], region: b.region, lv: [1, 1],
+    town: true, townId: b.townId, sprite: 'salvage', actions: [], salvage: true,
+  });
+}
 
 /**
  * 刷新点：每种怪物去它所在区域里、资源等级最接近它的野外点位，

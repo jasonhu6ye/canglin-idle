@@ -8,7 +8,7 @@ import { BAG_SLOTS, BELT_CAP, POTION_AT, WORLD_MOVE } from '../core/sim';
 import type { RegionId, SkillId } from '../core/types';
 import { FINE_POINTER } from './itemOpen';
 import { HW_TIERS } from '../core/halloween';
-import { tl } from '../i18n';
+import { tl, tlc } from '../i18n';
 
 /*
  * 攻略手册（用户 10-24：所有系统都要有教程和攻略文章，新人要看得懂）。
@@ -240,6 +240,23 @@ const ARTICLES: Article[] = [
       <ul className="hb-list">{HW_TIERS.map((h) => <li key={h.lv}><b>{h.name}</b>{tl`：Lv${h.lv}，打赢给 ${h.boxes} 个南瓜礼盒`}</li>)}</ul>
       <P>{tl('南瓜礼盒在背包里打开，得 8-15 南瓜积分和一些金币，积分直接存进仓库。积分在活动结束前用来兑换限定物品（兑换商店后续开放）。')}</P>
       <Tip>{tl('选难度时看一眼每档的评估。没打赢也不用重新召唤，回祭坛点「前往挑战」接着打。')}</Tip>
+    </>,
+  },
+  {
+    id: 'quality', cat: tl('生产'), title: tl('装备品质与分解台'),
+    body: () => <>
+      <P>{tl('每件做出来的装备和工具都会随机一个品质，名字前面带品质，比如「良好·木镐」。品质越高，攻击、力量、防御、工具速度和卖价越高。宝箱里开出来的装备是普通品质。')}</P>
+      <ul className="hb-list">
+        <li><b className="qn0">{tlc('quality', '普通')}</b>{tl('（白）：基础属性，T1 出货 60%')}</li>
+        <li><b className="qn1">{tl('良好')}</b>{tl('（绿）：属性 ×1.1，T1 出货 26%')}</li>
+        <li><b className="qn2">{tl('优秀')}</b>{tl('（蓝）：属性 ×1.22，T1 出货 9.5%')}</li>
+        <li><b className="qn3">{tl('史诗')}</b>{tl('（紫）：属性 ×1.36，T1 出货 3.2%')}</li>
+        <li><b className="qn4">{tl('传说')}</b>{tl('（金）：属性 ×1.55，T1 出货 1%')}</li>
+        <li><b className="qn5">{tl('神话')}</b>{tl('（红）：属性 ×1.8，T1 出货 0.3%')}</li>
+      </ul>
+      <P>{tl('阶级越高，高品质越难出：每高一阶，良好以上的概率乘 (1 - 7%×阶)，T8 的神话只有约 0.15%。制作页每件装备下面都列出了各品质的概率，物品详情里能看到每个品质的属性。')}</P>
+      <P>{tl('每座城镇仓库旁都有分解台：站在旁边，就能把仓库里不要的装备和工具分解成金币，给的钱是售价的 1.2 倍，比去集市卖划算。身上穿着的不会被分解。')}</P>
+      <Tip>{tl('仓库页右上角的「整理」按钮会按分类、阶级、品质把仓库排好；同一件同品质的装备会叠在一格里。')}</Tip>
     </>,
   },
   {

@@ -1,3 +1,4 @@
+import { qClass } from '../core/quality';
 import { useSticky } from './sticky';
 import { useEffect, useState, type ReactNode } from 'react';
 import { ACTIONS, BUFF_NAME, buffText, cropsOfField, nodesOfAction, WAYSTONES, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, type MapNode } from '../core/data';
@@ -5,6 +6,7 @@ import {
   atBank, atMarket, nearestBank, nearestMarket, BAG_SLOTS, BELT_CAP, beltSlotOf, eat, fromBelt, POTION_AT, toBelt, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, armorPerks, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip, openContainer,
   weaponStyle, buffPct, levelSpeed, maxHp, moveSpeed, playerAttackMs,
   redeemCode, toggleMount,
+  sortBank,
 } from '../core/sim';
 import type { BuffKind, EquipSlot, GameState, ItemCategory, SkillId, Summary } from '../core/types';
 import { openCombatLog } from './CombatLog';
@@ -67,7 +69,7 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
   return (
     <div className="item-detail frame">
       <div className="row1">
-        <span className="with-icon"><Icon item={id} size={28} /> <b>{item.tier !== undefined && `${tierName(item.tier)} `}{item.name}</b></span>
+        <span className="with-icon"><Icon item={id} size={28} /> <b className={qClass(item.quality)}>{item.tier !== undefined && `${tierName(item.tier)} `}{item.name}</b></span>
         <span className="muted">{tl`×${fmtNum(qty)} · 单价 ${item.value}`}</span>
       </div>
       {item.heals && <span>{tl`回复 ${item.heals} 生命`}{item.buff && <b className="gold"> · {buffText(item.buff)}</b>}</span>}
@@ -151,7 +153,7 @@ function ItemGrid({ items, sel, onSel, onAct, empty = 0, split = false }: { item
           onContextMenu={(e) => { e.preventDefault(); onSel(id); onAct?.(id); }}>
           <Icon item={id} info={false} />
           <span className="qty">{fmtNum(n)}</span>
-          <span className="nm">{ITEMS[id].name}</span>
+          <span className={`nm ${qClass(ITEMS[id].quality)}`}>{ITEMS[id].name}</span>
         </button>
       ))}
       {Array.from({ length: empty }, (_, i) => <span key={`e${i}`} className="cell empty-cell" />)}
@@ -167,7 +169,9 @@ export function BankPanel({ s }: { s: GameState }) {
   const value = all.reduce((n, [id, q]) => n + ITEMS[id].value * q, 0);
   return (
     <div className="page">
-      <h2>{tl('仓库 ')}<small className="muted">{tl`${all.length} 种 · 估值 ${fmtNum(value)} 金币`}</small></h2>
+      <h2 className="bank-head">{tl('仓库 ')}<small className="muted">{tl`${all.length} 种 · 估值 ${fmtNum(value)} 金币`}</small>
+        {all.length > 1 && <button className="pill sort-btn" title={tl('按分类、阶级、品质排好')} onClick={() => store.dispatch(sortBank)}>{tl('整理')}</button>}
+      </h2>
       {!atBank(s) && <FarFromBank />}
       <div className="chips-row">
         {CATEGORIES.map(([c, name]) => {
@@ -826,7 +830,7 @@ export function NodeList({ s, onPick }: { s: GameState; onPick: (id: string) => 
   let rows: { key: string; id: string; name: string; sub: string; lv?: string; dim?: boolean }[] = [];
   if (tab.id === 'town') {
     rows = NODES.filter((n) => n.town).map((n) => {
-      const kinds = n.portal ? [tl('进家园岛屿')] : n.waystone ? [tl('传送')] : n.farm ? [tl('种植')] : n.id === RANCH ? [tl('养马')] : [...new Set(n.actions.map((id) => { const a = ACTIONS[id]; return a.kind === 'skill' ? SKILLS[a.skill].name : tl('战斗'); }))];
+      const kinds = n.portal ? [tl('进家园岛屿')] : n.waystone ? [tl('传送')] : n.farm ? [tl('种植')] : n.id === RANCH ? [tl('养马')] : n.salvage ? [tl('分解装备')] : [...new Set(n.actions.map((id) => { const a = ACTIONS[id]; return a.kind === 'skill' ? SKILLS[a.skill].name : tl('战斗'); }))];
       if (n.id.includes('market')) kinds.unshift(tl('买卖'));
       return { key: n.id, id: n.id, name: n.waystone ? tl('传说石碑') : splitTown(n.name)?.[1] ?? n.name, sub: `${townName(n)} · ${n.closed ? tl('暂未开放') : n.opens === 'bank' ? tl('存取物品') : kinds.join(tl('、'))}`, dim: n.closed };
     }).sort((a, b) => (a.sub.startsWith(tl('主城')) === b.sub.startsWith(tl('主城')) ? 0 : a.sub.startsWith(tl('主城')) ? -1 : 1));

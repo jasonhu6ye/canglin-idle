@@ -1,4 +1,5 @@
-import { actionDuration, advance, buySeed, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour, openContainer, redeemCode, toggleMount, moveSpeed, rainBonus, summonPumpkin, placeFoal, collectHorse, RANCH_NODE } from './sim';
+import { actionDuration, advance, buySeed, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour, openContainer, redeemCode, toggleMount, moveSpeed, rainBonus, summonPumpkin, placeFoal, collectHorse, RANCH_NODE, salvage, salvageValue, sortBank, SALVAGE_NODES, SALVAGE_BONUS } from './sim';
+import { baseOf, qid, qualityOdds, rollQuality } from './quality';
 import { HW_BOX, HW_END, HW_POINT, HW_TIERS, hwFight } from './halloween';
 import { APT_MAX, APT_MIN, aptOf, FOAL, FOAL_MS, growMs, HORSE_XP } from './ranch';
 import { SPECIES } from './bestiary';
@@ -993,5 +994,70 @@ describe('回仓库存东西', () => {
     s = advance(s, T0 + 30 * 60_000).state;
     expect(s.bag[food] ?? 0).toBe(0);
     expect(s.bank[food]).toBe(500);
+  });
+});
+
+describe('装备品质、分解台、仓库整理（10-25）', () => {
+  it('T1 出货率 60/26/9.5/3.2/1/0.3，阶级越高高品质越少，加起来都是 100', () => {
+    expect(qualityOdds(0)).toEqual([60, 26, 9.5, 3.2, 1, 0.3]);
+    for (let t = 0; t < 8; t++) {
+      const o = qualityOdds(t);
+      expect(o.reduce((a, b) => a + b, 0)).toBeCloseTo(100, 6);
+      if (t) for (let q = 1; q < 6; q++) expect(o[q]).toBeLessThan(qualityOdds(t - 1)[q]);
+    }
+    const n = [0, 0, 0, 0, 0, 0];
+    for (let i = 0; i < 100_000; i++) n[rollQuality(0, i / 100_000)]++;
+    expect(n.map((k) => k / 1000)).toEqual([60, 26, 9.5, 3.2, 1, 0.3]);
+  });
+
+  it('每件装备都有 6 个品质，属性和售价逐级变高；做出来的装备随机品质', () => {
+    const gear = Object.values(ITEMS).filter((it) => it.equip && !it.equip.move && !it.quality);
+    for (const it of gear) for (let q = 1; q < 6; q++) {
+      const lo = ITEMS[qid(it.id, q - 1)];
+      const hi = ITEMS[qid(it.id, q)];
+      expect(hi, it.id).toBeDefined();
+      expect(hi.value).toBeGreaterThan(lo.value);
+      expect(hi.equip!.attack + hi.equip!.strength + hi.equip!.defence).toBeGreaterThanOrEqual(lo.equip!.attack + lo.equip!.strength + lo.equip!.defence);
+    }
+    const a = Object.values(ACTIONS).find((x) => x.kind === 'skill' && x.outputs.some((o) => ITEMS[o.item]?.equip && ITEMS[o.item].tier === 0 && !ITEMS[o.item].equip!.move)) as SkillAction;
+    let s = newGame(T0, 3);
+    for (const st of a.inputs ?? []) s.bank[st.item] = st.qty * 400;
+    s.xp[a.skill] = XP_TABLE[a.level];
+    s = startHere(s, a.id, { type: 'count', count: 300 });
+    s = advance(s, T0 + 100 * HOUR).state;
+    const out = a.outputs.find((o) => ITEMS[o.item]?.equip)!.item;
+    const made = [...new Set([...Object.keys(s.bank), ...Object.keys(s.bag)])].filter((id) => baseOf(id) === out);
+    expect(made.length).toBeGreaterThan(2);
+    expect(made.reduce((t, id) => t + (owned(s, id) ?? 0), 0)).toBe(300);
+    expect(owned(s, out)).toBeGreaterThan(130);
+  });
+
+  it('分解台：每座城镇一个，要站在旁边，金币是售价 1.2 倍，不能分解非装备', () => {
+    expect(SALVAGE_NODES.length).toBeGreaterThanOrEqual(10);
+    const s = newGame(T0, 1);
+    s.bank.wood_pickaxe = 3;
+    s.bank[qid('wood_pickaxe', 4)] = 1;
+    s.bank.raw_minnow = 5;
+    const items = { wood_pickaxe: 5, [qid('wood_pickaxe', 4)]: 1, raw_minnow: 5 };
+    expect(salvage(s, items)[1]).toBe(0);
+    s.loc = standOf(SALVAGE_NODES[0]);
+    const coins0 = s.bank.coins ?? 0;
+    const [n, got] = salvage(s, items);
+    expect(got).toBe(3 * salvageValue('wood_pickaxe') + salvageValue(qid('wood_pickaxe', 4)));
+    expect(salvageValue(qid('wood_pickaxe', 4))).toBe(Math.round(ITEMS[qid('wood_pickaxe', 4)].value * SALVAGE_BONUS));
+    expect(n.bank.wood_pickaxe).toBeUndefined();
+    expect(n.bank.raw_minnow).toBe(5);
+    expect(n.bank.coins).toBe(coins0 + got);
+  });
+
+  it('整理仓库：数量不变，装备在前，同一件按品质从高到低', () => {
+    const s = newGame(T0, 1);
+    s.bank = { coins: 9, raw_minnow: 4, wood_pickaxe: 1, [qid('wood_pickaxe', 2)]: 2, copper_ore: 7 };
+    const n = sortBank(s);
+    expect(n.bank).toEqual(s.bank);
+    const keys = Object.keys(n.bank);
+    expect(keys[0]).toBe('coins');
+    expect(keys.indexOf(qid('wood_pickaxe', 2))).toBeLessThan(keys.indexOf('wood_pickaxe'));
+    expect(keys.indexOf('wood_pickaxe')).toBeLessThan(keys.indexOf('raw_minnow'));
   });
 });

@@ -1,6 +1,8 @@
+import { QualityOdds } from './Quality';
 import { AltarSheet } from './Halloween';
 import { RanchSheet } from './Ranch';
 import { RANCH } from '../core/ranch';
+import { SalvageSheet } from './Salvage';
 import { MonsterDetail, MonsterIcon, TraitChips } from './Bestiary';
 import { useEffect, useRef, useState } from 'react';
 import { ACTIONS, nodeOfAction, ITEMS, MONSTERS, NODES, REGIONS, SEED_PRICE, SEED_SHOP, SKILLS, tierName } from '../core/data';
@@ -52,6 +54,7 @@ export function ActionSheet({ s, nodeId, onClose }: { s: GameState; nodeId: stri
   if (node.waystone) return <WaystoneSheet s={s} nodeId={nodeId} onClose={onClose} />;
   if (node.event) return <AltarSheet s={s} node={node} onClose={onClose} />;
   if (node.id === RANCH) return <RanchSheet s={s} node={node} onClose={onClose} />;
+  if (node.salvage) return <SalvageSheet s={s} node={node} onClose={onClose} />;
   return <NodeSheet s={s} node={node} onClose={onClose} />;
 }
 
@@ -184,6 +187,7 @@ function Recipe({ s, a }: { s: GameState; a: SkillAction }) {
       {a.inputs?.map((st) => cell(st, true))}
       {a.inputs && <b className="rc-arrow">→</b>}
       {a.outputs.map((st) => cell(st, false))}
+      {a.outputs.map((st) => <QualityOdds key={`q${st.item}`} item={st.item} />)}
       <small className="muted rc-tip">{a.inputs ? tl('点材料跳到它的制作或采集地点（缺的标红）；点产物看详情') : tl('点图标看物品详情')}</small>
     </span>
   );

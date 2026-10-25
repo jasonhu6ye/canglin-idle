@@ -1,3 +1,4 @@
+import { baseOf } from '../core/quality';
 import { HW_BOX, HW_POINT } from '../core/halloween';
 import { pumpkinBoxUrl, pumpkinPointUrl } from '../game/halloweenArt';
 import { CROPS, ITEMS, MONSTERS, TIERS, tierName } from '../core/data';
@@ -990,8 +991,9 @@ export function Icon({ item, size = 32, info = true }: { item: string; size?: nu
 function equipUrl(id: string): string | null {
   const it = ITEMS[id];
   if (!it?.equip || it.tier === undefined || it.equip.slot === 'ring' || it.equip.slot === 'neck') return null;
-  const prefix = id.split('_')[0];
-  return equipIconUrl(id.slice(prefix.length + 1), it.tier);
+  const base = baseOf(id);
+  const prefix = base.split('_')[0];
+  return equipIconUrl(base.slice(prefix.length + 1), it.tier);
 }
 
 /** 福袋、宝箱、首领宝藏、首领战利品和战旗 */
@@ -1019,11 +1021,18 @@ export function itemImageUrl(item: string): string | undefined {
   if (item === HW_POINT) return pumpkinPointUrl();
   const res = resIconUrl(item) ?? equipUrl(item) ?? lootUrl(item);
   if (res) return res;
-  const [tpl, tint] = itemIcon(item);
+  const [tpl, tint] = itemIcon(baseOf(item));
   return iconUrl(tpl, tint);
 }
 
+/** 装备品质（用户 10-25）：图标外加一圈品质色的边框，普通不加 */
 function BareIcon({ item, size }: { item: string; size: number }) {
+  const q = ITEMS[item]?.quality ?? 0;
+  if (!q) return <PlainIcon item={item} size={size} />;
+  return <span className={`qual q${q}`} style={{ width: size, height: size }}><PlainIcon item={item} size={size} /></span>;
+}
+
+function PlainIcon({ item, size }: { item: string; size: number }) {
   // 万圣节活动：南瓜礼盒、南瓜积分
   if (item === HW_BOX || item === HW_POINT) return <img className="icon" src={item === HW_BOX ? pumpkinBoxUrl() : pumpkinPointUrl()} width={size} height={size} alt="" draggable={false} />;
   if (item.startsWith('mount_')) return <img className="icon" src={mountIconUrl(item)} width={size} height={size} alt="" draggable={false} />;
@@ -1038,7 +1047,7 @@ function BareIcon({ item, size }: { item: string; size: number }) {
       </span>
     );
   }
-  const [tpl, tint] = itemIcon(item);
+  const [tpl, tint] = itemIcon(baseOf(item));
   const tier = ITEMS[item]?.tier;
   const img = <img className="icon" src={iconUrl(tpl, tint)} width={size} height={size} alt="" draggable={false} />;
   if (tier === undefined || size < 22) return img;

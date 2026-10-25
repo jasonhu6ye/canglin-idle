@@ -39,6 +39,8 @@ describe('数据闭环', () => {
     for (const it of Object.values(ITEMS)) it.opens?.pool.forEach((e) => made.add(e.item));
     // 兑换码送的坐骑
     made.add('mount_danmark');
+    // 品质版本由制作随机出（用户 10-25）
+    for (const it of Object.values(ITEMS)) if (it.quality) made.add(it.id);
     // 畜牧站养大的马；小马崽放进马栏
     for (let a = 50; a <= 200; a++) made.add(`mount_horse_${a}`);
     used.add('foal');

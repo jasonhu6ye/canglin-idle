@@ -47,6 +47,10 @@ export interface ItemDef {
   ammo?: { style: 'ranged' | 'magic'; power: number };
   /** 宝箱、福袋：可以打开 */
   opens?: LootTable;
+  /** 装备和工具的品质：0 普通 … 5 神话 */
+  quality?: number;
+  /** 不带品质前缀的名字 */
+  baseName?: string;
   /** 战利品图标：首领战旗、首领战利品按哪个首领画 */
   boss?: string;
   equip?: {

@@ -1,6 +1,7 @@
 import { ITEMS, SKILLS } from './data';
 import type { GameState, SkillId, Summary } from './types';
 import { level } from './sim';
+import { baseOf } from './quality';
 import { tl } from '../i18n';
 
 /** 新手任务：一条线带新玩家走一遍采集 → 加工 → 打造 → 战斗（用户 10-22 要求） */
@@ -66,13 +67,16 @@ export const QUESTS: QuestDef[] = [
     tip: tl('西边草原上有第二座城「落霞城」，有仓库、集市和全套生产建筑，仓库和主城是同一份。到那里点亮城里的石碑，以后就能来回传送。') },
 ];
 
-const equipped = (s: GameState, item: string) => Object.values(s.equipment).includes(item);
+// 任务要的装备不分品质（用户 10-25 加了品质）
+const equipped = (s: GameState, item: string) => Object.values(s.equipment).some((id) => id && baseOf(id) === item);
+const gained = (items: Record<string, number>, item: string) => Object.entries(items).reduce((n, [id, k]) => n + (baseOf(id) === item ? Math.max(0, k) : 0), 0);
+const plain = (id: string) => ITEMS[id].baseName ?? ITEMS[id].name;
 
 export function questText(q: QuestDef): string {
   const g = q.goal;
-  if (g.kind === 'gain') return tl`获得 ${g.n} 个${ITEMS[g.item].name}`;
+  if (g.kind === 'gain') return tl`获得 ${g.n} 个${plain(g.item)}`;
   if (g.kind === 'level') return tl`${SKILLS[g.skill].name}升到 ${g.n} 级`;
-  if (g.kind === 'equip') return tl`装备${ITEMS[g.item].name}`;
+  if (g.kind === 'equip') return tl`装备${plain(g.item)}`;
   if (g.kind === 'stones') return tl`点亮 ${g.n} 座传说石碑（含主城）`;
   return tl`击败 ${g.n} 只怪物或生物`;
 }
@@ -103,7 +107,7 @@ export function stepQuests(s: GameState, sum: Summary): QuestDef[] {
     const q = QUESTS[s.quest.i];
     if (!q) break;
     const g = q.goal;
-    if (g.kind === 'gain') s.quest.n += Math.max(0, sum.items[g.item] ?? 0);
+    if (g.kind === 'gain') s.quest.n += gained(sum.items, g.item);
     else if (g.kind === 'kills') s.quest.n += Object.values(sum.kills).reduce((a, b) => a + b, 0);
     const have = stateGoal(s, q) ?? s.quest.n;
     if (have < g.n) break;

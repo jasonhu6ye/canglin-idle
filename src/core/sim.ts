@@ -1,5 +1,6 @@
 import { partyXpPct } from './party';
 import { APT_MAX, APT_MIN, FOAL, growMs, HORSE_XP, horseItem, RANCH, RANCH_PENS } from './ranch';
+import { baseOf, qid, rollQuality } from './quality';
 import { HW_POINT, HW_TIERS, hwFight, hwOpen, hwTierOf, hwWait } from './halloween';
 import { BAR_VALUE, TIERS, ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAP_W, MID_BOX, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, planRoute, travelMs, type MapNode } from './data';
 import { nextRandom } from './rng';
@@ -779,7 +780,13 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         if (a.fail!.item) addLoot(a.fail!.item, 1);
         if (a.fail!.stunMs) s.progressMs = -a.fail!.stunMs;
       } else {
-        for (const o of a.outputs) if (o.chance === undefined || rand() < o.chance) addLoot(o.item, o.qty);
+        for (const o of a.outputs) {
+          if (o.chance !== undefined && rand() >= o.chance) continue;
+          // 做出来的装备、工具随机品质（用户 10-25）
+          const it = ITEMS[o.item];
+          if (it?.equip && !it.equip.move) for (let k = 0; k < o.qty; k++) addLoot(qid(o.item, rollQuality(it.tier, rand())), 1);
+          else addLoot(o.item, o.qty);
+        }
         if (gatherer && rand() < bonus) a.outputs.forEach((o) => o.chance === undefined && addLoot(o.item, o.qty));
         addXp(a.skill, a.xp);
       }
@@ -1211,6 +1218,49 @@ export function toBank(prev: GameState, item: string, qty: number): GameState {
   if (s.bag[item] <= 0) delete s.bag[item];
   s.bank[item] = (s.bank[item] ?? 0) + n;
   return s;
+}
+
+/** 分解台（用户 10-25）：仓库里的装备、工具分解成金币，比卖给集市多给两成 */
+export const SALVAGE_BONUS = 1.2;
+export const SALVAGE_NODES = NODES.filter((n) => n.salvage);
+export const atSalvage = (s: GameState) => SALVAGE_NODES.find((n) => nearNode(s, n));
+export const salvageValue = (id: string) => Math.max(1, Math.round((ITEMS[id]?.value ?? 0) * SALVAGE_BONUS));
+export const canSalvage = (id: string) => !!ITEMS[id]?.equip && !ITEMS[id].equip!.move;
+/** 分解仓库里的这些装备：返回新状态和拿到的金币 */
+export function salvage(prev: GameState, items: Record<string, number>): [GameState, number] {
+  if (!atSalvage(prev)) return [prev, 0];
+  const s = clone(prev);
+  let coins = 0;
+  for (const [id, want] of Object.entries(items)) {
+    const n = Math.min(Math.floor(want), s.bank[id] ?? 0);
+    if (n <= 0 || !canSalvage(id)) continue;
+    s.bank[id] -= n;
+    if (s.bank[id] <= 0) delete s.bank[id];
+    coins += n * salvageValue(id);
+  }
+  if (!coins) return [prev, 0];
+  s.bank.coins = (s.bank.coins ?? 0) + coins;
+  return [s, coins];
+}
+
+/** 仓库「整理」（用户 10-25）：按种类、阶级、名字、品质重新排好 */
+const SORT_CAT = ['gear', 'tool', 'food', 'potion', 'resource', 'material', 'seed', 'loot', 'deco', 'misc'];
+export function sortBank(prev: GameState): GameState {
+  const key = (id: string) => {
+    const it = ITEMS[id];
+    if (!it) return [99, 0, id, 0] as const;
+    const cat = SORT_CAT.indexOf(it.category);
+    return [cat < 0 ? 98 : cat, it.tier ?? -1, baseOf(id), -(it.quality ?? 0)] as const;
+  };
+  const ids = Object.keys(prev.bank).filter((id) => id !== 'coins').sort((a, b) => {
+    const x = key(a);
+    const y = key(b);
+    return x[0] - y[0] || x[1] - y[1] || (x[2] < y[2] ? -1 : x[2] > y[2] ? 1 : 0) || x[3] - y[3];
+  });
+  const bank: Record<string, number> = {};
+  if (prev.bank.coins) bank.coins = prev.bank.coins;
+  for (const id of ids) bank[id] = prev.bank[id];
+  return { ...prev, bank };
 }
 
 /** 背包里的东西全部存进仓库（食物也存，用户 10-25；打怪前会按设置自动回来拿） */

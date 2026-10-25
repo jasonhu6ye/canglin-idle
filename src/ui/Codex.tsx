@@ -1,3 +1,5 @@
+import { qClass, qid, QUALITY_NAME } from '../core/quality';
+import { QualityTable } from './Quality';
 import { useSticky } from './sticky';
 import { useMemo, useState } from 'react';
 import { ACTIONS, buffText, CROP_DEFS, fieldOfCrop, ITEMS, MONSTERS, nodeOfAction, nodesOfAction, SKILLS, TIERS, tierName } from '../core/data';
@@ -77,16 +79,19 @@ function goSource(x: Src) {
   openItem(null);
 }
 
+/** 装备任何品质拿到过都算见过 */
+const seenAny = (s: GameState, id: string) => !!s.seen[id] || (!!ITEMS[id]?.equip && QUALITY_NAME.some((_, q) => s.seen[qid(id, q)]));
+
 export function Codex({ s, onClose }: { s: GameState; onClose: () => void }) {
   const [tier, setTier] = useSticky<number | 'all' | 'none'>('codex.tier', 'all');
   const [type, setType] = useSticky('codex.type', 'all');
   const [sel, setSel] = useSticky<string | null>('codex.sel', null);
   const [tab, setTab] = useSticky<'items' | 'monsters'>('codex.tab', 'items');
-  const all = useMemo(() => Object.values(ITEMS).filter((it) => it.id !== 'coins'), []);
-  const got = all.filter((it) => s.seen[it.id]).length;
+  const all = useMemo(() => Object.values(ITEMS).filter((it) => it.id !== 'coins' && !it.quality), []);
+  const got = all.filter((it) => seenAny(s, it.id)).length;
   const shown = all.filter((it) =>
     (tier === 'all' || (tier === 'none' ? it.tier === undefined : it.tier === tier)) && (type === 'all' || typeOf(it) === type));
-  const shownGot = shown.filter((it) => s.seen[it.id]).length;
+  const shownGot = shown.filter((it) => seenAny(s, it.id)).length;
   const typeCounts = useMemo(() => {
     const c: Record<string, number> = {};
     for (const it of all) c[typeOf(it)] = (c[typeOf(it)] ?? 0) + 1;
@@ -126,7 +131,7 @@ export function Codex({ s, onClose }: { s: GameState; onClose: () => void }) {
 
       <div className="grid">
         {shown.map((it) => {
-          const known = !!s.seen[it.id];
+          const known = seenAny(s, it.id);
           return (
             <button key={it.id} className={`cell ${known ? '' : 'unknown'} ${sel === it.id ? 'sel' : ''}`} onClick={() => setSel(it.id)}>
               <Icon item={it.id} info={false} />
@@ -144,7 +149,8 @@ export function Codex({ s, onClose }: { s: GameState; onClose: () => void }) {
 
 export function CodexDetail({ s, id, reveal = false }: { s: GameState; id: string; reveal?: boolean }) {
   const it = ITEMS[id];
-  const known = reveal || !!s.seen[id];
+  // 图鉴里只列普通版，任何品质拿到过都算见过
+  const known = reveal || seenAny(s, id);
   const type = TYPES.find((t) => t.id === typeOf(it))!.name;
   if (!known) {
     return (
@@ -160,7 +166,7 @@ export function CodexDetail({ s, id, reveal = false }: { s: GameState; id: strin
   return (
     <div className="item-detail frame">
       <div className="row1">
-        <span className="with-icon"><Icon item={id} size={28} /> <b>{it.tier !== undefined && `${tierName(it.tier)} `}{it.name}</b></span>
+        <span className="with-icon"><Icon item={id} size={28} /> <b className={qClass(it.quality)}>{it.tier !== undefined && `${tierName(it.tier)} `}{it.name}</b></span>
         <span className="muted">{tl`${type} · 单价 ${it.value} · 拥有 ${owned}`}</span>
       </div>
       {it.heals && (
@@ -182,6 +188,7 @@ export function CodexDetail({ s, id, reveal = false }: { s: GameState; id: strin
           {e.style && e.slot !== 'weapon' && tl`（攻、力只对${STYLE_NAME[e.style]}生效）`}
         </span>
       )}
+      {e && !e.move && <QualityTable id={id} />}
       {(src.make.length > 0 || src.drops.length > 0) && <b className="sub">{tl('来源')}</b>}
       {[...src.make, ...src.drops].map((x) => (x.node || x.monster
         ? <button key={x.text} className="src-go" onClick={() => goSource(x)}><span>· {x.text}</span><b>{tl('寻路 ›')}</b></button>

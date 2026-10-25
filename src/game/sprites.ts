@@ -107,6 +107,24 @@ export const SPRITES: Record<string, string[]> = {
     '................',
     '................',
   ],
+  salvage: [
+    '..........kk....',
+    '.........khHk...',
+    '........khHk....',
+    '...kkk.khHk.....',
+    '..khhHkkkk......',
+    '..kHHHkoOk......',
+    '...kkkkoOk..kk..',
+    '.kkkkkkkkkkkhk..',
+    'kooooooooooooHk.',
+    'kOOOOOOOOOOOOk..',
+    '.kOk......kOk...',
+    '.kOk.kkk..kOk...',
+    '.kOkkgygk.kOk...',
+    '.kOkgygygkkOk...',
+    '.kkkkkkkkkkkk...',
+    '................',
+  ],
   fire: [
     '................',
     '.......k........',
@@ -666,7 +684,7 @@ export const SPRITE_VARIANTS: Record<string, { base: string; swap: Record<string
 export const NODE_MARKER: Record<string, string> = {
   ore: 'ore', tree: 'tree', fish: 'fishspot', herb: 'herb', camp: 'camp', boss: 'boss', anvil: 'anvil', furnace: 'fire',
   stove: 'fire', bench: 'workbench', bowyer: 'bowrack', potion: 'cauldron', enhance: 'pedestal',
-  market: 'sign', farm: 'sign', bank: 'chest', dummy: 'scarecrow', atelier: 'pedestal', cave: 'camp',
+  market: 'sign', farm: 'sign', bank: 'chest', dummy: 'scarecrow', atelier: 'pedestal', cave: 'camp', salvage: 'salvage',
 };
 
 /** 把字符画画到 canvas 上，供 Phaser 注册成纹理 */
