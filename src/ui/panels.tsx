@@ -31,10 +31,10 @@ import { online } from '../net';
 import { gameFps } from './GameCanvas';
 import { tl } from '../i18n';
 
-const GEAR_SLOTS: [EquipSlot, string][] = [
+export const GEAR_SLOTS: [EquipSlot, string][] = [
   ['head', tl('头部')], ['neck', tl('项链')], ['weapon', tl('武器')], ['body', tl('身体')], ['hands', tl('手部')], ['feet', tl('脚部')], ['ring', tl('戒指')],
 ];
-const TOOL_SLOTS: [EquipSlot, string, SkillId][] = [
+export const TOOL_SLOTS: [EquipSlot, string, SkillId][] = [
   ['axe', tl('斧头'), 'woodcutting'], ['pickaxe', tl('镐子'), 'mining'], ['sickle', tl('镰刀'), 'gathering'], ['knife', tl('刮皮刀'), 'hunting'],
   ['rod', tl('鱼竿'), 'fishing'], ['hoe', tl('锄头'), 'farming'], ['hammer', tl('锻造锤'), 'smithing'], ['needle', tl('缝纫针'), 'crafting'],
 ];
@@ -185,7 +185,7 @@ export function BankPanel({ s }: { s: GameState }) {
 }
 
 /** 装备一行的数值简写：攻击、力量、防御、速度、移速 */
-function gearStats(id: string) {
+export function gearStats(id: string) {
   const e = ITEMS[id]?.equip;
   if (!e) return '';
   const out: string[] = [];

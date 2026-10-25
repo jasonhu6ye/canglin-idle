@@ -172,6 +172,8 @@ export class SupabaseApi implements OnlineApi {
 
   private count_: number | null = null;
   private ids_ = new Set<string>();
+  private byId = new Map<string, Presence>();
+  presenceOf(playerId: string) { return this.byId.get(playerId); }
   onlineIds() { if (this.profile) this.channel(); return this.ids_; }
   async trades(): Promise<Trade[]> {
     const me = this.need().id;
@@ -209,6 +211,7 @@ export class SupabaseApi implements OnlineApi {
       for (const [, metas] of Object.entries(ch.presenceState<Presence>())) if (metas[0]) all.push(metas[0]);
       this.count_ = all.length;
       this.ids_ = new Set(all.map((p) => p.playerId));
+      this.byId = new Map(all.map((p) => [p.playerId, p]));
       const others = all.filter((p) => p.playerId !== me.id);
       this.presenceFns.forEach((f) => f(others));
     }).subscribe((status) => {
@@ -219,7 +222,7 @@ export class SupabaseApi implements OnlineApi {
   publishPresence(p: Omit<Presence, 'playerId' | 'name' | 'at'>) {
     if (!this.profile) return;
     this.lastPresence = p;
-    void this.channel().track({ ...p, playerId: this.profile.id, name: this.profile.name, guildTag: this.profile.guildTag, at: Date.now() });
+    void this.channel().track({ ...p, playerId: this.profile.id, pid: this.profile.pid, name: this.profile.name, guildTag: this.profile.guildTag, at: Date.now() });
   }
   onPresence(f: (all: Presence[]) => void) {
     this.presenceFns.add(f);

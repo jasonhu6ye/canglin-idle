@@ -75,6 +75,11 @@ export interface Presence {
   mounted?: string;
   /** 当前任务的动作 id，用来摆采集/战斗动作 */
   action?: string;
+  /** 点开别的玩家时看的信息：数字 ID、等级、身上的装备 */
+  pid?: number;
+  total?: number;
+  combat?: number;
+  equip?: Partial<Record<string, string>>;
   at: number;
 }
 
@@ -185,6 +190,8 @@ export interface OnlineApi {
   cancelTrade(tradeId: string): Promise<void>;
   /** 成交后领取：只有第一次返回 true */
   claimTrade(tradeId: string): Promise<boolean>;
+  /** 在线玩家最近一次同步的信息（点开别的玩家时用） */
+  presenceOf(playerId: string): Presence | undefined;
   /** 在线玩家的 id（看好友在不在线） */
   onlineIds(): Set<string>;
   /** 全服在线人数（还没连上时是 null） */
