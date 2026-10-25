@@ -7,6 +7,9 @@ import { HOME_CLICK, HOME_MSG, HOME_TOOL, IslandScene } from '../game/IslandScen
 
 let game: Phaser.Game | null = null;
 
+/** 当前帧率（更多页的状态栏用） */
+export const gameFps = () => game?.loop.actualFps ?? 0;
+
 export function emitToGame(event: string, ...args: unknown[]) {
   game?.events.emit(event, ...args);
 }

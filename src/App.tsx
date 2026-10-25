@@ -19,6 +19,9 @@ import { BuffBar } from './ui/BuffBar';
 import { GuildPanel, onOpenGuild } from './ui/Guild';
 import { LoginGate } from './ui/Login';
 import { useOnline } from './net/sync';
+import { FriendsPage } from './ui/FriendsPage';
+import { useSocial } from './net/social';
+import { ChatChip, ChatPage, onOpenChatPage, openChatPage } from './ui/ChatDock';
 import { CombatLog, onOpenCombatLog } from './ui/CombatLog';
 import { UpdateBanner } from './ui/UpdateBanner';
 import { DayClock } from './ui/DayClock';
@@ -27,11 +30,11 @@ import { WorldMap } from './ui/WorldMap';
 import { HomeHud } from './ui/HomeUI';
 import { homeNode } from './core/home';
 
-type Tab = 'game' | 'char' | 'bag' | 'bank' | 'skills' | 'guild' | 'more';
+type Tab = 'game' | 'char' | 'bag' | 'bank' | 'skills' | 'guild' | 'friends' | 'chat' | 'more';
 /** 电脑端快捷键说明（用户 10-23 要求优化电脑端操作） */
 const SHORTCUTS: [string, string][] = [
   ['WASD / 方向键', '走路'], ['鼠标右键', '点地面走过去，按住一直朝光标走'], ['鼠标左键', '点地点、怪物查看信息或攻击；拖动移动镜头'], ['滚轮 / + -', '缩放地图'],
-  ['空格', '镜头回到角色'], ['M', '世界地图'], ['G', '公会'], ['R', '骑上 / 下坐骑（坐骑栏有坐骑时）'], ['L', '日志（战斗掉落、采集制作产出和经验）'], ['Tab', '打开 / 关闭背包'], ['左键物品图标', '查看物品详情'], ['右键物品', '背包里穿上或放进补给栏，身上的卸下，仓库的取到背包'], ['1 - 7', '打开右侧面板，再按一次同一个收起'], ['Esc', '关闭当前页面，再按一次收起右侧面板'], ['?', '显示 / 隐藏这份说明'],
+  ['空格', '镜头回到角色'], ['M', '世界地图'], ['G', '公会'], ['R', '骑上 / 下坐骑（坐骑栏有坐骑时）'], ['L', '日志（战斗掉落、采集制作产出和经验）'], ['Tab', '打开 / 关闭背包'], ['左键物品图标', '查看物品详情'], ['右键物品', '背包里穿上或放进补给栏，身上的卸下，仓库的取到背包'], ['1 - 9', '打开右侧面板，再按一次同一个收起'], ['Enter', '聊天'], ['Esc', '关闭当前页面，再按一次收起右侧面板'], ['?', '显示 / 隐藏这份说明'],
 ];
 
 const TABS: { id: Tab; icon: [string, string]; label: string }[] = [
@@ -41,6 +44,8 @@ const TABS: { id: Tab; icon: [string, string]; label: string }[] = [
   { id: 'bank', icon: ['coins', '#f0c850'], label: '仓库' },
   { id: 'skills', icon: ['gem', '#e8b84a'], label: '技能' },
   { id: 'guild', icon: ['shield', '#7a8ab8'], label: '公会' },
+  { id: 'friends', icon: ['friends', '#e88ad0'], label: '好友' },
+  { id: 'chat', icon: ['chat', '#6ac0f0'], label: '聊天' },
   { id: 'more', icon: ['rune', '#9a9aa8'], label: '更多' },
 ];
 
@@ -126,6 +131,13 @@ export function App() {
 }
 
 function Game() {
+  const social = useSocial();
+  // 底部标签上的红点：聊天未读、好友申请 / 组队邀请 / 对方已确认的交易
+  const badges: Partial<Record<Tab, number>> = {
+    chat: Object.values(social.unread).reduce((a, b) => a + b, 0),
+    friends: social.friends.filter((f) => !f.accepted && f.incoming).length + social.invites.length
+      + social.trades.filter((t) => t.status === 'open' && t.theirOk && !t.myOk).length,
+  };
   const s = useGame();
   const offline = useOffline();
   const inactive = useInactive();
@@ -149,6 +161,7 @@ function Game() {
     setTab(id); setPanelOpen(true);
   }, []);
   useEffect(() => onOpenGuild(() => pickTab('guild')), [pickTab]);
+  useEffect(() => onOpenChatPage(() => { if (ui.current.tab !== 'chat' || !ui.current.panelOpen) pickTab('chat'); }), [pickTab]);
   const toasts = useToasts();
   const { region, banner } = useRegion();
   const boss = useBossBanner();
@@ -204,11 +217,12 @@ function Game() {
       const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
       if (tag === 'input' || tag === 'textarea' || e.ctrlKey || e.metaKey || e.altKey) return;
       const k = e.key;
-      if (k >= '1' && k <= '7') pickTab(TABS[+k - 1].id);
+      if (k >= '1' && k <= '9') pickTab(TABS[+k - 1].id);
       else if (k === 'm' || k === 'M') setWorldMap((v) => !v);
       else if (k === 'g' || k === 'G') pickTab('guild');
       else if (k === 'r' || k === 'R') store.dispatch((g) => toggleMount(g));
       else if (k === 'l' || k === 'L') setCombatLog((v) => !v);
+      else if (k === 'Enter') openChatPage();
       else if (k === 'Tab') {
         e.preventDefault();
         const u = ui.current;
@@ -250,6 +264,8 @@ function Game() {
   else if (tab === 'bank') side = <BankPanel s={s} />;
   else if (tab === 'skills') side = <SkillsPanel s={s} onPick={openNode} />;
   else if (tab === 'guild') side = <GuildPanel s={s} onClose={() => pickTab('game')} />;
+  else if (tab === 'chat') side = <ChatPage onClose={() => pickTab('game')} />;
+  else if (tab === 'friends') side = <FriendsPage s={s} onClose={() => pickTab('game')} />;
   else if (tab === 'more') side = <MorePanel s={s} />;
 
   return (
@@ -264,7 +280,7 @@ function Game() {
             <QueuePanel s={s} />
             <BuffBar s={s} region={region} />
               </div>
-          <StatusChips s={s} extra={<><HalloweenChip s={s} /><QuestCard s={s} onGo={openNode} /></>} log={combatLog ? <CombatLog onClose={() => setCombatLog(false)} /> : null} />
+          <StatusChips s={s} extra={<><HalloweenChip s={s} /><QuestCard s={s} onGo={openNode} /></>} log={combatLog ? <CombatLog onClose={() => setCombatLog(false)} /> : null} chat={<ChatChip />} />
           <MapButtons s={s} onWorldMap={() => setWorldMap(true)} />
         </div>
         <BossBar s={s} />
@@ -282,6 +298,7 @@ function Game() {
             onClick={() => pickTab(t.id)}>
             <TplIcon tpl={t.icon[0]} tint={t.icon[1]} size={22} />
             <span>{t.label}</span>
+            {badges[t.id] ? <b className="badge tab-badge">{badges[t.id]! > 99 ? '99+' : badges[t.id]}</b> : null}
             {wide && <kbd>{i + 1}</kbd>}
           </button>
         ))}

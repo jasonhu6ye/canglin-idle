@@ -8,6 +8,8 @@ import { combatLevel, level } from '../core/sim';
 
 export interface Profile {
   id: string;
+  /** 8 位数字 ID，给别人加好友用 */
+  pid?: number;
   name: string;
   /** 衣橱外观 id，别的玩家看到的样子 */
   outfit?: string;
@@ -76,14 +78,50 @@ export interface Presence {
   at: number;
 }
 
+export type ChatChannel = 'world' | 'guild' | 'party' | 'private';
 export interface ChatMsg {
   id: string;
-  channel: 'world' | 'guild';
+  channel: ChatChannel;
   playerId: string;
   name: string;
+  /** 私聊的对象 */
+  toId?: string;
   text: string;
   at: number;
 }
+
+export interface Friend {
+  playerId: string;
+  pid: number;
+  name: string;
+  /** false：还在申请中 */
+  accepted: boolean;
+  /** 申请是对方发来的 */
+  incoming: boolean;
+  totalLevel?: number;
+  combat?: number;
+  guildTag?: string;
+  lastSeen?: number;
+}
+/** 好友交易：mine / theirs 是 {物品 id: 数量}，东西都从仓库出 */
+export interface Trade {
+  id: string;
+  otherId: string;
+  mine: Record<string, number>;
+  theirs: Record<string, number>;
+  myOk: boolean;
+  theirOk: boolean;
+  status: 'open' | 'done' | 'cancelled';
+  /** 成交后自己这边领取过了 */
+  claimed: boolean;
+  updatedAt: number;
+}
+export interface Party {
+  id: string;
+  leader: string;
+  members: { playerId: string; name: string }[];
+}
+export interface PartyInvite { partyId: string; fromId: string; fromName: string }
 
 export interface OnlineApi {
   readonly kind: string;
@@ -125,8 +163,36 @@ export interface OnlineApi {
   /** 实时：返回取消订阅函数 */
   publishPresence(p: Omit<Presence, 'playerId' | 'name' | 'at'>): void;
   onPresence(f: (all: Presence[]) => void): () => void;
-  sendChat(channel: ChatMsg['channel'], text: string): Promise<void>;
+  /** 私聊要给 toId */
+  sendChat(channel: ChatChannel, text: string, toId?: string): Promise<void>;
   onChat(f: (m: ChatMsg) => void): () => void;
+
+  friends(): Promise<Friend[]>;
+  /** 按数字 ID 加好友：对方也申请过我就直接成为好友 */
+  addFriend(pid: number): Promise<'sent' | 'accepted'>;
+  answerFriend(fromId: string, accept: boolean): Promise<void>;
+  removeFriend(playerId: string): Promise<void>;
+  party(): Promise<Party | null>;
+  partyInvites(): Promise<PartyInvite[]>;
+  inviteParty(playerId: string): Promise<void>;
+  answerParty(partyId: string, accept: boolean): Promise<void>;
+  leaveParty(): Promise<void>;
+  trades(): Promise<Trade[]>;
+  /** 和好友开一笔交易（已有没结束的就返回那一笔） */
+  startTrade(playerId: string): Promise<string>;
+  setOffer(tradeId: string, items: Record<string, number>): Promise<void>;
+  confirmTrade(tradeId: string, ok: boolean): Promise<'open' | 'done'>;
+  cancelTrade(tradeId: string): Promise<void>;
+  /** 成交后领取：只有第一次返回 true */
+  claimTrade(tradeId: string): Promise<boolean>;
+  /** 在线玩家的 id（看好友在不在线） */
+  onlineIds(): Set<string>;
+  /** 全服在线人数（还没连上时是 null） */
+  onlineCount(): number | null;
+  /** 到服务器跑一个来回要多少毫秒 */
+  ping(): Promise<number>;
+  /** 好友申请、组队邀请、队伍成员有变化 */
+  onSocial(f: () => void): () => void;
 }
 
 /** 上传排行榜用的等级快照 */

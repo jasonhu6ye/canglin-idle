@@ -1,5 +1,5 @@
 import type { GameState } from '../core/types';
-import type { Board, ChatMsg, Guild, GuildMember, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
+import type { Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildMember, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { GUILD_MAX, levelSnapshot } from './api';
 
 /**
@@ -135,12 +135,33 @@ export class LocalApi implements OnlineApi {
 
   publishPresence() { /* 只有自己，不用发 */ }
   onPresence(f: (all: Presence[]) => void) { f([]); return () => {}; }
-  async sendChat(channel: ChatMsg['channel'], text: string) {
+  async sendChat(channel: ChatChannel, text: string, toId?: string) {
     const me = this.need();
-    const m: ChatMsg = { id: uid(), channel, playerId: me.id, name: me.name, text: text.slice(0, 200), at: Date.now() };
+    const m: ChatMsg = { id: uid(), channel, playerId: me.id, name: me.name, toId, text: text.slice(0, 200), at: Date.now() };
     this.db.chat = [...this.db.chat, m].slice(-100);
     this.flush();
     this.chatFns.forEach((fn) => fn(m));
   }
   onChat(f: (m: ChatMsg) => void) { this.chatFns.add(f); return () => { this.chatFns.delete(f); }; }
+
+  // 只有自己一个人：好友和队伍都是空的
+  async friends(): Promise<Friend[]> { return []; }
+  async addFriend(): Promise<'sent' | 'accepted'> { throw new Error('没有这个 ID 的玩家'); }
+  async answerFriend() {}
+  async removeFriend() {}
+  async party(): Promise<Party | null> { return null; }
+  async partyInvites(): Promise<PartyInvite[]> { return []; }
+  async inviteParty() { throw new Error('只能邀请好友'); }
+  async answerParty() {}
+  async leaveParty() {}
+  onSocial() { return () => {}; }
+  onlineCount() { return this.me() ? 1 : 0; }
+  onlineIds() { return new Set(this.me() ? [this.me()!.id] : []); }
+  async trades(): Promise<Trade[]> { return []; }
+  async startTrade(): Promise<string> { throw new Error('只能和好友交易'); }
+  async setOffer() {}
+  async confirmTrade(): Promise<'open' | 'done'> { return 'open'; }
+  async cancelTrade() {}
+  async claimTrade() { return false; }
+  async ping() { return 0; }
 }

@@ -3,6 +3,7 @@ import { store } from '../store';
 import { newGame, setSettings } from '../core/sim';
 import type { GameState } from '../core/types';
 import { online } from './index';
+import { syncSocial } from './social';
 
 /**
  * 账号和云存档（10-25 用户要求：进游戏要先登录 → 建角色 → 存档放云端）。
@@ -33,7 +34,7 @@ let phase: Phase = 'loading';
 let lastPush = 0;
 type Fn = () => void;
 const fns = new Set<Fn>();
-const set = (p: Phase) => { phase = p; fns.forEach((f) => f()); };
+const set = (p: Phase) => { phase = p; syncSocial(); fns.forEach((f) => f()); };
 
 const ls = {
   get: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },

@@ -2,11 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GameState, SkillId } from '../core/types';
 import { SKILLS } from '../core/data';
 import { store } from '../store';
-import { online, GUILD_COST, NAME_RE, TAG_RE, type Board, type ChatMsg, type Guild, type GuildMember, type GuildRole, type RankRow } from '../net';
+import { online, GUILD_COST, NAME_RE, TAG_RE, type Board, type Guild, type GuildMember, type GuildRole, type RankRow } from '../net';
 import { retry, signOut, useOnline } from '../net/sync';
 import { errText as baseErr } from './Login';
+import { openChatPage } from './ChatDock';
 
-/** 联机页（10-25 接 Supabase）：账号、排行榜、公会、聊天。G 键打开 */
+/** 公会页（G 键）。排行榜、账号设置也在这个文件里，分别从「更多」打开；好友在聊天页 */
 type Fn = () => void;
 const fns = new Set<Fn>();
 export const openGuild = () => fns.forEach((f) => f());
@@ -15,8 +16,6 @@ export const onOpenGuild = (f: Fn) => {
   return () => { fns.delete(f); };
 };
 
-type Tab = 'guild' | 'rank' | 'chat' | 'account';
-const TABS: [Tab, string][] = [['guild', '公会'], ['rank', '排行榜'], ['chat', '聊天'], ['account', '账号']];
 const ROLE: Record<GuildRole, string> = { leader: '会长', officer: '副会长', member: '成员' };
 const errText = (e: unknown) => {
   const m = baseErr(e);
@@ -35,30 +34,34 @@ function useAct() {
 }
 
 export function GuildPanel({ s, onClose }: { s: GameState; onClose: () => void }) {
-  const { me, phase } = useOnline();
-  const [tab, setTab] = useState<Tab>('guild');
-  const shown = !me && tab !== 'rank' ? 'account' : tab;
+  const { me } = useOnline();
   return (
     <div className="page guild">
       <div className="sheet-head">
         <button className="back" onClick={onClose}>‹ 返回</button>
-        <h2>联机</h2>
-        <small className="muted">{me ? `角色：${me.name}` : phase === 'offline' ? '离线游玩中' : ''}</small>
+        <h2>公会</h2>
+        {me?.guildTag && <small className="muted">[{me.guildTag}]</small>}
       </div>
-      <div className="tabs-row">
-        {TABS.map(([id, label]) => (
-          <button key={id} className={`pill ${shown === id ? 'on' : ''}`} onClick={() => setTab(id)}>{label}</button>
-        ))}
-      </div>
-      {shown === 'account' && <Account />}
-      {shown === 'rank' && <Ranks />}
-      {shown === 'guild' && me && <GuildTab s={s} />}
-      {shown === 'chat' && me && <Chat />}
+      {me ? <GuildTab s={s} /> : <AccountSettings />}
     </div>
   );
 }
 
-function Account() {
+/** 排行榜页（10-25 从联机页移到「更多」） */
+export function LeaderboardPage({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="page guild">
+      <div className="sheet-head">
+        <button className="back" onClick={onClose}>‹ 返回</button>
+        <h2>排行榜</h2>
+      </div>
+      <Ranks />
+    </div>
+  );
+}
+
+/** 账号设置（放在「更多 → 设置」里） */
+export function AccountSettings() {
   const { me } = useOnline();
   const { busy, err, run } = useAct();
   if (!me) {
@@ -76,7 +79,7 @@ function Account() {
   return (
     <div className="frame guild-card">
       <div>
-        <b>{me.name}</b>{me.guildTag && <small className="muted"> [{me.guildTag}]</small>}
+        <b>{me.name}</b>{me.guildTag && <small className="muted"> [{me.guildTag}]</small>} <small className="muted">ID {me.pid}</small>
         <p className="muted">存档每分钟自动传到云端，换手机或电脑登录同一个账号就能接着玩。</p>
         <div className="go">
           <button disabled={busy} onClick={() => {
@@ -190,6 +193,7 @@ function GuildTab({ s }: { s: GameState }) {
       </ul>
       {act.err && <p className="err">{act.err}</p>}
       <div className="go">
+        <button onClick={() => openChatPage('guild')}>公会聊天</button>
         <button disabled={act.busy} onClick={() => confirm(isLead && members.length > 1 ? '你是会长，退出后会长自动传给副会长或最早入会的成员。确定退出？' : '确定退出公会？')
           && void act.run(async () => { await online.leaveGuild(); await load(); })}>退出公会</button>
       </div>
@@ -256,39 +260,3 @@ function NoGuild({ s, onJoined }: { s: GameState; onJoined: () => Promise<void> 
   );
 }
 
-function Chat() {
-  const { me } = useOnline();
-  const [ch, setCh] = useState<ChatMsg['channel']>('world');
-  const [msgs, setMsgs] = useState<ChatMsg[]>([]);
-  const [text, setText] = useState('');
-  const act = useAct();
-  const box = useRef<HTMLDivElement>(null);
-  useEffect(() => online.onChat((m) => setMsgs((xs) => (xs.some((x) => x.id === m.id) ? xs : [...xs, m].slice(-200)))), []);
-  const shown = msgs.filter((m) => m.channel === ch);
-  useEffect(() => { box.current?.scrollTo(0, box.current.scrollHeight); }, [shown.length]);
-  return (
-    <>
-      <div className="tabs-row">
-        <button className={`pill ${ch === 'world' ? 'on' : ''}`} onClick={() => setCh('world')}>世界</button>
-        <button className={`pill ${ch === 'guild' ? 'on' : ''}`} disabled={!me?.guildId} onClick={() => setCh('guild')}>公会</button>
-      </div>
-      <div className="chat-box frame" ref={box}>
-        {!shown.length && <p className="muted">还没有消息</p>}
-        {shown.map((m) => (
-          <p key={m.id} className={m.playerId === me?.id ? 'me' : ''}>
-            <small className="muted">{new Date(m.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small> <b>{m.name}</b>：{m.text}
-          </p>
-        ))}
-      </div>
-      <form className="search-row" onSubmit={(e) => {
-        e.preventDefault();
-        const t = text.trim();
-        if (t) void act.run(async () => { await online.sendChat(ch, t); setText(''); });
-      }}>
-        <input placeholder="说点什么（200 字以内）" maxLength={200} value={text} onChange={(e) => setText(e.target.value)} />
-        <button className="primary" disabled={act.busy}>发送</button>
-      </form>
-      {act.err && <p className="err">{act.err}</p>}
-    </>
-  );
-}

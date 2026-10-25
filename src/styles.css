@@ -758,3 +758,65 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .login-box .go button { flex: 1; }
 .create-stage { display: flex; gap: 12px; align-items: center; padding: 8px; background: #120b07; box-shadow: 0 0 0 1px var(--edge); }
 .create-stage p { margin: 4px 0 0; }
+
+/* 聊天栏（10-25） */
+.chat-chip { display: flex; align-items: center; gap: 4px; white-space: nowrap; overflow: hidden; }
+.chat-chip > span, .chat-chip { text-overflow: ellipsis; }
+.badge { display: inline-block; min-width: 16px; padding: 0 4px; margin-left: 3px; border-radius: 8px; background: #c83a2a; color: #fff; font-size: 10px; line-height: 16px; text-align: center; }
+.ch-world { color: #e8dcc8; } .ch-guild { color: #8ee08a; } .ch-party { color: #6ac0f0; } .ch-private { color: #e88ad0; }
+.chat-dock { pointer-events: auto; }
+.chat-dock .chat-to { background: #120b07; color: inherit; border: 1px solid var(--edge); border-radius: 2px; padding: 3px 6px; font: inherit; }
+.chat-lines { height: 150px; overflow-y: auto; font-size: 12px; line-height: 1.5; }
+.chat-lines p { margin: 0 0 2px; word-break: break-word; }
+.chat-lines p.me b { color: var(--gold); }
+.chat-send { display: flex; gap: 4px; }
+.chat-send input { flex: 1; min-width: 0; background: #120b07; color: inherit; border: 1px solid var(--edge); border-radius: 2px; padding: 5px 7px; font: inherit; font-size: 16px; }
+.chat-send button { background: linear-gradient(#4a3220, #33221a); border: 0; border-radius: 2px; color: var(--gold); padding: 0 10px; box-shadow: 0 0 0 1px var(--edge); }
+.chat-dock .err { color: #e86a5a; margin: 0; }
+@media (min-width: 900px) { .chat-send input { font-size: 13px; } }
+.guild .my-id .id-row { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.guild .my-id .pid { font-size: 20px; letter-spacing: 2px; color: var(--gold); font-family: ui-monospace, monospace; }
+.guild .guild-list li.ghost button { opacity: 1; }
+.server-status { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 8px; margin: 4px 0 8px; text-align: center; }
+.server-status span { display: flex; flex-direction: column; gap: 2px; }
+.server-status small { color: var(--muted); font-size: 11px; }
+.server-status b { font-size: 15px; font-variant-numeric: tabular-nums; }
+.server-status .good { color: #8ee08a; } .server-status .mid { color: #e8c850; } .server-status .bad { color: #e86a5a; }
+.chat-chip .chat-last { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.chat-page .chat-to { width: 100%; background: #120b07; color: inherit; border: 1px solid var(--edge); border-radius: 2px; padding: 6px 8px; font: inherit; }
+.chat-page .chat-box { height: auto; min-height: 240px; max-height: calc(100vh - 300px); }
+.chat-page .tabs-row { flex-wrap: wrap; }
+/* 8 个标签后电脑端顶栏挤：窄一点的屏幕缩小字和两侧按钮 */
+@media (min-width: 900px) {
+  .tabbar button { min-width: 0; }
+}
+@media (min-width: 900px) and (max-width: 1400px) {
+  .app:not(.collapsed) .tabbar button { gap: 2px; font-size: 12px; }
+  .app:not(.collapsed) .tabbar button img { display: none; }
+  .app:not(.collapsed) .tabbar .help-btn { flex-basis: 22px; }
+  .app:not(.collapsed) .tabbar .fold-btn { flex-basis: 22px; }
+}
+
+/* 好友页和交易（10-25） */
+.guild .friend-list li.clickable { cursor: pointer; }
+.guild .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #5a4a3a; margin-right: 6px; vertical-align: middle; }
+.guild .dot.on { background: #6ae05a; box-shadow: 0 0 4px #6ae05a; }
+.guild .good { color: #8ee08a; }
+.friend-card { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 10px 6px; margin: 6px 0; text-align: center; }
+.friend-card div { display: flex; flex-direction: column; gap: 2px; }
+.friend-card small { color: var(--muted); font-size: 11px; }
+.friend-actions button { flex: 1; }
+.trade { padding: 8px; margin: 8px 0; }
+.trade h4 { margin: 0 0 4px; font-size: 13px; }
+.trade-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.trade-items { list-style: none; margin: 0 0 6px; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.trade-items li { display: flex; align-items: center; gap: 6px; padding: 3px 6px; background: #120b07; box-shadow: 0 0 0 1px var(--edge); font-size: 12px; }
+.trade-items li .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bank-picker { padding: 8px; margin-top: 8px; }
+.trade-items.pick { max-height: 240px; overflow-y: auto; }
+.trade-items.pick li { cursor: pointer; }
+.trade-items.pick li.on { box-shadow: 0 0 0 1px var(--gold); }
+.bank-picker .pick-name { align-self: center; font-size: 13px; white-space: nowrap; }
+.bank-picker .search-row input[inputmode] { flex: 0 0 72px; }
+.tabbar button { position: relative; }
+.tab-badge { position: absolute; top: 2px; left: 50%; margin-left: 6px; }
