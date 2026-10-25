@@ -83,6 +83,9 @@ export interface Presence {
   /** 血量（队伍栏用） */
   hp?: number;
   maxHp?: number;
+  /** 正在播的干活动画（work-mine、fight-sword…）和朝向；没在干活就没有 */
+  anim?: string;
+  flip?: boolean;
   /** 队长发起召集的时间（毫秒），队友看到就寻路过来 */
   rally?: number;
   at: number;

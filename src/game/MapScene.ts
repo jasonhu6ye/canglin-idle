@@ -9,9 +9,10 @@ import { animsOf, monsterFrameSize, paintMonsterSheet, type MonAnim } from './mo
 import { paintSkull } from './skullArt';
 import { paintAltar } from './halloweenArt';
 import { WORLD_SKILL } from '../core/bestiary';
-import { paintWolfSheet, wolfSaddle, WOLF_ANIMS, WOLF_FEET, WOLF_H, WOLF_W } from './wolfArt';
-import { coatOf, horseKind, horseSaddle, HORSE_ANIMS, paintHorseSheet, paintFoal, paintRanch, PADDOCK_SPOTS, RANCH_H, RANCH_W } from './horseArt';
-import { aptOf, RANCH } from '../core/ranch';
+import { WOLF_FEET, WOLF_H } from './wolfArt';
+import { paintFoal, paintRanch, PADDOCK_SPOTS, RANCH_H, RANCH_W } from './horseArt';
+import { RANCH } from '../core/ranch';
+import { besideXOf, ensureMountTex, mountKindOf, saddleBob, seatOf } from './mounts';
 import { FRAME_H, FRAME_W, HERO_ANIMS, HERO_FEET, HERO_PAD, NPC_ANIMS, NPC_OUTFITS, outfitOf, paintHeroSheet, type HeroDir } from './hero';
 import type { MonsterDef, RegionId, Summary } from '../core/types';
 import { store } from '../store';
@@ -926,7 +927,9 @@ export class MapScene extends Phaser.Scene {
     playerPos.x = px;
     playerPos.y = py;
     this.others.step(delta, playerPos);
-    this.others.publish(store.state, playerPos.x, playerPos.y);
+    // 正在干活就把当前的动作动画发给别人（挖矿、砍树、打怪…）
+    const anim = this.working && !this.manual && !this.mountBusy ? this.playerBody.anims.currentAnim?.key : undefined;
+    this.others.publish(store.state, playerPos.x, playerPos.y, anim && /^(work|fight)-/.test(anim) ? { anim, flip: this.playerBody.flipX } : undefined);
     // 登录后头顶显示自己的名字
     const me = online.me();
     const label = me ? (me.guildTag ? `[${me.guildTag}] ${me.name}` : me.name) : tl('[苍岭] 你');
@@ -2362,36 +2365,16 @@ export class MapScene extends Phaser.Scene {
 
   /** 骑手坐在狼背上的位置（相对脚底，侧面按朝右算） */
   private seat(dir: HeroDir) {
-    // 马背比狼背高
-    const up = this.mk === 'wolf' ? 0 : 5;
-    return dir === 'side' ? { x: -3, y: -16 - up } : dir === 'down' ? { x: 0, y: -19 - up } : { x: 0, y: -17 - up };
+    return seatOf(this.mk, dir);
   }
 
   /** 当前坐骑的种类：狼 wolf，马按毛色 horse0…horse3（用户 10-24 加了坐骑马） */
   private mk = 'wolf';
   private mountKind(id = store.state.equipment.mount) {
-    const apt = aptOf(id);
-    return apt ? horseKind(coatOf(apt)) : 'wolf';
+    return mountKindOf(id);
   }
-  /** 第一次用到某种坐骑时才画它的精灵表；动画名 mount:<种类>-<动作>-<层> */
   private ensureMount(kind: string) {
-    const tex = `mount-${kind}`;
-    if (this.textures.exists(tex)) return;
-    const horse = kind !== 'wolf';
-    const sheet = horse ? paintHorseSheet(Number(kind.slice(5))) : paintWolfSheet();
-    const t = this.textures.addCanvas(tex, sheet.canvas)!;
-    for (const f of sheet.frames) t.add(f.name, 0, f.x, f.y, WOLF_W, WOLF_H);
-    const list = horse ? HORSE_ANIMS : WOLF_ANIMS.map((a) => ({ ...a, key: a.key.slice(5) }));
-    for (const a of list) {
-      for (const layer of ['b', 'f']) {
-        const key = `mount:${kind}-${a.key}-${layer}`;
-        if (this.anims.exists(key)) continue;
-        this.anims.create({
-          key, frameRate: a.rate, repeat: a.key === 'howl' ? 0 : -1,
-          frames: Array.from({ length: a.frames }, (_, i) => ({ key: tex, frame: `${kind}-${a.key}-${i}-${layer}` })),
-        });
-      }
-    }
+    ensureMountTex(this, kind);
   }
 
   private playWolf(key: string) {
@@ -2400,7 +2383,7 @@ export class MapScene extends Phaser.Scene {
   }
   /** 坐骑在旁边等的时候离人多远（马比狼大） */
   private get besideX() {
-    return this.mk === 'wolf' ? -22 : -26;
+    return besideXOf(this.mk);
   }
 
   /** 按当前状态播放走路、待机动画（骑着时人和狼一起） */
@@ -2466,9 +2449,7 @@ export class MapScene extends Phaser.Scene {
     if (this.mountBusy) return;
     if (this.idleAt && !this.walker && !this.working && this.time.now >= this.idleAt) this.heroAnim('idle');
     if (this.mountMode !== 'ride') return;
-    const name = (this.wolfFront.anims.currentFrame?.frame.name ?? '') as string;
-    const m = /^([a-z]+\d?)-(.+)-(\d+)-f$/.exec(name);
-    const dy = !m ? 0 : m[1] === 'wolf' ? wolfSaddle(`wolf-${m[2]}`, +m[3]) : horseSaddle(m[2], +m[3]);
+    const dy = saddleBob((this.wolfFront.anims.currentFrame?.frame.name ?? '') as string);
     const seat = this.seat(this.facing);
     this.playerBody.y = 7 + seat.y + dy;
   }
