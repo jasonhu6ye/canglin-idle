@@ -1,4 +1,5 @@
 import { mix, phash, Pix, ramp } from './pix';
+import { tl } from '../i18n';
 
 /*
  * 主角多帧动画（冒险者造型，衣橱可换配色）：头、身体、双臂、双腿、围巾、行囊分开画，每一帧按姿势参数重新拼一次，
@@ -63,35 +64,35 @@ export interface Outfit {
 
 export const OUTFITS: Outfit[] = [
   {
-    id: 'adventurer', name: '冒险者', desc: '原皮。皮背心、红围巾、背着行囊的旅人。',
+    id: 'adventurer', name: tl('冒险者'), desc: tl('原皮。皮背心、红围巾、背着行囊的旅人。'),
     skin: ['#c8946a', '#f2c9a0'], hair: ['#4a2a18', '#7a4a28', '#a8703a'],
     coat: ['#4a2a18', '#6e4226', '#8e5a34', '#b07a48'], shirt: ['#b8a888', '#e8dcc0'],
     pants: ['#2a3438', '#3e4c52'], boots: ['#2a1a10', '#5a3a22'], scarf: ['#8a1e22', '#c83a32'],
     pack: ['#5a3a22', '#8a6038', '#b08050'], roll: '#4e7a4a',
   },
   {
-    id: 'ranger', name: '林地游侠', desc: '绿色斗篷兜帽，适合在林子里打猎。',
+    id: 'ranger', name: tl('林地游侠'), desc: tl('绿色斗篷兜帽，适合在林子里打猎。'),
     skin: ['#c8946a', '#f2c9a0'], hair: ['#2a3a1a', '#3a5a2a', '#5a7a3a'],
     coat: ['#23381e', '#335230', '#4a7040', '#6a9058'], shirt: ['#8a7a58', '#b8a47a'],
     pants: ['#3a2e22', '#54432f'], boots: ['#2a1a10', '#4a3020'], scarf: ['#5a4a2a', '#8a7038'],
     pack: ['#4a3a22', '#6e5a34', '#8e7a48'], roll: '#a08a5a', hood: true,
   },
   {
-    id: 'snow', name: '雪原旅人', desc: '白色毛领外套和蓝围巾，冰原上不怕冷。',
+    id: 'snow', name: tl('雪原旅人'), desc: tl('白色毛领外套和蓝围巾，冰原上不怕冷。'),
     skin: ['#d8a882', '#f8dcc0'], hair: ['#c8b080', '#e0cc98', '#f8ecc0'],
     coat: ['#6a7a90', '#a8b8c8', '#d8e2ec', '#ffffff'], shirt: ['#5a6a80', '#7a8ca4'],
     pants: ['#3a4250', '#525c6e'], boots: ['#4a3a30', '#7a6050'], scarf: ['#2a5a9a', '#4a8ad8'],
     pack: ['#5a5a6a', '#7a7a8c', '#9a9aac'], roll: '#c8382e',
   },
   {
-    id: 'shadow', name: '暗影刺客', desc: '黑色紧身装束，深红围巾。',
+    id: 'shadow', name: tl('暗影刺客'), desc: tl('黑色紧身装束，深红围巾。'),
     skin: ['#b88660', '#e0b890'], hair: ['#141418', '#26262e', '#3a3a46'],
     coat: ['#141418', '#24242c', '#363642', '#50505e'], shirt: ['#2a2a34', '#3e3e4a'],
     pants: ['#16161a', '#24242a'], boots: ['#0e0e10', '#26262c'], scarf: ['#5a0e14', '#9a1a24'],
     pack: ['#26262c', '#3a3a42', '#50505a'], roll: '#5a1a2a', hood: true,
   },
   {
-    id: 'noble', name: '王都骑士', desc: '蓝白罩衣配金边，镇上骑士团的制式装扮。',
+    id: 'noble', name: tl('王都骑士'), desc: tl('蓝白罩衣配金边，镇上骑士团的制式装扮。'),
     skin: ['#c8946a', '#f2c9a0'], hair: ['#c89a3a', '#e8c060', '#fff0a0'],
     coat: ['#1a2a5a', '#2a4088', '#3e5cb8', '#7a98e0'], shirt: ['#a8acb4', '#e0e4ec'],
     pants: ['#3a3a44', '#565662'], boots: ['#3a2a1a', '#6a4a2a'], scarf: ['#b08a2a', '#f0c84a'],
@@ -99,49 +100,49 @@ export const OUTFITS: Outfit[] = [
   },
   // ---- 兑换码「为爱发电」解锁的五套（用户 10-23 给的参考图和录屏，按本作画法重画） ----
   {
-    id: 'pumpkin', name: '南瓜提灯人', desc: '雕着笑脸的南瓜头，眼里的火一明一暗；破旧的灰绿斗篷，手提一盏冒火星的油灯。',
+    id: 'pumpkin', name: tl('南瓜提灯人'), desc: tl('雕着笑脸的南瓜头，眼里的火一明一暗；破旧的灰绿斗篷，手提一盏冒火星的油灯。'),
     skin: ['#5a4a3a', '#7a6650'], hair: ['#a8300c', '#e0561a', '#ff8a2a', '#ffc060'],
     coat: ['#1e2420', '#2e3a32', '#46564a', '#6a7a6c'], shirt: ['#2a2018', '#40321f'],
     pants: ['#1a1a18', '#2a2a26'], boots: ['#141412', '#2e2a24'], scarf: ['#3a4a3a', '#5a6e58'],
     pack: ['#2a2018', '#3e3024', '#5a4632'], roll: '#3a4a3a',
     head: 'pumpkin', noPack: true, cloak: ['#26342c', '#3a4c40', '#56705c'], offhand: 'lantern',
-    glow: ['#c84a10', '#ffa020', '#fff0a0'], fx: 'embers', code: '为爱发电',
+    glow: ['#c84a10', '#ffa020', '#fff0a0'], fx: 'embers', code: tl('为爱发电'),
   },
   {
-    id: 'voidpumpkin', name: '幽蓝南瓜', desc: '烧成焦黑的南瓜头里亮着幽蓝的鬼火，偶尔闪过一丝红光；提灯里的火也是冷的。',
+    id: 'voidpumpkin', name: tl('幽蓝南瓜'), desc: tl('烧成焦黑的南瓜头里亮着幽蓝的鬼火，偶尔闪过一丝红光；提灯里的火也是冷的。'),
     skin: ['#3a3a40', '#5a5a62'], hair: ['#16161c', '#26262e', '#3a3a44', '#565662'],
     coat: ['#1a201e', '#283430', '#3c4c46', '#5c6e66'], shirt: ['#1e1e22', '#2e2e34'],
     pants: ['#141416', '#222226'], boots: ['#0e0e10', '#24242a'], scarf: ['#2e3e38', '#4a6058'],
     pack: ['#1e1e22', '#2e2e34', '#44444c'], roll: '#2e3e38',
     head: 'voidpumpkin', noPack: true, cloak: ['#1e2c28', '#2e423c', '#465e56'], offhand: 'lantern',
-    glow: ['#1a6ab0', '#4ab0ff', '#c8f0ff'], fx: 'wisps', code: '为爱发电',
+    glow: ['#1a6ab0', '#4ab0ff', '#c8f0ff'], fx: 'wisps', code: tl('为爱发电'),
   },
   {
-    id: 'paleknight', name: '白发魔骑', desc: '一头乱翘的白发，灰白的脸上一双红眼；黑铁铠甲配一面染血的木盾，脚下缠着暗红的雾。',
+    id: 'paleknight', name: tl('白发魔骑'), desc: tl('一头乱翘的白发，灰白的脸上一双红眼；黑铁铠甲配一面染血的木盾，脚下缠着暗红的雾。'),
     skin: ['#6a6e78', '#a8acb6'], hair: ['#8a909a', '#c8ccd6', '#eef0f6', '#ffffff'],
     coat: ['#141418', '#26262e', '#3c3c48', '#6a6a7a'], shirt: ['#4a4a56', '#9a9aa8'],
     pants: ['#16161a', '#28282e'], boots: ['#0e0e10', '#2a2a30'], scarf: ['#2a2228', '#4a3a40'],
     pack: ['#4a2a1a', '#6e3e22', '#8e5a34'], roll: '#4a2a1a',
     head: 'paleknight', noPack: true, cloak: ['#141418', '#22222a', '#34343e'], offhand: 'shield',
-    glow: ['#8a0e0e', '#ff3a2a', '#ffb08a'], fx: 'mist', code: '为爱发电',
+    glow: ['#8a0e0e', '#ff3a2a', '#ffb08a'], fx: 'mist', code: tl('为爱发电'),
   },
   {
-    id: 'jester', name: '红黑小丑', desc: '红黑两色的分叉小丑帽挂着银铃，白面具上画着红泪痕；菱格衣服，走到哪都撒红色的纸花。',
+    id: 'jester', name: tl('红黑小丑'), desc: tl('红黑两色的分叉小丑帽挂着银铃，白面具上画着红泪痕；菱格衣服，走到哪都撒红色的纸花。'),
     skin: ['#c8c8d0', '#f4f4f8'], hair: ['#2a2a32', '#44444e', '#62626e', '#8a8a96'],
     coat: ['#141418', '#26262e', '#3a3a44', '#585864'], shirt: ['#8a0e14', '#e01e28'],
     pants: ['#1e1e24', '#34343c'], boots: ['#7a0a10', '#c81a22'], scarf: ['#b8b8c4', '#ffffff'],
     pack: ['#26262e', '#3a3a44', '#585864'], roll: '#8a0e14',
     head: 'jester', noPack: true, harlequin: true,
-    glow: ['#8a0e14', '#ff2a3a', '#ffd0d0'], fx: 'confetti', code: '为爱发电',
+    glow: ['#8a0e14', '#ff2a3a', '#ffd0d0'], fx: 'confetti', code: tl('为爱发电'),
   },
   {
-    id: 'bone', name: '骸骨术士', desc: '戴着兽骨头盔、肩披骨甲，眼窝里燃着青色的魂火，身边飘着点点灵光。',
+    id: 'bone', name: tl('骸骨术士'), desc: tl('戴着兽骨头盔、肩披骨甲，眼窝里燃着青色的魂火，身边飘着点点灵光。'),
     skin: ['#8a7e6a', '#d8ccb4'], hair: ['#8a7e6a', '#c8bca4', '#ece2cc', '#fffaf0'],
     coat: ['#1a1a1e', '#2c2a2a', '#4a4440', '#6a6258'], shirt: ['#a89a84', '#e8dece'],
     pants: ['#241c16', '#3a2e24'], boots: ['#141010', '#2e2420'], scarf: ['#1a6a5a', '#3aa890'],
     pack: ['#3a2e24', '#5a4634', '#7a6248'], roll: '#5a2a1a',
     head: 'bone', noPack: true, cloak: ['#1a2a28', '#2a4440', '#3e5e58'],
-    glow: ['#1a8aa0', '#5ae0f0', '#e0ffff'], fx: 'sparks', code: '为爱发电',
+    glow: ['#1a8aa0', '#5ae0f0', '#e0ffff'], fx: 'sparks', code: tl('为爱发电'),
   },
 ];
 /** 兑换码解锁的外观 */
@@ -150,35 +151,35 @@ const SKIN = ['#c8946a', '#f2c9a0'];
 /** 镇上走动的村民，用和主角同一套画法，只换配色、不背行囊 */
 export const NPC_OUTFITS: Record<string, Outfit> = {
   villager: {
-    id: 'npc-villager', name: '村民', desc: '', npc: true,
+    id: 'npc-villager', name: tl('村民'), desc: '', npc: true,
     skin: SKIN, hair: ['#1e1612', '#3a2a20', '#5a4232'],
     coat: ['#6a2a1e', '#9a3e2a', '#c05a3a', '#e07a52'], shirt: ['#b8a888', '#e8dcc0'],
     pants: ['#3a2e22', '#54432f'], boots: ['#2a1a10', '#4a3020'], scarf: ['#8a6a1a', '#c8a03a'],
     pack: ['#4a3a22', '#6e5a34', '#8e7a48'], roll: '#8a6a1a',
   },
   villager2: {
-    id: 'npc-villager2', name: '村民', desc: '', npc: true,
+    id: 'npc-villager2', name: tl('村民'), desc: '', npc: true,
     skin: ['#d8a882', '#f8dcc0'], hair: ['#a8803a', '#d0a850', '#f0d080'],
     coat: ['#1e3a6a', '#2a5a90', '#3a7ac0', '#6aa0e0'], shirt: ['#c8c8c8', '#f4f4f0'],
     pants: ['#3a3a44', '#565662'], boots: ['#3a2a1a', '#6a4a2a'], scarf: ['#a89060', '#e8d0a0'],
     pack: ['#4a3a22', '#6e5a34', '#8e7a48'], roll: '#2a5a90',
   },
   villager3: {
-    id: 'npc-villager3', name: '村民', desc: '', npc: true,
+    id: 'npc-villager3', name: tl('村民'), desc: '', npc: true,
     skin: ['#a8704a', '#d8a078'], hair: ['#5a2414', '#8a3a1e', '#b05a2a'],
     coat: ['#23401e', '#3a6a32', '#5aa04a', '#80c068'], shirt: ['#a89878', '#d8c8a0'],
     pants: ['#3a2e22', '#54432f'], boots: ['#2a1a10', '#4a3020'], scarf: ['#4a3020', '#7a5030'],
     pack: ['#4a3a22', '#6e5a34', '#8e7a48'], roll: '#5aa04a',
   },
   guard: {
-    id: 'npc-guard', name: '卫兵', desc: '', npc: true,
+    id: 'npc-guard', name: tl('卫兵'), desc: '', npc: true,
     skin: SKIN, hair: ['#4a5058', '#8a9098', '#c8ced6'],
     coat: ['#3e444c', '#62666e', '#8a8f99', '#c0c6ce'], shirt: ['#2a3a6a', '#3a4a7a'],
     pants: ['#2a2a34', '#3e3e4a'], boots: ['#2a1a10', '#4a3020'], scarf: ['#2a3a6a', '#4a5a9a'],
     pack: ['#2a3a6a', '#3a4a7a', '#5a6a9a'], roll: '#3a4a7a',
   },
   merchant: {
-    id: 'npc-merchant', name: '商人', desc: '', npc: true,
+    id: 'npc-merchant', name: tl('商人'), desc: '', npc: true,
     skin: SKIN, hair: ['#5a5a5a', '#8a8a8a', '#c0c0c0'],
     coat: ['#3a1458', '#5a2080', '#8a3ab0', '#b070d8'], shirt: ['#b8a888', '#e8dcc0'],
     pants: ['#3a2e22', '#54432f'], boots: ['#2a1a10', '#4a3020'], scarf: ['#b08a2a', '#f0c84a'],

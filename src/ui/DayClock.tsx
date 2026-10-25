@@ -3,6 +3,7 @@ import { REGIONS } from '../core/data';
 import type { RegionId } from '../core/types';
 import { DAY_MS, gameHour, isRaining } from '../game/ambience';
 import { mix, phash } from '../game/pix';
+import { tl } from '../i18n';
 
 /**
  * 右上角的昼夜时钟（用户 10-23 要求，参考《饥荒》的圆盘，但按本游戏的像素风画）：
@@ -10,11 +11,11 @@ import { mix, phash } from '../game/pix';
  * 下面一块木牌写时间和昼夜。一天 = 现实 24 分钟，和地图上的明暗同一个钟。
  */
 const SEGS: { from: number; to: number; color: string; name: string }[] = [
-  { from: 0, to: 5, color: '#2c3466', name: '夜晚' },
-  { from: 5, to: 7, color: '#c8703a', name: '清晨' },
-  { from: 7, to: 17.5, color: '#d8a83e', name: '白天' },
-  { from: 17.5, to: 20, color: '#a8443a', name: '黄昏' },
-  { from: 20, to: 24, color: '#2c3466', name: '夜晚' },
+  { from: 0, to: 5, color: '#2c3466', name: tl('夜晚') },
+  { from: 5, to: 7, color: '#c8703a', name: tl('清晨') },
+  { from: 7, to: 17.5, color: '#d8a83e', name: tl('白天') },
+  { from: 17.5, to: 20, color: '#a8443a', name: tl('黄昏') },
+  { from: 20, to: 24, color: '#2c3466', name: tl('夜晚') },
 ];
 const phaseOf = (h: number) => SEGS.find((s) => h >= s.from && h < s.to)!;
 
@@ -83,7 +84,7 @@ function paint(ctx: CanvasRenderingContext2D, h: number) {
       put(px, py, '#2a1c12');
     }
   }
-  if (phase.name === '夜晚') {
+  if (phase.name === tl('夜晚')) {
     // 月牙
     for (let y = -3; y <= 3; y++) {
       for (let x = -3; x <= 3; x++) {
@@ -93,7 +94,7 @@ function paint(ctx: CanvasRenderingContext2D, h: number) {
     }
   } else {
     // 太阳：圆心加四个方向的光芒
-    const sun = phase.name === '白天' ? '#ffd86a' : '#ff9a5a';
+    const sun = phase.name === tl('白天') ? '#ffd86a' : '#ff9a5a';
     for (let y = -2; y <= 2; y++) for (let x = -2; x <= 2; x++) if (Math.hypot(x, y) <= 2.2) put(Math.floor(C) + x, Math.floor(C) + y, x + y < 0 ? '#fff3c4' : sun);
     for (const [x, y] of [[0, -4], [0, 4], [-4, 0], [4, 0], [-3, -3], [3, -3], [-3, 3], [3, 3]]) put(Math.floor(C) + x, Math.floor(C) + y, sun);
   }
@@ -117,12 +118,12 @@ export function DayClock({ region }: { region: RegionId }) {
   const hh = String(Math.floor(h)).padStart(2, '0');
   const mm = String(Math.floor((h % 1) * 60)).padStart(2, '0');
   const left = Math.ceil((((phase.to - h) / 24) * DAY_MS) / 60000);
-  const next = phase.to === 24 ? '' : `，约 ${left} 分钟后进入${phaseOf(phase.to % 24).name}`;
+  const next = phase.to === 24 ? '' : tl`，约 ${left} 分钟后进入${phaseOf(phase.to % 24).name}`;
   return (
-    <div className="day-clock" title={`游戏时间 ${hh}:${mm} · ${phase.name}${next} · ${REGIONS[region].name}${rain ? ' · 下雨（在这里钓鱼快 25%）' : ''}`}>
+    <div className="day-clock" title={tl`游戏时间 ${hh}:${mm} · ${phase.name}${next} · ${REGIONS[region].name}${rain ? tl(' · 下雨（在这里钓鱼快 25%）') : ''}`}>
       <canvas ref={ref} width={N} height={N} />
       <span className="day-clock-label">
-        <b>{hh}:{mm}</b> {phase.name}{rain && <i className="rain-dot" title="下雨" />}
+        <b>{hh}:{mm}</b> {phase.name}{rain && <i className="rain-dot" title={tl("下雨")} />}
       </span>
     </div>
   );

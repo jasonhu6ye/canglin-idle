@@ -1,3 +1,4 @@
+import { tl } from '../i18n';
 /*
  * 万圣节限定活动（用户 10-24）：苍岭城东边的活动祭坛可以召唤南瓜王，
  * 5 档难度（30 级起），每小时召唤一次，打赢掉南瓜礼盒，礼盒开出南瓜积分（活动结束前拿去兑换，兑换商店后续开放）。
@@ -14,11 +15,11 @@ export const HW_POINT = 'pumpkin_pt';
 
 /** 五档难度：南瓜王等级、打赢给几个礼盒 */
 export const HW_TIERS = [
-  { lv: 30, boxes: 1, name: '难度一' },
-  { lv: 50, boxes: 2, name: '难度二' },
-  { lv: 70, boxes: 4, name: '难度三' },
-  { lv: 95, boxes: 6, name: '难度四' },
-  { lv: 120, boxes: 10, name: '难度五' },
+  { lv: 30, boxes: 1, name: tl('难度一') },
+  { lv: 50, boxes: 2, name: tl('难度二') },
+  { lv: 70, boxes: 4, name: tl('难度三') },
+  { lv: 95, boxes: 6, name: tl('难度四') },
+  { lv: 120, boxes: 10, name: tl('难度五') },
 ] as const;
 export const hwBossId = (d: number) => `pumpkin_king_${d + 1}`;
 export const hwFight = (d: number) => `fight_${hwBossId(d)}`;

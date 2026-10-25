@@ -1,4 +1,5 @@
 import { mix, phash, Pix } from './pix';
+import { tl } from '../i18n';
 
 /*
  * 坐骑马和野马（用户 10-24）：全部逐像素画。
@@ -15,10 +16,10 @@ export const HORSE_FEET = 42;
 /** 毛色：按资质分四档，资质越高越稀有 */
 export interface Coat { id: number; name: string; body: string; mane: string; blanket: string; dapple?: boolean; shine?: boolean; sock?: boolean }
 export const COATS: Coat[] = [
-  { id: 0, name: '栗色', body: '#9a5226', mane: '#3a1c0c', blanket: '#3a6ab0', sock: true },
-  { id: 1, name: '乌骓', body: '#2e2832', mane: '#0c0a10', blanket: '#b03a3a' },
-  { id: 2, name: '银白', body: '#d4d0c8', mane: '#f8f6f2', blanket: '#6a3ab0', dapple: true },
-  { id: 3, name: '金鬃', body: '#dca23e', mane: '#fff4d0', blanket: '#a8202a', shine: true },
+  { id: 0, name: tl('栗色'), body: '#9a5226', mane: '#3a1c0c', blanket: '#3a6ab0', sock: true },
+  { id: 1, name: tl('乌骓'), body: '#2e2832', mane: '#0c0a10', blanket: '#b03a3a' },
+  { id: 2, name: tl('银白'), body: '#d4d0c8', mane: '#f8f6f2', blanket: '#6a3ab0', dapple: true },
+  { id: 3, name: tl('金鬃'), body: '#dca23e', mane: '#fff4d0', blanket: '#a8202a', shine: true },
 ];
 export { coatOf } from '../core/ranch';
 

@@ -10,6 +10,7 @@ import { fmtNum } from './format';
 import { FINE_POINTER, openNodeSheet } from './itemOpen';
 import { newsPending, onNewsClosed } from './News';
 import { guideShowing, onGuideClosed } from './Guide';
+import { tl } from '../i18n';
 
 /*
  * 万圣节活动界面（用户 10-24）：祭坛召唤面板、活动公告（带贴图）、地图上的活动提示条。
@@ -36,7 +37,7 @@ export const hwLeft = (now: number) => {
   const ms = Math.max(0, HW_END - now);
   const d = Math.floor(ms / 86_400_000);
   const h = Math.floor((ms % 86_400_000) / 3_600_000);
-  return d ? `${d} 天 ${h} 小时` : `${h} 小时 ${Math.floor((ms % 3_600_000) / 60_000)} 分`;
+  return d ? tl`${d} 天 ${h} 小时` : tl`${h} 小时 ${Math.floor((ms % 3_600_000) / 60_000)} 分`;
 };
 const have = (s: GameState, id: string) => (s.bag[id] ?? 0) + (s.bank[id] ?? 0);
 
@@ -86,44 +87,42 @@ export function AltarSheet({ s, node, onClose }: { s: GameState; node: MapNode; 
   return (
     <div className="sheet hw-sheet">
       <div className="sheet-head">
-        <button className="back" onClick={onClose}>‹ 返回</button>
+        <button className="back" onClick={onClose}>{tl('‹ 返回')}</button>
         <h2>{node.name}</h2>
-        <small className="muted">{open ? `活动剩余 ${hwLeft(now)} · 11 月 1 日关闭` : '活动已结束'}</small>
+        <small className="muted">{open ? tl`活动剩余 ${hwLeft(now)} · 11 月 1 日关闭` : tl('活动已结束')}</small>
       </div>
       <img className="hw-poster" src={posterBannerUrl()} alt="" />
       <div className="hw-stats">
-        <span><img src={pumpkinPointUrl()} alt="" /> 南瓜积分 <b>{fmtNum(s.bank[HW_POINT] ?? 0)}</b></span>
-        <span><img src={pumpkinBoxUrl()} alt="" /> 未开礼盒 <b>{fmtNum(have(s, HW_BOX))}</b></span>
-        <button className="link" onClick={openHalloween}>活动说明 ›</button>
+        <span><img src={pumpkinPointUrl()} alt="" />{tl(' 南瓜积分 ')}<b>{fmtNum(s.bank[HW_POINT] ?? 0)}</b></span>
+        <span><img src={pumpkinBoxUrl()} alt="" />{tl(' 未开礼盒 ')}<b>{fmtNum(have(s, HW_BOX))}</b></span>
+        <button className="link" onClick={openHalloween}>{tl('活动说明 ›')}</button>
       </div>
       {!open ? (
-        <p className="pad muted">万圣节活动已经在 11 月 1 日结束，南瓜王回去了。手里的南瓜积分请留着，兑换商店开放后可以使用。</p>
+        <p className="pad muted">{tl('万圣节活动已经在 11 月 1 日结束，南瓜王回去了。手里的南瓜积分请留着，兑换商店开放后可以使用。')}</p>
       ) : summoned !== undefined ? (
         <div className="hw-summoned">
           <KingAnim d={summoned} size={72} />
           <div>
-            <b>{MONSTERS[hwBossId(summoned)].name}</b> Lv{HW_TIERS[summoned].lv} 已被召唤，正在祭坛等你。
-            <div className="muted">打赢一次就会离开，掉 {HW_TIERS[summoned].boxes} 个南瓜礼盒。没打赢可以回来接着打。</div>
-            {!fighting && <button className="primary" onClick={resume}>前往挑战</button>}
-            {fighting && <div className="good">正在挑战中…</div>}
+            <b>{MONSTERS[hwBossId(summoned)].name}</b>{tl` Lv${HW_TIERS[summoned].lv} 已被召唤，正在祭坛等你。`}<div className="muted">{tl`打赢一次就会离开，掉 ${HW_TIERS[summoned].boxes} 个南瓜礼盒。没打赢可以回来接着打。`}</div>
+            {!fighting && <button className="primary" onClick={resume}>{tl('前往挑战')}</button>}
+            {fighting && <div className="good">{tl('正在挑战中…')}</div>}
           </div>
         </div>
       ) : (
         <>
-          <p className="pad">选一档难度，召唤万圣节限定首领「南瓜王」。每小时只能召唤一次，召唤后角色会自己走到祭坛开打。</p>
+          <p className="pad">{tl('选一档难度，召唤万圣节限定首领「南瓜王」。每小时只能召唤一次，召唤后角色会自己走到祭坛开打。')}</p>
           <ul className="action-list hw-tiers">
             {HW_TIERS.map((h, d) => {
               const m = MONSTERS[hwBossId(d)];
               const e = combatEstimate(s, m);
-              const cls = e.rating === '轻松' ? 'good' : e.rating === '适中' ? '' : 'warn';
+              const cls = e.rating === tl('轻松') ? 'good' : e.rating === tl('适中') ? '' : 'warn';
               return (
                 <li key={d} className={pick === d ? 'sel' : ''} onClick={() => setPick(d)}>
                   <span className="hw-tier-num">{d + 1}</span>
                   <span className="act-body">
-                    <span className="row1"><b>{h.name}</b> <span className="muted">Lv{h.lv} · 生命 {fmtNum(m.hp)}</span></span>
-                    <span className="row2">
-                      奖励 <img src={pumpkinBoxUrl()} alt="" className="inline-icon" /> 南瓜礼盒 ×{h.boxes}
-                      <span className={cls}> · 评估：{e.killMs === Infinity ? '打不动（回血比你的输出快）' : `${e.rating}（约 ${Math.max(1, Math.round(e.killMs / 1000))} 秒，掉血约 ${Math.round(e.taken)}）`}</span>
+                    <span className="row1"><b>{h.name}</b> <span className="muted">{tl`Lv${h.lv} · 生命 ${fmtNum(m.hp)}`}</span></span>
+                    <span className="row2">{tl('奖励 ')}<img src={pumpkinBoxUrl()} alt="" className="inline-icon" />{tl` 南瓜礼盒 ×${h.boxes}`}
+                      <span className={cls}>{tl` · 评估：${e.killMs === Infinity ? tl('打不动（回血比你的输出快）') : tl`${e.rating}（约 ${Math.max(1, Math.round(e.killMs / 1000))} 秒，掉血约 ${Math.round(e.taken)}）`}`}</span>
                     </span>
                   </span>
                 </li>
@@ -131,12 +130,12 @@ export function AltarSheet({ s, node, onClose }: { s: GameState; node: MapNode; 
             })}
           </ul>
           <div className="go">
-            {wait > 0 && <span className="muted">召唤冷却中，{clock(wait)} 后可以再召唤</span>}
-            <button className="primary" disabled={wait > 0} onClick={summon}>召唤南瓜王 · {HW_TIERS[pick].name}</button>
+            {wait > 0 && <span className="muted">{tl`召唤冷却中，${clock(wait)} 后可以再召唤`}</span>}
+            <button className="primary" disabled={wait > 0} onClick={summon}>{tl`召唤南瓜王 · ${HW_TIERS[pick].name}`}</button>
           </div>
         </>
       )}
-      <p className="pad muted small">南瓜积分在活动结束前可以兑换限定物品，兑换商店即将开放。冷却 {HW_COOLDOWN / 3_600_000} 小时从召唤那一刻开始算。</p>
+      <p className="pad muted small">{tl`南瓜积分在活动结束前可以兑换限定物品，兑换商店即将开放。冷却 ${HW_COOLDOWN / 3_600_000} 小时从召唤那一刻开始算。`}</p>
     </div>
   );
 }
@@ -182,50 +181,46 @@ export function HalloweenNotice() {
         <div className="hw-hero">
           <img src={posterBannerUrl()} alt="" />
           <div className="hw-title">
-            <small>限时活动 · 11 月 1 日结束</small>
-            万圣节 · 南瓜王降临
-          </div>
+            <small>{tl('限时活动 · 11 月 1 日结束')}</small>{tl('万圣节 · 南瓜王降临')}</div>
         </div>
         <div className="news-body">
-          <p className="hw-lead">
-            南瓜王从月夜里醒来了！苍岭城东门外立起了一座<b>万圣节活动祭坛</b>，在祭坛召唤南瓜王，打败它拿<b>南瓜礼盒</b>，开出<b>南瓜积分</b>，活动结束前兑换限定奖励。
-            {hwOpen(now) ? <> 活动还剩 <b className="gold">{hwLeft(now)}</b>。</> : ' 活动已经结束。'}
+          <p className="hw-lead">{tl('南瓜王从月夜里醒来了！苍岭城东门外立起了一座')}<b>{tl('万圣节活动祭坛')}</b>{tl('，在祭坛召唤南瓜王，打败它拿')}<b>{tl('南瓜礼盒')}</b>{tl('，开出')}<b>{tl('南瓜积分')}</b>{tl('，活动结束前兑换限定奖励。')}{hwOpen(now) ? <>{tl(' 活动还剩 ')}<b className="gold">{hwLeft(now)}</b>{tl('。')}</> : tl(' 活动已经结束。')}
           </p>
           <div className="hw-cards">
             <figure>
               <img src={posterAltarUrl()} alt="" />
-              <figcaption><b>① 活动祭坛</b>在苍岭城东门外，和城镇连在一起。点祭坛选难度召唤，<b>每小时一次</b>。</figcaption>
+              <figcaption><b>{tl('① 活动祭坛')}</b>{tl('在苍岭城东门外，和城镇连在一起。点祭坛选难度召唤，')}<b>{tl('每小时一次')}</b>{tl('。')}</figcaption>
             </figure>
             <figure>
               <div className="hw-king-box"><KingAnim d={4} size={90} /></div>
-              <figcaption><b>② 南瓜王</b>头戴王冠、手持南瓜灯权杖，每 4 下放一次大招「南瓜炸弹」，伤害 ×2.6。</figcaption>
+              <figcaption><b>{tl('② 南瓜王')}</b>{tl('头戴王冠、手持南瓜灯权杖，每 4 下放一次大招「南瓜炸弹」，伤害 ×2.6。')}</figcaption>
             </figure>
             <figure>
               <img src={posterRewardUrl()} alt="" />
-              <figcaption><b>③ 南瓜礼盒</b>打开得 8-15 南瓜积分和金币，积分直接存进仓库。</figcaption>
+              <figcaption><b>{tl('③ 南瓜礼盒')}</b>{tl('打开得 8-15 南瓜积分和金币，积分直接存进仓库。')}</figcaption>
             </figure>
           </div>
-          <h3>五档难度</h3>
+          <h3>{tl('五档难度')}</h3>
           <table className="hw-table">
-            <thead><tr><th>难度</th><th>南瓜王等级</th><th>礼盒</th></tr></thead>
+            <thead><tr><th>{tl('难度')}</th><th>{tl('南瓜王等级')}</th><th>{tl('礼盒')}</th></tr></thead>
             <tbody>
               {HW_TIERS.map((h, d) => (
                 <tr key={d}><td>{h.name}</td><td>Lv{h.lv}</td><td><img src={pumpkinBoxUrl()} alt="" className="inline-icon" /> ×{h.boxes}</td></tr>
               ))}
             </tbody>
           </table>
-          <h3>活动指引</h3>
+          <h3>{tl('活动指引')}</h3>
           <ol className="hb-steps">
-            <li>点下面的「寻路去祭坛」，角色会自己走到苍岭城东门外的{altar.name}（世界地图里选「活动」也能找到）。</li>
-            <li>点祭坛，选一档难度后点「召唤南瓜王」，角色会自动开打。战斗前记得在食物栏放好食物。</li>
-            <li>打赢后礼盒进背包，在背包里{FINE_POINTER ? '右键' : '点一下'}礼盒就能打开，积分自动存进仓库。</li>
-            <li>没打赢也没关系，召唤出来的南瓜王会一直在祭坛等你，回来点「前往挑战」接着打。</li>
-            <li>11 月 1 日活动关闭，南瓜王离开。南瓜积分在兑换商店开放后使用。</li>
+            <li>{tl`点下面的「寻路去祭坛」，角色会自己走到苍岭城东门外的${altar.name}（世界地图里选「活动」也能找到）。`}</li>
+            <li>{tl('点祭坛，选一档难度后点「召唤南瓜王」，角色会自动开打。战斗前记得在食物栏放好食物。')}</li>
+            <li>{tl`打赢后礼盒进背包，在背包里${FINE_POINTER ? tl('右键') : tl('点一下')}礼盒就能打开，积分自动存进仓库。`}</li>
+            <li>{tl('没打赢也没关系，召唤出来的南瓜王会一直在祭坛等你，回来点「前往挑战」接着打。')}</li>
+            <li>{tl('11 月 1 日活动关闭，南瓜王离开。南瓜积分在兑换商店开放后使用。')}</li>
           </ol>
         </div>
         <div className="go">
-          <button onClick={close}>知道了</button>
-          {hwOpen(now) && <button className="primary" onClick={go}>寻路去祭坛</button>}
+          <button onClick={close}>{tl('知道了')}</button>
+          {hwOpen(now) && <button className="primary" onClick={go}>{tl('寻路去祭坛')}</button>}
         </div>
       </div>
     </div>
@@ -238,14 +233,14 @@ export function HalloweenChip({ s }: { s: GameState }) {
   if (!hwOpen(now)) return null;
   const wait = hwWait(s.halloween?.last, now);
   const summoned = s.halloween?.summoned;
-  const text = summoned !== undefined ? `南瓜王在祭坛等你 · ${HW_TIERS[summoned].name}` : wait > 0 ? `南瓜王冷却 ${clock(wait)}` : '南瓜王可以召唤了！';
+  const text = summoned !== undefined ? tl`南瓜王在祭坛等你 · ${HW_TIERS[summoned].name}` : wait > 0 ? tl`南瓜王冷却 ${clock(wait)}` : tl('南瓜王可以召唤了！');
   return (
     <div className={`chip hw-chip ${summoned !== undefined || wait <= 0 ? 'ready' : ''}`}>
       <button className="hw-chip-main" onClick={() => openNodeSheet(HW_ALTAR)}>
-        <img src={pumpkinPointUrl()} alt="" /> <b>万圣节</b> {text}
+        <img src={pumpkinPointUrl()} alt="" /> <b>{tl('万圣节')}</b> {text}
       </button>
-      <button className="hw-chip-go" onClick={() => store.requestWalk(HW_ALTAR)}>寻路</button>
-      <button className="hw-chip-go" onClick={openHalloween}>说明</button>
+      <button className="hw-chip-go" onClick={() => store.requestWalk(HW_ALTAR)}>{tl('寻路')}</button>
+      <button className="hw-chip-go" onClick={openHalloween}>{tl('说明')}</button>
     </div>
   );
 }

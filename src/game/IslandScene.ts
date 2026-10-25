@@ -13,6 +13,7 @@ import { paintFloor, paintPedestal, paintPortal, paintPortalSwirl, paintThing, p
 import { liquidIndex, T, tileIndex, VARIANTS } from './tiles';
 import { GROUNDS, LIQUIDS, type PropKind } from './world';
 import { paintProp } from './art';
+import { tl } from '../i18n';
 
 /** 岛上用的工具：建造某件东西 / 拆除 / 无（走路） */
 export type HomeTool = { kind: 'build'; id: string } | { kind: 'demolish' } | null;
@@ -78,7 +79,7 @@ export class IslandScene extends Phaser.Scene {
     const ring = this.add.ellipse(0, 6, 14, 6).setStrokeStyle(1, 0xe8b84a).setFillStyle(0xe8b84a, 0.25);
     this.body = this.add.sprite(0, 7, 'hero').setOrigin(0.5, (HERO_FEET + HERO_PAD.t) / FRAME_H);
     this.body.play('idle-down');
-    const name = this.add.text(0, 7 - HERO_FEET + 1, '[苍岭] 你', { fontFamily: FONT, fontSize: '7px', color: '#ffffff', stroke: '#000', strokeThickness: 2, resolution: 4 }).setOrigin(0.5);
+    const name = this.add.text(0, 7 - HERO_FEET + 1, tl('[苍岭] 你'), { fontFamily: FONT, fontSize: '7px', color: '#ffffff', stroke: '#000', strokeThickness: 2, resolution: 4 }).setOrigin(0.5);
     this.player.add([ring, this.body, name]).setDepth(this.player.y + 1000);
     this.night = this.add.rectangle(0, 0, ISLAND * T, ISLAND * T, 0x0a1430, 0).setOrigin(0).setDepth(9e6);
     this.setupCamera();
@@ -210,7 +211,7 @@ export class IslandScene extends Phaser.Scene {
     this.tweens.add({ targets: swirl, angle: -360, duration: 4000, repeat: -1 });
     this.tweens.add({ targets: swirl, scale: 1.08, yoyo: true, repeat: -1, duration: 900, ease: 'Sine.inOut' });
     this.add.image(cx, by - 24, 'glow').setTint(0x8a6af0).setBlendMode(Phaser.BlendModes.ADD).setDepth(by + 1001).setAlpha(0.5);
-    this.add.text(cx, by - PORTAL_H - 4, '回城传送门', { fontFamily: FONT, fontSize: '7px', color: '#e8d8ff', backgroundColor: '#1b120ccc', padding: { x: 3, y: 1 }, resolution: 4 })
+    this.add.text(cx, by - PORTAL_H - 4, tl('回城传送门'), { fontFamily: FONT, fontSize: '7px', color: '#e8d8ff', backgroundColor: '#1b120ccc', padding: { x: 3, y: 1 }, resolution: 4 })
       .setOrigin(0.5, 1).setDepth(9e5);
     this.add.zone(cx, by - 20, T * 3, T * 3).setInteractive({ useHandCursor: true }).setData('portal', true);
   }
@@ -324,7 +325,7 @@ export class IslandScene extends Phaser.Scene {
     const d = buildDef(t.id);
     const px = Math.floor(this.player.x / T);
     const py = Math.floor(this.player.y / T);
-    if (!why && d && !d.walk && !d.floor && px >= x && px < x + d.w && py >= y && py < y + d.h) why = '你站在这里，先走开';
+    if (!why && d && !d.walk && !d.floor && px >= x && px < x + d.w && py >= y && py < y + d.h) why = tl('你站在这里，先走开');
     if (why) {
       if (this.painted.size === 1) this.game.events.emit(HOME_MSG, why);
       return;

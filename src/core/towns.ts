@@ -1,5 +1,6 @@
 import { at, atF, atW, OLD_BOX } from './geo';
 import type { RegionId } from './types';
+import { tl } from '../i18n';
 
 /*
  * 12080 大地图的 8 座新城镇（用户 10-24：每座城镇布局都不一样，各有特点风格）。
@@ -11,7 +12,7 @@ export type TownTheme = 'village' | 'snowfort' | 'lantern' | 'port' | 'ashcamp' 
 /** 城里的设施：仓库、集市、各种生产建筑、家园传送门 */
 export type Facility = 'bank' | 'market' | 'smithy' | 'furnace' | 'kitchen' | 'workshop' | 'bowyer' | 'apothecary' | 'atelier';
 export const FACILITY_NAME: Record<Facility, string> = {
-  bank: '仓库', market: '集市', smithy: '铁匠铺', furnace: '熔炉', kitchen: '灶台', workshop: '工坊', bowyer: '制弓台', apothecary: '药剂铺', atelier: '珍材坊',
+  bank: tl('仓库'), market: tl('集市'), smithy: tl('铁匠铺'), furnace: tl('熔炉'), kitchen: tl('灶台'), workshop: tl('工坊'), bowyer: tl('制弓台'), apothecary: tl('药剂铺'), atelier: tl('珍材坊'),
 };
 
 export interface TownBuilding { kind: string; x: number; y: number; w: number; h: number; fac?: Facility }
@@ -66,8 +67,8 @@ const col = (k: string, x: number, y0: number, y1: number, step: number): [strin
 export const TOWNS: TownDef[] = [
   {
     // 凤麦镇：青岚丘陵的风车麦田小镇。没有城墙，一条长街东西贯穿，一条小溪南北穿过，镇外是麦田和三座风车
-    id: 'fengmai', name: '凤麦镇', region: 'hills', c: atF(0.075, 0.33), theme: 'village',
-    intro: '风车、麦田和茅草屋顶的小镇，一条长街贯穿东西，小溪从镇中间流过。适合刚出新手村的玩家落脚。',
+    id: 'fengmai', name: tl('凤麦镇'), region: 'hills', c: atF(0.075, 0.33), theme: 'village',
+    intro: tl('风车、麦田和茅草屋顶的小镇，一条长街贯穿东西，小溪从镇中间流过。适合刚出新手村的玩家落脚。'),
     clear: [-62, -42, 62, 42],
     grounds: [
       rect('farm', -46, -32, -14, -18), rect('farm', 24, -32, 50, -18), rect('farm', -46, 20, -16, 34),
@@ -101,8 +102,8 @@ export const TOWNS: TownDef[] = [
   },
   {
     // 雪隘堡：冰封雪原里扼守山口的石头要塞。方形厚城墙、四角哨塔，只开南北两座城门，一条大路从中间穿过
-    id: 'xueai', name: '雪隘堡', region: 'snow', c: at(0.56, 0.28), theme: 'snowfort',
-    intro: '扼守雪山关隘的石头要塞，方形厚城墙、四角哨塔，只开南北两道城门。铁匠铺、熔炉齐全，是北方采矿打怪的补给站。',
+    id: 'xueai', name: tl('雪隘堡'), region: 'snow', c: at(0.56, 0.28), theme: 'snowfort',
+    intro: tl('扼守雪山关隘的石头要塞，方形厚城墙、四角哨塔，只开南北两道城门。铁匠铺、熔炉齐全，是北方采矿打怪的补给站。'),
     clear: [-42, -36, 42, 36],
     grounds: [rect('roadsnow', -2, -26, 2, 26), rect('roadsnow', -26, -2, 26, 2), rect('cobble', -6, -6, 6, 6)],
     walls: { prop: 'wall', shape: 'rect', hw: 30, hh: 24, gates: ['n', 's'] },
@@ -123,8 +124,8 @@ export const TOWNS: TownDef[] = [
   },
   {
     // 岩灯城：灰岩高地上依山而建的三层台地城，台地之间是石崖，靠石阶上下；满城挂灯笼，顶上一座灯塔
-    id: 'yandeng', name: '岩灯城', region: 'highland', c: at(0.74, 0.40), theme: 'lantern',
-    intro: '依山而建的三层台地城，台地之间只能走石阶，满城挂着灯笼，最高处是一座灯塔。矿工之城，打造和冶炼设施齐全。',
+    id: 'yandeng', name: tl('岩灯城'), region: 'highland', c: at(0.74, 0.40), theme: 'lantern',
+    intro: tl('依山而建的三层台地城，台地之间只能走石阶，满城挂着灯笼，最高处是一座灯塔。矿工之城，打造和冶炼设施齐全。'),
     clear: [-46, -36, 46, 30],
     grounds: [
       rect('cobble', -38, -24, 38, 22),
@@ -148,8 +149,8 @@ export const TOWNS: TownDef[] = [
   },
   {
     // 珊瑚港：金沙海岸东岸的海港。白墙蓝顶的房子沿着港口大街排开，三条栈桥伸进海峡，栈桥尽头有灯塔
-    id: 'coralport', name: '珊瑚港', region: 'coast', c: { x: OLD_BOX.x + OLD_BOX.size - 60, y: at(0, 0.51).y }, theme: 'port',
-    intro: '海峡边的白墙蓝顶海港，三条栈桥伸进海里，最长那条尽头立着灯塔。能在栈桥上钓海鱼，集市里有水手和渔夫。',
+    id: 'coralport', name: tl('珊瑚港'), region: 'coast', c: { x: OLD_BOX.x + OLD_BOX.size - 60, y: at(0, 0.51).y }, theme: 'port',
+    intro: tl('海峡边的白墙蓝顶海港，三条栈桥伸进海里，最长那条尽头立着灯塔。能在栈桥上钓海鱼，集市里有水手和渔夫。'),
     clear: [-46, -30, 92, 30],
     grounds: [
       rect('ocean', 30, -26, 92, 26), rect('beach', 24, -26, 29, 26),
@@ -174,8 +175,8 @@ export const TOWNS: TownDef[] = [
   },
   {
     // 灰烬营地：熔岩荒地里的前线营地。一圈尖木栅栏围成圆形，中间燃着篝火，四周是帐篷和铁匠炉
-    id: 'ashcamp', name: '灰烬营地', region: 'lava', c: at(0.70, 0.76), theme: 'ashcamp',
-    intro: '火山荒地里用尖木栅栏围成的圆形营地，中间燃着篝火，四周是帐篷、铁匠炉和熔炉。熔岩区打怪的前线补给点。',
+    id: 'ashcamp', name: tl('灰烬营地'), region: 'lava', c: at(0.70, 0.76), theme: 'ashcamp',
+    intro: tl('火山荒地里用尖木栅栏围成的圆形营地，中间燃着篝火，四周是帐篷、铁匠炉和熔炉。熔岩区打怪的前线补给点。'),
     clear: [-40, -40, 40, 40],
     grounds: [{ g: 'roaddark', disk: [0, 0, 27] }, rect('roaddark', -2, -32, 2, 32), rect('roaddark', -32, -2, 32, 2)],
     walls: { prop: 'palisade', shape: 'circle', hw: 28, hh: 28, gates: ['n', 's', 'w', 'e'] },
@@ -195,8 +196,8 @@ export const TOWNS: TownDef[] = [
   },
   {
     // 晶辉要塞：晶簇荒原上的菱形晶墙要塞。东南西三个尖角是城门，北尖角是一座发光的晶塔，地面铺着白石
-    id: 'crystalfort', name: '晶辉要塞', region: 'crystal', c: atW(0.51, 0.9), theme: 'crystal',
-    intro: '菱形晶墙围起来的白石要塞，东、南、西三个尖角开门，北尖角上的晶塔日夜发光。珍材坊、药剂铺、集市都在，是晶簇荒原的大本营。',
+    id: 'crystalfort', name: tl('晶辉要塞'), region: 'crystal', c: atW(0.51, 0.9), theme: 'crystal',
+    intro: tl('菱形晶墙围起来的白石要塞，东、南、西三个尖角开门，北尖角上的晶塔日夜发光。珍材坊、药剂铺、集市都在，是晶簇荒原的大本营。'),
     clear: [-46, -46, 46, 46],
     grounds: [{ g: 'marble', diamond: 33 }, rect('crystalground', -2, -15, 2, 36), rect('crystalground', -36, -2, 36, 2)],
     walls: { prop: 'crystalwall', shape: 'diamond', hw: 34, hh: 34, gates: ['s', 'w', 'e'] },
@@ -215,8 +216,8 @@ export const TOWNS: TownDef[] = [
   },
   {
     // 遗忘哨塔：腐月湿地的高脚水上哨站。整座镇子建在紫色沼水上，靠木栈道连起来，中间一座高高的哨塔
-    id: 'forgotten', name: '遗忘哨塔', region: 'moonmire', c: atF(0.06, 0.8), theme: 'stilt',
-    intro: '建在紫色沼水上的高脚哨站，房子立在木桩上，靠栈道连起来，北边的高塔亮着紫灯。能在栈道上钓月沼的鱼。',
+    id: 'forgotten', name: tl('遗忘哨塔'), region: 'moonmire', c: atF(0.06, 0.8), theme: 'stilt',
+    intro: tl('建在紫色沼水上的高脚哨站，房子立在木桩上，靠栈道连起来，北边的高塔亮着紫灯。能在栈道上钓月沼的鱼。'),
     clear: [-48, -40, 48, 40],
     grounds: [
       rect('moonwater', -36, -30, 36, 26),
@@ -238,8 +239,8 @@ export const TOWNS: TownDef[] = [
   },
   {
     // 虚辉遗都：星陨晶海岛上的上古遗都。白石广场上一排排石柱，大多已经断了，中间的神殿修好了当作仓库
-    id: 'voidruins', name: '虚辉遗都', region: 'starsea', c: atF(0.68, 0.945), theme: 'ruins',
-    intro: '晶海孤岛上的上古遗都，白石广场两侧是一排排断裂的石柱，中间的神殿被修好当作仓库。最外圈的终局城镇，有遗物商人和珍材坊。',
+    id: 'voidruins', name: tl('虚辉遗都'), region: 'starsea', c: atF(0.68, 0.945), theme: 'ruins',
+    intro: tl('晶海孤岛上的上古遗都，白石广场两侧是一排排断裂的石柱，中间的神殿被修好当作仓库。最外圈的终局城镇，有遗物商人和珍材坊。'),
     clear: [-44, -36, 44, 36],
     grounds: [rect('marble', -30, -22, 30, 22), rect('marble', -2, 22, 2, 30), rect('marble', -38, -2, 38, 2)],
     buildings: [

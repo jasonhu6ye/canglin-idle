@@ -1,5 +1,6 @@
 import { ITEMS, NODES, type MapNode } from './data';
 import type { GameState, HomeThing, ItemStack } from './types';
+import { tl } from '../i18n';
 
 /**
  * 家园岛屿（用户 10-23）：两座城各有一个传送门，进去是一座自己的海岛。
@@ -67,8 +68,8 @@ export const isHomeLand = (x: number, y: number, size: number) => {
 
 export type BuildCat = 'struct' | 'floor' | 'furniture' | 'station' | 'outdoor' | 'trophy';
 export const BUILD_CATS: { id: BuildCat; name: string }[] = [
-  { id: 'struct', name: '墙和门' }, { id: 'floor', name: '地板' }, { id: 'furniture', name: '家具' },
-  { id: 'station', name: '制作台' }, { id: 'outdoor', name: '户外' }, { id: 'trophy', name: '战利品' },
+  { id: 'struct', name: tl('墙和门') }, { id: 'floor', name: tl('地板') }, { id: 'furniture', name: tl('家具') },
+  { id: 'station', name: tl('制作台') }, { id: 'outdoor', name: tl('户外') }, { id: 'trophy', name: tl('战利品') },
 ];
 
 export interface BuildDef {
@@ -98,106 +99,106 @@ const b = (id: string, name: string, cat: BuildCat, w: number, h: number, cost: 
   ({ id, name, cat, w, h, cost, ...extra });
 
 export const BUILDS: BuildDef[] = [
-  b('wall_wood', '木墙', 'struct', 1, 1, [c('plank_1', 2)], { wall: true }),
-  b('wall_stone', '石墙', 'struct', 1, 1, [c('stone', 4)], { wall: true }),
-  b('wall_brick', '红砖墙', 'struct', 1, 1, [c('stone', 3), c('copper_bar', 1)], { wall: true }),
-  b('wall_white', '白灰墙', 'struct', 1, 1, [c('stone', 3), c('tin_bar', 1)], { wall: true }),
-  b('door_wood', '木门', 'struct', 1, 1, [c('plank_1', 4)], { walk: true }),
-  b('door_iron', '铁门', 'struct', 1, 1, [c('iron_bar', 3)], { walk: true }),
-  b('fence', '木篱笆', 'struct', 1, 1, [c('plain_log', 1)], { wall: true }),
-  b('floor_wood', '木地板', 'floor', 1, 1, [c('plank_1', 1)], { floor: true }),
-  b('floor_dark', '深色木地板', 'floor', 1, 1, [c('plank_3', 1)], { floor: true }),
-  b('floor_stone', '石砖地', 'floor', 1, 1, [c('stone', 2)], { floor: true }),
-  b('floor_marble', '大理石地', 'floor', 1, 1, [c('stone', 3), c('tin_bar', 1)], { floor: true }),
-  b('carpet_red', '红地毯', 'floor', 1, 1, [c('cloth_1', 2)], { floor: true }),
-  b('carpet_blue', '蓝地毯', 'floor', 1, 1, [c('cloth_2', 2)], { floor: true }),
-  b('path', '石板路', 'floor', 1, 1, [c('stone', 1)], { floor: true }),
-  b('bed', '木床', 'furniture', 1, 2, [c('plank_1', 6), c('cloth_1', 4)]),
-  b('bed_double', '双人床', 'furniture', 2, 2, [c('plank_2', 10), c('cloth_2', 8)]),
-  b('table', '木桌', 'furniture', 2, 1, [c('plank_1', 4)]),
-  b('chair', '木椅', 'furniture', 1, 1, [c('plank_1', 2)]),
-  b('chest', '储物箱', 'furniture', 1, 1, [c('plank_1', 8), c('copper_bar', 2)], { chest: true, desc: '岛上有储物箱，就能在岛上存取仓库，干活背包满了也直接存进去。' }),
-  b('shelf', '书架', 'furniture', 2, 1, [c('plank_2', 6)]),
-  b('wardrobe', '衣柜', 'furniture', 1, 1, [c('plank_2', 8)]),
-  b('lamp', '落地灯', 'furniture', 1, 1, [c('copper_bar', 2), c('cloth_1', 1)], { light: true }),
-  b('fireplace', '壁炉', 'furniture', 2, 1, [c('stone', 20)], { light: true }),
-  b('plant_pot', '盆栽', 'furniture', 1, 1, [c('stone', 2), c('green_herb', 1)]),
-  b('rug_round', '圆地垫', 'furniture', 2, 2, [c('cloth_1', 6)], { floor: true }),
-  b('st_kitchen', '灶台', 'station', 2, 1, [c('stone', 15), c('copper_bar', 2)], { station: 'kitchen', light: true }),
-  b('st_furnace', '熔炉', 'station', 2, 2, [c('stone', 30)], { station: 'furnace', light: true }),
-  b('st_smithy', '铁砧', 'station', 2, 1, [c('copper_bar', 10), c('stone', 5)], { station: 'smithy' }),
-  b('st_workshop', '工作台', 'station', 2, 1, [c('plank_1', 10), c('copper_bar', 2)], { station: 'workshop' }),
-  b('st_bowyer', '制弓台', 'station', 2, 1, [c('plank_2', 10)], { station: 'bowyer' }),
-  b('st_apothecary', '药剂台', 'station', 2, 1, [c('plank_1', 6), c('green_herb', 10)], { station: 'apothecary' }),
-  b('tree', '小树', 'outdoor', 1, 1, [c('plain_log', 5)]),
-  b('flowerbed', '花坛', 'outdoor', 2, 1, [c('stone', 4), c('green_herb', 2)]),
-  b('bench', '长椅', 'outdoor', 2, 1, [c('plank_1', 5)]),
-  b('streetlamp', '路灯', 'outdoor', 1, 1, [c('copper_bar', 3), c('stone', 2)], { light: true }),
-  b('well', '水井', 'outdoor', 2, 2, [c('stone', 25), c('plank_1', 4)]),
-  b('statue', '石像', 'outdoor', 2, 2, [c('stone', 60)]),
+  b('wall_wood', tl('木墙'), 'struct', 1, 1, [c('plank_1', 2)], { wall: true }),
+  b('wall_stone', tl('石墙'), 'struct', 1, 1, [c('stone', 4)], { wall: true }),
+  b('wall_brick', tl('红砖墙'), 'struct', 1, 1, [c('stone', 3), c('copper_bar', 1)], { wall: true }),
+  b('wall_white', tl('白灰墙'), 'struct', 1, 1, [c('stone', 3), c('tin_bar', 1)], { wall: true }),
+  b('door_wood', tl('木门'), 'struct', 1, 1, [c('plank_1', 4)], { walk: true }),
+  b('door_iron', tl('铁门'), 'struct', 1, 1, [c('iron_bar', 3)], { walk: true }),
+  b('fence', tl('木篱笆'), 'struct', 1, 1, [c('plain_log', 1)], { wall: true }),
+  b('floor_wood', tl('木地板'), 'floor', 1, 1, [c('plank_1', 1)], { floor: true }),
+  b('floor_dark', tl('深色木地板'), 'floor', 1, 1, [c('plank_3', 1)], { floor: true }),
+  b('floor_stone', tl('石砖地'), 'floor', 1, 1, [c('stone', 2)], { floor: true }),
+  b('floor_marble', tl('大理石地'), 'floor', 1, 1, [c('stone', 3), c('tin_bar', 1)], { floor: true }),
+  b('carpet_red', tl('红地毯'), 'floor', 1, 1, [c('cloth_1', 2)], { floor: true }),
+  b('carpet_blue', tl('蓝地毯'), 'floor', 1, 1, [c('cloth_2', 2)], { floor: true }),
+  b('path', tl('石板路'), 'floor', 1, 1, [c('stone', 1)], { floor: true }),
+  b('bed', tl('木床'), 'furniture', 1, 2, [c('plank_1', 6), c('cloth_1', 4)]),
+  b('bed_double', tl('双人床'), 'furniture', 2, 2, [c('plank_2', 10), c('cloth_2', 8)]),
+  b('table', tl('木桌'), 'furniture', 2, 1, [c('plank_1', 4)]),
+  b('chair', tl('木椅'), 'furniture', 1, 1, [c('plank_1', 2)]),
+  b('chest', tl('储物箱'), 'furniture', 1, 1, [c('plank_1', 8), c('copper_bar', 2)], { chest: true, desc: tl('岛上有储物箱，就能在岛上存取仓库，干活背包满了也直接存进去。') }),
+  b('shelf', tl('书架'), 'furniture', 2, 1, [c('plank_2', 6)]),
+  b('wardrobe', tl('衣柜'), 'furniture', 1, 1, [c('plank_2', 8)]),
+  b('lamp', tl('落地灯'), 'furniture', 1, 1, [c('copper_bar', 2), c('cloth_1', 1)], { light: true }),
+  b('fireplace', tl('壁炉'), 'furniture', 2, 1, [c('stone', 20)], { light: true }),
+  b('plant_pot', tl('盆栽'), 'furniture', 1, 1, [c('stone', 2), c('green_herb', 1)]),
+  b('rug_round', tl('圆地垫'), 'furniture', 2, 2, [c('cloth_1', 6)], { floor: true }),
+  b('st_kitchen', tl('灶台'), 'station', 2, 1, [c('stone', 15), c('copper_bar', 2)], { station: 'kitchen', light: true }),
+  b('st_furnace', tl('熔炉'), 'station', 2, 2, [c('stone', 30)], { station: 'furnace', light: true }),
+  b('st_smithy', tl('铁砧'), 'station', 2, 1, [c('copper_bar', 10), c('stone', 5)], { station: 'smithy' }),
+  b('st_workshop', tl('工作台'), 'station', 2, 1, [c('plank_1', 10), c('copper_bar', 2)], { station: 'workshop' }),
+  b('st_bowyer', tl('制弓台'), 'station', 2, 1, [c('plank_2', 10)], { station: 'bowyer' }),
+  b('st_apothecary', tl('药剂台'), 'station', 2, 1, [c('plank_1', 6), c('green_herb', 10)], { station: 'apothecary' }),
+  b('tree', tl('小树'), 'outdoor', 1, 1, [c('plain_log', 5)]),
+  b('flowerbed', tl('花坛'), 'outdoor', 2, 1, [c('stone', 4), c('green_herb', 2)]),
+  b('bench', tl('长椅'), 'outdoor', 2, 1, [c('plank_1', 5)]),
+  b('streetlamp', tl('路灯'), 'outdoor', 1, 1, [c('copper_bar', 3), c('stone', 2)], { light: true }),
+  b('well', tl('水井'), 'outdoor', 2, 2, [c('stone', 25), c('plank_1', 4)]),
+  b('statue', tl('石像'), 'outdoor', 2, 2, [c('stone', 60)]),
   // ───── 10-24 新增 ─────
-  b('wall_log', '原木墙', 'struct', 1, 1, [c('plain_log', 3)], { wall: true }),
-  b('wall_dark', '深色木墙', 'struct', 1, 1, [c('plank_3', 2)], { wall: true }),
-  b('wall_window', '带窗木墙', 'struct', 1, 1, [c('plank_1', 2), c('tin_bar', 1)], { wall: true }),
-  b('wall_moss', '青苔石墙', 'struct', 1, 1, [c('stone', 4), c('green_herb', 1)], { wall: true }),
-  b('wall_marble', '大理石墙', 'struct', 1, 1, [c('stone', 5), c('titanium_bar', 1)], { wall: true }),
-  b('hedge', '树篱', 'struct', 1, 1, [c('plain_log', 1), c('green_herb', 2)], { wall: true }),
-  b('fence_iron', '铁栅栏', 'struct', 1, 1, [c('iron_bar', 2)], { wall: true }),
-  b('door_gold', '镶金大门', 'struct', 1, 1, [c('plank_4', 4), c('runic_bar', 1)], { walk: true }),
-  b('door_arch', '花拱门', 'struct', 1, 1, [c('plank_1', 3), c('green_herb', 3)], { walk: true }),
-  b('floor_birch', '桦木地板', 'floor', 1, 1, [c('plank_2', 1)], { floor: true }),
-  b('floor_herring', '人字纹地板', 'floor', 1, 1, [c('plank_4', 1)], { floor: true }),
-  b('floor_check', '黑白格地砖', 'floor', 1, 1, [c('stone', 2), c('iron_bar', 1)], { floor: true }),
-  b('floor_mosaic', '马赛克地砖', 'floor', 1, 1, [c('stone', 2), c('sapphire', 1)], { floor: true }),
-  b('carpet_green', '绿地毯', 'floor', 1, 1, [c('cloth_3', 2)], { floor: true }),
-  b('carpet_purple', '紫地毯', 'floor', 1, 1, [c('cloth_5', 2)], { floor: true }),
-  b('floor_hay', '干草地', 'floor', 1, 1, [c('wheat', 2)], { floor: true }),
-  b('gravel', '碎石路', 'floor', 1, 1, [c('stone', 1)], { floor: true }),
-  b('sofa', '布沙发', 'furniture', 2, 1, [c('plank_2', 6), c('cloth_2', 8)]),
-  b('armchair', '扶手椅', 'furniture', 1, 1, [c('plank_2', 4), c('cloth_2', 4)]),
-  b('stool', '小板凳', 'furniture', 1, 1, [c('plank_1', 1)]),
-  b('dining_table', '长餐桌', 'furniture', 3, 2, [c('plank_3', 12)]),
-  b('desk', '书桌', 'furniture', 2, 1, [c('plank_2', 8), c('cloth_1', 1)]),
-  b('cabinet', '橱柜', 'furniture', 2, 1, [c('plank_2', 10), c('copper_bar', 2)]),
-  b('nightstand', '床头柜', 'furniture', 1, 1, [c('plank_1', 4)]),
-  b('dresser', '梳妆台', 'furniture', 2, 1, [c('plank_3', 8), c('tin_bar', 2)]),
-  b('mirror', '落地镜', 'furniture', 1, 1, [c('plank_2', 3), c('tin_bar', 3)]),
-  b('clock', '落地钟', 'furniture', 1, 1, [c('plank_3', 6), c('copper_bar', 4)]),
-  b('piano', '钢琴', 'furniture', 2, 1, [c('plank_5', 12), c('iron_bar', 6)]),
-  b('bathtub', '浴缸', 'furniture', 2, 1, [c('iron_bar', 10), c('stone', 10)]),
-  b('candelabra', '烛台', 'furniture', 1, 1, [c('copper_bar', 3)], { light: true }),
-  b('globe', '地球仪', 'furniture', 1, 1, [c('plank_2', 2), c('copper_bar', 2), c('cloth_2', 1)]),
-  b('easel', '画架', 'furniture', 1, 1, [c('plank_1', 4), c('cloth_1', 2)]),
-  b('weapon_rack', '兵器架', 'furniture', 2, 1, [c('plank_2', 6), c('iron_bar', 4)]),
-  b('armor_stand', '盔甲架', 'furniture', 1, 1, [c('plank_1', 3), c('iron_bar', 6)]),
-  b('barrel', '木桶', 'furniture', 1, 1, [c('plank_1', 4), c('copper_bar', 1)]),
-  b('crates', '木箱堆', 'furniture', 2, 1, [c('plank_1', 8)]),
-  b('vase', '花瓶', 'furniture', 1, 1, [c('stone', 3), c('green_herb', 2)]),
-  b('fishtank', '鱼缸', 'furniture', 2, 1, [c('tin_bar', 4), c('minnow', 3)]),
-  b('cat_bed', '猫窝', 'furniture', 1, 1, [c('cloth_1', 4)]),
-  b('rug_long', '长地毯', 'furniture', 3, 2, [c('cloth_3', 10)], { floor: true }),
-  b('fountain', '喷泉', 'outdoor', 3, 3, [c('stone', 120), c('copper_bar', 10)]),
-  b('pond', '小池塘', 'outdoor', 2, 2, [c('stone', 20), c('minnow', 2)]),
-  b('pine_tree', '松树', 'outdoor', 1, 1, [c('pine_log', 5)]),
-  b('cherry_tree', '樱花树', 'outdoor', 1, 1, [c('oak_log', 5), c('green_herb', 3)]),
-  b('bush', '灌木', 'outdoor', 1, 1, [c('green_herb', 2)]),
-  b('rock', '大石头', 'outdoor', 1, 1, [c('stone', 15)]),
-  b('haystack', '草堆', 'outdoor', 1, 1, [c('wheat', 10)]),
-  b('scarecrow', '稻草人', 'outdoor', 1, 1, [c('plain_log', 2), c('wheat', 5), c('cloth_1', 1)]),
-  b('signpost', '路牌', 'outdoor', 1, 1, [c('plank_1', 3)]),
-  b('mailbox', '信箱', 'outdoor', 1, 1, [c('plank_1', 2), c('iron_bar', 1)]),
-  b('campfire', '篝火', 'outdoor', 1, 1, [c('plain_log', 4), c('stone', 6)], { light: true }),
-  b('torch', '火把', 'outdoor', 1, 1, [c('plain_log', 1), c('cloth_1', 1)], { light: true }),
-  b('stone_lantern', '石灯笼', 'outdoor', 1, 1, [c('stone', 12)], { light: true }),
-  b('tent', '帐篷', 'outdoor', 2, 2, [c('plank_1', 6), c('cloth_2', 12)]),
-  b('beehive', '蜂箱', 'outdoor', 1, 1, [c('plank_2', 4)]),
-  b('dog_house', '狗屋', 'outdoor', 2, 1, [c('plank_2', 8)]),
-  b('birdbath', '鸟浴盆', 'outdoor', 1, 1, [c('stone', 10)]),
-  b('garden_bed', '菜畦', 'outdoor', 2, 1, [c('plank_1', 4), c('seed_potato', 2)]),
-  b('windmill', '小风车', 'outdoor', 2, 2, [c('plank_3', 20), c('cloth_3', 6)]),
-  b('st_atelier', '珍材台', 'station', 2, 1, [c('plank_4', 10), c('crystal_1', 5)], { station: 'atelier' }),
+  b('wall_log', tl('原木墙'), 'struct', 1, 1, [c('plain_log', 3)], { wall: true }),
+  b('wall_dark', tl('深色木墙'), 'struct', 1, 1, [c('plank_3', 2)], { wall: true }),
+  b('wall_window', tl('带窗木墙'), 'struct', 1, 1, [c('plank_1', 2), c('tin_bar', 1)], { wall: true }),
+  b('wall_moss', tl('青苔石墙'), 'struct', 1, 1, [c('stone', 4), c('green_herb', 1)], { wall: true }),
+  b('wall_marble', tl('大理石墙'), 'struct', 1, 1, [c('stone', 5), c('titanium_bar', 1)], { wall: true }),
+  b('hedge', tl('树篱'), 'struct', 1, 1, [c('plain_log', 1), c('green_herb', 2)], { wall: true }),
+  b('fence_iron', tl('铁栅栏'), 'struct', 1, 1, [c('iron_bar', 2)], { wall: true }),
+  b('door_gold', tl('镶金大门'), 'struct', 1, 1, [c('plank_4', 4), c('runic_bar', 1)], { walk: true }),
+  b('door_arch', tl('花拱门'), 'struct', 1, 1, [c('plank_1', 3), c('green_herb', 3)], { walk: true }),
+  b('floor_birch', tl('桦木地板'), 'floor', 1, 1, [c('plank_2', 1)], { floor: true }),
+  b('floor_herring', tl('人字纹地板'), 'floor', 1, 1, [c('plank_4', 1)], { floor: true }),
+  b('floor_check', tl('黑白格地砖'), 'floor', 1, 1, [c('stone', 2), c('iron_bar', 1)], { floor: true }),
+  b('floor_mosaic', tl('马赛克地砖'), 'floor', 1, 1, [c('stone', 2), c('sapphire', 1)], { floor: true }),
+  b('carpet_green', tl('绿地毯'), 'floor', 1, 1, [c('cloth_3', 2)], { floor: true }),
+  b('carpet_purple', tl('紫地毯'), 'floor', 1, 1, [c('cloth_5', 2)], { floor: true }),
+  b('floor_hay', tl('干草地'), 'floor', 1, 1, [c('wheat', 2)], { floor: true }),
+  b('gravel', tl('碎石路'), 'floor', 1, 1, [c('stone', 1)], { floor: true }),
+  b('sofa', tl('布沙发'), 'furniture', 2, 1, [c('plank_2', 6), c('cloth_2', 8)]),
+  b('armchair', tl('扶手椅'), 'furniture', 1, 1, [c('plank_2', 4), c('cloth_2', 4)]),
+  b('stool', tl('小板凳'), 'furniture', 1, 1, [c('plank_1', 1)]),
+  b('dining_table', tl('长餐桌'), 'furniture', 3, 2, [c('plank_3', 12)]),
+  b('desk', tl('书桌'), 'furniture', 2, 1, [c('plank_2', 8), c('cloth_1', 1)]),
+  b('cabinet', tl('橱柜'), 'furniture', 2, 1, [c('plank_2', 10), c('copper_bar', 2)]),
+  b('nightstand', tl('床头柜'), 'furniture', 1, 1, [c('plank_1', 4)]),
+  b('dresser', tl('梳妆台'), 'furniture', 2, 1, [c('plank_3', 8), c('tin_bar', 2)]),
+  b('mirror', tl('落地镜'), 'furniture', 1, 1, [c('plank_2', 3), c('tin_bar', 3)]),
+  b('clock', tl('落地钟'), 'furniture', 1, 1, [c('plank_3', 6), c('copper_bar', 4)]),
+  b('piano', tl('钢琴'), 'furniture', 2, 1, [c('plank_5', 12), c('iron_bar', 6)]),
+  b('bathtub', tl('浴缸'), 'furniture', 2, 1, [c('iron_bar', 10), c('stone', 10)]),
+  b('candelabra', tl('烛台'), 'furniture', 1, 1, [c('copper_bar', 3)], { light: true }),
+  b('globe', tl('地球仪'), 'furniture', 1, 1, [c('plank_2', 2), c('copper_bar', 2), c('cloth_2', 1)]),
+  b('easel', tl('画架'), 'furniture', 1, 1, [c('plank_1', 4), c('cloth_1', 2)]),
+  b('weapon_rack', tl('兵器架'), 'furniture', 2, 1, [c('plank_2', 6), c('iron_bar', 4)]),
+  b('armor_stand', tl('盔甲架'), 'furniture', 1, 1, [c('plank_1', 3), c('iron_bar', 6)]),
+  b('barrel', tl('木桶'), 'furniture', 1, 1, [c('plank_1', 4), c('copper_bar', 1)]),
+  b('crates', tl('木箱堆'), 'furniture', 2, 1, [c('plank_1', 8)]),
+  b('vase', tl('花瓶'), 'furniture', 1, 1, [c('stone', 3), c('green_herb', 2)]),
+  b('fishtank', tl('鱼缸'), 'furniture', 2, 1, [c('tin_bar', 4), c('minnow', 3)]),
+  b('cat_bed', tl('猫窝'), 'furniture', 1, 1, [c('cloth_1', 4)]),
+  b('rug_long', tl('长地毯'), 'furniture', 3, 2, [c('cloth_3', 10)], { floor: true }),
+  b('fountain', tl('喷泉'), 'outdoor', 3, 3, [c('stone', 120), c('copper_bar', 10)]),
+  b('pond', tl('小池塘'), 'outdoor', 2, 2, [c('stone', 20), c('minnow', 2)]),
+  b('pine_tree', tl('松树'), 'outdoor', 1, 1, [c('pine_log', 5)]),
+  b('cherry_tree', tl('樱花树'), 'outdoor', 1, 1, [c('oak_log', 5), c('green_herb', 3)]),
+  b('bush', tl('灌木'), 'outdoor', 1, 1, [c('green_herb', 2)]),
+  b('rock', tl('大石头'), 'outdoor', 1, 1, [c('stone', 15)]),
+  b('haystack', tl('草堆'), 'outdoor', 1, 1, [c('wheat', 10)]),
+  b('scarecrow', tl('稻草人'), 'outdoor', 1, 1, [c('plain_log', 2), c('wheat', 5), c('cloth_1', 1)]),
+  b('signpost', tl('路牌'), 'outdoor', 1, 1, [c('plank_1', 3)]),
+  b('mailbox', tl('信箱'), 'outdoor', 1, 1, [c('plank_1', 2), c('iron_bar', 1)]),
+  b('campfire', tl('篝火'), 'outdoor', 1, 1, [c('plain_log', 4), c('stone', 6)], { light: true }),
+  b('torch', tl('火把'), 'outdoor', 1, 1, [c('plain_log', 1), c('cloth_1', 1)], { light: true }),
+  b('stone_lantern', tl('石灯笼'), 'outdoor', 1, 1, [c('stone', 12)], { light: true }),
+  b('tent', tl('帐篷'), 'outdoor', 2, 2, [c('plank_1', 6), c('cloth_2', 12)]),
+  b('beehive', tl('蜂箱'), 'outdoor', 1, 1, [c('plank_2', 4)]),
+  b('dog_house', tl('狗屋'), 'outdoor', 2, 1, [c('plank_2', 8)]),
+  b('birdbath', tl('鸟浴盆'), 'outdoor', 1, 1, [c('stone', 10)]),
+  b('garden_bed', tl('菜畦'), 'outdoor', 2, 1, [c('plank_1', 4), c('seed_potato', 2)]),
+  b('windmill', tl('小风车'), 'outdoor', 2, 2, [c('plank_3', 20), c('cloth_3', 6)]),
+  b('st_atelier', tl('珍材台'), 'station', 2, 1, [c('plank_4', 10), c('crystal_1', 5)], { station: 'atelier' }),
 ];
-for (const d of BUILDS) if (d.station && !d.desc) d.desc = `能做${NODES.find((n) => n.id === d.station)?.name.replace('落霞城·', '')}里的所有东西，站在岛上就能直接干活。`;
+for (const d of BUILDS) if (d.station && !d.desc) d.desc = tl`能做${NODES.find((n) => n.id === d.station)?.name.replace(tl('落霞城·'), '')}里的所有东西，站在岛上就能直接干活。`;
 export const BUILD_BY_ID: Record<string, BuildDef> = Object.fromEntries(BUILDS.map((d) => [d.id, d]));
 
 /** 首领战旗、战利品这类装饰：仓库里有就能摆，id 写作 deco:物品 id */
@@ -206,7 +207,7 @@ export function buildDef(id: string): BuildDef | undefined {
   if (!id.startsWith('deco:')) return undefined;
   const it = ITEMS[id.slice(5)];
   if (!it) return undefined;
-  return { id, name: it.name, cat: 'trophy', w: 1, h: 1, cost: [c(it.id, 1)], desc: '首领的专属战利品，摆在家里显摆。' };
+  return { id, name: it.name, cat: 'trophy', w: 1, h: 1, cost: [c(it.id, 1)], desc: tl('首领的专属战利品，摆在家里显摆。') };
 }
 /** 能当战利品摆出来的物品 */
 export const isTrophy = (itemId: string) => ITEMS[itemId]?.category === 'deco' || ITEMS[itemId]?.category === 'loot' && !ITEMS[itemId]?.opens;
@@ -235,19 +236,19 @@ export const affordable = (s: GameState, cost: ItemStack[]) => cost.every((i) =>
 /** 能不能在 (x, y) 放这件东西；不能就返回原因 */
 export function canPlace(s: GameState, id: string, x: number, y: number, grid = thingGrid(s.home)): string | null {
   const d = buildDef(id);
-  if (!d) return '没有这种东西';
-  if (!s.home?.inside) return '要在岛上才能建造';
+  if (!d) return tl('没有这种东西');
+  if (!s.home?.inside) return tl('要在岛上才能建造');
   const size = homeSize(s);
   for (let dy = 0; dy < d.h; dy++) for (let dx = 0; dx < d.w; dx++) {
     const cx = x + dx;
     const cy = y + dy;
-    if (!isHomeLand(cx, cy, size)) return '只能盖在陆地上';
-    if (inPortal(cx, cy)) return '传送门旁边要留出来';
+    if (!isHomeLand(cx, cy, size)) return tl('只能盖在陆地上');
+    if (inPortal(cx, cy)) return tl('传送门旁边要留出来');
     if (d.floor && d.cat === 'floor') {
-      if (s.home.floors[key(cx, cy)] === id) return '已经铺过了';
-    } else if (grid.has(key(cx, cy))) return '这里已经有东西了';
+      if (s.home.floors[key(cx, cy)] === id) return tl('已经铺过了');
+    } else if (grid.has(key(cx, cy))) return tl('这里已经有东西了');
   }
-  if (!affordable(s, d.cost)) return '材料不够';
+  if (!affordable(s, d.cost)) return tl('材料不够');
   return null;
 }
 
@@ -381,7 +382,7 @@ export function migrateHome(h: GameState['home']): GameState['home'] {
 export const HOME_NODES: MapNode[] = BUILDS.filter((d) => d.station || d.chest).map((d) => {
   const town = NODES.find((n) => n.id === d.station);
   return {
-    id: `home_${d.id}`, name: `家园·${d.name}`, x: -1, y: -1, region: 'town', lv: [1, 1],
+    id: `home_${d.id}`, name: tl`家园·${d.name}`, x: -1, y: -1, region: 'town', lv: [1, 1],
     sprite: town?.sprite ?? 'bank', actions: town?.actions ?? [], town: true,
     ...(d.chest ? { opens: 'bank' as const } : {}),
   };

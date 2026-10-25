@@ -17,29 +17,30 @@ import { homeNode } from '../core/home';
 import { PortalSheet } from './HomeUI';
 import { fmtNum, stacks } from './format';
 import { Icon, SkillIcon } from './icons';
+import { tl } from '../i18n';
 
 const COUNTS = [1, 10, 50, 100, 500];
 const TIMES = [10, 30, 60, 240];
 const THRESHOLDS = [0.25, 0.5, 0.75];
 /** 配方分类（用户 10-23：用分类和阶级筛选代替「点击展开更多」） */
-const CATS = ['武器', '护甲', '首饰', '工具', '弹药', '锭', '板材·皮革·布料', '料理', '药水', '强化石', '其他'] as const;
+const CATS = [tl('武器'), tl('护甲'), tl('首饰'), tl('工具'), tl('弹药'), tl('锭'), tl('板材·皮革·布料'), tl('料理'), tl('药水'), tl('强化石'), tl('其他')] as const;
 function catOf(a: ActionDef): (typeof CATS)[number] {
-  if (a.kind !== 'skill') return '其他';
+  if (a.kind !== 'skill') return tl('其他');
   const id = a.outputs[0]?.item ?? '';
   const it = ITEMS[id];
-  if (!it) return '其他';
+  if (!it) return tl('其他');
   const slot = it.equip?.slot;
-  if (slot === 'weapon') return '武器';
-  if (slot === 'head' || slot === 'body' || slot === 'feet' || slot === 'hands') return '护甲';
-  if (slot === 'ring' || slot === 'neck') return '首饰';
-  if (it.category === 'tool') return '工具';
-  if (it.ammo || id.includes('arrowhead')) return '弹药';
-  if (id.endsWith('_bar')) return '锭';
-  if (/^(plank|leather|cloth)_\d$/.test(id)) return '板材·皮革·布料';
-  if (it.category === 'food') return '料理';
-  if (it.category === 'potion') return '药水';
-  if (id.startsWith('enh_')) return '强化石';
-  return '其他';
+  if (slot === 'weapon') return tl('武器');
+  if (slot === 'head' || slot === 'body' || slot === 'feet' || slot === 'hands') return tl('护甲');
+  if (slot === 'ring' || slot === 'neck') return tl('首饰');
+  if (it.category === 'tool') return tl('工具');
+  if (it.ammo || id.includes('arrowhead')) return tl('弹药');
+  if (id.endsWith('_bar')) return tl('锭');
+  if (/^(plank|leather|cloth)_\d$/.test(id)) return tl('板材·皮革·布料');
+  if (it.category === 'food') return tl('料理');
+  if (it.category === 'potion') return tl('药水');
+  if (id.startsWith('enh_')) return tl('强化石');
+  return tl('其他');
 }
 const tierOf = (a: ActionDef) => (a.kind === 'skill' ? ITEMS[a.outputs[0]?.item]?.tier : undefined);
 
@@ -90,13 +91,13 @@ function NodeSheet({ s, node, onClose }: { s: GameState; node: MapNode; onClose:
   return (
     <div className="sheet">
       <div className="sheet-head">
-        <button className="back" onClick={onClose}>‹ 返回</button>
+        <button className="back" onClick={onClose}>{tl('‹ 返回')}</button>
         <h2>{node.name}</h2>
-        <small className="muted">{isHome ? '家园岛屿' : REGIONS[node.region].name}{!node.town && !node.cave && ` · Lv${node.lv[0]}-${node.lv[1]}`}</small>
+        <small className="muted">{isHome ? tl('家园岛屿') : REGIONS[node.region].name}{!node.town && !node.cave && ` · Lv${node.lv[0]}-${node.lv[1]}`}</small>
       </div>
       {cats.length > 1 && (
         <div className="chips-row filter-row">
-          <button className={`pill ${cat === 'all' ? 'on' : ''}`} onClick={() => { setCat('all'); setTier('all'); }}>全部 {all.length}</button>
+          <button className={`pill ${cat === 'all' ? 'on' : ''}`} onClick={() => { setCat('all'); setTier('all'); }}>{tl`全部 ${all.length}`}</button>
           {cats.map((c) => (
             <button key={c} className={`pill ${cat === c ? 'on' : ''}`} onClick={() => { setCat(c); setTier('all'); }}>
               {c} {all.filter((id) => catOf(ACTIONS[id]) === c).length}
@@ -106,7 +107,7 @@ function NodeSheet({ s, node, onClose }: { s: GameState; node: MapNode; onClose:
       )}
       {tiers.length > 1 && (
         <div className="chips-row filter-row">
-          <button className={`pill ${tier === 'all' ? 'on' : ''}`} onClick={() => setTier('all')}>全部阶级</button>
+          <button className={`pill ${tier === 'all' ? 'on' : ''}`} onClick={() => setTier('all')}>{tl('全部阶级')}</button>
           {tiers.map((t) => <button key={t} className={`pill ${tier === t ? 'on' : ''}`} onClick={() => setTier(t)}>{tierName(t)}</button>)}
         </div>
       )}
@@ -121,18 +122,17 @@ function NodeSheet({ s, node, onClose }: { s: GameState; node: MapNode; onClose:
               <span className="act-body">
                 <span className="row1">
                   <b>{a.kind === 'skill' && !a.inputs && ITEMS[a.outputs[0]?.item]?.tier !== undefined && `${tierName(ITEMS[a.outputs[0].item].tier!)} `}{a.name}</b>
-                  <span className="xph">{fmtNum(xpPerHour(s, id))} 经验/时</span>
+                  <span className="xph">{tl`${fmtNum(xpPerHour(s, id))} 经验/时`}</span>
                 </span>
                 <span className="row2">
                   {a.kind === 'combat' ? (
                     <>
-                      <span className={`diff ${a.difficulty}`}>{MONSTERS[a.monster].world ? '世界首领' : MONSTERS[a.monster].boss ? 'BOSS' : MONSTERS[a.monster].rank === 'elite' ? '精英' : a.difficulty}</span> {tierName(MONSTERS[a.monster].tier)} · {MONSTERS[a.monster].level} 级 · 生命 {fmtNum(MONSTERS[a.monster].hp)}
+                      <span className={`diff ${a.difficulty}`}>{MONSTERS[a.monster].world ? tl('世界首领') : MONSTERS[a.monster].boss ? 'BOSS' : MONSTERS[a.monster].rank === 'elite' ? tl('精英') : a.difficulty}</span> {tl`${tierName(MONSTERS[a.monster].tier)} · ${MONSTERS[a.monster].level} 级 · 生命 ${fmtNum(MONSTERS[a.monster].hp)}`}
                       <TraitChips m={MONSTERS[a.monster]} />
                     </>
                   ) : (
                     <>
-                      {SKILLS[a.skill].name} {a.level} 级 · {(actionDuration(s, a) / 1000).toFixed(1)} 秒
-                      {a.inputs && <> · 消耗 {stacks(a.inputs)}</>}
+                      {tl`${SKILLS[a.skill].name} ${a.level} 级 · ${(actionDuration(s, a) / 1000).toFixed(1)} 秒`}{a.inputs && <>{tl` · 消耗 ${stacks(a.inputs)}`}</>}
                       {' '}→ {stacks(a.outputs.filter((o) => !o.chance))}
                     </>
                   )}
@@ -146,9 +146,9 @@ function NodeSheet({ s, node, onClose }: { s: GameState; node: MapNode; onClose:
       </ul>
 
       {node.sprite === 'market' && <SeedShop s={s} />}
-      {node.closed && <p className="muted pad">{node.sea ? `${node.name}在海上的岛屿，要等以后的航行系统开放才能去，敬请期待。` : `${node.name}暂未开放，敬请期待。`}</p>}
-      {node.cave && <p className="muted pad">大型洞窟入口。里面的内容还在筹备，暂未开放，敬请期待。</p>}
-      {!all.length && !node.cave && !node.closed && <p className="muted pad">这里是怪物出没的地方。点地图上的怪物或生物，就能查看它的信息并开打。</p>}
+      {node.closed && <p className="muted pad">{node.sea ? tl`${node.name}在海上的岛屿，要等以后的航行系统开放才能去，敬请期待。` : tl`${node.name}暂未开放，敬请期待。`}</p>}
+      {node.cave && <p className="muted pad">{tl('大型洞窟入口。里面的内容还在筹备，暂未开放，敬请期待。')}</p>}
+      {!all.length && !node.cave && !node.closed && <p className="muted pad">{tl('这里是怪物出没的地方。点地图上的怪物或生物，就能查看它的信息并开打。')}</p>}
       {all.length > 0 && <TaskConfig s={s} action={selected} onDone={onClose} far={node.town && !near(s) ? node : undefined} />}
     </div>
   );
@@ -162,14 +162,14 @@ function Recipe({ s, a }: { s: GameState; a: SkillAction }) {
     const src = need ? producerOf(s, st.item) : undefined;
     return (
       <span key={st.item} className={`rc-cell ${short ? 'short' : ''} ${src ? 'jump' : ''}`}
-        title={src ? `去做${ITEMS[st.item].name}：${NODES.find((n) => n.id === src.node)?.name}` : undefined}
+        title={src ? tl`去做${ITEMS[st.item].name}：${NODES.find((n) => n.id === src.node)?.name}` : undefined}
         onClick={src ? (e) => { e.stopPropagation(); jumpTo(src.action, src.node); } : undefined}>
         <Icon item={st.item} size={24} info={!src} />
         <small>
           ×{st.qty}{st.chance !== undefined && ` ${Math.round(st.chance * 1000) / 10}%`}
           {need && <i className={short ? 'warn' : ''}> / {fmtNum(have(st.item))}</i>}
         </small>
-        {short && src && <em className="rc-go">去做 ›</em>}
+        {short && src && <em className="rc-go">{tl('去做 ›')}</em>}
       </span>
     );
   };
@@ -178,7 +178,7 @@ function Recipe({ s, a }: { s: GameState; a: SkillAction }) {
       {a.inputs?.map((st) => cell(st, true))}
       {a.inputs && <b className="rc-arrow">→</b>}
       {a.outputs.map((st) => cell(st, false))}
-      <small className="muted rc-tip">{a.inputs ? '点材料跳到它的制作或采集地点（缺的标红）；点产物看详情' : '点图标看物品详情'}</small>
+      <small className="muted rc-tip">{a.inputs ? tl('点材料跳到它的制作或采集地点（缺的标红）；点产物看详情') : tl('点图标看物品详情')}</small>
     </span>
   );
 }
@@ -207,16 +207,16 @@ function SeedShop({ s }: { s: GameState }) {
   const coins = s.bank.coins ?? 0;
   return (
     <div className="seed-shop">
-      <h3>种子摊 <small className="muted">金币 {fmtNum(coins)}{!here && ' · 要走到集市旁边才能买'}</small></h3>
+      <h3>{tl('种子摊 ')}<small className="muted">{tl`金币 ${fmtNum(coins)}`}{!here && tl(' · 要走到集市旁边才能买')}</small></h3>
       <ul>
         {SEED_SHOP.map((id) => {
           const price = ITEMS[id].value * SEED_PRICE;
           return (
             <li key={id}>
               <Icon item={id} size={26} />
-              <span className="grow">{ITEMS[id].name}<small className="muted"> 单价 {price} · 仓库有 {fmtNum(s.bank[id] ?? 0)}</small></span>
+              <span className="grow">{ITEMS[id].name}<small className="muted">{tl` 单价 ${price} · 仓库有 ${fmtNum(s.bank[id] ?? 0)}`}</small></span>
               {[1, 10].map((n) => (
-                <button key={n} disabled={!here || coins < price * n} onClick={() => store.dispatch((g) => buySeed(g, id, n))}>买 {n}</button>
+                <button key={n} disabled={!here || coins < price * n} onClick={() => store.dispatch((g) => buySeed(g, id, n))}>{tl`买 ${n}`}</button>
               ))}
             </li>
           );
@@ -234,9 +234,9 @@ export function MonsterSheet({ s, actionId, onClose }: { s: GameState; actionId:
   return (
     <div className="sheet">
       <div className="sheet-head">
-        <button className="back" onClick={onClose}>‹ 返回</button>
+        <button className="back" onClick={onClose}>{tl('‹ 返回')}</button>
         <h2>{m.name}</h2>
-        <small className="muted">{fmtNum(xpPerHour(s, actionId))} 经验/时</small>
+        <small className="muted">{tl`${fmtNum(xpPerHour(s, actionId))} 经验/时`}</small>
       </div>
       {/* 信息区自己滚动，开始按钮固定在底部 */}
       <div className="sheet-body">
@@ -274,7 +274,7 @@ function TaskConfig({ s, action: selected, onDone, far }: { s: GameState; action
       <div className="tabs3">
         {(['count', 'time', 'infinite'] as const).map((t) => (
           <button key={t} className={modeType === t ? 'on' : ''} onClick={() => setModeType(t)}>
-            {{ count: '× 数量', time: '◷ 时间', infinite: '∞ 无限' }[t]}
+            {{ count: tl('× 数量'), time: tl('◷ 时间'), infinite: tl('∞ 无限') }[t]}
           </button>
         ))}
       </div>
@@ -286,25 +286,25 @@ function TaskConfig({ s, action: selected, onDone, far }: { s: GameState; action
       {modeType === 'count' && (
         // 自定义数量（用户 10-23）：直接输入要做几次
         <label className={`custom-count ${COUNTS.includes(count) ? '' : 'on'}`}>
-          <span>自定义</span>
-          <input type="number" inputMode="numeric" min={1} max={99999} placeholder="输入次数"
+          <span>{tl('自定义')}</span>
+          <input type="number" inputMode="numeric" min={1} max={99999} placeholder={tl("输入次数")}
             value={COUNTS.includes(count) ? '' : count}
             onChange={(e) => {
               const n = Math.floor(Number(e.target.value));
               if (n >= 1) setCount(Math.min(99999, n));
             }} />
-          <span className="muted">次</span>
+          <span className="muted">{tl('次')}</span>
         </label>
       )}
       {modeType === 'time' && (
         <div className="opts">
-          {TIMES.map((m) => <button key={m} className={minutes === m ? 'on' : ''} onClick={() => setMinutes(m)}>{m >= 60 ? `${m / 60}小时` : `${m}分`}</button>)}
+          {TIMES.map((m) => <button key={m} className={minutes === m ? 'on' : ''} onClick={() => setMinutes(m)}>{m >= 60 ? tl`${m / 60}小时` : tl`${m}分`}</button>)}
         </div>
       )}
       {selected && ACTIONS[selected].kind === 'combat' && (
         <>
           <div className="opts">
-            <span className="lbl">进食阈值</span>
+            <span className="lbl">{tl('进食阈值')}</span>
             {THRESHOLDS.map((t) => (
               <button key={t} className={s.settings.eatThreshold === t ? 'on' : ''} onClick={() => store.dispatch((g) => setSettings(g, { eatThreshold: t }))}>
                 {t * 100}%
@@ -312,36 +312,36 @@ function TaskConfig({ s, action: selected, onDone, far }: { s: GameState; action
             ))}
           </div>
           <div className="opts">
-            <span className="lbl">带食物</span>
+            <span className="lbl">{tl('带食物')}</span>
             {[0, 20, 50, 100, -1].map((n) => (
               <button key={n} className={s.settings.carryFood === n ? 'on' : ''} onClick={() => store.dispatch((g) => setSettings(g, { carryFood: n }))}>
-                {n < 0 ? '全部' : n === 0 ? '不带' : n}
+                {n < 0 ? tl('全部') : n === 0 ? tl('不带') : n}
               </button>
             ))}
           </div>
           <div className="opts">
-            <span className="lbl">带药水</span>
+            <span className="lbl">{tl('带药水')}</span>
             {[true, false].map((v) => (
               <button key={String(v)} className={(s.settings.carryPotion !== false) === v ? 'on' : ''} onClick={() => store.dispatch((g) => setSettings(g, { carryPotion: v }))}>
-                {v ? '带' : '不带'}
+                {v ? tl('带') : tl('不带')}
               </button>
             ))}
           </div>
           {(s.settings.carryFood === 0 || s.settings.carryPotion === false) && (
-            <p className="muted small-note">选了「不带」：开打前不回仓库拿，战斗中也不吃不喝。</p>
+            <p className="muted small-note">{tl('选了「不带」：开打前不回仓库拿，战斗中也不吃不喝。')}</p>
           )}
         </>
       )}
       {far && (
         <div className="go far-bank">
-          <span className="muted">要走到{far.name}旁边才能开工（排进队列的会自己走过去）</span>
-          <button onClick={() => { store.requestWalk(far.id); onDone(); }}>寻路去{far.name}</button>
+          <span className="muted">{tl`要走到${far.name}旁边才能开工（排进队列的会自己走过去）`}</span>
+          <button onClick={() => { store.requestWalk(far.id); onDone(); }}>{tl`寻路去${far.name}`}</button>
         </div>
       )}
       <div className="go">
-        <button className="primary" disabled={!selected || !!far} onClick={() => go(true)}>立即开始</button>
+        <button className="primary" disabled={!selected || !!far} onClick={() => go(true)}>{tl('立即开始')}</button>
         <button disabled={!selected || queueFull} onClick={() => go(false)}>
-          {queueFull ? `队列已满 ${MAX_QUEUE}/${MAX_QUEUE}` : `加入队列 ${s.queue.length}/${MAX_QUEUE}`}
+          {queueFull ? tl`队列已满 ${MAX_QUEUE}/${MAX_QUEUE}` : tl`加入队列 ${s.queue.length}/${MAX_QUEUE}`}
         </button>
       </div>
     </div>
@@ -356,22 +356,22 @@ function CombatInfo({ s, monster }: { s: GameState; monster: string }) {
   const foodCount = [s.bank, s.bag].reduce((n, rec) => n + Object.entries(rec).reduce((m, [id, q]) => m + (ITEMS[id]?.heals ? q : 0), 0), 0);
   return (
     <span className="combat-info">
-      <span>你用{SKILLS[st.style].name}：命中 {Math.round(st.playerHit * 100)}% · 最高 {st.playerMaxHit}</span>
-      <span>它的命中 {Math.round(st.monsterHit * 100)}% · 最高 {st.monsterMaxHit}</span>
+      <span>{tl`你用${SKILLS[st.style].name}：命中 ${Math.round(st.playerHit * 100)}% · 最高 ${st.playerMaxHit}`}</span>
+      <span>{tl`它的命中 ${Math.round(st.monsterHit * 100)}% · 最高 ${st.monsterMaxHit}`}</span>
       {(() => {
         const e = combatEstimate(s, m);
-        const cls = e.rating === '轻松' ? 'good' : e.rating === '适中' ? '' : 'warn';
+        const cls = e.rating === tl('轻松') ? 'good' : e.rating === tl('适中') ? '' : 'warn';
         return <>
-          <span>暴击 {Math.round(st.crit * 100)}% · 闪避 {Math.round(st.dodge * 100)}%{st.reduce > 0 && ` · 减伤 ${Math.round(st.reduce * 100)}%`}</span>
+          <span>{tl`暴击 ${Math.round(st.crit * 100)}% · 闪避 ${Math.round(st.dodge * 100)}%`}{st.reduce > 0 && tl` · 减伤 ${Math.round(st.reduce * 100)}%`}</span>
           {e.killMs === Infinity
-            ? <span className="warn">评估：<b>打不动</b> · 它回血比你的输出还快，先提升等级和装备</span>
-            : <span className={cls}>评估：<b>{e.rating}</b> · 每只约 {Math.max(1, Math.round(e.killMs / 1000))} 秒、掉血约 {Math.round(e.taken)} · 每小时约 {fmtNum(Math.floor(e.perHour))} 只<small className="muted">（不算回仓库的路）</small></span>}
+            ? <span className="warn">{tl('评估：')}<b>{tl('打不动')}</b>{tl(' · 它回血比你的输出还快，先提升等级和装备')}</span>
+            : <span className={cls}>{tl('评估：')}<b>{e.rating}</b>{tl` · 每只约 ${Math.max(1, Math.round(e.killMs / 1000))} 秒、掉血约 ${Math.round(e.taken)} · 每小时约 ${fmtNum(Math.floor(e.perHour))} 只`}<small className="muted">{tl('（不算回仓库的路）')}</small></span>}
         </>;
       })()}
       {st.style !== 'melee' && (
-        <span className={ammo ? '' : 'warn'}>{ammo ? `弹药：${ITEMS[ammo.id].name}${ammo.inBag ? '' : '（在仓库，开战前回去拿）'}` : `没有${st.style === 'ranged' ? '箭' : '符文'}！会立刻停止`}</span>
+        <span className={ammo ? '' : 'warn'}>{ammo ? tl`弹药：${ITEMS[ammo.id].name}${ammo.inBag ? '' : tl('（在仓库，开战前回去拿）')}` : tl`没有${st.style === 'ranged' ? tl('箭') : tl('符文')}！会立刻停止`}</span>
       )}
-      <span className={food ? '' : 'warn'}>{food ? `食物：最好的是${ITEMS[food].name}，共 ${fmtNum(foodCount)} 份` : '没有食物！挂机可能阵亡'}</span>
+      <span className={food ? '' : 'warn'}>{food ? tl`食物：最好的是${ITEMS[food].name}，共 ${fmtNum(foodCount)} 份` : tl('没有食物！挂机可能阵亡')}</span>
     </span>
   );
 }

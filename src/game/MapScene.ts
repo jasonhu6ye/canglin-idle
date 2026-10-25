@@ -28,6 +28,7 @@ import {
   BUILDINGS, CHUNK, FIELDS, findPath, GROUNDS, groundIndex, hash, isWalkable, LIQUIDS, propsInChunk, reachableNear, regionAt, SPAWN, standTile,
   WANDERERS, type PropKind,
 } from './world';
+import { tl } from '../i18n';
 
 /** 步行速度（格/秒）。以后的坐骑在这上面乘倍率 */
 export { WALK_TILES_PER_SEC };
@@ -180,7 +181,7 @@ export class MapScene extends Phaser.Scene {
     const ring = this.add.ellipse(0, 6, 14, 6).setStrokeStyle(1, 0xe8b84a).setFillStyle(0xe8b84a, 0.25);
     this.playerBody = this.add.sprite(0, 7, 'hero').setOrigin(0.5, (HERO_FEET + HERO_PAD.t) / FRAME_H);
     this.playerBody.play('idle-down');
-    const name = this.add.text(0, 7 - HERO_FEET + 1, '[苍岭] 你', { fontFamily: FONT, fontSize: '7px', color: '#ffffff', stroke: '#000', strokeThickness: 2, resolution: 4 }).setOrigin(0.5);
+    const name = this.add.text(0, 7 - HERO_FEET + 1, tl('[苍岭] 你'), { fontFamily: FONT, fontSize: '7px', color: '#ffffff', stroke: '#000', strokeThickness: 2, resolution: 4 }).setOrigin(0.5);
     this.wolfBack = this.add.sprite(0, 7, 'mount-wolf').setOrigin(0.5, WOLF_FEET / WOLF_H).setVisible(false);
     this.wolfFront = this.add.sprite(0, 7, 'mount-wolf').setOrigin(0.5, WOLF_FEET / WOLF_H).setVisible(false);
     // 头顶小血条：打怪时或没满血时显示，红字飘在它上面，不和名字叠在一起
@@ -267,7 +268,7 @@ export class MapScene extends Phaser.Scene {
         const a = standTile(A);
         this.moveTo(a.x, a.y);
         if (!this.walker || this.walker === old) return;
-        this.float(`顺路去${A.name}传送`, '#8ae8ff');
+        this.float(tl`顺路去${A.name}传送`, '#8ae8ff');
         this.arrive = () => {
           this.stoneJump(r.via![1]);
           this.time.delayedCall(500, () => {
@@ -632,13 +633,13 @@ export class MapScene extends Phaser.Scene {
     const now = Date.now();
     if (!p) {
       const seed = pickSeed(store.state, PLOT_BY_ID[id].field);
-      return seed ? `空地 · 点一下种${CROP_DEFS[seed].name}` : '空地 · 没有能种的种子';
+      return seed ? tl`空地 · 点一下种${CROP_DEFS[seed].name}` : tl('空地 · 没有能种的种子');
     }
     const c = CROP_DEFS[p.crop];
-    if (plotPhase(p, now) === 'ripe') return `${c?.name ?? ''} · 熟了，点一下收获`;
+    if (plotPhase(p, now) === 'ripe') return tl`${c?.name ?? ''} · 熟了，点一下收获`;
     const left = Math.max(0, Math.ceil((p.ripe - now) / 1000));
-    const t = left >= 60 ? `${Math.floor(left / 60)}分${left % 60}秒` : `${left}秒`;
-    return `${c?.name ?? ''} · ${Math.floor(plotGrowth(p, now) * 100)}% · ${t}后熟\n${p.water ? '已浇水（快 25%）' : '没浇水 · 点一下浇水'}`;
+    const t = left >= 60 ? tl`${Math.floor(left / 60)}分${left % 60}秒` : tl`${left}秒`;
+    return tl`${c?.name ?? ''} · ${Math.floor(plotGrowth(p, now) * 100)}% · ${t}后熟\n${p.water ? tl('已浇水（快 25%）') : tl('没浇水 · 点一下浇水')}`;
   }
   private showPlotInfo(id: string, ms: number) {
     const plot = PLOT_BY_ID[id];
@@ -695,7 +696,7 @@ export class MapScene extends Phaser.Scene {
       if (!p) {
         crop = pickSeed(st, plot.field);
         if (!crop) {
-          this.float('没有能种的种子', '#ff9a7a');
+          this.float(tl('没有能种的种子'), '#ff9a7a');
           this.game.events.emit(NODE_CLICK, plot.field);
           return;
         }
@@ -706,8 +707,8 @@ export class MapScene extends Phaser.Scene {
       if (store.state === before) return;
       const ph = plotPhase(p, now);
       this.facePlot(plot);
-      if (ph === 'growing') this.float('浇水', '#8ad0ff');
-      else if (ph === 'empty') this.float(`种下 ${CROP_DEFS[crop!].name}`, '#b8e07a');
+      if (ph === 'growing') this.float(tl('浇水'), '#8ad0ff');
+      else if (ph === 'empty') this.float(tl`种下 ${CROP_DEFS[crop!].name}`, '#b8e07a');
       this.farmPose();
     };
     if (Math.abs(me.x - plot.x) + Math.abs(me.y - plot.y) <= 1 && !this.walker && !store.state.walk) return act();
@@ -905,7 +906,7 @@ export class MapScene extends Phaser.Scene {
     });
     // 登录后头顶显示自己的名字
     const me = online.me();
-    const label = me ? (me.guildTag ? `[${me.guildTag}] ${me.name}` : me.name) : '[苍岭] 你';
+    const label = me ? (me.guildTag ? `[${me.guildTag}] ${me.name}` : me.name) : tl('[苍岭] 你');
     if (this.heroName.text !== label) this.heroName.setText(label);
   }
 
@@ -1045,7 +1046,7 @@ export class MapScene extends Phaser.Scene {
     this.tweens.add({ targets: swirl, scale: 1.08, yoyo: true, repeat: -1, duration: 900, ease: 'Sine.inOut' });
     const glow = this.add.image(cx, by - 24, 'glow').setTint(0x8a6af0).setBlendMode(Phaser.BlendModes.ADD).setDepth(by + 1001).setAlpha(0.45);
     this.tweens.add({ targets: glow, alpha: 0.7, yoyo: true, repeat: -1, duration: 1300 });
-    this.add.text(cx, by - PORTAL_H - 4, n.name.replace('落霞城·', ''), {
+    this.add.text(cx, by - PORTAL_H - 4, n.name.replace(tl('落霞城·'), ''), {
       fontFamily: FONT, fontSize: '7px', color: '#e8d8ff', backgroundColor: '#1b120ccc', padding: { x: 3, y: 1 }, resolution: 4,
     }).setOrigin(0.5, 1).setDepth(D_LABEL);
     this.add.zone(cx, by - 22, T * 3, T * 3).setInteractive({ useHandCursor: true }).setData('node', n.id);
@@ -1061,7 +1062,7 @@ export class MapScene extends Phaser.Scene {
       st.img.setTexture(`waystone-${lit ? 'on' : 'off'}`);
       st.glow.setAlpha(lit ? 0.55 : 0);
       const n = WAYSTONES.find((x) => x.id === id)!;
-      st.text.setText(lit ? n.name : `${n.name}\n（未激活）`).setColor(lit ? '#c8f4ff' : '#b0a898');
+      st.text.setText(lit ? n.name : tl`${n.name}\n（未激活）`).setColor(lit ? '#c8f4ff' : '#b0a898');
     }
   }
 
@@ -1083,7 +1084,7 @@ export class MapScene extends Phaser.Scene {
     for (const id of ids) {
       const n = WAYSTONES.find((x) => x.id === id);
       if (!n) continue;
-      this.float(`激活了${n.name}`, '#8ae8ff', true);
+      this.float(tl`激活了${n.name}`, '#8ae8ff', true);
       const flash = this.add.image(n.x * T + T / 2, n.y * T - 12, 'glow').setTint(0x6ad8f0).setBlendMode(Phaser.BlendModes.ADD).setDepth(D_FLOAT).setScale(0.3);
       this.tweens.add({ targets: flash, scale: 2.2, alpha: 0, duration: 900, onComplete: () => flash.destroy() });
     }
@@ -1111,7 +1112,7 @@ export class MapScene extends Phaser.Scene {
     this.recenterCameraOnly();
     const flash = this.add.image(this.player.x, this.player.y - 8, 'glow').setTint(0x9ae8ff).setBlendMode(Phaser.BlendModes.ADD).setDepth(D_FLOAT).setScale(0.2);
     this.tweens.add({ targets: flash, scale: 1.8, alpha: 0, duration: 700, onComplete: () => flash.destroy() });
-    this.float(`传送到${dest.name}`, '#8ae8ff', true);
+    this.float(tl`传送到${dest.name}`, '#8ae8ff', true);
     this.idle();
   }
 
@@ -1133,7 +1134,7 @@ export class MapScene extends Phaser.Scene {
       const key = `cave-${n.region}`;
       if (!this.textures.exists(key)) this.textures.addCanvas(key, paintCave(n.region));
       this.add.image(cx, cy + T / 2 - T * 2, key).setOrigin(0.5, 1).setScale(1.3).setDepth(cy + 1000 - T * 2);
-      this.add.text(cx, cy - 64, `${n.name}\n（未开放）`, {
+      this.add.text(cx, cy - 64, tl`${n.name}\n（未开放）`, {
         fontFamily: FONT, fontSize: '8px', color: '#d8c8f0', backgroundColor: '#1b120ccc', padding: { x: 3, y: 1 }, resolution: 4, align: 'center',
       }).setOrigin(0.5, 1).setDepth(D_LABEL);
       this.add.zone(cx, cy - T * 2, T * 4, T * 4).setInteractive({ useHandCursor: true }).setData('node', n.id);
@@ -1174,7 +1175,7 @@ export class MapScene extends Phaser.Scene {
     this.nodeLabels.push({ node: n, text });
     // 特色地点：头顶再标一个大字地名，远远就能看到
     if (n.site) {
-      this.add.text(cx, cy - 34, `「${n.name}」`, {
+      this.add.text(cx, cy - 34, tl`「${n.name}」`, {
         fontFamily: FONT, fontSize: '13px', color: '#ffd86a', stroke: '#1b120c', strokeThickness: 4, resolution: 4,
       }).setOrigin(0.5, 1).setDepth(D_LABEL);
     }
@@ -1193,7 +1194,7 @@ export class MapScene extends Phaser.Scene {
     this.time.addEvent({ delay: 220, loop: true, callback: () => img.setTexture(`altar-${(f = (f + 1) % 4)}`) });
     this.addGlow(cx, cy - 70, 0xa050ff, 44);
     this.addGlow(cx, cy - 30, 0xff8a20, 30);
-    this.add.text(cx, cy - 108, `🎃 ${n.name}\n召唤南瓜王 · Lv30-120`, {
+    this.add.text(cx, cy - 108, tl`🎃 ${n.name}\n召唤南瓜王 · Lv30-120`, {
       fontFamily: FONT, fontSize: '9px', color: '#ffb050', stroke: '#1a0820', strokeThickness: 3, resolution: 4, align: 'center',
     }).setOrigin(0.5, 1).setDepth(D_LABEL);
     this.add.zone(cx, cy - 50, T * 6, T * 6).setInteractive({ useHandCursor: true }).setData('node', n.id);
@@ -1235,7 +1236,7 @@ export class MapScene extends Phaser.Scene {
     const halo = this.add.image(cx, cy - 134, 'glow').setTint(0xff2010).setBlendMode(Phaser.BlendModes.ADD).setDepth(D_LABEL - 1).setScale(1.1).setAlpha(0.7);
     this.tweens.add({ targets: [skull, halo], y: cy - 140, yoyo: true, repeat: -1, duration: 1100, ease: 'Sine.inOut' });
     this.tweens.add({ targets: halo, alpha: 0.3, scale: 1.4, yoyo: true, repeat: -1, duration: 800, ease: 'Sine.inOut' });
-    this.add.text(cx, cy - 154, `☠ 世界首领 ☠\n「${n.name}」${m ? `  Lv${m.level}` : ''}`, {
+    this.add.text(cx, cy - 154, tl`☠ 世界首领 ☠\n「${n.name}」${m ? `  Lv${m.level}` : ''}`, {
       fontFamily: FONT, fontSize: '11px', color: '#ff6a5a', stroke: '#1a0404', strokeThickness: 4, resolution: 4, align: 'center',
     }).setOrigin(0.5, 1).setDepth(D_LABEL);
   }
@@ -1247,7 +1248,7 @@ export class MapScene extends Phaser.Scene {
     this.lastCombatLevel = cl;
     for (const { node, text } of this.nodeLabels) {
       if (node.town && !node.pond) {
-        text.setText(node.closed ? `${node.name}（未开放）` : node.name);
+        text.setText(node.closed ? tl`${node.name}（未开放）` : node.name);
         continue;
       }
       const d = DANGER[dangerLevel(node, cl)];
@@ -1633,7 +1634,7 @@ export class MapScene extends Phaser.Scene {
         this.walker = undefined;
         this.clearRoute();
         this.player.setPosition(SPAWN.x * T + T / 2, SPAWN.y * T + T / 2);
-        this.float('阵亡，回城复活', '#ff7a6a', true);
+        this.float(tl('阵亡，回城复活'), '#ff7a6a', true);
         if (!this.following) this.recenterCameraOnly();
         this.travelTo = undefined;
         if (store.state.queue[0]?.action === this.currentAction) {
@@ -1741,13 +1742,13 @@ export class MapScene extends Phaser.Scene {
     const supply = toBank && t0 && ACTIONS[t0.action]?.kind === 'combat' && !t0.stocked;
     const done = () => {
       this.clearRoute();
-      if (toBank) this.float(supply ? '补给完毕' : '已存入仓库', '#9ad8ff', true);
+      if (toBank) this.float(supply ? tl('补给完毕') : tl('已存入仓库'), '#9ad8ff', true);
       else this.startWorking();
     };
     // 顺路用传送石碑（存档里算好的路线）：先走到第一座石碑，传过去，再走完剩下的
     const via = st.travel?.to === node.id ? st.travel.via : undefined;
     if (via) {
-      if (toBank) this.float(supply ? '回仓库拿食物' : '背包满了，回仓库', '#e8b84a');
+      if (toBank) this.float(supply ? tl('回仓库拿食物') : tl('背包满了，回仓库'), '#e8b84a');
       this.goViaStones(via, dest, done);
       return;
     }
@@ -1767,7 +1768,7 @@ export class MapScene extends Phaser.Scene {
       speed = len / (ms / 1000);
     }
     this.drawRoute(path);
-    if (toBank) this.float(supply ? '回仓库拿食物' : '背包满了，回仓库', '#e8b84a');
+    if (toBank) this.float(supply ? tl('回仓库拿食物') : tl('背包满了，回仓库'), '#e8b84a');
     this.walkPath(path, done, speed);
   }
 
@@ -1793,7 +1794,7 @@ export class MapScene extends Phaser.Scene {
     }
     const path = findPath(this.playerTile(), standTile(A)) ?? [];
     this.drawRoute(path);
-    this.float(`顺路去${A.name}传送`, '#8ae8ff');
+    this.float(tl`顺路去${A.name}传送`, '#8ae8ff');
     this.walkPath(path, () => {
       this.clearRoute();
       // 一道光，人出现在另一座石碑旁
@@ -1805,7 +1806,7 @@ export class MapScene extends Phaser.Scene {
       this.recenterCameraOnly();
       const flash = this.add.image(this.player.x, this.player.y - 8, 'glow').setTint(0x9ae8ff).setBlendMode(Phaser.BlendModes.ADD).setDepth(D_FLOAT).setScale(0.2);
       this.tweens.add({ targets: flash, scale: 1.8, alpha: 0, duration: 700, onComplete: () => flash.destroy() });
-      this.float(`传送到${B.name}`, '#8ae8ff', true);
+      this.float(tl`传送到${B.name}`, '#8ae8ff', true);
       this.idle();
       this.time.delayedCall(500, leg2);
     }, speedFor(path, t1 - elapsed));
@@ -1924,7 +1925,7 @@ export class MapScene extends Phaser.Scene {
     const bar: (typeof this.bars)[number] = { spr, m, bg, trail, fill, w, h, live: false, shown: 1 };
     if (boss) {
       // 首领：血条上方常驻名字，脚下一圈暗红光环和阴影
-      bar.label = this.add.text(0, 0, m.event ? `🎃 万圣节限定 · ${m.name}  Lv${m.level}` : m.world ? `☠ 世界首领 · ${m.name}  Lv${m.level}` : `首领 · ${m.name}  Lv${m.level}`, {
+      bar.label = this.add.text(0, 0, m.event ? tl`🎃 万圣节限定 · ${m.name}  Lv${m.level}` : m.world ? tl`☠ 世界首领 · ${m.name}  Lv${m.level}` : tl`首领 · ${m.name}  Lv${m.level}`, {
         fontFamily: FONT, fontSize: big96(m) ? '11px' : '10px', color: m.event ? '#ffa040' : m.world ? '#ff7a6a' : '#ffd86a', stroke: '#2a0808', strokeThickness: 3, resolution: 4,
       }).setOrigin(0.5, 1);
       const S = monsterFrameSize(m) * monScale(m) * (big96(m) ? 0.8 : 1);
@@ -2034,12 +2035,12 @@ export class MapScene extends Phaser.Scene {
     const ny = foe.y - S * 0.55;
     const land = () => {
       if (!foe.active) return;
-      if (dmg < 0) return this.popText(nx, ny, '未命中', '#b8b8c0', 7);
+      if (dmg < 0) return this.popText(nx, ny, tl('未命中'), '#b8b8c0', 7);
       this.hitFlash(foe, 1);
       const spark = this.add.image(tx + (Math.random() - 0.5) * 6, ty + (Math.random() - 0.5) * 6, 'fx-hit').setDepth(D_FLOAT - 1).setBlendMode(Phaser.BlendModes.ADD);
       this.tweens.add({ targets: spark, scale: 1.8, alpha: 0, angle: 45, duration: 220, onComplete: () => spark.destroy() });
       const heavy = crit || dmg >= Math.max(3, combatStats(store.state, m).playerMaxHit * 0.85);
-      this.popText(nx, ny, crit ? `暴击 ${dmg}!` : heavy ? `${dmg}!` : `${dmg}`, crit ? '#ff7a30' : heavy ? '#ffb030' : '#ffffff', crit ? 11 : heavy ? 10 : 8);
+      this.popText(nx, ny, crit ? tl`暴击 ${dmg}!` : heavy ? `${dmg}!` : `${dmg}`, crit ? '#ff7a30' : heavy ? '#ffb030' : '#ffffff', crit ? 11 : heavy ? 10 : 8);
       if (heavy) this.cameras.main.shake(crit ? 130 : 90, crit ? 0.003 : 0.002);
     };
     const from = { x: this.player.x + 6, y: this.player.y - 4 };
@@ -2072,13 +2073,13 @@ export class MapScene extends Phaser.Scene {
     const y = this.player.y - 36;
     // 精英、首领的大招和首领狂怒：在怪头上喊出来
     const world = art === 'world' && m ? WORLD_SKILL[m.id] : undefined;
-    const shout = world ? `${world.name}！` : art === 'enrage' ? '狂怒！' : art === 'boss' ? MONSTER_MOVES.boss.name : art === 'elite' ? MONSTER_MOVES.elite.name : '';
+    const shout = world ? tl`${world.name}！` : art === 'enrage' ? tl('狂怒！') : art === 'boss' ? MONSTER_MOVES.boss.name : art === 'elite' ? MONSTER_MOVES.elite.name : '';
     if (world && foe?.active && m) this.worldSkillFx(m, foe);
     if (shout && foe?.active) {
       this.popText(foe.x, foe.y - (world ? 72 : 30), shout, world ? '#ff5a3a' : art === 'enrage' ? '#ff3a3a' : '#ff8a5a', world ? 13 : art === 'elite' ? 8 : 10);
       if (art !== 'elite' && dmg > 0) this.cameras.main.shake(160, 0.004);
     }
-    if (dmg < 0) return this.popText(x - 4, y, '闪避', '#9ad8ff', 7);
+    if (dmg < 0) return this.popText(x - 4, y, tl('闪避'), '#9ad8ff', 7);
     if (dmg === 0) return;
     this.hitFlash(this.playerBody, -1, 0xff5040);
     this.popText(x - 4, y, `-${dmg}`, '#ff5a4a', 8);
@@ -2655,9 +2656,9 @@ export class MapScene extends Phaser.Scene {
       const [item, qty] = gained[0];
       this.float(`+${qty} ${ITEMS[item].name}`, '#ffffff');
     } else if (s.items.coins > 0) {
-      this.float(`+${s.items.coins} 金币`, '#ffd25e');
+      this.float(tl`+${s.items.coins} 金币`, '#ffd25e');
     }
-    for (const lu of s.levelUps) this.float(`${SKILLS[lu.skill].name} 升到 ${lu.level} 级！`, '#ffd25e', true);
+    for (const lu of s.levelUps) this.float(tl`${SKILLS[lu.skill].name} 升到 ${lu.level} 级！`, '#ffd25e', true);
   }
 }
 

@@ -12,6 +12,7 @@ import { emitToGame } from './GameCanvas';
 import { MonsterIcon } from './Bestiary';
 import { store } from '../store';
 import { FINE_POINTER } from './itemOpen';
+import { tl } from '../i18n';
 
 /** 缩略图每像素代表几格 */
 const STEP = Math.max(3, Math.round(MAP_W / 500));
@@ -57,15 +58,15 @@ const LABELS: Record<RegionId, [number, number]> = {
   frostpeak: [0.5, 0.04], ashcape: [0.92, 0.92], thunder: [0.9, 0.03], starsea: [0.5, 0.97],
 };
 /** 城镇在世界地图上只标一个点（新城镇标在仓库上） */
-const TOWN_MARK: Record<string, string> = { smithy: '苍岭城', market2: '落霞城', ...Object.fromEntries(TOWNS.map((t) => [`${t.id}_bank`, t.name])) };
+const TOWN_MARK: Record<string, string> = { smithy: tl('苍岭城'), market2: tl('落霞城'), ...Object.fromEntries(TOWNS.map((t) => [`${t.id}_bank`, t.name])) };
 
 const MAX_ZOOM = 8;
 
 /** 世界地图筛选（用户 10-23）：按用途看地点 */
 type Filter = 'all' | 'stone' | 'town' | 'boss' | 'world' | 'event' | 'cave' | SkillId;
 const FILTERS: [Filter, string][] = [
-  ['all', '全部'], ['stone', '传送石碑'], ['town', '城镇'], ['mining', '采矿'], ['woodcutting', '伐木'], ['fishing', '钓鱼'],
-  ['gathering', '采集'], ['hunting', '狩猎'], ['thieving', '偷窃'], ['boss', '首领'], ['world', '世界首领'], ['event', '活动'], ['cave', '洞窟'],
+  ['all', tl('全部')], ['stone', tl('传送石碑')], ['town', tl('城镇')], ['mining', tl('采矿')], ['woodcutting', tl('伐木')], ['fishing', tl('钓鱼')],
+  ['gathering', tl('采集')], ['hunting', tl('狩猎')], ['thieving', tl('偷窃')], ['boss', tl('首领')], ['world', tl('世界首领')], ['event', tl('活动')], ['cave', tl('洞窟')],
 ];
 const skillsOf = (n: MapNode) => new Set(n.actions.map((id) => ACTIONS[id]).flatMap((a) => (a.kind === 'skill' ? [a.skill] : [])));
 function passes(n: MapNode, f: Filter) {
@@ -165,12 +166,12 @@ export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: ()
   return (
     <div className="worldmap">
       <div className="sheet-head">
-        <button className="back" onClick={onClose}>‹ 返回</button>
-        <h2>世界地图</h2>
+        <button className="back" onClick={onClose}>{tl('‹ 返回')}</button>
+        <h2>{tl('世界地图')}</h2>
         <span className="zoom-btns">
-          <button onClick={() => zoomAt(zoom / 1.4)} disabled={zoom <= 1}>－</button>
-          <button className="zoom-val" onClick={() => zoomAt(1)} title="还原">{zoom.toFixed(1)}×</button>
-          <button onClick={() => zoomAt(zoom * 1.4)} disabled={zoom >= MAX_ZOOM}>＋</button>
+          <button onClick={() => zoomAt(zoom / 1.4)} disabled={zoom <= 1}>{tl('－')}</button>
+          <button className="zoom-val" onClick={() => zoomAt(1)} title={tl("还原")}>{zoom.toFixed(1)}×</button>
+          <button onClick={() => zoomAt(zoom * 1.4)} disabled={zoom >= MAX_ZOOM}>{tl('＋')}</button>
         </span>
       </div>
       <div className="chips-row wm-filter">
@@ -187,7 +188,7 @@ export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: ()
           {NODES.filter((n) => (!n.town || n.pond || TOWN_MARK[n.id] || n.waystone) && passes(n, filter)).map((n) => {
             const d = n.town && !n.pond ? 0 : dangerLevel(n, cl);
             const lit = n.waystone && s.waystones?.includes(n.id);
-            const name = n.waystone ? n.name.replace('传说石碑·', '石碑·') : TOWN_MARK[n.id] ?? n.name;
+            const name = n.waystone ? n.name.replace(tl('传说石碑·'), tl('石碑·')) : TOWN_MARK[n.id] ?? n.name;
             const big = n.site || n.world || n.event || TOWN_MARK[n.id] || (n.waystone && filter === 'stone');
             return (
               <button key={n.id} className={`wm-node ${sel === n.id ? 'sel' : ''} ${n.cave ? 'cave' : ''} ${n.waystone ? `stone ${lit ? 'lit' : ''}` : ''}`} style={{ left: `${(n.x / MAP_W) * 100}%`, top: `${(n.y / MAP_H) * 100}%` }}
@@ -204,11 +205,11 @@ export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: ()
       </div>
       <div className="wm-legend">
         {DANGER.map((d) => <span key={d.name}><i style={{ background: d.color }} />{d.name}</span>)}
-        <span><i className="stone-mark" />石碑（已激活）</span>
-        <span><i className="stone-mark off" />石碑（未激活）</span>
-        <span><img className="wm-skull-mini" src={skullUrl()} alt="" />世界首领</span>
-        <span><i className="me" />你</span>
-        {FINE_POINTER && <span className="wm-hint">滚轮缩放 · 按住左键拖动</span>}
+        <span><i className="stone-mark" />{tl('石碑（已激活）')}</span>
+        <span><i className="stone-mark off" />{tl('石碑（未激活）')}</span>
+        <span><img className="wm-skull-mini" src={skullUrl()} alt="" />{tl('世界首领')}</span>
+        <span><i className="me" />{tl('你')}</span>
+        {FINE_POINTER && <span className="wm-hint">{tl('滚轮缩放 · 按住左键拖动')}</span>}
       </div>
       {node && (
         <NodeCard s={s} nodeId={node.id} cl={cl} onOpen={() => onOpenNode(node.id)}
@@ -227,25 +228,25 @@ function NodeCard({ s, nodeId, cl, onOpen, onWalk }: { s: GameState; nodeId: str
     <div className="wm-card frame">
       <div className="row1">
         <b>{TOWN_MARK[n.id] ?? n.name}</b>
-        <span style={{ color: d.color }}>危险度：{d.name}</span>
+        <span style={{ color: d.color }}>{tl`危险度：${d.name}`}</span>
       </div>
       <small className="muted">{REGIONS[n.region].name}{!n.town && !n.cave && ` · Lv${n.lv[0]}${n.lv[1] !== n.lv[0] ? `-${n.lv[1]}` : ''}`}</small>
-      {n.cave && <span>大型洞窟 · 尚未开放，敬请期待</span>}
-      {n.waystone && <span>{s.waystones?.includes(n.id) ? '已激活：站在任意一座激活过的石碑旁就能传送到这里' : '未激活：走到石碑旁边就会激活'}</span>}
-      {skills.length > 0 && <span>可练：{skills.join('、')}</span>}
+      {n.cave && <span>{tl('大型洞窟 · 尚未开放，敬请期待')}</span>}
+      {n.waystone && <span>{s.waystones?.includes(n.id) ? tl('已激活：站在任意一座激活过的石碑旁就能传送到这里') : tl('未激活：走到石碑旁边就会激活')}</span>}
+      {skills.length > 0 && <span>{tl`可练：${skills.join(tl('、'))}`}</span>}
       {monsters.length > 0 && (
         <span className="wm-mons">
-          <small className="muted">点怪物去追踪：Boss 和交过手的能找到准确位置，其他只到大概的刷新区域</small>
+          <small className="muted">{tl('点怪物去追踪：Boss 和交过手的能找到准确位置，其他只到大概的刷新区域')}</small>
           {monsters.map((m) => (
             <button key={m!.id} className="pill" onClick={() => store.track(m!.id)}>
-              <MonsterIcon m={m!} size={18} /> {m!.name} {m!.level}{m!.world ? ' 世界首领' : m!.rank === 'boss' ? ' Boss' : m!.rank === 'elite' ? ' 精英' : ''}
+              <MonsterIcon m={m!} size={18} /> {m!.name} {m!.level}{m!.world ? tl(' 世界首领') : m!.rank === 'boss' ? ' Boss' : m!.rank === 'elite' ? tl(' 精英') : ''}
             </button>
           ))}
         </span>
       )}
       <div className="go">
-        <button className="primary" onClick={onWalk}>寻路前往 · 约 {Math.ceil(travelMs(playerPos, standOf(n), moveSpeed(store.state)) / 1000)} 秒</button>
-        {!TOWN_MARK[n.id] && (n.town || skills.length > 0 || n.waystone) && <button onClick={onOpen}>{n.waystone ? '打开石碑' : '查看任务'}</button>}
+        <button className="primary" onClick={onWalk}>{tl`寻路前往 · 约 ${Math.ceil(travelMs(playerPos, standOf(n), moveSpeed(store.state)) / 1000)} 秒`}</button>
+        {!TOWN_MARK[n.id] && (n.town || skills.length > 0 || n.waystone) && <button onClick={onOpen}>{n.waystone ? tl('打开石碑') : tl('查看任务')}</button>}
       </div>
     </div>
   );

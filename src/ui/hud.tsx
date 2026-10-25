@@ -11,6 +11,7 @@ import { store } from '../store';
 import { emitToGame } from './GameCanvas';
 import { actionName, fmtNum, modeLabel } from './format';
 import { mountIconUrl, SkillIcon, TplIcon } from './icons';
+import { tl } from '../i18n';
 
 /** 顶栏头像：取当前外观正面站立帧的上半身 */
 const portraits = new Map<string, string>();
@@ -35,11 +36,11 @@ export function TopBar({ s }: { s: GameState }) {
   return (
     <header className="topbar">
       <span className="avatar"><img src={portrait(s.settings.skin)} alt="" /></span>
-      <span className="stat" title="战斗等级 / 总等级"><SkillIcon skill="melee" size={16} /> {combatLevel(s)} <small className="muted">/ {total}</small></span>
-      <span className="hp" title="生命">
+      <span className="stat" title={tl("战斗等级 / 总等级")}><SkillIcon skill="melee" size={16} /> {combatLevel(s)} <small className="muted">/ {total}</small></span>
+      <span className="hp" title={tl("生命")}>
         <SkillIcon skill="hitpoints" size={16} /> <span className="bar"><i style={{ width: `${hpPct}%` }} /></span> {s.hp}
       </span>
-      <span className="coins" title="金币"><TplIcon tpl="coins" tint="#f0c850" size={16} /> {fmtNum(s.bank.coins ?? 0)}</span>
+      <span className="coins" title={tl("金币")}><TplIcon tpl="coins" tint="#f0c850" size={16} /> {fmtNum(s.bank.coins ?? 0)}</span>
     </header>
   );
 }
@@ -54,27 +55,27 @@ export function BossBar({ s }: { s: GameState }) {
   const pct = (hp / m.hp) * 100;
   return (
     <div className="boss-bar">
-      <div className="name"><small>{m.event ? '万圣节限定' : m.world ? '世界首领' : '首领'}</small>{m.name}<span>Lv{m.level}</span></div>
+      <div className="name"><small>{m.event ? tl('万圣节限定') : m.world ? tl('世界首领') : tl('首领')}</small>{m.name}<span>Lv{m.level}</span></div>
       <div className="track"><i className="trail" style={{ width: `${pct}%` }} /><i className="fill" style={{ width: `${pct}%` }} />
-      <div className="num">{s.combat.respawnMs > 0 ? `重新出现中… ${Math.ceil(s.combat.respawnMs / 1000)} 秒` : `${Math.ceil(hp)} / ${m.hp}`}</div></div>
+      <div className="num">{s.combat.respawnMs > 0 ? tl`重新出现中… ${Math.ceil(s.combat.respawnMs / 1000)} 秒` : `${Math.ceil(hp)} / ${m.hp}`}</div></div>
     </div>
   );
 }
 
 export function QueuePanel({ s }: { s: GameState }) {
   if (!s.queue.length) {
-    return <div className="panel queue idle">空闲中——点地图上的地点选个任务</div>;
+    return <div className="panel queue idle">{tl('空闲中——点地图上的地点选个任务')}</div>;
   }
   return (
     <div className="panel queue">
       {s.queue.map((t, i) => (
         <div key={i} className="queue-row">
           <span>
-            {i > 0 && '然后 '}
+            {i > 0 && tl('然后 ')}
             {actionName(t.action)} {modeLabel(t.mode)}
             {t.mode.type === 'count' && i === 0 && <em> ({t.done}/{t.mode.count})</em>}
           </span>
-          <button className="x" onClick={() => store.dispatch((g) => removeTask(g, i))} aria-label="移除">✕</button>
+          <button className="x" onClick={() => store.dispatch((g) => removeTask(g, i))} aria-label={tl("移除")}>✕</button>
         </div>
       ))}
     </div>
@@ -86,12 +87,12 @@ export function stopText(reason: TaskEndReason, action: string, item?: string): 
   const a = ACTIONS[action];
   const name = actionName(action);
   switch (reason) {
-    case 'noInput': return `${name}停了：材料不够${item && ITEMS[item] ? `，缺${ITEMS[item].name}` : ''}（背包和仓库都没有了）`;
-    case 'level': return `${name}停了：${a?.kind === 'skill' ? `${SKILLS[a.skill].name}要 ${a.level} 级` : '等级不够'}`;
-    case 'death': return `${name}停了：连续阵亡 3 次。换更好的装备、食物栏放上食物，或者换只弱一点的怪`;
-    case 'noAmmo': return `${name}停了：弹药用完了，背包和仓库都没有`;
-    case 'summon': return `${name}停了：南瓜王不在，要先去万圣节活动祭坛召唤`;
-    default: return `${name}做完了，队列空了，角色在发呆`;
+    case 'noInput': return tl`${name}停了：材料不够${item && ITEMS[item] ? tl`，缺${ITEMS[item].name}` : ''}（背包和仓库都没有了）`;
+    case 'level': return tl`${name}停了：${a?.kind === 'skill' ? tl`${SKILLS[a.skill].name}要 ${a.level} 级` : tl('等级不够')}`;
+    case 'death': return tl`${name}停了：连续阵亡 3 次。换更好的装备、食物栏放上食物，或者换只弱一点的怪`;
+    case 'noAmmo': return tl`${name}停了：弹药用完了，背包和仓库都没有`;
+    case 'summon': return tl`${name}停了：南瓜王不在，要先去万圣节活动祭坛召唤`;
+    default: return tl`${name}做完了，队列空了，角色在发呆`;
   }
 }
 
@@ -104,11 +105,11 @@ function StopChip({ s }: { s: GameState }) {
   const again = () => store.dispatch((g) => enqueue(g, st.action, st.mode));
   return (
     <div className={`chip stop-chip ${st.reason === 'complete' ? '' : 'bad'}`}>
-      <b>{st.reason === 'complete' ? '空闲' : '停了'}</b> · {stopText(st.reason, st.action, st.item)}
-      {src && <button className="pill on" onClick={() => jumpTo(src.action, src.node)}>去做{ITEMS[st.item!].name} ›</button>}
-      {(st.reason === 'complete' || st.reason === 'death') && <button className="pill on" onClick={again}>{st.reason === 'complete' ? '再来一轮' : '再试一次'}</button>}
-      {node && st.reason !== 'noInput' && <button className="pill" onClick={() => openNodeSheet(node.id)}>换个任务</button>}
-      <button className="pill" title="关掉提示" onClick={() => store.dispatch(dismissStop)}>×</button>
+      <b>{st.reason === 'complete' ? tl('空闲') : tl('停了')}</b> · {stopText(st.reason, st.action, st.item)}
+      {src && <button className="pill on" onClick={() => jumpTo(src.action, src.node)}>{tl`去做${ITEMS[st.item!].name} ›`}</button>}
+      {(st.reason === 'complete' || st.reason === 'death') && <button className="pill on" onClick={again}>{st.reason === 'complete' ? tl('再来一轮') : tl('再试一次')}</button>}
+      {node && st.reason !== 'noInput' && <button className="pill" onClick={() => openNodeSheet(node.id)}>{tl('换个任务')}</button>}
+      <button className="pill" title={tl("关掉提示")} onClick={() => store.dispatch(dismissStop)}>×</button>
     </div>
   );
 }
@@ -120,8 +121,7 @@ export function StatusChips({ s, extra, log, chat }: { s: GameState; extra?: Rea
   if (task && s.paused) {
     body = (
       <>
-        <b style={{ color: '#9aa0a8' }}>已暂停</b> · 你离开了{actionName(task.action)}的地点
-        <button className="pill on" onClick={() => store.dispatch(resumeWork)}>继续工作</button>
+        <b style={{ color: '#9aa0a8' }}>{tl('已暂停')}</b>{tl` · 你离开了${actionName(task.action)}的地点`}<button className="pill on" onClick={() => store.dispatch(resumeWork)}>{tl('继续工作')}</button>
       </>
     );
   } else if (s.travel) {
@@ -131,8 +131,7 @@ export function StatusChips({ s, extra, log, chat }: { s: GameState; extra?: Rea
     const supply = isBankId(s.travel.to) && t0 && ACTIONS[t0.action]?.kind === 'combat' && !t0.stocked;
     body = (
       <>
-        <b style={{ color: '#e8b84a' }}>{supply ? '补给' : isBankId(s.travel.to) ? '背包满了' : '寻路中'}</b> · {supply ? '回仓库拿食物' : isBankId(s.travel.to) ? '回仓库存东西' : `前往${n?.name}`} · 还要 {Math.ceil(s.travel.ms / 1000)} 秒
-        <span className="bar wide"><i style={{ width: `${pct}%` }} /></span>
+        <b style={{ color: '#e8b84a' }}>{supply ? tl('补给') : isBankId(s.travel.to) ? tl('背包满了') : tl('寻路中')}</b>{tl` · ${supply ? tl('回仓库拿食物') : isBankId(s.travel.to) ? tl('回仓库存东西') : tl`前往${n?.name}`} · 还要 ${Math.ceil(s.travel.ms / 1000)} 秒`}<span className="bar wide"><i style={{ width: `${pct}%` }} /></span>
       </>
     );
   } else if (a?.kind === 'skill') {
@@ -140,8 +139,8 @@ export function StatusChips({ s, extra, log, chat }: { s: GameState; extra?: Rea
     body = (
       <>
         <SkillIcon skill={a.skill} size={14} /> <b style={{ color: SKILLS[a.skill].color }}>{SKILLS[a.skill].name}</b> · {a.name}
-        {rainBonus(s, a) > 0 && <em className="rain-buff" title="钓点在下雨，鱼更容易上钩"> 雨天钓鱼 +{Math.round(rainBonus(s, a) * 100)}%</em>}
-        {s.progressMs < 0 && <em> 晕眩中</em>}
+        {rainBonus(s, a) > 0 && <em className="rain-buff" title={tl("钓点在下雨，鱼更容易上钩")}>{tl` 雨天钓鱼 +${Math.round(rainBonus(s, a) * 100)}%`}</em>}
+        {s.progressMs < 0 && <em>{tl(' 晕眩中')}</em>}
         <span className="bar wide"><i style={{ width: `${pct}%` }} /></span>
       </>
     );
@@ -159,15 +158,15 @@ export function StatusChips({ s, extra, log, chat }: { s: GameState; extra?: Rea
       <>
         <SkillIcon skill={style} size={14} /> <b style={{ color: SKILLS[style].color }}>{SKILLS[style].name}</b> · {m.name}
         <span className="bar wide foe"><i style={{ width: `${respawn ? 0 : (Math.max(0, hp) / m.hp) * 100}%` }} /></span>
-        {respawn ? <em>下一只 {Math.ceil(respawn / 1000)} 秒后出现</em> : <em>{Math.max(0, hp)}/{m.hp}</em>}
+        {respawn ? <em>{tl`下一只 ${Math.ceil(respawn / 1000)} 秒后出现`}</em> : <em>{Math.max(0, hp)}/{m.hp}</em>}
         <span className="fight-me">
-          <b>你</b>
+          <b>{tl('你')}</b>
           <span className={`bar me ${me < 0.3 ? 'low' : me < 0.6 ? 'mid' : ''}`}><i style={{ width: `${me * 100}%` }} /></span>
           <em>{Math.max(0, s.hp)}/{max}</em>
-          <span className={food ? '' : 'warn'}>食物 {fmtNum(food)}</span>
-          <span className="muted">约 {fmtNum(Math.round(est.perHour))} 只/时</span>
+          <span className={food ? '' : 'warn'}>{tl`食物 ${fmtNum(food)}`}</span>
+          <span className="muted">{tl`约 ${fmtNum(Math.round(est.perHour))} 只/时`}</span>
         </span>
-        {!food && me < 0.4 && <em className="warn"> 没有食物了，血量偏低，小心阵亡</em>}
+        {!food && me < 0.4 && <em className="warn">{tl(' 没有食物了，血量偏低，小心阵亡')}</em>}
       </>
     );
   }
@@ -176,7 +175,7 @@ export function StatusChips({ s, extra, log, chat }: { s: GameState; extra?: Rea
       {extra}
       {(!task || s.lastStop?.reason !== 'complete') && <StopChip s={s} />}
       {body && <div className="chip">{body}</div>}
-      {log || <button className="chip dim log-chip" title="日志 (L)" onClick={openCombatLog}>⚔ 击杀 {fmtNum(s.stats.kills)} · 阵亡 {s.stats.deaths} · <u>展开日志 ▸</u></button>}
+      {log || <button className="chip dim log-chip" title={tl("日志 (L)")} onClick={openCombatLog}>{tl`⚔ 击杀 ${fmtNum(s.stats.kills)} · 阵亡 ${s.stats.deaths} · `}<u>{tl('展开日志 ▸')}</u></button>}
       {chat}
     </div>
   );
@@ -187,15 +186,15 @@ export function MapButtons({ s, onWorldMap }: { s: GameState; onWorldMap: () => 
   return (
     <div className="map-buttons">
       {mount && (
-        <button className={`mount-btn ${s.mounted ? 'on' : ''}`} title={s.mounted ? '下坐骑 (R)' : '骑乘 (R)'} onClick={() => store.dispatch((g) => toggleMount(g))}>
+        <button className={`mount-btn ${s.mounted ? 'on' : ''}`} title={s.mounted ? tl('下坐骑 (R)') : tl('骑乘 (R)')} onClick={() => store.dispatch((g) => toggleMount(g))}>
           <img src={mountIconUrl(mount)} width={30} height={30} alt="" draggable={false} />
-          <small>{s.mounted ? '下骑' : '骑乘'}</small>
+          <small>{s.mounted ? tl('下骑') : tl('骑乘')}</small>
         </button>
       )}
-      <button onClick={onWorldMap} title="世界地图">▦</button>
-      <button onClick={() => emitToGame('zoom', 0.5)}>＋</button>
-      <button onClick={() => emitToGame('zoom', -0.5)}>－</button>
-      <button onClick={() => emitToGame('recenter')} title="回到角色">◎</button>
+      <button onClick={onWorldMap} title={tl("世界地图")}>▦</button>
+      <button onClick={() => emitToGame('zoom', 0.5)}>{tl('＋')}</button>
+      <button onClick={() => emitToGame('zoom', -0.5)}>{tl('－')}</button>
+      <button onClick={() => emitToGame('recenter')} title={tl("回到角色")}>◎</button>
     </div>
   );
 }
@@ -216,15 +215,15 @@ export function QuestCard({ s, onGo }: { s: GameState; onGo: (nodeId: string) =>
   const idx = (s.quest?.i ?? 0) + 1;
   return (
     <div className={`chip quest ${open ? '' : 'folded'}`}>
-      <button className="fold" title={open ? '收起' : '展开'} onClick={toggle}>{open ? '▾' : '▸'}</button>
-      <b className="gold">新手任务 {idx}/{QUESTS.length}</b> {questText(p.q)}
-      {open && <span className="muted"> {p.have}/{p.q.goal.n} · 奖励 {p.q.reward} 金币</span>}
+      <button className="fold" title={open ? tl('收起') : tl('展开')} onClick={toggle}>{open ? '▾' : '▸'}</button>
+      <b className="gold">{tl`新手任务 ${idx}/${QUESTS.length}`}</b> {questText(p.q)}
+      {open && <span className="muted"> {tl`${p.have}/${p.q.goal.n} · 奖励 ${p.q.reward} 金币`}</span>}
       {!open && <span className="muted"> {p.have}/{p.q.goal.n}</span>}
       {node && <button className="pill" onClick={() => {
         // 提示是个动作就直接选中它，打开页面点「立即开始」就行
         if (ACTIONS[p.q.hint]) store.focusAction = p.q.hint;
         onGo(node.id);
-      }}>去做</button>}
+      }}>{tl('去做')}</button>}
       {open && <div className="quest-tip">💡 {p.q.tip}</div>}
     </div>
   );

@@ -4,6 +4,7 @@ import { rainBonus } from '../core/sim';
 import { aptOf } from '../core/ranch';
 import type { BuffKind, GameState, RegionId } from '../core/types';
 import { isRaining, RAIN_FISH } from '../core/weather';
+import { tl } from '../i18n';
 
 /**
  * 增益栏（用户 10-23）：时钟左边一排像素小图标，料理增益、雨天钓鱼、骑乘；
@@ -48,16 +49,16 @@ function buffsOf(s: GameState, region: RegionId, now: number): Buff[] {
   const out: Buff[] = [];
   for (const [k, b] of Object.entries(s.buffs ?? {}) as [BuffKind, { pct: number; ms: number }][]) {
     const m = Math.ceil(b.ms / 60000);
-    out.push({ key: k, icon: k, name: BUFF_NAME[k], value: `+${Math.round(b.pct * 100)}%`, time: m >= 60 ? `${Math.floor(m / 60)}时` : `${m}分`, desc: `料理增益：${BUFF_NAME[k]} +${Math.round(b.pct * 100)}%，还剩 ${m} 分钟` });
+    out.push({ key: k, icon: k, name: BUFF_NAME[k], value: `+${Math.round(b.pct * 100)}%`, time: m >= 60 ? tl`${Math.floor(m / 60)}时` : tl`${m}分`, desc: tl`料理增益：${BUFF_NAME[k]} +${Math.round(b.pct * 100)}%，还剩 ${m} 分钟` });
   }
   if (isRaining(region, now)) {
     const a = ACTIONS[s.queue[0]?.action ?? ''];
     const on = !s.paused && a?.kind === 'skill' && rainBonus(s, a, now) > 0;
-    out.push({ key: 'rain', icon: 'rain', name: '雨天钓鱼', value: `+${Math.round(RAIN_FISH * 100)}%`, time: '下雨', desc: `正在下雨：在下雨的钓点钓鱼快 ${Math.round(RAIN_FISH * 100)}%，雨停就没了${on ? '（正在生效）' : ''}`, dim: !on });
+    out.push({ key: 'rain', icon: 'rain', name: tl('雨天钓鱼'), value: `+${Math.round(RAIN_FISH * 100)}%`, time: tl('下雨'), desc: tl`正在下雨：在下雨的钓点钓鱼快 ${Math.round(RAIN_FISH * 100)}%，雨停就没了${on ? tl('（正在生效）') : ''}`, dim: !on });
   }
   if (s.mounted && s.equipment.mount) {
     const mv = ITEMS[s.equipment.mount]?.equip?.move ?? 0;
-    out.push({ key: 'mount', icon: aptOf(s.equipment.mount) ? 'horse' : 'mount', name: '骑乘', value: `+${Math.round(mv * 100)}%`, desc: `骑着${ITEMS[s.equipment.mount].name}：移动速度 +${Math.round(mv * 100)}%` });
+    out.push({ key: 'mount', icon: aptOf(s.equipment.mount) ? 'horse' : 'mount', name: tl('骑乘'), value: `+${Math.round(mv * 100)}%`, desc: tl`骑着${ITEMS[s.equipment.mount].name}：移动速度 +${Math.round(mv * 100)}%` });
   }
   return out;
 }

@@ -3,6 +3,7 @@ import { setSettings } from '../core/sim';
 import type { GameState } from '../core/types';
 import { HERO_ANIMS, HERO_H, HERO_PAD, HERO_W, OUTFITS, paintHeroSheet, type Outfit } from '../game/hero';
 import { store } from '../store';
+import { tl } from '../i18n';
 
 const PREVIEW = ['walk-down', 'idle-side', 'walk-side', 'walk-up', 'work-chop', 'fight-sword'];
 
@@ -38,19 +39,19 @@ export function Wardrobe({ s, onClose }: { s: GameState; onClose: () => void }) 
   return (
     <div className="page wardrobe">
       <div className="sheet-head">
-        <button className="back" onClick={onClose}>‹ 返回</button>
-        <h2>衣橱</h2>
+        <button className="back" onClick={onClose}>{tl('‹ 返回')}</button>
+        <h2>{tl('衣橱')}</h2>
       </div>
       <div className="wardrobe-stage frame">
         <HeroPreview outfit={sel} scale={5} />
         <div>
-          <b>{sel.name}</b>{sel.id === OUTFITS[0].id && <small className="muted"> · 原皮</small>}
+          <b>{sel.name}</b>{sel.id === OUTFITS[0].id && <small className="muted">{tl(' · 原皮')}</small>}
           <p className="muted">{sel.desc}</p>
-          {sel.code && <p className="gold small-note">限定外观 · 自带动态特效</p>}
+          {sel.code && <p className="gold small-note">{tl('限定外观 · 自带动态特效')}</p>}
           <button className="primary" disabled={sel.id === cur || locked(sel)} onClick={() => store.dispatch((g) => setSettings(g, { skin: sel.id }))}>
-            {sel.id === cur ? '穿着中' : locked(sel) ? '需要兑换码解锁' : '换上'}
+            {sel.id === cur ? tl('穿着中') : locked(sel) ? tl('需要兑换码解锁') : tl('换上')}
           </button>
-          {locked(sel) && <p className="muted small-note">在「更多」页输入兑换码领取</p>}
+          {locked(sel) && <p className="muted small-note">{tl('在「更多」页输入兑换码领取')}</p>}
         </div>
       </div>
       <div className="wardrobe-grid">
@@ -58,8 +59,8 @@ export function Wardrobe({ s, onClose }: { s: GameState; onClose: () => void }) 
           <button key={o.id} className={`slot ${o.id === pick ? 'on' : ''}`} onClick={() => setPick(o.id)}>
             <HeroPreview outfit={o} scale={2} />
             <span>{o.name}</span>
-            {o.id === cur && <small className="gold">穿着中</small>}
-            {locked(o) && <small className="muted">🔒 未解锁</small>}
+            {o.id === cur && <small className="gold">{tl('穿着中')}</small>}
+            {locked(o) && <small className="muted">{tl('🔒 未解锁')}</small>}
           </button>
         ))}
       </div>
