@@ -14,6 +14,7 @@ import { fmtDuration, fmtNum } from './format';
 import { Codex } from './Codex';
 import { Handbook } from './Handbook';
 import { TOWNS } from '../core/towns';
+import { RANCH } from '../core/ranch';
 import { Wardrobe } from './Wardrobe';
 import { exportSave, importError, importSave } from '../saveCode';
 import { outfitOf } from '../game/hero';
@@ -755,7 +756,8 @@ const NODE_TABS: NodeTab[] = [
   { id: 'thieving', name: '偷窃', skill: 'thieving' }, { id: 'boss', name: '首领' }, { id: 'cave', name: '洞窟' },
 ];
 const BOSSES = Object.values(MONSTERS).filter((m) => m.rank === 'boss').sort((a, b) => a.level - b.level);
-const townName = (n: MapNode) => (n.region === 'town' ? '主城' : '落霞城');
+/** 设施属于哪座城：主城的设施名字不带前缀，其他城镇是「城名·设施」 */
+const townName = (n: MapNode) => (n.region === 'town' ? '主城' : n.waystone ? n.name.split('·').pop()! : n.name.includes('·') ? n.name.split('·')[0] : '落霞城');
 
 export function NodeList({ s, onPick }: { s: GameState; onPick: (id: string) => void }) {
   const [tabId, setTabId] = useState('town');
@@ -763,8 +765,9 @@ export function NodeList({ s, onPick }: { s: GameState; onPick: (id: string) => 
   let rows: { key: string; id: string; name: string; sub: string; lv?: string; dim?: boolean }[] = [];
   if (tab.id === 'town') {
     rows = NODES.filter((n) => n.town).map((n) => {
-      const kinds = n.portal ? ['进家园岛屿'] : n.waystone ? ['传送'] : n.farm ? ['种植'] : [...new Set(n.actions.map((id) => { const a = ACTIONS[id]; return a.kind === 'skill' ? SKILLS[a.skill].name : '战斗'; }))];
-      return { key: n.id, id: n.id, name: n.name.replace('落霞城·', ''), sub: `${townName(n)} · ${n.closed ? '暂未开放' : n.opens === 'bank' ? '存取物品' : kinds.join('、')}`, dim: n.closed };
+      const kinds = n.portal ? ['进家园岛屿'] : n.waystone ? ['传送'] : n.farm ? ['种植'] : n.id === RANCH ? ['养马'] : [...new Set(n.actions.map((id) => { const a = ACTIONS[id]; return a.kind === 'skill' ? SKILLS[a.skill].name : '战斗'; }))];
+      if (n.id.includes('market')) kinds.unshift('买卖');
+      return { key: n.id, id: n.id, name: n.waystone ? '传说石碑' : n.name.split('·').pop()!, sub: `${townName(n)} · ${n.closed ? '暂未开放' : n.opens === 'bank' ? '存取物品' : kinds.join('、')}`, dim: n.closed };
     }).sort((a, b) => (a.sub.startsWith('主城') === b.sub.startsWith('主城') ? 0 : a.sub.startsWith('主城') ? -1 : 1));
   } else if (tab.id === 'boss') {
     rows = BOSSES.map((m) => ({ key: m.id, id: `fight_${m.id}`, name: m.name, sub: `${REGIONS[m.region].name} · ${s.bestiary?.[m.id] ? `已击败 ${s.bestiary[m.id]} 次` : '未击败'}`, lv: `Lv${m.level}` }));

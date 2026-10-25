@@ -156,11 +156,12 @@ export function migrate(raw: unknown): GameState | null {
     farm: Object.fromEntries(Object.entries(farmIn ?? {}).filter(([id, p]) => PLOT_BY_ID[id] && obj(p) && CROP_DEFS[p.crop] && Number.isFinite(p.at) && Number.isFinite(p.ripe))),
     // 栏位里的东西改过名或删掉了就丢掉，免得界面读不到物品
     belt: Object.fromEntries(Object.entries(obj<NonNullable<GameState['belt']>>(s.belt) ?? {}).filter(([slot, b]) => b && ITEMS[b.id] && beltSlotOf(b.id) === slot && Number.isInteger(b.qty) && b.qty > 0)),
-    // 旧存档：现在拥有的东西都算获得过
+    // 现在拥有的东西都算获得过（旧存档、导入的存档图鉴里可能漏了）
     seen: {
-      ...(seenIn ?? Object.fromEntries(
+      ...Object.fromEntries(
         [...Object.keys(bankIn), ...Object.keys(keep(s.bag)), ...Object.values(equipment)].filter((id) => id && ITEMS[id]).map((id) => [id, 1 as const]),
-      )),
+      ),
+      ...seenIn,
       seed_potato: 1,
     },
   };
@@ -457,22 +458,30 @@ export function combatStats(s: GameState, m: MonsterDef) {
   };
 }
 
+/**
+ * 「再生」每次出手回多少血：血越厚回得越少。以前一律 3%，血量是普通怪 10 倍以上的首领
+ * 回血比同级玩家的输出还快，永远打不死（蘑菇女王、九头蛇、噬魂魔树等）。
+ */
+export const regenPct = (m: MonsterDef) => (m.world ? 0.003 : m.rank === 'boss' ? 0.006 : m.rank === 'elite' ? 0.015 : 0.03);
+
 /** 战前评估：打一只大约多久、掉多少血、难度（期望值，不是模拟） */
 export function combatEstimate(s: GameState, m: MonsterDef) {
   const st = combatStats(s, m);
   const swing = playerAttackMs(s);
   let avg = st.playerHit * ((1 + st.playerMaxHit) / 2) * (1 + st.crit * (st.critMult - 1));
-  const dps = Math.max(1e-6, avg / swing);
-  const killMs = m.hp / dps;
   const rage = m.traits.includes('berserk') ? 1.25 : 1;
   const venom = m.traits.includes('venom') ? Math.ceil(m.level / 8) : 0;
   const mv = moveOf(m);
   const move = mv ? 1 + (mv.mult - 1) / mv.every : 1;
   const mAvg = st.monsterMaxHit > 0 ? move * (m.rank === 'boss' ? 1.1 : 1) * st.monsterHit * (1 - st.dodge) * (((1 + st.monsterMaxHit * rage) / 2) * (1 - st.reduce) + venom) : 0;
-  const taken = (mAvg / m.attackMs) * killMs;
+  // 怪物的再生和吸血抵掉一部分输出；抵光了就打不死
+  const heal = ((m.traits.includes('regen') ? Math.ceil(m.hp * regenPct(m)) : 0) + (m.traits.includes('lifesteal') ? mAvg / 2 : 0)) / m.attackMs;
+  const dps = avg / swing - heal;
+  const killMs = dps > 1e-6 ? m.hp / dps : Infinity;
+  const taken = killMs === Infinity ? Infinity : (mAvg / m.attackMs) * killMs;
   const hp = maxHp(s);
   const ratio = taken / hp;
-  const rating = ratio < 0.2 ? '轻松' : ratio < 0.5 ? '适中' : ratio < 1 ? '危险' : '很难';
+  const rating = killMs === Infinity ? '打不动' : ratio < 0.2 ? '轻松' : ratio < 0.5 ? '适中' : ratio < 1 ? '危险' : '很难';
   // 新怪刷出来后要等一整次出手间隔才打第一下
   const perHour = 3_600_000 / (killMs + swing + (m.respawnMs ?? RESPAWN_MS));
   return { killMs, taken, rating, perHour, swing };
@@ -901,7 +910,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       const big = !!move && ((c.mSwings ?? 0) + 1) % move.every === 0;
       if (big) c.mArt = m.world || m.event ? 'world' : m.rank;
       else if (c.mArt !== 'enrage' || !enraged) c.mArt = undefined;
-      if (has('regen')) c.monsterHp = Math.min(m.hp, c.monsterHp + Math.ceil(m.hp * 0.03));
+      if (has('regen')) c.monsterHp = Math.min(m.hp, c.monsterHp + Math.ceil(m.hp * regenPct(m)));
       c.mSwings = (c.mSwings ?? 0) + 1;
       c.mDmg = -1;
       if (st.monsterMaxHit > 0 && rand() < st.monsterHit && rand() >= st.dodge) {

@@ -20,7 +20,7 @@ export const TRAITS = {
   evasive: { name: '灵巧', desc: '你的命中率 ×0.8' },
   venom: { name: '剧毒', desc: '命中时额外造成 等级÷8 点毒伤' },
   lifesteal: { name: '吸血', desc: '造成伤害的一半回复自身' },
-  regen: { name: '再生', desc: '每次攻击回复 3% 生命' },
+  regen: { name: '再生', desc: '每次攻击回复生命（普通 3%、精英 1.5%、首领 0.6%、世界首领 0.3%）' },
   berserk: { name: '狂暴', desc: '生命低于一半时伤害 ×1.5' },
   thorns: { name: '荆棘', desc: '你造成伤害的 15% 反弹给你' },
   pack: { name: '群居', desc: '刷新时间减半' },

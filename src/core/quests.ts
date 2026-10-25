@@ -19,7 +19,7 @@ export interface QuestDef {
 
 export const QUESTS: QuestDef[] = [
   { hint: 'chop_plain', reward: 30, goal: { kind: 'gain', item: 'plain_log', n: 10 },
-    tip: '点「去做」，角色会自己走到树林。到了以后点「立即开始」，砍树会一直自动进行，你可以去干别的。' },
+    tip: '点「去做」打开树林的页面，原木已经选好了，点「立即开始」角色会自己走过去砍树，之后一直自动进行，你可以去干别的。' },
   { hint: 'mine_stone', reward: 30, goal: { kind: 'gain', item: 'stone', n: 10 },
     tip: '采集的东西先进背包，背包满了角色会自动走回仓库存好，再回来接着干。' },
   { hint: 'fish_minnow', reward: 30, goal: { kind: 'gain', item: 'raw_minnow', n: 10 },

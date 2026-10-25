@@ -216,6 +216,9 @@ function Game() {
         else { setTab((t) => (t === 'bag' ? 'game' : 'bag')); setNode(null); setMonster(null); setWorldMap(false); }
       }
       else if (k === 'Escape') {
+        // 有弹窗（公告、指引、宝箱结果等）先关最上面那个
+        const pops = document.querySelectorAll<HTMLElement>('.item-popup');
+        if (pops.length) { pops[pops.length - 1].click(); return; }
         const u = ui.current;
         // 先关打开的地点/怪物页，没有的话收起面板
         if (!u.node && !u.monster) setPanelOpen(false);

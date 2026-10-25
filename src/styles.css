@@ -279,6 +279,9 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
   .tabbar { border-left: 2px solid var(--edge); border-top: 0; border-bottom: 2px solid var(--edge); box-shadow: inset 0 -2px 0 var(--gold-dark); padding: 0 4px; }
   .tabbar button { flex-direction: row; justify-content: center; gap: 5px; font-size: 13px; padding: 9px 0; position: relative; }
   .tabbar button img { width: 18px; height: 18px; }
+  .tabbar button span { white-space: nowrap; }
+  /* 面板最窄（约 1366 宽以下）时七个标签挤不下：图标缩小、字小一号，免得两个字折成两行 */
+  @media (max-width: 1500px) { .tabbar button { gap: 3px; font-size: 12px; } .tabbar button img { width: 16px; height: 16px; } .tabbar kbd { display: none; } }
   .tabbar kbd { position: absolute; top: 2px; right: 4px; font: 9px/1 system-ui, sans-serif; color: var(--muted); opacity: 0.7; }
   .tabbar .help-btn { flex: 0 0 34px; font-size: 15px; font-weight: 700; color: var(--gold); }
   .tabbar .fold-btn { flex: 0 0 30px; font-size: 16px; font-weight: 700; color: var(--gold); }
@@ -419,6 +422,8 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 
 /* 新手任务提示、新手指引 */
 .quest-tip { flex-basis: 100%; font-size: 11px; color: #c8b89a; line-height: 1.45; }
+/* 手机横屏高度很矮：任务提示收起来，别把整个画面挡住 */
+@media (max-height: 520px) { .quest-tip { display: none; } }
 .guide { padding: 14px 16px; width: min(460px, 100%); }
 .guide h2 { margin: 4px 0 8px; color: #ffd86a; text-align: center; }
 .guide ul { margin: 0 0 10px; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; line-height: 1.55; font-size: 13px; }

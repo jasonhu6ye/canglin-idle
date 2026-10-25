@@ -9,6 +9,7 @@ import { store } from '../store';
 import { fmtNum } from './format';
 import { FINE_POINTER, openNodeSheet } from './itemOpen';
 import { newsPending, onNewsClosed } from './News';
+import { guideShowing, onGuideClosed } from './Guide';
 
 /*
  * 万圣节活动界面（用户 10-24）：祭坛召唤面板、活动公告（带贴图）、地图上的活动提示条。
@@ -122,7 +123,7 @@ export function AltarSheet({ s, node, onClose }: { s: GameState; node: MapNode; 
                     <span className="row1"><b>{h.name}</b> <span className="muted">Lv{h.lv} · 生命 {fmtNum(m.hp)}</span></span>
                     <span className="row2">
                       奖励 <img src={pumpkinBoxUrl()} alt="" className="inline-icon" /> 南瓜礼盒 ×{h.boxes}
-                      <span className={cls}> · 评估：{e.rating}（约 {Math.max(1, Math.round(e.killMs / 1000))} 秒，掉血约 {Math.round(e.taken)}）</span>
+                      <span className={cls}> · 评估：{e.killMs === Infinity ? '打不动（回血比你的输出快）' : `${e.rating}（约 ${Math.max(1, Math.round(e.killMs / 1000))} 秒，掉血约 ${Math.round(e.taken)}）`}</span>
                     </span>
                   </span>
                 </li>
@@ -155,13 +156,14 @@ export function HalloweenNotice() {
     // 第一次进游戏（看过新手指引以后）自动弹一次；有更新公告的话等它关掉再弹
     const auto = () => {
       try {
-        if (!hwOpen(Date.now()) || localStorage.getItem(SEEN) || !localStorage.getItem('canglin-guide-seen')) return;
+        if (guideShowing() || !hwOpen(Date.now()) || localStorage.getItem(SEEN) || !localStorage.getItem('canglin-guide-seen')) return;
       } catch { return; }
       setOpen(true);
     };
     const off = onNewsClosed(auto);
+    const off2 = onGuideClosed(auto);
     if (!newsPending()) auto();
-    return () => { listeners.delete(f); off(); };
+    return () => { listeners.delete(f); off(); off2(); };
   }, []);
   const now = useNow(30_000);
   if (!open) return null;

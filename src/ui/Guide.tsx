@@ -86,13 +86,25 @@ const PAGES: { title: string; lines: string[] }[] = [
 type Fn = (open: boolean) => void;
 const fns = new Set<Fn>();
 export const openGuide = () => fns.forEach((f) => f(true));
+// 新手指引开着的时候别的弹窗（活动公告）先等着，关掉以后再弹，免得叠在一起
+let showing = false;
+const closed = new Set<() => void>();
+export const guideShowing = () => showing;
+export function onGuideClosed(f: () => void) {
+  closed.add(f);
+  return () => { closed.delete(f); };
+}
 
 export function Guide() {
   const [open, setOpen] = useState(() => {
     try { return !localStorage.getItem('canglin-guide-seen'); } catch { return false; }
   });
+  if (open) showing = true;
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      if (showing) { showing = false; closed.forEach((f) => f()); }
+      return;
+    }
     try { localStorage.setItem('canglin-guide-seen', '1'); } catch { /* 无痕模式存不了就算了 */ }
   }, [open]);
   const [page, setPage] = useState(0);

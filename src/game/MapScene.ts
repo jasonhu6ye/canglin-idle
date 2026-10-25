@@ -893,8 +893,11 @@ export class MapScene extends Phaser.Scene {
     const lit = 1 + this.amb.dark * 0.7;
     for (const g of this.glows) g.img.setAlpha((g.base + Math.sin(time / 380 + g.phase) * 0.12 + (hash(Math.floor(time / 90), g.phase * 100) - 0.5) * 0.08) * lit);
     this.updateParticles();
-    playerPos.x = Math.floor(this.player.x / T);
-    playerPos.y = Math.floor(this.player.y / T);
+    const px = Math.floor(this.player.x / T);
+    const py = Math.floor(this.player.y / T);
+    if (px !== playerPos.x || py !== playerPos.y) this.fadeNearLabel(px, py);
+    playerPos.x = px;
+    playerPos.y = py;
     this.others.step(delta, playerPos);
     this.others.publish({
       x: playerPos.x, y: playerPos.y, outfit: store.state.settings.skin, action: store.state.paused ? undefined : store.state.queue[0]?.action,
@@ -904,6 +907,17 @@ export class MapScene extends Phaser.Scene {
     const me = online.me();
     const label = me ? (me.guildTag ? `[${me.guildTag}] ${me.name}` : me.name) : '[苍岭] 你';
     if (this.heroName.text !== label) this.heroName.setText(label);
+  }
+
+
+  /** 角色站在地点旁边干活时，地点名牌正好压在角色名字上：把它调淡 */
+  private nearLabel: Phaser.GameObjects.Text | null = null;
+  private fadeNearLabel(x: number, y: number) {
+    const hit = this.nodeLabels.find(({ node }) => Math.abs(node.x - x) <= 2 && y - node.y >= 0 && y - node.y <= 3)?.text ?? null;
+    if (hit === this.nearLabel) return;
+    this.nearLabel?.setAlpha(1);
+    hit?.setAlpha(0.25);
+    this.nearLabel = hit;
   }
 
   // ---- 区域氛围 ----
