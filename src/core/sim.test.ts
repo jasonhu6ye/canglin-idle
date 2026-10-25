@@ -1,6 +1,6 @@
 import { actionDuration, advance, buySeed, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour, openContainer, redeemCode, toggleMount, moveSpeed, rainBonus, summonPumpkin, placeFoal, collectHorse, RANCH_NODE, bagRoomFor, playerAttackMs, playerBonuses, salvage, salvageValue, sortBank, SALVAGE_NODES, SALVAGE_BONUS } from './sim';
 import { baseOf, qid, qualityOdds, rollQuality } from './quality';
-import { claimMail, clearMail, HW_DAILY_BOXES, stepMail, unreadMail } from './mail';
+import { claimMail, clearMail, GIFTS, HW_DAILY_BOXES, stepMail, unreadMail } from './mail';
 import { HW_BOX, HW_END, HW_POINT, HW_TIERS, hwFight } from './halloween';
 import { APT_MAX, APT_MIN, aptOf, FOAL, FOAL_MS, growMs, HORSE_XP } from './ranch';
 import { SPECIES } from './bestiary';
@@ -1072,9 +1072,20 @@ describe('装备品质、分解台、仓库整理（10-25）', () => {
 });
 
 describe('邮箱（10-25）', () => {
+  /** 先当作全服赠礼已经领过，只测活动邮件 */
+  const noGift = (s: GameState) => { s.mailKeys = GIFTS.map((g) => `gift-${g.key}`); return s; };
+  it('全服赠礼：副本上线送 5 把 T4 绿洞钥匙，每个存档只送一次', () => {
+    const t = HW_END + 3 * HOUR;
+    let s = stepMail(newGame(t, 1), t);
+    const gift = s.mail!.find((m) => m.kind === 'gift');
+    expect(gift?.items).toEqual([{ item: 'dkey_g4', qty: 5 }]);
+    expect(stepMail(s, t + HOUR)).toBe(s);
+    s = claimMail(s, gift!.id, bagRoomFor)[0];
+    expect(s.bag.dkey_g4).toBe(5);
+  });
   it('万圣节期间每天上线送 3 个礼盒，同一天只送一次；领取进背包；活动结束礼盒全部销毁', () => {
     const day1 = new Date(2026, 9, 26, 9).getTime();
-    let s = newGame(day1, 1);
+    let s = noGift(newGame(day1, 1));
     s = stepMail(s, day1);
     expect(s.mail).toHaveLength(1);
     expect(s.mail![0].items).toEqual([{ item: HW_BOX, qty: HW_DAILY_BOXES }]);
@@ -1094,7 +1105,7 @@ describe('邮箱（10-25）', () => {
     expect(clearMail(after).mail!.every((m) => !m.claimed)).toBe(true);
   });
   it('邮件读档保留，坏数据丢掉', () => {
-    let s = stepMail(newGame(new Date(2026, 9, 26).getTime(), 1), new Date(2026, 9, 26).getTime());
+    let s = stepMail(noGift(newGame(new Date(2026, 9, 26).getTime(), 1)), new Date(2026, 9, 26).getTime());
     const raw = JSON.parse(JSON.stringify(s));
     raw.mail.push({ id: 'x' }, { id: 9, kind: 'quest', at: 1, items: [{ item: 'nope', qty: 1 }] });
     s = migrate(raw)!;

@@ -77,7 +77,7 @@ export interface ItemDef {
 }
 
 /** 邮件种类：标题和正文按种类在界面上生成，换语言也能跟着变 */
-export type MailKind = 'hw_daily' | 'quest' | 'redeem' | 'hw_expired';
+export type MailKind = 'hw_daily' | 'quest' | 'redeem' | 'hw_expired' | 'gift';
 export interface Mail {
   id: number;
   kind: MailKind;

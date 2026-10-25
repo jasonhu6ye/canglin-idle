@@ -126,6 +126,13 @@ function key(p: Pix, i: number, kind: 'green' | 'blue') {
   p.set(Math.round(cx - 0.6), Math.round(cy - 0.6 + (i === 4 ? 1 : 0)), G[3]);
 }
 
+/** 钥匙的画布（公告贴图用） */
+export function keyCanvas(kind: 'green' | 'blue', tier: number): HTMLCanvasElement {
+  const p = new Pix(20, 20);
+  key(p, Math.max(0, Math.min(4, tier - 3)), kind);
+  return p.outline().canvas();
+}
+
 export function keyIconUrl(kind: 'green' | 'blue', tier: number): string {
   const k = `key${kind}${tier}`;
   const hit = cache.get(k);

@@ -10,6 +10,11 @@ import type { GameState, ItemStack, Mail, MailKind } from './types';
 
 export const MAIL_CAP = 100;
 export const HW_DAILY_BOXES = 3;
+/** 全服赠礼（每个存档领一次）：key 是去重键（也当 arg 存进邮件，界面按它显示标题正文） */
+export const GIFTS: { key: string; items: ItemStack[] }[] = [
+  // 副本大更新（用户 10-25）：送全部玩家 5 把 T4 绿洞钥匙
+  { key: 'dg-launch', items: [{ item: 'dkey_g4', qty: 5 }] },
+];
 
 /** 本地日期，当作每日礼物的去重键 */
 export const dayKey = (now: number) => {
@@ -59,8 +64,13 @@ export function stepMail(prev: GameState, now: number): GameState {
   const daily = hwOpen(now) && !prev.mailKeys?.includes(key);
   const stale = !hwOpen(now) && (has(prev.bag, HW_BOX) || has(prev.bank, HW_BOX) || !!prev.mail?.some((m) => m.items.some((i) => i.item === HW_BOX)));
   const expired = !!prev.mail?.some((m) => m.expires !== undefined && m.expires <= now);
-  if (!daily && !stale && !expired) return prev;
+  const gifts = GIFTS.filter((g) => !prev.mailKeys?.includes(`gift-${g.key}`));
+  if (!daily && !stale && !expired && !gifts.length) return prev;
   const s: GameState = JSON.parse(JSON.stringify(prev));
+  for (const g of gifts) {
+    s.mailKeys = [...(s.mailKeys ?? []), `gift-${g.key}`];
+    sendMail(s, 'gift', g.items, now, { arg: g.key });
+  }
   if (daily) {
     s.mailKeys = [...(s.mailKeys ?? []).filter((k) => !k.startsWith('hw-2')).slice(-30), key];
     sendMail(s, 'hw_daily', [{ item: HW_BOX, qty: HW_DAILY_BOXES }], now, { expires: HW_END });

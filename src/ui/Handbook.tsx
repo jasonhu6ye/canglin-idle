@@ -1,3 +1,4 @@
+import { openDungeonNotice } from './DungeonNotice';
 import { useSticky } from './sticky';
 import { GUILD_COST } from '../net/api';
 import { useMemo, useState, type ReactNode } from 'react';
@@ -236,6 +237,7 @@ const ARTICLES: Article[] = [
   {
     id: 'dungeon', cat: tl('装备与战斗'), title: tl('副本：绿洞和蓝洞'),
     body: () => <>
+      <p><button className="pill" onClick={openDungeonNotice}>{tl('打开副本玩法公告（带配图）')}</button></p>
       <P>{tl('副本钥匙在背包里点「使用」，会在身边空地开一个洞口，30 分钟后消失（已经在里面的人不受影响）。开好后会问要不要自动寻路过去，地图上洞口有绿色或蓝色光柱和倒计时。每个洞口每人只能进一次，同时最多开着 3 个。')}</P>
       <ul className="hb-list">
         <li><b>{tl('绿洞')}</b>{tl('：单人地下副本，1-4 层随机，一个人或组队都能进。')}</li>

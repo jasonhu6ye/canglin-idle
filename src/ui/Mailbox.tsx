@@ -31,6 +31,10 @@ function mailText(m: Mail): { title: string; body: string } {
     }
     case 'redeem':
       return { title: tl('兑换码奖励'), body: tl`兑换码「${m.arg ?? ''}」的奖励。` };
+    case 'gift':
+      return m.arg === 'dg-launch'
+        ? { title: tl('副本大更新礼物'), body: tl('地下副本（绿洞、蓝洞）上线啦！送你 5 把 T4 绿洞钥匙，在背包里使用就能在身边开一个洞口。玩法说明在攻略手册的「副本：绿洞和蓝洞」里。') }
+        : { title: tl('系统赠礼'), body: tl('送给全体玩家的礼物。') };
     case 'hw_expired':
       return { title: tl('万圣节活动已结束'), body: tl('感谢参加万圣节活动！没有打开的南瓜礼盒已经自动回收。') };
     default:

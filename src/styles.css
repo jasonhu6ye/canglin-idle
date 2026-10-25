@@ -972,3 +972,13 @@ h2.dg-blue { color: #6ab4ff; }
 .dg-rolls { display: flex; flex-direction: column; gap: 3px; font-size: 11px; max-height: 40vh; overflow-y: auto; }
 .dg-roll { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: center; }
 .dg-roll.me { background: rgba(232,194,74,.12); border-radius: 3px; padding: 1px 3px; }
+/* 副本公告（10-25） */
+.dg-notice .hw-cards figure { background: rgba(14, 24, 40, 0.7); border-color: #2a5a7a; }
+.dg-notice .hw-cards figcaption b, .dg-notice .hw-lead b { color: #7ad8ff; }
+.dg-title { color: #b8f0ff; text-shadow: 0 2px 0 #06101a, 0 0 10px #2a9aff, 0 0 2px #000; font-size: 20px; }
+.dg-title small { color: #ffd86a; }
+.dg-keys-card .dg-keys { aspect-ratio: 4 / 3; display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 4px 8px; background: radial-gradient(circle, rgba(255, 210, 90, 0.25), transparent 70%), linear-gradient(#0e1424, #1a2236); }
+.dg-keys span { display: flex; flex-direction: column; align-items: center; font-size: 10px; color: #ffd86a; }
+.dg-green-t { color: #5ee07a; }
+.dg-blue-t { color: #6ab4ff; }
+@media (max-width: 520px) { .dg-keys-card .dg-keys { aspect-ratio: 2 / 1; } }

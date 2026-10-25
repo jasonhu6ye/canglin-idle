@@ -8,6 +8,13 @@ import { tl } from '../i18n';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-10-25-u', date: tl('10 月 25 日'), title: tl('副本上线礼物：5 把 T4 绿洞钥匙'),
+    lines: [
+      tl('副本上线礼物：全部玩家送 5 把 T4 绿洞钥匙，打开邮箱领取。'),
+      tl('新增带配图的副本玩法公告，第一次进游戏会弹出来，攻略手册的副本文章里也能再打开。'),
+    ],
+  },
+  {
     id: '2026-10-25-t', date: tl('10 月 25 日'), title: tl('副本组队同步'),
     lines: [
       tl('蓝洞和组队进的绿洞现在全队同步：在副本里能看到同一层的队友在走、在打怪，大地图上不再显示在副本里的人。'),
