@@ -16,6 +16,23 @@ import { MailButton } from './Mailbox';
 
 /** 顶栏头像：取当前外观正面站立帧的上半身 */
 const portraits = new Map<string, string>();
+/**
+ * 每小时击杀数（用户 10-25 要求替换总击杀）：按日志里最近一小时的击杀实测；
+ * 刚开打击杀太少算不准时，正在打怪就用战前评估，不在打怪显示 0。
+ */
+function killsPerHour(s: GameState): string {
+  const now = Date.now();
+  const kills = store.combatLog.filter((e) => e.kind === 'kill' && now - e.t < 3_600_000);
+  if (kills.length >= 3) {
+    const span = Math.max(kills[kills.length - 1].t - kills[0].t, 1);
+    // n 只之间有 n-1 段间隔
+    return fmtNum(Math.round(((kills.length - 1) / span) * 3_600_000));
+  }
+  const a = s.queue[0] && ACTIONS[s.queue[0].action];
+  if (a?.kind === 'combat') return tl`约 ${fmtNum(Math.round(combatEstimate(s, MONSTERS[a.monster]).perHour))}`;
+  return '0';
+}
+
 export function portrait(skin?: string): string {
   const o = outfitOf(skin);
   let url = portraits.get(o.id);
@@ -177,7 +194,7 @@ export function StatusChips({ s, extra, log, chat }: { s: GameState; extra?: Rea
       {extra}
       {(!task || s.lastStop?.reason !== 'complete') && <StopChip s={s} />}
       {body && <div className="chip">{body}</div>}
-      {log || <button className="chip dim log-chip" title={tl("日志 (L)")} onClick={openCombatLog}>{tl`⚔ 击杀 ${fmtNum(s.stats.kills)} · 阵亡 ${s.stats.deaths} · `}<u>{tl('展开日志 ▸')}</u></button>}
+      {log || <button className="chip dim log-chip" title={tl("日志 (L)")} onClick={openCombatLog}>{tl`⚔ 每小时击杀 ${killsPerHour(s)} · 阵亡 ${s.stats.deaths} · `}<u>{tl('展开日志 ▸')}</u></button>}
       {chat}
     </div>
   );

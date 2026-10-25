@@ -115,6 +115,9 @@ export function migrate(raw: unknown): GameState | null {
   // 采集从种植里拆出来（10-23）：旧存档的种植经验两边都保留
   xp.gathering = Math.max(0, num(xpIn.gathering, num(xpIn.farming, 0)));
   const bankIn = ammoRefund(keep(s.bank), [obj<Record<string, number>>(s.bank), obj<Record<string, number>>(s.bag)]);
+  // 金币不再放背包（10-25）：背包里的金币并进仓库
+  const bagIn = keep(s.bag);
+  if (bagIn.coins) { bankIn.coins = (bankIn.coins ?? 0) + bagIn.coins; delete bagIn.coins; }
   const seenIn = obj<Record<string, 1>>(s.seen);
   const farmIn = obj<GameState['farm']>(s.farm);
   const oldSize = num(s.mapSize, 1080) > 0 ? num(s.mapSize, 1080) : 1080;
@@ -131,7 +134,7 @@ export function migrate(raw: unknown): GameState | null {
     hp: Math.min(hpMax, Math.max(1, num(s.hp, hpMax))),
     // 种植改成要种子：旧存档送 10 颗土豆种子
     bank: farmRefund(farmIn, seenIn?.seed_potato ? bankIn : { ...bankIn, seed_potato: (bankIn.seed_potato ?? 0) + 10 }),
-    bag: keep(s.bag),
+    bag: bagIn,
     equipment,
     queue,
     progressMs: sameTask ? num(s.progressMs, 0) : 0,
@@ -389,7 +392,7 @@ const healOf = (id: string) => ITEMS[id]?.heals ?? 0;
 export const stackOf = (id: string) => (ITEMS[id]?.equip ? 1 : BAG_STACK);
 
 export function bagSlotsUsed(bag: Record<string, number>) {
-  return Object.entries(bag).reduce((n, [id, q]) => n + Math.ceil(q / stackOf(id)), 0);
+  return Object.entries(bag).reduce((n, [id, q]) => n + (id === 'coins' ? 0 : Math.ceil(q / stackOf(id))), 0);
 }
 
 /** 背包里还能放下多少个这种物品 */
@@ -526,7 +529,8 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
 
   /** 采集、制作、打怪的产出进背包；万一放不下，多出来的才进仓库 */
   const addLoot = (item: string, qty: number) => {
-    const n = Math.min(qty, bagRoomFor(s.bag, item));
+    // 金币不占背包格子，直接进钱包（仓库金币，用户 10-25）
+    const n = item === 'coins' ? 0 : Math.min(qty, bagRoomFor(s.bag, item));
     if (n > 0) s.bag[item] = (s.bag[item] ?? 0) + n;
     if (qty > n) s.bank[item] = (s.bank[item] ?? 0) + qty - n;
     s.seen[item] = 1;
@@ -564,7 +568,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   };
   const lootOf = (a: SkillAction | CombatAction) => {
     const out: string[] = [];
-    const push = (id: string, q: number) => { for (let i = 0; i < Math.min(q, 100); i++) out.push(id); };
+    const push = (id: string, q: number) => { if (id !== 'coins') for (let i = 0; i < Math.min(q, 100); i++) out.push(id); };
     if (a.kind === 'skill') {
       a.outputs.forEach((o) => push(o.item, o.qty));
       if (a.fail?.item) push(a.fail.item, 1);
@@ -573,7 +577,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       // 以前把所有可能的掉落都算上，掉落种类多的怪打一只就要回一趟仓库
       const drops = MONSTERS[a.monster].drops;
       drops.forEach((d) => { if (d.chance === undefined || d.chance >= 0.5) push(d.item, d.qty); });
-      const rare = drops.find((d) => d.chance !== undefined && d.chance < 0.5 && !out.includes(d.item));
+      const rare = drops.find((d) => d.chance !== undefined && d.chance < 0.5 && d.item !== 'coins' && !out.includes(d.item));
       if (rare) out.push(rare.item);
     }
     return out;
