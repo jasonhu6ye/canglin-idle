@@ -26,6 +26,34 @@ const FIXED: Record<string, string> = {
 };
 
 const TPL: Record<string, string[]> = {
+  friends: [
+    '............',
+    '..kkk..kkk..',
+    '.kcbbkkbcck.',
+    '.kbbbkkbbbk.',
+    '.kbbbkkbbbk.',
+    '..kkk..kkk..',
+    '.kkkkkkkkkk.',
+    'kcbbbkkcbbbk',
+    'kbbbbkkbbbbk',
+    'kbbbbkkbbbbk',
+    'kkkkkkkkkkkk',
+    '............',
+  ],
+  chat: [
+    '............',
+    '.kkkkkkkkkk.',
+    'kbbbbbbbbbbk',
+    'kbccccccccbk',
+    'kbcwbbwbbcbk',
+    'kbcbbbbbbcbk',
+    'kbcwbwbbbcbk',
+    'kbccccccccbk',
+    '.kkkbbkkkkk.',
+    '...kbk......',
+    '...kk.......',
+    '............',
+  ],
   ore: [
     '............',
     '....kkkk....',

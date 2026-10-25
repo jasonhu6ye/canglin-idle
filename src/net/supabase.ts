@@ -1,6 +1,6 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js';
 import type { GameState } from '../core/types';
-import type { Board, ChatMsg, Guild, GuildMember, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
+import type { Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildMember, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { levelSnapshot } from './api';
 import { tl } from '../i18n';
 
@@ -16,7 +16,7 @@ const toRank = (r: Row): RankRow => ({
   value: r.value, xp: r.xp == null ? undefined : Number(r.xp),
 });
 const toChat = (m: Row): ChatMsg => ({
-  id: String(m.id), channel: m.channel, playerId: m.player_id, name: m.name, text: m.text, at: Date.parse(m.at),
+  id: String(m.id), channel: m.channel, playerId: m.player_id, name: m.name, toId: m.to_id ?? undefined, text: m.text, at: Date.parse(m.at),
 });
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function ok(r: { data: any; error: { message: string } | null }): any {
@@ -46,9 +46,9 @@ export class SupabaseApi implements OnlineApi {
     const { data: { session } } = await this.sb.auth.getSession();
     this.session = !!session;
     if (!session) return (this.profile = null);
-    const p = ok(await this.sb.from('profiles').select('id,name,outfit,guild_id').eq('id', session.user.id).maybeSingle());
+    const p = ok(await this.sb.from('profiles').select('id,pid,name,outfit,guild_id').eq('id', session.user.id).maybeSingle());
     if (!p) return (this.profile = null);
-    this.profile = { id: p.id, name: p.name, outfit: p.outfit ?? undefined, guildId: p.guild_id };
+    this.profile = { id: p.id, pid: p.pid, name: p.name, outfit: p.outfit ?? undefined, guildId: p.guild_id };
     await this.loadTag();
     void this.sb.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', p.id);
     return this.profile;
@@ -83,6 +83,7 @@ export class SupabaseApi implements OnlineApi {
     this.session = false;
     if (this.world) void this.sb.removeChannel(this.world);
     this.world = null;
+    this.count_ = null;
   }
   private need() {
     if (!this.profile) throw new Error(tl('请先登录'));
@@ -97,6 +98,7 @@ export class SupabaseApi implements OnlineApi {
     const id = this.need().id;
     const snap = levelSnapshot(s);
     ok(await this.sb.from('saves').upsert({ player_id: id, data: s, last_tick: s.lastTick, updated_at: new Date().toISOString() }));
+    void this.sb.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', id);
     ok(await this.sb.from('ranks').upsert({ player_id: id, total: snap.total, combat: snap.combat, skills: snap.skills, xp: snap.xp, updated_at: new Date().toISOString() }));
   }
   async pullSave() {
@@ -168,6 +170,35 @@ export class SupabaseApi implements OnlineApi {
   }
   async contribute(taskId: string, qty: number) { ok(await this.sb.rpc('contribute', { p_task: taskId, p_qty: qty })); }
 
+  private count_: number | null = null;
+  private ids_ = new Set<string>();
+  onlineIds() { if (this.profile) this.channel(); return this.ids_; }
+  async trades(): Promise<Trade[]> {
+    const me = this.need().id;
+    // 没结束的和最近一天的（成交后要领取）
+    const since = new Date(Date.now() - 86_400_000).toISOString();
+    const rows = ok(await this.sb.from('trades').select('*').or(`status.eq.open,updated_at.gt.${since}`).order('updated_at', { ascending: false })) as Row[];
+    return rows.map((t) => {
+      const a = t.a === me;
+      return {
+        id: t.id, otherId: a ? t.b : t.a, mine: a ? t.a_items : t.b_items, theirs: a ? t.b_items : t.a_items,
+        myOk: a ? t.a_ok : t.b_ok, theirOk: a ? t.b_ok : t.a_ok, status: t.status, claimed: a ? t.a_claimed : t.b_claimed,
+        updatedAt: Date.parse(t.updated_at),
+      };
+    });
+  }
+  async startTrade(playerId: string) { return ok(await this.sb.rpc('start_trade', { p_other: playerId })) as string; }
+  async setOffer(tradeId: string, items: Record<string, number>) { ok(await this.sb.rpc('set_offer', { p_trade: tradeId, p_items: items })); }
+  async confirmTrade(tradeId: string, yes: boolean) { return ok(await this.sb.rpc('confirm_trade', { p_trade: tradeId, p_ok: yes })) as 'open' | 'done'; }
+  async cancelTrade(tradeId: string) { ok(await this.sb.rpc('cancel_trade', { p_trade: tradeId })); }
+  async claimTrade(tradeId: string) { return ok(await this.sb.rpc('claim_trade', { p_trade: tradeId })) as boolean; }
+  onlineCount() { if (this.profile) this.channel(); return this.count_; }
+  async ping() {
+    const t = performance.now();
+    ok(await this.sb.from('guilds').select('id').limit(1));
+    return Math.round(performance.now() - t);
+  }
+
   /** 世界频道：在线玩家位置走 Realtime presence，不进数据库 */
   private channel() {
     const me = this.need();
@@ -176,6 +207,8 @@ export class SupabaseApi implements OnlineApi {
     ch.on('presence', { event: 'sync' }, () => {
       const all: Presence[] = [];
       for (const [, metas] of Object.entries(ch.presenceState<Presence>())) if (metas[0]) all.push(metas[0]);
+      this.count_ = all.length;
+      this.ids_ = new Set(all.map((p) => p.playerId));
       const others = all.filter((p) => p.playerId !== me.id);
       this.presenceFns.forEach((f) => f(others));
     }).subscribe((status) => {
@@ -194,11 +227,18 @@ export class SupabaseApi implements OnlineApi {
     return () => { this.presenceFns.delete(f); };
   }
 
-  async sendChat(channel: ChatMsg['channel'], text: string) {
+  async sendChat(channel: ChatChannel, text: string, toId?: string) {
     const me = this.need();
     if (channel === 'guild' && !me.guildId) throw new Error(tl('还没加入公会'));
+    let party_id: string | null = null;
+    if (channel === 'party') {
+      party_id = ok(await this.sb.rpc('my_party')) as string | null;
+      if (!party_id) throw new Error(tl('还没有队伍'));
+    }
+    if (channel === 'private' && !toId) throw new Error(tl('选一个好友'));
     ok(await this.sb.from('chat').insert({
-      channel, guild_id: channel === 'guild' ? me.guildId : null, player_id: me.id, name: me.name, text: text.slice(0, 200),
+      channel, guild_id: channel === 'guild' ? me.guildId : null, party_id, to_id: channel === 'private' ? toId : null,
+      player_id: me.id, name: me.name, text: text.slice(0, 200),
     }));
   }
   onChat(f: (m: ChatMsg) => void) {
@@ -208,6 +248,47 @@ export class SupabaseApi implements OnlineApi {
       .subscribe();
     void this.sb.from('chat').select('*').order('at', { ascending: false }).limit(50)
       .then((r) => (r.data ?? []).reverse().forEach((m) => f(toChat(m))));
+    return () => { void this.sb.removeChannel(ch); };
+  }
+
+  async friends(): Promise<Friend[]> {
+    const me = this.need().id;
+    const who = 'name, pid, last_seen, guild_id, ranks(total, combat)';
+    const rows = ok(await this.sb.from('friends')
+      .select(`from_id, to_id, accepted, a:profiles!friends_from_id_fkey(${who}), b:profiles!friends_to_id_fkey(${who})`)) as Row[];
+    const list = rows.map((r) => ({ r, incoming: r.to_id === me, o: (r.to_id === me ? r.a : r.b) as Row | null }));
+    // 会标单独查（profiles.guild_id 没有外键，不能直接嵌）
+    const gids = [...new Set(list.map((x) => x.o?.guild_id).filter(Boolean))];
+    const tags = new Map<string, string>();
+    if (gids.length) for (const g of ok(await this.sb.from('guilds').select('id, tag').in('id', gids)) as Row[]) tags.set(g.id, g.tag);
+    return list.map(({ r, incoming, o }) => ({
+      playerId: incoming ? r.from_id : r.to_id, pid: Number(o?.pid), name: o?.name ?? '?', accepted: r.accepted, incoming,
+      totalLevel: o?.ranks?.total, combat: o?.ranks?.combat, guildTag: o?.guild_id ? tags.get(o.guild_id) : undefined,
+      lastSeen: o?.last_seen ? Date.parse(o.last_seen) : undefined,
+    }));
+  }
+  async addFriend(pid: number) { return ok(await this.sb.rpc('add_friend', { p_pid: pid })) as 'sent' | 'accepted'; }
+  async answerFriend(fromId: string, accept: boolean) { ok(await this.sb.rpc('answer_friend', { p_from: fromId, p_accept: accept })); }
+  async removeFriend(playerId: string) { ok(await this.sb.rpc('remove_friend', { p_other: playerId })); }
+  async party(): Promise<Party | null> {
+    const rows = ok(await this.sb.from('party_members').select('player_id, party_id, joined_at, profiles(name), parties(leader)').order('joined_at')) as Row[];
+    if (!rows.length) return null;
+    return {
+      id: rows[0].party_id, leader: rows[0].parties?.leader,
+      members: rows.map((r) => ({ playerId: r.player_id, name: r.profiles?.name ?? '?' })),
+    };
+  }
+  async partyInvites(): Promise<PartyInvite[]> {
+    const rows = ok(await this.sb.from('party_invites').select('party_id, from_id, profiles!party_invites_from_id_fkey(name)').eq('to_id', this.need().id)) as Row[];
+    return rows.map((r) => ({ partyId: r.party_id, fromId: r.from_id, fromName: r.profiles?.name ?? '?' }));
+  }
+  async inviteParty(playerId: string) { ok(await this.sb.rpc('invite_party', { p_to: playerId })); }
+  async answerParty(partyId: string, accept: boolean) { ok(await this.sb.rpc('answer_party', { p_party: partyId, p_accept: accept })); }
+  async leaveParty() { ok(await this.sb.rpc('leave_party')); }
+  onSocial(f: () => void) {
+    const ch = this.sb.channel(`social-${Math.random().toString(36).slice(2)}`);
+    for (const table of ['friends', 'party_invites', 'party_members', 'trades']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, () => f());
+    ch.subscribe();
     return () => { void this.sb.removeChannel(ch); };
   }
 }

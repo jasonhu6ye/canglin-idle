@@ -223,29 +223,271 @@ language sql stable security definer set search_path = public as $$
   from me join profiles p on p.id = me.player_id left join guilds g on g.id = p.guild_id
 $$;
 
--- ========== 聊天 ==========
+-- ========== 玩家数字 ID（10-25，用来加好友） ==========
+alter table public.profiles add column if not exists pid bigint generated always as identity (start with 10000001);
+create unique index if not exists profiles_pid on public.profiles (pid);
+
+-- ========== 好友 ==========
+-- 一对好友存一行：from_id 发的申请，accepted 后算好友
+create table if not exists public.friends (
+  from_id uuid not null references public.profiles(id) on delete cascade,
+  to_id uuid not null references public.profiles(id) on delete cascade,
+  accepted boolean not null default false,
+  created_at timestamptz not null default now(),
+  primary key (from_id, to_id),
+  check (from_id <> to_id)
+);
+create index if not exists friends_to on public.friends (to_id);
+alter table public.friends enable row level security;
+drop policy if exists "friends 自己相关" on public.friends;
+create policy "friends 自己相关" on public.friends for select using (auth.uid() in (from_id, to_id));
+
+create or replace function public.is_friend(a uuid, b uuid) returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from friends where accepted and ((from_id = a and to_id = b) or (from_id = b and to_id = a)))
+$$;
+
+-- 按数字 ID 发好友申请；对方已经申请过我就直接成为好友
+create or replace function public.add_friend(p_pid bigint) returns text
+language plpgsql security definer set search_path = public as $$
+declare other uuid; n int;
+begin
+  if auth.uid() is null then raise exception '请先登录'; end if;
+  select id into other from profiles where pid = p_pid;
+  if other is null then raise exception '没有这个 ID 的玩家'; end if;
+  if other = auth.uid() then raise exception '不能加自己'; end if;
+  if is_friend(auth.uid(), other) then raise exception '已经是好友了'; end if;
+  if exists (select 1 from friends where from_id = other and to_id = auth.uid()) then
+    update friends set accepted = true where from_id = other and to_id = auth.uid();
+    return 'accepted';
+  end if;
+  select count(*) into n from friends where from_id = auth.uid() or to_id = auth.uid();
+  if n >= 200 then raise exception '好友和申请加起来最多 200 个'; end if;
+  insert into friends (from_id, to_id) values (auth.uid(), other) on conflict do nothing;
+  return 'sent';
+end $$;
+
+create or replace function public.answer_friend(p_from uuid, p_accept boolean) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if p_accept then update friends set accepted = true where from_id = p_from and to_id = auth.uid();
+  else delete from friends where from_id = p_from and to_id = auth.uid() and not accepted; end if;
+end $$;
+
+create or replace function public.remove_friend(p_other uuid) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  delete from friends where (from_id = auth.uid() and to_id = p_other) or (from_id = p_other and to_id = auth.uid());
+end $$;
+
+-- ========== 队伍（最多 5 人） ==========
+create table if not exists public.parties (
+  id uuid primary key default gen_random_uuid(),
+  leader uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+create table if not exists public.party_members (
+  player_id uuid primary key references public.profiles(id) on delete cascade,
+  party_id uuid not null references public.parties(id) on delete cascade,
+  joined_at timestamptz not null default now()
+);
+create index if not exists party_members_party on public.party_members (party_id);
+create table if not exists public.party_invites (
+  party_id uuid not null references public.parties(id) on delete cascade,
+  to_id uuid not null references public.profiles(id) on delete cascade,
+  from_id uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (party_id, to_id)
+);
+alter table public.parties enable row level security;
+alter table public.party_members enable row level security;
+alter table public.party_invites enable row level security;
+
+create or replace function public.my_party() returns uuid language sql stable security definer set search_path = public as $$
+  select party_id from party_members where player_id = auth.uid()
+$$;
+drop policy if exists "parties 本队可看" on public.parties;
+create policy "parties 本队可看" on public.parties for select using (id = public.my_party());
+drop policy if exists "party_members 本队可看" on public.party_members;
+create policy "party_members 本队可看" on public.party_members for select using (party_id = public.my_party());
+drop policy if exists "party_invites 自己相关" on public.party_invites;
+create policy "party_invites 自己相关" on public.party_invites for select using (auth.uid() in (to_id, from_id));
+
+-- 邀请好友组队：自己还没队伍就先建一个
+create or replace function public.invite_party(p_to uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare pt uuid; n int;
+begin
+  if not is_friend(auth.uid(), p_to) then raise exception '只能邀请好友'; end if;
+  pt := my_party();
+  if pt is null then
+    insert into parties (leader) values (auth.uid()) returning id into pt;
+    insert into party_members (player_id, party_id) values (auth.uid(), pt);
+  end if;
+  if exists (select 1 from party_members where player_id = p_to) then raise exception '对方已经在队伍里了'; end if;
+  select count(*) into n from party_members where party_id = pt;
+  if n >= 5 then raise exception '队伍满了（最多 5 人）'; end if;
+  insert into party_invites (party_id, to_id, from_id) values (pt, p_to, auth.uid())
+    on conflict (party_id, to_id) do update set created_at = now();
+end $$;
+
+create or replace function public.answer_party(p_party uuid, p_accept boolean) returns void
+language plpgsql security definer set search_path = public as $$
+declare n int;
+begin
+  if not exists (select 1 from party_invites where party_id = p_party and to_id = auth.uid()) then raise exception '邀请已失效'; end if;
+  delete from party_invites where party_id = p_party and to_id = auth.uid();
+  if not p_accept then return; end if;
+  if my_party() is not null then raise exception '先退出现在的队伍'; end if;
+  select count(*) into n from party_members where party_id = p_party;
+  if n = 0 then raise exception '队伍已解散'; end if;
+  if n >= 5 then raise exception '队伍满了'; end if;
+  insert into party_members (player_id, party_id) values (auth.uid(), p_party);
+end $$;
+
+create or replace function public.leave_party() returns void
+language plpgsql security definer set search_path = public as $$
+declare pt uuid; heir uuid;
+begin
+  pt := my_party();
+  if pt is null then return; end if;
+  delete from party_members where player_id = auth.uid();
+  select player_id into heir from party_members where party_id = pt order by joined_at limit 1;
+  -- 只剩一个人就解散
+  if heir is null or (select count(*) from party_members where party_id = pt) < 2 then
+    delete from parties where id = pt;
+  else
+    update parties set leader = heir where id = pt and leader = auth.uid();
+  end if;
+end $$;
+
+-- ========== 聊天：世界 / 公会 / 队伍 / 私聊 ==========
 create table if not exists public.chat (
   id bigint generated always as identity primary key,
-  channel text not null check (channel in ('world', 'guild')),
+  channel text not null,
   guild_id uuid references public.guilds(id) on delete cascade,
   player_id uuid not null references public.profiles(id) on delete cascade,
   name text not null,
   text text not null check (char_length(text) between 1 and 200),
   at timestamptz not null default now()
 );
+alter table public.chat add column if not exists party_id uuid references public.parties(id) on delete cascade;
+alter table public.chat add column if not exists to_id uuid references public.profiles(id) on delete cascade;
+alter table public.chat drop constraint if exists chat_channel_check;
+alter table public.chat add constraint chat_channel_check check (channel in ('world', 'guild', 'party', 'private'));
 create index if not exists chat_at on public.chat (at desc);
 alter table public.chat enable row level security;
 drop policy if exists "chat 世界和本会可看" on public.chat;
-create policy "chat 世界和本会可看" on public.chat for select using (
-  channel = 'world' or guild_id = (select guild_id from public.profiles where id = auth.uid()));
+drop policy if exists "chat 能看的" on public.chat;
+create policy "chat 能看的" on public.chat for select using (
+  channel = 'world'
+  or (channel = 'guild' and guild_id = (select guild_id from public.profiles where id = auth.uid()))
+  or (channel = 'party' and party_id = public.my_party())
+  or (channel = 'private' and auth.uid() in (player_id, to_id)));
 drop policy if exists "chat 自己发" on public.chat;
 create policy "chat 自己发" on public.chat for insert with check (
   auth.uid() = player_id
   and name = (select name from public.profiles where id = auth.uid())
-  and (channel = 'world' and guild_id is null
-    or channel = 'guild' and guild_id = (select guild_id from public.profiles where id = auth.uid())));
+  and (channel = 'world' and guild_id is null and party_id is null and to_id is null
+    or channel = 'guild' and guild_id = (select guild_id from public.profiles where id = auth.uid())
+    or channel = 'party' and party_id = public.my_party()
+    or channel = 'private' and to_id is not null and public.is_friend(auth.uid(), to_id)));
 
--- 新聊天实时推送
-do $$ begin
-  alter publication supabase_realtime add table public.chat;
-exception when duplicate_object then null; end $$;
+-- 新聊天、好友申请、组队邀请实时推送
+do $$ begin alter publication supabase_realtime add table public.chat; exception when duplicate_object then null; end $$;
+do $$ begin alter publication supabase_realtime add table public.friends; exception when duplicate_object then null; end $$;
+do $$ begin alter publication supabase_realtime add table public.party_invites; exception when duplicate_object then null; end $$;
+do $$ begin alter publication supabase_realtime add table public.party_members; exception when duplicate_object then null; end $$;
+
+-- ========== 好友交易（10-25） ==========
+-- 双方各放物品（从仓库出），都点确认才成交；成交后各自的游戏领取一次（claimed），东西才真正到账
+create table if not exists public.trades (
+  id uuid primary key default gen_random_uuid(),
+  a uuid not null references public.profiles(id) on delete cascade,
+  b uuid not null references public.profiles(id) on delete cascade,
+  a_items jsonb not null default '{}',
+  b_items jsonb not null default '{}',
+  a_ok boolean not null default false,
+  b_ok boolean not null default false,
+  status text not null default 'open' check (status in ('open', 'done', 'cancelled')),
+  a_claimed boolean not null default false,
+  b_claimed boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists trades_a on public.trades (a);
+create index if not exists trades_b on public.trades (b);
+alter table public.trades enable row level security;
+drop policy if exists "trades 双方可看" on public.trades;
+create policy "trades 双方可看" on public.trades for select using (auth.uid() in (a, b));
+
+create or replace function public.start_trade(p_other uuid) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare t uuid;
+begin
+  if not is_friend(auth.uid(), p_other) then raise exception '只能和好友交易'; end if;
+  select id into t from trades where status = 'open' and ((a = auth.uid() and b = p_other) or (a = p_other and b = auth.uid()));
+  if t is not null then return t; end if;
+  if (select count(*) from trades where status = 'open' and auth.uid() in (a, b)) >= 5 then raise exception '同时最多 5 笔交易'; end if;
+  insert into trades (a, b) values (auth.uid(), p_other) returning id into t;
+  return t;
+end $$;
+
+-- 改自己这边放的东西：{物品 id: 数量}，改了以后双方都要重新确认
+create or replace function public.set_offer(p_trade uuid, p_items jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+declare t trades; k text; v jsonb;
+begin
+  select * into t from trades where id = p_trade for update;
+  if t.id is null or auth.uid() not in (t.a, t.b) then raise exception '交易不存在'; end if;
+  if t.status <> 'open' then raise exception '交易已经结束'; end if;
+  if jsonb_typeof(p_items) <> 'object' then raise exception '物品格式不对'; end if;
+  if (select count(*) from jsonb_object_keys(p_items)) > 12 then raise exception '一次最多放 12 种东西'; end if;
+  for k, v in select * from jsonb_each(p_items) loop
+    if jsonb_typeof(v) <> 'number' or (v::text)::numeric <= 0 or (v::text)::numeric <> floor((v::text)::numeric) then
+      raise exception '数量不对';
+    end if;
+  end loop;
+  if auth.uid() = t.a then update trades set a_items = p_items, a_ok = false, b_ok = false, updated_at = now() where id = p_trade;
+  else update trades set b_items = p_items, a_ok = false, b_ok = false, updated_at = now() where id = p_trade; end if;
+end $$;
+
+-- 确认 / 取消确认；双方都确认就成交
+create or replace function public.confirm_trade(p_trade uuid, p_ok boolean) returns text
+language plpgsql security definer set search_path = public as $$
+declare t trades;
+begin
+  select * into t from trades where id = p_trade for update;
+  if t.id is null or auth.uid() not in (t.a, t.b) then raise exception '交易不存在'; end if;
+  if t.status <> 'open' then raise exception '交易已经结束'; end if;
+  if auth.uid() = t.a then t.a_ok := p_ok; else t.b_ok := p_ok; end if;
+  if t.a_ok and t.b_ok then
+    if t.a_items = '{}'::jsonb and t.b_items = '{}'::jsonb then raise exception '双方都没放东西'; end if;
+    t.status := 'done';
+  end if;
+  update trades set a_ok = t.a_ok, b_ok = t.b_ok, status = t.status, updated_at = now() where id = p_trade;
+  return t.status;
+end $$;
+
+create or replace function public.cancel_trade(p_trade uuid) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  update trades set status = 'cancelled', updated_at = now()
+    where id = p_trade and status = 'open' and auth.uid() in (a, b);
+end $$;
+
+-- 成交后领取：只有第一次返回 true，游戏据此扣掉自己给出的、加上收到的
+create or replace function public.claim_trade(p_trade uuid) returns boolean
+language plpgsql security definer set search_path = public as $$
+declare n int;
+begin
+  update trades set a_claimed = true where id = p_trade and status = 'done' and a = auth.uid() and not a_claimed;
+  get diagnostics n = row_count;
+  if n = 0 then
+    update trades set b_claimed = true where id = p_trade and status = 'done' and b = auth.uid() and not b_claimed;
+    get diagnostics n = row_count;
+  end if;
+  return n > 0;
+end $$;
+
+do $$ begin alter publication supabase_realtime add table public.trades; exception when duplicate_object then null; end $$;
+

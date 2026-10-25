@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ACTIONS, BUFF_NAME, buffText, cropsOfField, WAYSTONES, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, type MapNode } from '../core/data';
 import {
   atBank, atMarket, nearestBank, nearestMarket, BAG_SLOTS, BELT_CAP, beltSlotOf, eat, fromBelt, POTION_AT, toBelt, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, armorPerks, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip, openContainer,
@@ -26,9 +26,10 @@ import { openHalloween } from './Halloween';
 import { hwOpen } from '../core/halloween';
 import { stopText } from './hud';
 import { actionName } from './format';
-import { openGuild } from './Guild';
+import { AccountSettings, LeaderboardPage } from './Guild';
+import { online } from '../net';
+import { gameFps } from './GameCanvas';
 import { tl } from '../i18n';
-import { LangSwitch } from './LangSwitch';
 
 const GEAR_SLOTS: [EquipSlot, string][] = [
   ['head', tl('头部')], ['neck', tl('项链')], ['weapon', tl('武器')], ['body', tl('身体')], ['hands', tl('手部')], ['feet', tl('脚部')], ['ring', tl('戒指')],
@@ -507,21 +508,22 @@ const MONSTER_COUNT = (() => {
 const LANG_TITLE = '语言 · Language'; // i18n-ignore
 
 export function MorePanel({ s }: { s: GameState }) {
-  const [confirming, setConfirming] = useState(false);
-  const [codex, setCodex] = useState(false);
-  const [wardrobe, setWardrobe] = useState(false);
-  const [book, setBook] = useState(false);
-  if (codex) return <Codex s={s} onClose={() => setCodex(false)} />;
-  if (book) return <Handbook onClose={() => setBook(false)} />;
-  if (wardrobe) return <Wardrobe s={s} onClose={() => setWardrobe(false)} />;
+  const [page, setPage] = useState<'codex' | 'wardrobe' | 'book' | 'rank' | 'settings' | null>(null);
+  const close = () => setPage(null);
+  if (page === 'codex') return <Codex s={s} onClose={close} />;
+  if (page === 'book') return <Handbook onClose={close} />;
+  if (page === 'wardrobe') return <Wardrobe s={s} onClose={close} />;
+  if (page === 'rank') return <LeaderboardPage onClose={close} />;
+  if (page === 'settings') return <SettingsPage s={s} onClose={close} />;
   const total = Object.keys(ITEMS).length - 1;
   const got = Object.keys(s.seen).filter((id) => id !== 'coins' && ITEMS[id]).length;
   return (
     <div className="page">
-      <h2>{LANG_TITLE}</h2>
-      <LangSwitch before={() => store.save()} />
-      <h2>{tl('公会 ')}<small className="muted">{tl('多人功能开发中')}</small></h2>
-      <button className="primary" onClick={openGuild}>{tl('打开公会')}</button>
+      <ServerStatus />
+      <h2>{tl('设置 ')}<small className="muted">{tl('账号、存档')}</small></h2>
+      <button className="primary" onClick={() => setPage('settings')}>{tl('打开设置')}</button>
+      <h2>{tl('排行榜 ')}<small className="muted">{tl('总等级、战斗等级、各技能')}</small></h2>
+      <button className="primary" onClick={() => setPage('rank')}>{tl('查看排行榜')}</button>
       {hwOpen(Date.now()) && <>
         <h2>{tl('万圣节活动 ')}<small className="muted">{tl('11 月 1 日结束')}</small></h2>
         <button className="primary" onClick={openHalloween}>{tl('查看活动说明')}</button>
@@ -531,21 +533,59 @@ export function MorePanel({ s }: { s: GameState }) {
       <h2>{tl('新手指引')}</h2>
       <button className="primary" onClick={openGuide}>{tl('重新查看新手指引')}</button>
       <h2>{tl('攻略手册 ')}<small className="muted">{tl('每个系统的教程、城镇和首领攻略')}</small></h2>
-      <button className="primary" onClick={() => setBook(true)}>{tl('打开攻略手册')}</button>
-      <h2>{tl('日志 ')}<small className="muted">{tl('战斗掉落、采集制作的产出和经验')}</small></h2>
-      <button className="primary" onClick={openCombatLog}>{tl('打开日志')}</button>
+      <button className="primary" onClick={() => setPage('book')}>{tl('打开攻略手册')}</button>
       <h2>{tl('兑换码')}</h2>
       <Redeem />
       <h2>{tl('物品图鉴 ')}<small className="muted">{tl`已收集 ${got}/${total}`}</small></h2>
       <div className="bag-meter"><i style={{ width: `${(got / total) * 100}%` }} /></div>
-      <button className="primary" onClick={() => setCodex(true)}>{tl('打开图鉴')}</button>
+      <button className="primary" onClick={() => setPage('codex')}>{tl('打开图鉴')}</button>
       <h2>{tl('衣橱 ')}<small className="muted">{tl`当前：${outfitOf(s.settings.skin).name}`}</small></h2>
-      <button className="primary" onClick={() => setWardrobe(true)}>{tl('打开衣橱')}</button>
+      <button className="primary" onClick={() => setPage('wardrobe')}>{tl('打开衣橱')}</button>
       <h2>{tl('关于')}</h2>
-      <p>{tl('苍岭放置（暂定名）测试服，单机版。角色会一直执行队列里的任务，关掉网页也会在下次打开时结算离线收益，最多 24 小时。')}</p>
-      <p className="muted">{tl`世界 ${MAP_W}×${MAP_H} 格，${Object.keys(REGIONS).length} 个区域，${TOWNS.length + 2} 座城镇。${Object.keys(SKILLS).length} 种技能、${Object.keys(ITEMS).length - 1} 种物品、${MONSTER_COUNT.all} 种怪物（精英 ${MONSTER_COUNT.elite}、首领 ${MONSTER_COUNT.boss}），资源、装备和怪物都是正式数值。 美术全部用代码逐像素绘制。存档保存在本浏览器里。`}</p>
+      <p>{tl('苍岭放置（暂定名）测试服。角色会一直执行队列里的任务，关掉网页也会在下次打开时结算离线收益，最多 24 小时。')}</p>
+      <p className="muted">{tl`世界 ${MAP_W}×${MAP_H} 格，${Object.keys(REGIONS).length} 个区域，${TOWNS.length + 2} 座城镇。${Object.keys(SKILLS).length} 种技能、${Object.keys(ITEMS).length - 1} 种物品、${MONSTER_COUNT.all} 种怪物（精英 ${MONSTER_COUNT.elite}、首领 ${MONSTER_COUNT.boss}），资源、装备和怪物都是正式数值。 美术全部用代码逐像素绘制。存档跟着账号保存在云端。`}</p>
       <p className="muted">{tl('版本 ')}{__BUILD__}</p>
-      <h2>{tl('存档')}</h2>
+    </div>
+  );
+}
+
+/** 更多页顶上的状态栏：全服在线人数、延迟、帧率（用户 10-25） */
+function ServerStatus() {
+  const [, tick] = useState(0);
+  const [ping, setPing] = useState<number | null>(null);
+  useEffect(() => {
+    const t = setInterval(() => tick((n) => n + 1), 1000);
+    let live = true;
+    const measure = () => { if (online.me()) online.ping().then((ms) => live && setPing(ms)).catch(() => live && setPing(-1)); };
+    measure();
+    const p = setInterval(measure, 5000);
+    return () => { live = false; clearInterval(t); clearInterval(p); };
+  }, []);
+  const n = online.onlineCount();
+  const fps = gameFps();
+  const lvl = (ms: number) => (ms < 0 ? 'bad' : ms < 150 ? 'good' : ms < 400 ? 'mid' : 'bad');
+  return (
+    <div className="server-status frame">
+      <span><small>{tl('在线玩家')}</small><b>{online.me() ? n ?? '…' : tl('离线')}</b></span>
+      <span><small>{tl('延迟')}</small><b className={ping == null ? '' : lvl(ping)}>{ping == null ? '…' : ping < 0 ? tl('连不上') : `${ping} ms`}</b></span>
+      <span><small>FPS</small><b className={fps >= 50 ? 'good' : fps >= 25 ? 'mid' : 'bad'}>{fps ? Math.round(fps) : '…'}</b></span>
+      <span><small>{tl('每帧')}</small><b>{fps ? `${(1000 / fps).toFixed(1)} ms` : '…'}</b></span>
+    </div>
+  );
+}
+
+/** 设置：账号和存档（用户 10-25 从联机页、更多页挪进来） */
+function SettingsPage({ s, onClose }: { s: GameState; onClose: () => void }) {
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <div className="page guild">
+      <div className="sheet-head">
+        <button className="back" onClick={onClose}>{tl('‹ 返回')}</button>
+        <h2>{tl('设置')}</h2>
+      </div>
+      <h3>{tl('账号')}</h3>
+      <AccountSettings />
+      <h3>{tl('存档备份')}</h3>
       <SaveBackup s={s} />
       {confirming ? (
         <div className="go">
@@ -630,7 +670,7 @@ function SaveBackup({ s }: { s: GameState }) {
   };
   return (
     <div className="save-backup">
-      <p className="muted">{tl('存档只保存在这个浏览器里。iOS 长时间不打开网站可能会被清掉，建议定期导出存档码保存。')}</p>
+      <p className="muted">{tl('存档每分钟自动传到云端。下面是手动备份：导出存档码或文件，需要时再导入。')}</p>
       <div className="go">
         <button onClick={doExport}>{tl('导出存档码')}</button>
         <button onClick={() => { setMode('import'); setCode(''); setMsg(''); }}>{tl('导入存档码')}</button>

@@ -114,7 +114,7 @@ function StopChip({ s }: { s: GameState }) {
   );
 }
 
-export function StatusChips({ s, extra, log }: { s: GameState; extra?: ReactNode; log?: ReactNode }) {
+export function StatusChips({ s, extra, log, chat }: { s: GameState; extra?: ReactNode; log?: ReactNode; chat?: ReactNode }) {
   const task = s.queue[0];
   const a = task && ACTIONS[task.action];
   let body = null;
@@ -176,6 +176,7 @@ export function StatusChips({ s, extra, log }: { s: GameState; extra?: ReactNode
       {(!task || s.lastStop?.reason !== 'complete') && <StopChip s={s} />}
       {body && <div className="chip">{body}</div>}
       {log || <button className="chip dim log-chip" title={tl("日志 (L)")} onClick={openCombatLog}>{tl`⚔ 击杀 ${fmtNum(s.stats.kills)} · 阵亡 ${s.stats.deaths} · `}<u>{tl('展开日志 ▸')}</u></button>}
+      {chat}
     </div>
   );
 }
