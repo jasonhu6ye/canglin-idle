@@ -70,6 +70,7 @@ export class LocalApi implements OnlineApi {
     this.flush();
   }
   async pullSave() { return this.db.save; }
+  async cloudHead() { return this.db.save ? { tick: this.db.save.lastTick } : null; }
 
   private row(board: Board): RankRow | null {
     const me = this.db.me, snap = this.db.snap;

@@ -153,4 +153,11 @@ export const EN_SOCIAL: Record<string, string> = {
   '组队中（{0} 人）：所有技能经验 +{1}%。每个队员 +{2}%，5 人满队 +{3}%': 'In a party of {0}: +{1}% XP for every skill. Each member adds +{2}%, up to +{3}% with a full party of 5.',
   '组队经验加成：每个队员 +5%': 'Party XP bonus: +5% per member',
   '组队时所有技能经验增加：队伍每个人 +5%，2 人 +10%，5 人满队 +25%。左上角增益栏能看到当前加成。': 'Being in a party now boosts XP for every skill: +5% per member, so +10% for two and +25% for a full party of five. The buff bar at the top left shows your current bonus.',
+  '这个账号在别的设备上玩过了': 'This account was played on another device',
+  '别的设备或浏览器在这之后上传了更新的存档。为了不拿这边的旧进度盖掉它，这里已经暂停。点下面的按钮会读取云端最新的存档，并结算离开期间的收获。': 'Another device or browser has uploaded a newer save since then. This page is paused so its older progress does not overwrite it. Tap the button below to load the latest cloud save and collect what you earned while away.',
+  '读取最新存档，在这里继续': 'Load latest save and continue here',
+  '修复离线收益被旧进度盖掉': 'Fixed offline rewards being overwritten by older progress',
+  '同一个账号在两台设备（或两个浏览器）上开着时，留在后台的那边会拿旧进度把云端更新的存档盖掉，看起来就像离线收益没了。现在发现别处传过更新的存档，这边会先停下，点按钮读取最新存档后再结算离开期间的收获。': 'When the same account was open on two devices (or two browsers), the one left in the background could overwrite the newer cloud save with older progress, which looked like lost offline rewards. Now, if a newer save was uploaded elsewhere, this side pauses first; tap the button to load the latest save and then collect what you earned while away.',
+  '离线收获的弹窗会先弹出来，不再被更新公告挡住。': 'The while-you-were-away summary now shows first instead of being hidden behind the update notes.',
+  '{0} 项': '{0} items',
 };

@@ -40,6 +40,13 @@ const ls = {
   get: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
   set: (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* 存不了就算了 */ } },
 };
+/** 这台设备（这个浏览器）的 id，跟存档一起传上去 */
+const DEVICE_KEY = 'canglin-device';
+function deviceId() {
+  let id = ls.get(DEVICE_KEY);
+  if (!id) { id = Math.random().toString(36).slice(2, 12); ls.set(DEVICE_KEY, id); }
+  return id;
+}
 const xpSum = (s: GameState) => Object.values(s.xp).reduce((a, b) => a + b, 0);
 /** 比新开的档多了经验才算有进度（新档生命值本来就有经验） */
 const hasProgress = (s: GameState) => xpSum(s) > xpSum(newGame(0, 1));
@@ -58,9 +65,15 @@ export async function pushNow() {
   const me = online.me();
   if (!me || phase !== 'play' || store.inactive || ls.get(OWNER_KEY) !== me.id) return;
   lastPush = Date.now();
-  const s = store.state;
   try {
-    await online.pushSave(s);
+    // 别的设备（或别的浏览器）在这之后传过存档：这边停下，别拿旧进度盖掉它（用户 10-25 离线收益丢了）
+    const cloud = await online.cloudHead();
+    if (cloud && cloud.device && cloud.device !== deviceId() && cloud.tick > Number(ls.get(SYNCED_KEY) ?? 0) + 1000) {
+      store.stop('device');
+      return;
+    }
+    const s = store.state;
+    await online.pushSave(s, deviceId());
     ls.set(SYNCED_KEY, String(s.lastTick));
   } catch { /* 连不上就下次再传 */ }
 }
@@ -128,5 +141,6 @@ export async function retry() {
 export function startSync() {
   void retry();
   setInterval(() => { if (Date.now() - lastPush > PUSH_EVERY_MS) void pushNow(); }, 10_000);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') void pushNow(); });
+  // 切回来时马上对一次云端：这段时间可能在别的设备上玩过
+  document.addEventListener('visibilitychange', () => void pushNow());
 }

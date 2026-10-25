@@ -153,8 +153,11 @@ export interface OnlineApi {
   rename(name: string): Promise<void>;
 
   /** 云存档：存的是整个 GameState；冲突时比 lastTick，新的赢 */
-  pushSave(s: GameState): Promise<void>;
   pullSave(): Promise<GameState | null>;
+  /** 存档上传时带上设备 id，好认出是不是别的设备传的 */
+  pushSave(s: GameState, device?: string): Promise<void>;
+  /** 云端存档的 lastTick 和上传它的设备（不下载整份存档），没有就是 null */
+  cloudHead(): Promise<{ tick: number; device?: string } | null>;
 
   /** 排行榜读的是 pushSave 时顺便写的等级快照 */
   leaderboard(board: Board, limit?: number): Promise<RankRow[]>;

@@ -60,15 +60,21 @@ class Store {
     this.emit();
   }
 
-  /** 游戏在另一个页面里打开了：这边停下，不再存档 */
+  /** 游戏在另一个页面（tab）或另一台设备（device）上开着：这边停下，不再存档 */
   inactive = false;
+  inactiveWhy: 'tab' | 'device' = 'tab';
+  stop(why: 'tab' | 'device') {
+    if (this.inactive) return;
+    this.inactive = true;
+    this.inactiveWhy = why;
+    this.emit();
+  }
 
   constructor() {
     try { localStorage.setItem(OWNER_KEY, TAB_ID); } catch { /* 存不了就不管多开 */ }
     window.addEventListener('storage', (e) => {
-      if (e.key !== OWNER_KEY || !e.newValue || e.newValue === TAB_ID || this.inactive) return;
-      this.inactive = true;
-      this.emit();
+      if (e.key !== OWNER_KEY || !e.newValue || e.newValue === TAB_ID) return;
+      this.stop('tab');
     });
     const loaded = load();
     const { state, summary } = advance(loaded, Date.now());
