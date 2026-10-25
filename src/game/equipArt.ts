@@ -468,8 +468,8 @@ function tool(p: Pix, key: string, t: number) {
         if (d > r) return null;
         if (d > r - 0.9) return t >= 5 ? (v < 0 ? A[3] : A[2]) : v < 0 ? M[4] : M[3];
         // 锅底：左上亮、右下暗，中间一圈油光
-        if (Math.abs(d - r * 0.45) < 0.4 && u < cu) return M[3];
-        return v < -1 ? M[2] : M[1];
+        if (Math.abs(d - r * 0.45) < 0.4 && u < cu && v < 0) return mix(M[3], '#1a1410', 0.25);
+        return mix(v < -1 ? M[1] : M[0], '#1a1410', 0.45);
       });
       if (t === 2 || t === 4 || t === 6) parts.push(ball(cu + r - 0.3, 0, 1, M)); // 对面的小耳
       if (t >= 2) parts.push(ball(10.3, 0, 0.7, M)); // 柄和锅的铆钉
