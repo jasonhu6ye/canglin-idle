@@ -233,7 +233,12 @@ export function playerBonuses(s: GameState, style = weaponStyle(s)) {
 
 export const TOOL_FOR: Partial<Record<SkillId, EquipSlot>> = {
   mining: 'pickaxe', woodcutting: 'axe', fishing: 'rod', gathering: 'sickle', farming: 'hoe', hunting: 'knife', smithing: 'hammer', crafting: 'needle',
+  // 制弓和锻造共用锻造锤（用户 10-25）；烹饪用炒锅
+  fletching: 'hammer', cooking: 'pan',
 };
+
+/** 这个工具栏位给哪些技能加速（锻造锤：锻造、制弓），名字用顿号连起来 */
+export const toolSkillNames = (slot: EquipSlot) => (Object.keys(TOOL_FOR) as SkillId[]).filter((k) => TOOL_FOR[k] === slot).map((k) => SKILLS[k].name).join(tl('、'));
 
 /** 移动速度（格/秒）：骑着坐骑时按坐骑加成 */
 export function moveSpeed(s: GameState): number {

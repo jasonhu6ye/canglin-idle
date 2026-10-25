@@ -526,4 +526,9 @@ export const EN_TEXT: Record<string, string> = {
   '顶栏金币旁边加了邮箱（信封图标，红点是没读或没领的邮件）。新手任务奖励、兑换码奖励、活动礼物以后都发到邮箱，打开点「领取」或「一键领取」，东西进背包，放不下进仓库，金币进仓库。': 'There is now a mailbox next to your coins in the top bar (the envelope; the red dot counts unread or unclaimed mail). Starter quest rewards, redeem code rewards and event gifts now arrive there. Tap Claim or Claim all: items go to your bag, overflow goes to the bank, and coins go to the bank.',
   '万圣节活动期间，每天上线都会收到 3 个南瓜礼盒。': 'During Halloween you receive 3 Pumpkin Gift Boxes every day you log in.',
   '活动结束（11 月 1 日 0 点）后，背包、仓库和邮箱里没打开的南瓜礼盒会自动销毁，记得及时打开。': 'When the event ends (Nov 1, 00:00), unopened Pumpkin Gift Boxes in your bag, bank and mailbox disappear, so open them in time.',
+  '寻路去石碑也会传送，石碑分类，制作页显示进度': 'Travel to waystones teleports, waystone categories, progress on the crafting page',
+  '修好了寻路去传说石碑时不传送的问题：比如站在野外石碑旁，在地图上点主城石碑「寻路前往」，现在会直接传送过去，不再跑回去。站在石碑旁边时也会立刻传送，不用先走一步。': 'Fixed auto-travel ignoring teleports when the destination is a waystone. For example, standing at a wilderness waystone and choosing "Go there" on the Canglin waystone now teleports you straight there instead of running. If you are already next to a waystone, you teleport right away.',
+  '世界地图上「寻路前往」显示的时间按真正的路线算，经过石碑会写「经石碑约 X 秒」。': 'The time on the world map\'s "Go there" button now follows the real route, and says "via waystones" when it uses them.',
+  '传说石碑列表分成城镇、野外区域、特色地点、已激活几类，激活过的排在前面，会记住上次选的分类。': 'The waystone list is now split into Towns, Wilds, Landmarks and Activated. Activated stones come first, and your last tab is remembered.',
+  '制作页底部（开始按钮上面）显示当前任务的名字、进度条和完成数量，手机上不用退出页面也能看进度。': 'The bottom of the crafting page (above the start buttons) now shows your current task, its progress bar and count, so you can watch progress on mobile without leaving the page.',
 };

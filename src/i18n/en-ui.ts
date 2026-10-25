@@ -788,4 +788,12 @@ export const EN_UI: Record<string, string> = {
   '{0} 过期': 'Expires {0}',
   '已领取': 'Claimed',
   '领取': 'Claim',
+  // 制作页进度、石碑分类（10-25）
+  '剩 {0} 分钟': '{0} min left',
+  '已完成 {0}': '{0} done',
+  '寻路中 · 还要 {0} 秒': 'Traveling · {0}s left',
+  ' · 后面还排了 {0} 个': ' · {0} more queued',
+  '野外区域': 'Wilds',
+  '特色地点': 'Landmarks',
+  '寻路前往 · 经石碑约 {0} 秒': 'Go there · about {0}s via waystones',
 };

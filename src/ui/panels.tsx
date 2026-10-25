@@ -6,7 +6,7 @@ import {
   atBank, atMarket, nearestBank, nearestMarket, BAG_SLOTS, BELT_CAP, beltSlotOf, eat, fromBelt, POTION_AT, toBelt, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, armorPerks, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip, openContainer,
   weaponStyle, buffPct, levelSpeed, maxHp, moveSpeed, playerAttackMs,
   redeemCode, toggleMount,
-  sortBank,
+  sortBank, toolSkillNames, TOOL_FOR,
 } from '../core/sim';
 import type { BuffKind, EquipSlot, GameState, ItemCategory, SkillId, Summary } from '../core/types';
 import { openCombatLog } from './CombatLog';
@@ -39,7 +39,7 @@ export const GEAR_SLOTS: [EquipSlot, string][] = [
 ];
 export const TOOL_SLOTS: [EquipSlot, string, SkillId][] = [
   ['axe', tl('斧头'), 'woodcutting'], ['pickaxe', tl('镐子'), 'mining'], ['sickle', tl('镰刀'), 'gathering'], ['knife', tl('刮皮刀'), 'hunting'],
-  ['rod', tl('鱼竿'), 'fishing'], ['hoe', tl('锄头'), 'farming'], ['hammer', tl('锻造锤'), 'smithing'], ['needle', tl('缝纫针'), 'crafting'],
+  ['rod', tl('鱼竿'), 'fishing'], ['hoe', tl('锄头'), 'farming'], ['hammer', tl('锻造锤'), 'smithing'], ['needle', tl('缝纫针'), 'crafting'], ['pan', tl('炒锅'), 'cooking'],
 ];
 const STYLE_NAME = { melee: tl('近战'), ranged: tl('远程'), magic: tl('魔法') };
 
@@ -77,7 +77,7 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
       {e && (
         <span className={canEquip ? '' : 'warn'}>
           {e.move ? tl`坐骑 · 骑乘时移动速度 +${Math.round(e.move * 100)}%` : tl`需要${SKILLS[e.skill].name} ${e.level} 级`}
-          {e.move ? '' : e.speed ? tl` · ${SKILLS[e.skill].name}速度 +${Math.round(e.speed * 100)}%` : tl` · 攻 +${e.attack} 力 +${e.strength} 防 +${e.defence}${e.attackMs ? tl` · 攻速 ${(e.attackMs / 1000).toFixed(1)} 秒` : ''}`}
+          {e.move ? '' : e.speed ? tl` · ${toolSkillNames(e.slot) || SKILLS[e.skill].name}速度 +${Math.round(e.speed * 100)}%` : tl` · 攻 +${e.attack} 力 +${e.strength} 防 +${e.defence}${e.attackMs ? tl` · 攻速 ${(e.attackMs / 1000).toFixed(1)} 秒` : ''}`}
           {e.style && e.slot !== 'weapon' && tl`（攻、力只对${STYLE_NAME[e.style]}生效）`}
         </span>
       )}
@@ -367,7 +367,9 @@ function Attributes({ s }: { s: GameState }) {
       </ul>
       <h2>{tl('干活加速 ')}<small className="muted">{tl('动作时间 ÷（1 + 等级 + 工具 + 料理）')}</small></h2>
       <ul className="attr-list speed">
-        {TOOL_SLOTS.map(([slot, name, skill]) => {
+        {(Object.keys(TOOL_FOR) as SkillId[]).map((skill) => {
+          const slot = TOOL_FOR[skill]!;
+          const name = TOOL_SLOTS.find(([k]) => k === slot)?.[1] ?? '';
           const lv = levelSpeed(s, skill);
           const tool = slotSpeed(s, slot);
           const food = buffPct(s, 'speed');

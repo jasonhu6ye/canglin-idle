@@ -27,6 +27,20 @@ const FIXED: Record<string, string> = {
 };
 
 const TPL: Record<string, string[]> = {
+  pan: [
+    '............',
+    '......kkkk..',
+    '.....kbccbk.',
+    '....kbaaacbk',
+    '....kbaaaabk',
+    '....kbaaaabk',
+    '.....kbaabk.',
+    '....okkkkk..',
+    '...oO.......',
+    '..oO........',
+    '.oO.........',
+    'kO..........',
+  ],
   mail: [
     '............',
     '............',
@@ -942,7 +956,7 @@ const EQUIP_TPL: Record<string, string> = {
   plate_head: 'helm', plate_body: 'body', plate_feet: 'boots', plate_hands: 'gauntlet',
   leather_head: 'cap', leather_body: 'jacket', leather_feet: 'boots', leather_hands: 'gloves',
   cloth_head: 'hood', cloth_body: 'robe', cloth_feet: 'shoes', cloth_hands: 'gloves',
-  axe: 'axe', pickaxe: 'pickaxe', sickle: 'sickle', knife: 'knife', rod: 'rod', hoe: 'hoe', hammer: 'hammer', needle: 'needle',
+  axe: 'axe', pickaxe: 'pickaxe', sickle: 'sickle', knife: 'knife', rod: 'rod', hoe: 'hoe', hammer: 'hammer', needle: 'needle', pan: 'pan',
 };
 
 /** 物品 → [模板, 颜色]（矿石、木头、棉花、兽皮另有专门的图，见 resIconUrl） */

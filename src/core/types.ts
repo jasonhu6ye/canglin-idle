@@ -12,7 +12,7 @@ export type CombatStyle = 'melee' | 'ranged' | 'magic';
 
 /** mount：坐骑栏（用户 10-23 要求先留好栏位，坐骑以后加） */
 export type GearSlot = 'weapon' | 'head' | 'body' | 'feet' | 'hands' | 'neck' | 'ring' | 'mount';
-export type ToolSlot = 'axe' | 'pickaxe' | 'sickle' | 'knife' | 'rod' | 'hoe' | 'hammer' | 'needle';
+export type ToolSlot = 'axe' | 'pickaxe' | 'sickle' | 'knife' | 'rod' | 'hoe' | 'hammer' | 'needle' | 'pan';
 export type EquipSlot = GearSlot | ToolSlot;
 
 /** 料理增益：攻击（命中）、力量（最高伤害）、防御、干活速度、经验 */

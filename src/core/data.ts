@@ -321,8 +321,10 @@ export const EQUIP_TYPES: EquipType[] = [
   TL('hammer', tl('锻造锤'), 'hammer', 'smithing', 'smithing', [['bar', 2], ['plank', 1]], 2),
   TL('rod', tl('鱼竿'), 'rod', 'fishing', 'fletching', [['plank', 2], ['cloth', 1]], 2),
   TL('needle', tl('缝纫针'), 'needle', 'crafting', 'smithing', [['bar', 1]], 0),
+  // 烹饪工具（用户 10-25：烹饪缺了一系列工具）
+  TL('pan', tl('炒锅'), 'pan', 'cooking', 'smithing', [['bar', 2], ['plank', 1]], 1),
 ];
-const TOOL_SLOTS: EquipSlot[] = ['axe', 'pickaxe', 'sickle', 'knife', 'rod', 'hoe', 'hammer', 'needle'];
+const TOOL_SLOTS: EquipSlot[] = ['axe', 'pickaxe', 'sickle', 'knife', 'rod', 'hoe', 'hammer', 'needle', 'pan'];
 const matItem = (m: Mat, i: number) => (m === 'bar' ? `${TIERS[i].id}_bar` : `${m}_${i + 1}`);
 const matCost = (m: Mat, i: number) => (m === 'bar' ? BAR_VALUE[i] : RES_VALUE[i] * 3);
 

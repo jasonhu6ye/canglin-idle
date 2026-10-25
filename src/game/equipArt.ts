@@ -455,6 +455,28 @@ function tool(p: Pix, key: string, t: number) {
       if (t === 7 || t === 4) parts.push(ball(16.5, 0, 1.1, A));
       break;
     }
+    case 'pan': {
+      // 炒锅（烹饪工具，用户 10-25）：短柄 + 圆锅，锅形各阶不同（平底锅、深锅、双耳锅、宽口炒锅……）
+      parts.length = 0;
+      parts.push(shaft(-1, 9.5, 0.75, W));
+      if (wrap) parts.push(grip(-1, 4, 0.9, A[1], A[2]));
+      const r = [4, 4.3, 4.5, 4.8, 5, 5.2, 5.4, 5.6][t];
+      const sq = [1, 1, 0.85, 1, 0.8, 1, 0.9, 1][t];
+      const cu = 10 + r;
+      parts.push((u, v) => {
+        const d = Math.hypot((u - cu) * sq, v);
+        if (d > r) return null;
+        if (d > r - 0.9) return t >= 5 ? (v < 0 ? A[3] : A[2]) : v < 0 ? M[4] : M[3];
+        // 锅底：左上亮、右下暗，中间一圈油光
+        if (Math.abs(d - r * 0.45) < 0.4 && u < cu) return M[3];
+        return v < -1 ? M[2] : M[1];
+      });
+      if (t === 2 || t === 4 || t === 6) parts.push(ball(cu + r - 0.3, 0, 1, M)); // 对面的小耳
+      if (t >= 2) parts.push(ball(10.3, 0, 0.7, M)); // 柄和锅的铆钉
+      if (t === 7) parts.push(ball(cu, 0, 1.2, A));
+      if (t === 3 || t === 6) parts.push(dots(cu - r * 0.4, cu + r * 0.4, r * 0.4, 0, A[3]));
+      break;
+    }
     default: { // needle 针：一根针 + 旁边一轴线，线的颜色和线轴样式逐阶不同
       parts.length = 0;
       const thread = ramp([WOODS[0], '#e04a4a', '#4a8ae0', '#e8c040', '#f0f0f8', ACCENT[5], ACCENT[6], ACCENT[7]][t]);
@@ -845,7 +867,7 @@ export function equipIconUrl(key: string, tier: number): string | null {
   else if (key === 'longbow') bow(p, tier, true);
   else if (key === 'crossbow') crossbow(p, tier);
   else if (key === 'staff') staff(p, tier);
-  else if (['axe', 'pickaxe', 'sickle', 'knife', 'rod', 'hoe', 'hammer', 'needle'].includes(key)) tool(p, key, tier);
+  else if (['axe', 'pickaxe', 'sickle', 'knife', 'rod', 'hoe', 'hammer', 'needle', 'pan'].includes(key)) tool(p, key, tier);
   else if (part === 'head') (mat === 'plate' ? helm : mat === 'leather' ? capLeather : hatCloth)(p, tier);
   else if (part === 'body') bodyArmor(p, tier, mat as 'plate');
   else if (part === 'feet') boots(p, tier, mat as 'plate');

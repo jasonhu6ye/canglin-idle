@@ -61,6 +61,33 @@ export function ActionSheet({ s, nodeId, onClose }: { s: GameState; nodeId: stri
 /** 每个地点上次选的分类、阶级和配方：关掉再打开还停在原处（用户 10-25） */
 const sheetMemo = new Map<string, { cat: string; tier: number | 'all'; selected: string | null }>();
 
+/**
+ * 制作页底部的当前任务进度（用户 10-25：手机上要退出页面才看得到进度条）：
+ * 正在做的东西、第几个、进度条；寻路中、暂停时也写出来。
+ */
+function TaskProgress({ s }: { s: GameState }) {
+  const t = s.queue[0];
+  const a = t && ACTIONS[t.action];
+  if (!t || !a) return null;
+  const left = t.mode.type === 'count' ? `${t.done}/${t.mode.count}` : t.mode.type === 'time' ? tl`剩 ${Math.max(0, Math.ceil((t.mode.ms - t.elapsedMs) / 60000))} 分钟` : tl`已完成 ${fmtNum(t.done)}`;
+  let pct = 0;
+  let what: string = a.kind === 'skill' ? a.name : MONSTERS[a.monster].name;
+  let note = left;
+  if (s.paused) note = tl('已暂停');
+  else if (s.travel) {
+    pct = (1 - s.travel.ms / s.travel.total) * 100;
+    note = tl`寻路中 · 还要 ${Math.ceil(s.travel.ms / 1000)} 秒`;
+  } else if (a.kind === 'skill') pct = (Math.max(0, s.progressMs) / actionDuration(s, a)) * 100;
+  else if (s.combat) pct = (1 - Math.max(0, s.combat.monsterHp) / MONSTERS[a.monster].hp) * 100;
+  if (s.queue.length > 1) what += tl` · 后面还排了 ${s.queue.length - 1} 个`;
+  return (
+    <div className={`task-prog ${s.paused ? 'paused' : ''}`}>
+      <span className="tp-row"><b>{what}</b><small className="muted">{note}</small></span>
+      <span className="bar wide"><i style={{ width: `${Math.min(100, pct)}%` }} /></span>
+    </div>
+  );
+}
+
 function NodeSheet({ s, node, onClose }: { s: GameState; node: MapNode; onClose: () => void }) {
   // 从别的配方跳过来：直接选中要做的那个（用户 10-23）
   const focus = store.focusAction && node.actions.includes(store.focusAction) ? store.focusAction : null;
@@ -290,6 +317,7 @@ function TaskConfig({ s, action: selected, onDone, far, stay }: { s: GameState; 
   const queueFull = s.queue.length >= MAX_QUEUE;
   return (
     <div className="config">
+      <TaskProgress s={s} />
       <div className="tabs3">
         {(['count', 'time', 'infinite'] as const).map((t) => (
           <button key={t} className={modeType === t ? 'on' : ''} onClick={() => setModeType(t)}>

@@ -1,7 +1,7 @@
 import { skullUrl } from '../game/skullArt';
 import { pumpkinPointUrl } from '../game/halloweenArt';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ACTIONS, DANGER, dangerLevel, MAP_H, MAP_W, MID_BOX, MONSTERS, NODES, OLD_BOX, REGIONS, SKILLS, standOf, travelMs, type MapNode } from '../core/data';
+import { ACTIONS, DANGER, dangerLevel, MAP_H, MAP_W, MID_BOX, MONSTERS, NODES, OLD_BOX, REGIONS, SKILLS, planRoute, standOf, type MapNode } from '../core/data';
 import { TOWNS } from '../core/towns';
 import { combatLevel, moveSpeed } from '../core/sim';
 import type { GameState, RegionId, SkillId } from '../core/types';
@@ -224,6 +224,7 @@ function NodeCard({ s, nodeId, cl, onOpen, onWalk }: { s: GameState; nodeId: str
   const d = DANGER[n.town && !n.pond ? 0 : dangerLevel(n, cl)];
   const monsters = n.actions.map((id) => ACTIONS[id]).filter((a) => a.kind === 'combat').map((a) => a.kind === 'combat' ? MONSTERS[a.monster] : null);
   const skills = [...new Set(n.actions.map((id) => ACTIONS[id]).filter((a) => a.kind === 'skill').map((a) => (a.kind === 'skill' ? SKILLS[a.skill].name : '')))];
+  const route = planRoute(s.waystones, playerPos, standOf(n), moveSpeed(s));
   return (
     <div className="wm-card frame">
       <div className="row1">
@@ -245,7 +246,7 @@ function NodeCard({ s, nodeId, cl, onOpen, onWalk }: { s: GameState; nodeId: str
         </span>
       )}
       <div className="go">
-        <button className="primary" onClick={onWalk}>{tl`寻路前往 · 约 ${Math.ceil(travelMs(playerPos, standOf(n), moveSpeed(store.state)) / 1000)} 秒`}</button>
+        <button className="primary" onClick={onWalk}>{route.via ? tl`寻路前往 · 经石碑约 ${Math.ceil(route.ms / 1000)} 秒` : tl`寻路前往 · 约 ${Math.ceil(route.ms / 1000)} 秒`}</button>
         {!TOWN_MARK[n.id] && (n.town || skills.length > 0 || n.waystone) && <button onClick={onOpen}>{n.waystone ? tl('打开石碑') : tl('查看任务')}</button>}
       </div>
     </div>

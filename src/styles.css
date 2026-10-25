@@ -927,3 +927,9 @@ html[lang="en"] .login-box h1 { letter-spacing: 2px; }
 .mail-items { display: flex; flex-wrap: wrap; gap: 8px; }
 .mail-body .primary { align-self: flex-start; min-width: 90px; }
 .mail-close { align-self: center; min-width: 120px; }
+/* 制作页里的当前任务进度（10-25） */
+.task-prog { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
+.task-prog .tp-row { display: flex; justify-content: space-between; gap: 8px; }
+.task-prog .tp-row b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-prog .bar { display: block; width: 100%; height: 6px; }
+.task-prog.paused { opacity: 0.6; }

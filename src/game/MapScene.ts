@@ -264,22 +264,16 @@ export class MapScene extends Phaser.Scene {
       // 走到建筑、资源点、石碑旁边：自动打开它的页面（用户 10-23）
       const opens = n.town || n.waystone || n.farm || n.actions.some((a) => ACTIONS[a].kind !== 'combat');
       const onArrive = () => this.game.events.emit(NODE_CLICK, n.id);
-      // 远路自动顺路用已激活的传送石碑（用户 10-23）
-      const r: Route = n.waystone ? { ms: 0 } : planRoute(store.state.waystones, this.playerTile(), dest, moveSpeed(store.state));
+      // 远路自动顺路用已激活的传送石碑（用户 10-23）；目的地本身是石碑也一样（10-25 用户反馈：站在石碑旁寻路去主城石碑却跑过去）
+      const r: Route = planRoute(store.state.waystones, this.playerTile(), dest, moveSpeed(store.state));
       if (r.via) {
-        const A = WAYSTONES.find((x) => x.id === r.via![0])!;
-        const a = standTile(A);
-        this.moveTo(a.x, a.y);
-        if (!this.walker || this.walker === old) return;
-        this.float(tl`顺路去${A.name}传送`, '#8ae8ff');
-        this.arrive = () => {
-          this.stoneJump(r.via![1]);
-          this.time.delayedCall(500, () => {
-            const before = this.walker;
-            this.moveTo(dest.x, dest.y);
-            if (opens && this.walker && this.walker !== before) this.arrive = onArrive;
-          });
-        };
+        this.viaStones(r.via, () => {
+          const before = this.walker;
+          this.moveTo(dest.x, dest.y, false);
+          if (!opens) return;
+          if (this.walker && this.walker !== before) this.arrive = onArrive;
+          else onArrive();
+        });
         return;
       }
       this.moveTo(dest.x, dest.y);
@@ -294,16 +288,7 @@ export class MapScene extends Phaser.Scene {
       if (!dest) return;
       const r: Route = planRoute(store.state.waystones, this.playerTile(), dest, moveSpeed(store.state));
       if (r.via) {
-        const A = WAYSTONES.find((w) => w.id === r.via![0])!;
-        const a = standTile(A);
-        const old = this.walker;
-        this.moveTo(a.x, a.y);
-        if (!this.walker || this.walker === old) return;
-        this.float(tl`顺路去${A.name}传送`, '#8ae8ff');
-        this.arrive = () => {
-          this.stoneJump(r.via![1]);
-          this.time.delayedCall(500, () => this.moveTo(dest.x, dest.y));
-        };
+        this.viaStones(r.via, () => this.moveTo(dest.x, dest.y));
         return;
       }
       this.moveTo(dest.x, dest.y);
@@ -1805,6 +1790,25 @@ export class MapScene extends Phaser.Scene {
   }
 
   /** 自动寻路经过石碑：走到 a，传到 b，再走到 dest；快慢按存档里剩下的时间来，和离线结算一致 */
+  /** 手动寻路顺路用石碑：走到 A（已经站在 A 旁边就不走），传到 B，再接着 then */
+  private viaStones(via: [string, string], then: () => void) {
+    const A = WAYSTONES.find((x) => x.id === via[0])!;
+    const a = standTile(A);
+    const jump = () => {
+      const p = this.playerTile();
+      store.dispatch((g) => setLoc(leaveWork(g), p.x, p.y));
+      this.stoneJump(via[1]);
+      this.time.delayedCall(500, then);
+    };
+    const p = this.playerTile();
+    if (Math.hypot(p.x - a.x, p.y - a.y) <= 3) return jump();
+    const old = this.walker;
+    this.moveTo(a.x, a.y);
+    if (!this.walker || this.walker === old) return;
+    this.float(tl`顺路去${A.name}传送`, '#8ae8ff');
+    this.arrive = jump;
+  }
+
   private goViaStones(via: [string, string], dest: { x: number; y: number }, done: () => void) {
     const A = WAYSTONES.find((n) => n.id === via[0]);
     const B = WAYSTONES.find((n) => n.id === via[1]);

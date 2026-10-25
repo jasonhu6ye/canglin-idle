@@ -3,7 +3,7 @@ import { QualityTable } from './Quality';
 import { useSticky } from './sticky';
 import { useMemo, useState } from 'react';
 import { ACTIONS, buffText, CROP_DEFS, fieldOfCrop, ITEMS, MONSTERS, nodeOfAction, nodesOfAction, SKILLS, TIERS, tierName } from '../core/data';
-import { maxHp, POTION_AT } from '../core/sim';
+import { maxHp, POTION_AT, toolSkillNames } from '../core/sim';
 import type { GameState, ItemDef } from '../core/types';
 import { Icon } from './icons';
 import { Bestiary } from './Bestiary';
@@ -183,7 +183,7 @@ export function CodexDetail({ s, id, reveal = false }: { s: GameState; id: strin
       {e && (
         <span>
           {e.move ? tl`坐骑 · 骑乘时移动速度 +${Math.round(e.move * 100)}%` : tl`需要${SKILLS[e.skill].name} ${e.level} 级`}
-          {e.move ? '' : e.speed ? tl` · ${SKILLS[e.skill].name}速度 +${Math.round(e.speed * 100)}%` : tl` · 攻 +${e.attack} 力 +${e.strength} 防 +${e.defence}`}
+          {e.move ? '' : e.speed ? tl` · ${toolSkillNames(e.slot) || SKILLS[e.skill].name}速度 +${Math.round(e.speed * 100)}%` : tl` · 攻 +${e.attack} 力 +${e.strength} 防 +${e.defence}`}
           {e.attackMs ? tl` · 攻速 ${(e.attackMs / 1000).toFixed(1)} 秒` : ''}
           {e.style && e.slot !== 'weapon' && tl`（攻、力只对${STYLE_NAME[e.style]}生效）`}
         </span>
