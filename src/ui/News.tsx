@@ -8,6 +8,12 @@ import { tl } from '../i18n';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-10-25-g', date: tl('10 月 25 日'), title: tl('组队经验加成：每个队员 +5%'),
+    lines: [
+      tl('组队时所有技能经验增加：队伍每个人 +5%，2 人 +10%，5 人满队 +25%。左上角增益栏能看到当前加成。'),
+    ],
+  },
+  {
     id: '2026-10-25-f', date: tl('10 月 25 日'), title: tl('自动寻路更聪明：会挑最快的石碑路线'),
     lines: [
       tl('自动寻路现在会比较所有已激活的传说石碑，挑「走到石碑 + 传送 + 走到目的地」最快的那条；只要比直接走快就会用石碑，不再明明传送更快还一路跑过去。'),

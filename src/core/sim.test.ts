@@ -952,3 +952,26 @@ describe('首领再生（10-25）', () => {
     }
   });
 });
+
+describe('组队经验加成', () => {
+  it('每个队员 +5%，5 人满队 +25%，离开队伍就没了', async () => {
+    const { setPartySize, partyXpPct } = await import('./party');
+    const run = () => {
+      const s = startHere(newGame(T0, 1), 'fish_minnow', { type: 'infinite' });
+      return advance(s, T0 + 10 * 60_000).state.xp.fishing;
+    };
+    const base = run();
+    setPartySize(5);
+    expect(partyXpPct()).toBeCloseTo(0.25);
+    const full = run();
+    setPartySize(9);
+    expect(partyXpPct()).toBeCloseTo(0.25);
+    setPartySize(2);
+    expect(partyXpPct()).toBeCloseTo(0.1);
+    setPartySize(0);
+    expect(full / base).toBeGreaterThan(1.2);
+    // 经验多了升级快、动作也快一点，所以会略高于 1.25
+    expect(full / base).toBeLessThan(1.4);
+    expect(run()).toBe(base);
+  });
+});

@@ -1,3 +1,4 @@
+import { setPartySize } from '../core/party';
 import { useEffect, useState } from 'react';
 import { online, type ChatChannel, type ChatMsg, type Friend, type Party, type PartyInvite, type Trade } from './index';
 import { ITEMS } from '../core/data';
@@ -28,7 +29,11 @@ const st: State = {
 };
 type Fn = () => void;
 const fns = new Set<Fn>();
-const emit = () => fns.forEach((f) => f());
+const emit = () => {
+  // 组队经验加成按队伍人数算（用户 10-25）
+  setPartySize(st.party?.members.length ?? 0);
+  fns.forEach((f) => f());
+};
 
 export function useSocial() {
   const [, bump] = useState(0);
