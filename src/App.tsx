@@ -20,6 +20,9 @@ import { GuildPanel, onOpenGuild } from './ui/Guild';
 import { LoginGate } from './ui/Login';
 import { useOnline } from './net/sync';
 import { FriendsPage } from './ui/FriendsPage';
+import { PlayerPopup } from './ui/PlayerPopup';
+import { PartyInvitePopup, TradePopup } from './ui/SocialPopups';
+import { PLAYER_CLICK } from './game/MapScene';
 import { useSocial } from './net/social';
 import { ChatChip, ChatPage, onOpenChatPage, openChatPage } from './ui/ChatDock';
 import { CombatLog, onOpenCombatLog } from './ui/CombatLog';
@@ -162,6 +165,8 @@ function Game() {
     setTab(id); setPanelOpen(true);
   }, []);
   useEffect(() => onOpenGuild(() => pickTab('guild')), [pickTab]);
+  const [playerPop, setPlayerPop] = useState<string | null>(null);
+  useEffect(() => onGameEvent(PLAYER_CLICK, (id: string) => setPlayerPop(id)), []);
   useEffect(() => onOpenChatPage(() => { if (ui.current.tab !== 'chat' || !ui.current.panelOpen) pickTab('chat'); }), [pickTab]);
   const toasts = useToasts();
   const { region, banner } = useRegion();
@@ -323,6 +328,9 @@ function Game() {
         </div>
       )}
       {offline && <OfflineModal sum={offline} />}
+      {playerPop && <PlayerPopup playerId={playerPop} onClose={() => setPlayerPop(null)} />}
+      <TradePopup s={s} />
+      <PartyInvitePopup />
       <ItemPopup s={s} />
       <LootReveal />
       <Guide />

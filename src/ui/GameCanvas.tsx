@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { store } from '../store';
 import { useEffect, useRef } from 'react';
 import { DPR } from '../game/dpr';
-import { BOSS_BANNER, MapScene, NODE_CLICK, REGION_CHANGE } from '../game/MapScene';
+import { BOSS_BANNER, MapScene, NODE_CLICK, PLAYER_CLICK, REGION_CHANGE } from '../game/MapScene';
 import { HOME_CLICK, HOME_MSG, HOME_TOOL, IslandScene } from '../game/IslandScene';
 
 let game: Phaser.Game | null = null;
@@ -51,6 +51,7 @@ export function GameCanvas({ onNodeClick }: { onNodeClick: (nodeId: string) => v
     const g = game;
     g.events.on(REGION_CHANGE, relay(REGION_CHANGE));
     g.events.on(BOSS_BANNER, relay(BOSS_BANNER));
+    g.events.on(PLAYER_CLICK, relay(PLAYER_CLICK));
     g.events.on(HOME_MSG, relay(HOME_MSG));
     g.events.on(HOME_TOOL, relay(HOME_TOOL));
     g.events.on(HOME_CLICK, (id: string) => onNodeClick(id));

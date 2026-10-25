@@ -8,6 +8,7 @@ import { openChatPage } from './ChatDock';
 import { fmtNum } from './format';
 import { Icon } from './icons';
 import { errText } from './Login';
+import { openTrade } from './SocialPopups';
 import { tl } from '../i18n';
 
 /**
@@ -114,7 +115,7 @@ export function FriendsPage({ s, onClose }: { s: GameState; onClose: () => void 
           return (
             <li key={t.id}>
               <span>{tl`和 ${f?.name ?? '?'} 的交易 `}<small className="muted">{t.theirOk ? tl('对方已确认') : t.myOk ? tl('等对方确认') : tl('进行中')}</small></span>
-              <button className="small primary" onClick={() => setPick(t.otherId)}>{tl('查看')}</button>
+              <button className="small primary" onClick={() => openTrade(t.id)}>{tl('查看')}</button>
             </li>
           );
         })}
@@ -189,11 +190,12 @@ function FriendDetail({ s, f, online: on, onBack }: { s: GameState; f: Friend; o
         <button disabled={act.busy || inParty || partyFull} onClick={() => act.run(async () => { await online.inviteParty(f.playerId); setNote(tl`已邀请 ${f.name} 组队，等对方同意`); })}>
           {inParty ? tl('已在队伍里') : tl('邀请组队')}
         </button>
-        <button disabled={act.busy || !!trade} onClick={() => act.run(() => online.startTrade(f.playerId))}>{tl('发起交易')}</button>
+        {trade
+          ? <button onClick={() => openTrade(trade.id)}>{tl('查看交易')}</button>
+          : <button disabled={act.busy} onClick={() => act.run(async () => openTrade(await online.startTrade(f.playerId)))}>{tl('发起交易')}</button>}
       </div>
       {note && <p className="muted small-note">{note}</p>}
       {act.err && <p className="err">{act.err}</p>}
-      {trade && <TradeView s={s} t={trade} name={f.name} />}
       <div className="go">
         <button className="danger" disabled={act.busy} onClick={() => confirm(tl`删除好友 ${f.name}？`) && void act.run(async () => { await online.removeFriend(f.playerId); onBack(); })}>{tl('删除好友')}</button>
       </div>
@@ -218,7 +220,7 @@ function Items({ items, onRemove }: { items: Record<string, number>; onRemove?: 
   );
 }
 
-function TradeView({ s, t, name }: { s: GameState; t: Trade; name: string }) {
+export function TradeView({ s, t, name }: { s: GameState; t: Trade; name: string }) {
   const act = useAct();
   const [adding, setAdding] = useState(false);
   const setOffer = (items: Record<string, number>) => act.run(() => online.setOffer(t.id, items));
@@ -245,7 +247,7 @@ function TradeView({ s, t, name }: { s: GameState; t: Trade; name: string }) {
           <Items items={t.theirs} />
         </div>
       </div>
-      {short.length > 0 && <p className="err">{tl`仓库里不够：${short.join('、')}`}</p>}
+      {short.length > 0 && <p className="err">{tl`仓库里不够：${short.join(tl('、'))}`}</p>}
       <p className="muted small-note">{tl('东西从仓库出、进仓库。任何一方改了东西，双方都要重新确认。')}</p>
       <div className="go">
         {t.myOk

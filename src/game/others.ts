@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { online, type Presence } from '../net';
+import { levelSnapshot, online, type Presence } from '../net';
+import type { GameState } from '../core/types';
 import { FRAME_H, FRAME_W, HERO_ANIMS, HERO_FEET, HERO_PAD, outfitOf, paintHeroSheet } from './hero';
 import { T } from './tiles';
 
@@ -28,6 +29,7 @@ export class OtherPlayers {
   private latest: Presence[] = [];
   private off: () => void;
   private sent = { x: -1, y: -1, key: '', at: 0 };
+  private checked = 0;
 
   constructor(private scene: Phaser.Scene) {
     this.off = online.onPresence((all) => { this.latest = all; });
@@ -57,15 +59,20 @@ export class OtherPlayers {
     return key;
   }
 
-  /** 把自己的位置发出去：格子变了或隔了一阵才发 */
-  publish(me: { x: number; y: number; outfit?: string; action?: string; mounted?: string }) {
+  /** 把自己的位置、装备和等级发出去：格子变了、换了东西或隔了一阵才发；每半秒最多看一次 */
+  publish(st: GameState, x: number, y: number) {
     if (!online.me()) return;
-    const key = `${me.outfit}|${me.action}|${me.mounted}`;
     const now = Date.now();
-    const moved = Math.abs(me.x - this.sent.x) + Math.abs(me.y - this.sent.y) >= 2;
+    if (now - this.checked < 500) return;
+    this.checked = now;
+    const action = st.paused ? undefined : st.queue[0]?.action;
+    const mounted = st.mounted ? st.equipment.mount : undefined;
+    const snap = levelSnapshot(st);
+    const key = JSON.stringify([st.settings.skin, action, mounted, st.equipment, snap.total, snap.combat]);
+    const moved = Math.abs(x - this.sent.x) + Math.abs(y - this.sent.y) >= 2;
     if (!moved && key === this.sent.key && now - this.sent.at < KEEPALIVE_MS) return;
-    this.sent = { x: me.x, y: me.y, key, at: now };
-    online.publishPresence({ x: me.x, y: me.y, outfit: me.outfit, action: me.action, mounted: me.mounted });
+    this.sent = { x, y, key, at: now };
+    online.publishPresence({ x, y, outfit: st.settings.skin, action, mounted, equip: { ...st.equipment }, total: snap.total, combat: snap.combat });
   }
 
   step(delta: number, near: { x: number; y: number }) {
@@ -79,6 +86,8 @@ export class OtherPlayers {
       if (o && o.key !== key) { o.box.destroy(); o = undefined; }
       if (!o) {
         const body = this.scene.add.sprite(0, 0, key).setOrigin(0.5, (HERO_FEET + HERO_PAD.t) / FRAME_H);
+        // 点别的玩家弹出菜单（查看信息、装备、加好友、交易…）
+        body.setInteractive({ useHandCursor: true, pixelPerfect: false }).setData('player', p.playerId);
         body.play(`${key}:idle-down`);
         const name = this.scene.add.text(0, -HERO_FEET + 1, '', { fontFamily: FONT, fontSize: '7px', color: '#cfe0ff', stroke: '#000', strokeThickness: 2, resolution: 4 }).setOrigin(0.5);
         const box = this.scene.add.container(tx, ty, [body, name]).setAlpha(0.92);

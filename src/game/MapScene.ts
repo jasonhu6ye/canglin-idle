@@ -42,6 +42,8 @@ const FONT = '"PingFang SC","Microsoft YaHei",sans-serif';
 const CHIMNEY: Record<string, boolean> = { furnace: true, hall: true, smithy: true, inn: true, house: true, house3: true, atelier: true, manor: true, thatch: true };
 
 export const NODE_CLICK = 'node-click';
+/** 点了地图上别的玩家 */
+export const PLAYER_CLICK = 'player-click';
 
 /** 点位周围第 i 种怪的刷新点；地图扩大后怪物也散开些，不挤在点位旁边 */
 const spotCache = new Map<string, { x: number; y: number }>();
@@ -900,10 +902,7 @@ export class MapScene extends Phaser.Scene {
     playerPos.x = px;
     playerPos.y = py;
     this.others.step(delta, playerPos);
-    this.others.publish({
-      x: playerPos.x, y: playerPos.y, outfit: store.state.settings.skin, action: store.state.paused ? undefined : store.state.queue[0]?.action,
-      mounted: store.state.mounted ? store.state.equipment.mount : undefined,
-    });
+    this.others.publish(store.state, playerPos.x, playerPos.y);
     // 登录后头顶显示自己的名字
     const me = online.me();
     const label = me ? (me.guildTag ? `[${me.guildTag}] ${me.name}` : me.name) : tl('[苍岭] 你');
@@ -1491,6 +1490,11 @@ export class MapScene extends Phaser.Scene {
         store.tracking = null;
         const wp = cam.getWorldPoint(p.x, p.y);
         this.moveTo(Math.floor(wp.x / T), Math.floor(wp.y / T));
+        return;
+      }
+      const player = over.map((o) => o.getData('player') as string | undefined).find(Boolean);
+      if (player) {
+        this.game.events.emit(PLAYER_CLICK, player);
         return;
       }
       const node = over.map((o) => (o.getData('monster') ?? o.getData('node')) as string | undefined).find(Boolean);
