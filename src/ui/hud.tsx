@@ -219,7 +219,11 @@ export function QuestCard({ s, onGo }: { s: GameState; onGo: (nodeId: string) =>
       <b className="gold">新手任务 {idx}/{QUESTS.length}</b> {questText(p.q)}
       {open && <span className="muted"> {p.have}/{p.q.goal.n} · 奖励 {p.q.reward} 金币</span>}
       {!open && <span className="muted"> {p.have}/{p.q.goal.n}</span>}
-      {node && <button className="pill" onClick={() => onGo(node.id)}>去做</button>}
+      {node && <button className="pill" onClick={() => {
+        // 提示是个动作就直接选中它，打开页面点「立即开始」就行
+        if (ACTIONS[p.q.hint]) store.focusAction = p.q.hint;
+        onGo(node.id);
+      }}>去做</button>}
       {open && <div className="quest-tip">💡 {p.q.tip}</div>}
     </div>
   );

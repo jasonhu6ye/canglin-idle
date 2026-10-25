@@ -915,3 +915,26 @@ describe('畜牧站养马', () => {
     expect(placeFoal({ ...s, loc: standOf(RANCH_NODE), bag: { [FOAL]: 1 } }, 0, T0).ranch?.pens[0]?.ms).toBe(FOAL_MS);
   });
 });
+
+describe('首领再生（10-25）', () => {
+  it('高出 5 级、穿同阶板甲拿剑，每个首领都打得动（以前带再生的首领回血比输出快）', async () => {
+    const { combatEstimate } = await import('./sim');
+    const { TIERS } = await import('./data');
+    for (const m of Object.values(MONSTERS)) {
+      if (m.rank !== 'boss') continue;
+      const lv = m.level + 5;
+      const s = newGame(T0, 1);
+      for (const k of Object.keys(s.xp) as (keyof typeof s.xp)[]) s.xp[k] = XP_TABLE[lv];
+      const t = [...TIERS].reverse().find((x) => x.level <= lv)!;
+      for (const [id, it] of Object.entries(ITEMS)) {
+        const e = it.equip;
+        if (!e || !id.startsWith(`${t.id}_`) || id.startsWith('mount')) continue;
+        if (e.slot === 'weapon' ? !id.includes('sword') : e.defence && !id.includes('plate')) continue;
+        s.equipment[e.slot] = id;
+      }
+      const est = combatEstimate(s, m);
+      expect(est.killMs, m.id).toBeLessThan(Infinity);
+      expect(est.rating, m.id).not.toBe('打不动');
+    }
+  });
+});

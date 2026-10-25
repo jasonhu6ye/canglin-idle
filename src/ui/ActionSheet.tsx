@@ -363,7 +363,9 @@ function CombatInfo({ s, monster }: { s: GameState; monster: string }) {
         const cls = e.rating === '轻松' ? 'good' : e.rating === '适中' ? '' : 'warn';
         return <>
           <span>暴击 {Math.round(st.crit * 100)}% · 闪避 {Math.round(st.dodge * 100)}%{st.reduce > 0 && ` · 减伤 ${Math.round(st.reduce * 100)}%`}</span>
-          <span className={cls}>评估：<b>{e.rating}</b> · 每只约 {Math.max(1, Math.round(e.killMs / 1000))} 秒、掉血约 {Math.round(e.taken)} · 每小时约 {fmtNum(Math.floor(e.perHour))} 只<small className="muted">（不算回仓库的路）</small></span>
+          {e.killMs === Infinity
+            ? <span className="warn">评估：<b>打不动</b> · 它回血比你的输出还快，先提升等级和装备</span>
+            : <span className={cls}>评估：<b>{e.rating}</b> · 每只约 {Math.max(1, Math.round(e.killMs / 1000))} 秒、掉血约 {Math.round(e.taken)} · 每小时约 {fmtNum(Math.floor(e.perHour))} 只<small className="muted">（不算回仓库的路）</small></span>}
         </>;
       })()}
       {st.style !== 'melee' && (

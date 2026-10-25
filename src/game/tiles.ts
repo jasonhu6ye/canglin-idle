@@ -73,8 +73,11 @@ const PAL: Record<Ground, string[]> = {
   starwater: ['#141850', '#1c2266', '#2a3284', '#e8e0ff'],
 };
 
+// 每个像素都要用调色板，先解析一次（以前每个像素都重新 parseInt，开局要多花 1 秒）
+const PAL_RGB = Object.fromEntries(Object.entries(PAL).map(([k, v]) => [k, v.map(hex)])) as Record<Ground, RGB[]>;
+
 function groundPixel(g: Ground, x: number, y: number, v: number, f: number): RGB {
-  const p = PAL[g].map(hex);
+  const p = PAL_RGB[g];
   const [dark, base, light, acc] = p;
   const n = hash(x, y, v * 31 + g.length);
   const n2 = hash(x >> 1, y >> 1, v * 17 + 5);
@@ -386,8 +389,9 @@ function cellOrigin(i: number) {
   return { x: (i % COLS) * CELL + 1, y: Math.floor(i / COLS) * CELL + 1 };
 }
 
+let tileImg: ImageData | null = null;
 function putTile(ctx: CanvasRenderingContext2D, i: number, pixel: (x: number, y: number) => RGB | null) {
-  const img = ctx.createImageData(CELL, CELL);
+  const img = tileImg ?? (tileImg = ctx.createImageData(CELL, CELL));
   for (let py = 0; py < CELL; py++) {
     for (let px = 0; px < CELL; px++) {
       // 外圈 1px 取最近的内部像素（extrude）
@@ -395,7 +399,7 @@ function putTile(ctx: CanvasRenderingContext2D, i: number, pixel: (x: number, y:
       const y = Math.min(15, Math.max(0, py - 1));
       const c = pixel(x, y);
       const o = (py * CELL + px) * 4;
-      if (!c) continue;
+      if (!c) { img.data[o + 3] = 0; continue; }
       img.data[o] = c[0];
       img.data[o + 1] = c[1];
       img.data[o + 2] = c[2];
@@ -413,24 +417,57 @@ export function paintTileset(canvas: HTMLCanvasElement) {
   GROUNDS.forEach((g, gi) => {
     for (let v = 0; v < VARIANTS; v++) putTile(ctx, tileIndex(gi, v), (x, y) => groundPixel(g, x, y, v, 0));
   });
-  LIQUIDS.forEach((g, li) => paintLiquid(ctx, g, li, 0));
+  LIQUIDS.forEach((g, li) => paintLiquid(ctx, g, li, groundFrame(g, 0)));
 }
 
-function paintLiquid(ctx: CanvasRenderingContext2D, g: Ground, li: number, frame: number) {
+function paintLiquid(ctx: CanvasRenderingContext2D, g: Ground, li: number, ground: RGB[][]) {
+  const edges = edgesOf(g);
   for (let mask = 1; mask < 16; mask++) {
+    const e = edges[mask];
     for (let v = 0; v < VARIANTS; v++) {
-      putTile(ctx, liquidIndex(li, mask, v), (x, y) => edgePixel(g, x, y, mask) ?? groundPixel(g, x, y, v, frame));
+      const px = ground[v];
+      putTile(ctx, liquidIndex(li, mask, v), (x, y) => e[y * 16 + x] ?? px[y * 16 + x]);
     }
   }
 }
 
-/** 只重画水面和岩浆，返回 true 表示画布有变化 */
+/** 一种地面某一帧 4 个变体的 16×16 像素（液体的 60 个岸边格子都复用它，不再每格重算噪声） */
+function groundFrame(g: Ground, frame: number): RGB[][] {
+  return Array.from({ length: VARIANTS }, (_, v) => {
+    const px: RGB[] = new Array(256);
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) px[y * 16 + x] = groundPixel(g, x, y, v, frame);
+    return px;
+  });
+}
+
+/** 岸边像素不随帧变化，算一次存起来 */
+const EDGES = new Map<Ground, (RGB | null)[][]>();
+function edgesOf(g: Ground) {
+  let e = EDGES.get(g);
+  if (!e) {
+    e = [[]];
+    for (let mask = 1; mask < 16; mask++) {
+      const px: (RGB | null)[] = new Array(256);
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) px[y * 16 + x] = edgePixel(g, x, y, mask);
+      e.push(px);
+    }
+    EDGES.set(g, e);
+  }
+  return e;
+}
+
+/** 只重画水面和岩浆（以前每 0.22 秒把 7 种液体 448 个格子逐像素重算一遍噪声，占了主线程三成时间） */
 export function animateTileset(canvas: HTMLCanvasElement, frame: number) {
   const ctx = canvas.getContext('2d')!;
   for (const g of ANIMATED) {
     const gi = GROUNDS.indexOf(g);
-    for (let v = 0; v < VARIANTS; v++) putTile(ctx, tileIndex(gi, v), (x, y) => groundPixel(g, x, y, v, frame));
-    paintLiquid(ctx, g, LIQUIDS.indexOf(g), frame);
+    const ground = groundFrame(g, frame);
+    for (let v = 0; v < VARIANTS; v++) {
+      const px = ground[v];
+      putTile(ctx, tileIndex(gi, v), (x, y) => px[y * 16 + x]);
+    }
+    const li = LIQUIDS.indexOf(g);
+    if (li >= 0) paintLiquid(ctx, g, li, ground);
   }
 }
 
