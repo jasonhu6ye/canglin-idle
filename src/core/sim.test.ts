@@ -701,6 +701,20 @@ describe('传说石碑', () => {
     // 不站在石碑旁传不了
     expect(useWaystone({ ...t, loc: { x: 0, y: 0 } }, 'stone_town').loc).toEqual({ x: 0, y: 0 });
   });
+  it('自动寻路在所有已激活石碑里挑最快的一对，只要比走路快就用', async () => {
+    const { WAYSTONES, planRoute, standOf: st, STONE_JUMP_MS } = await import('./data');
+    const all = WAYSTONES.map((n) => n.id);
+    for (const from of WAYSTONES.slice(0, 6)) for (const to of WAYSTONES.slice(-6)) {
+      const a = st(from);
+      const b = { x: st(to).x + 3, y: st(to).y };
+      const r = planRoute(all, a, b);
+      // 至少不比「起点石碑直接传到终点石碑」慢
+      expect(r.ms).toBeLessThanOrEqual(Math.min(travelMs(a, b), STONE_JUMP_MS + travelMs(st(to), b)));
+      if (from !== to) expect(r.via).toBeDefined();
+    }
+    // 只激活一座：只能走路
+    expect(planRoute(['stone_town'], st(WAYSTONES[0]), st(WAYSTONES[WAYSTONES.length - 1])).via).toBeUndefined();
+  });
 });
 
 describe('雨天钓鱼', () => {
