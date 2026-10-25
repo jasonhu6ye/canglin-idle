@@ -13,12 +13,12 @@ export const HORSE_H = 44;
 export const HORSE_FEET = 42;
 
 /** 毛色：按资质分四档，资质越高越稀有 */
-export interface Coat { id: number; name: string; rare: string; body: string; mane: string; blanket: string; dapple?: boolean; shine?: boolean; sock?: boolean }
+export interface Coat { id: number; name: string; body: string; mane: string; blanket: string; dapple?: boolean; shine?: boolean; sock?: boolean }
 export const COATS: Coat[] = [
-  { id: 0, name: '栗色', rare: '普通', body: '#9a5226', mane: '#3a1c0c', blanket: '#3a6ab0', sock: true },
-  { id: 1, name: '乌骓', rare: '优良', body: '#2e2832', mane: '#0c0a10', blanket: '#b03a3a' },
-  { id: 2, name: '银白', rare: '稀有', body: '#d4d0c8', mane: '#f8f6f2', blanket: '#6a3ab0', dapple: true },
-  { id: 3, name: '金鬃', rare: '传说', body: '#dca23e', mane: '#fff4d0', blanket: '#a8202a', shine: true },
+  { id: 0, name: '栗色', body: '#9a5226', mane: '#3a1c0c', blanket: '#3a6ab0', sock: true },
+  { id: 1, name: '乌骓', body: '#2e2832', mane: '#0c0a10', blanket: '#b03a3a' },
+  { id: 2, name: '银白', body: '#d4d0c8', mane: '#f8f6f2', blanket: '#6a3ab0', dapple: true },
+  { id: 3, name: '金鬃', body: '#dca23e', mane: '#fff4d0', blanket: '#a8202a', shine: true },
 ];
 export { coatOf } from '../core/ranch';
 

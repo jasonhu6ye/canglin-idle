@@ -11,7 +11,7 @@ import { doorOf, FACILITY_NAME, townAt, TOWNS, type Facility, type TownDef } fro
 
 export { MAP_W, MAP_H, MID_BOX, OLD_BOX, at, atW, atF } from './geo';
 import { MAP_W, MAP_H, MID_BOX, OLD_BOX, at, atW, atF } from './geo';
-import { APT_MAX, APT_MIN, COAT_NAME, COAT_RARE, coatOf, FOAL, FOAL_CHANCE, horseItem, RANCH } from './ranch';
+import { APT_MAX, APT_MIN, COAT_NAME, coatOf, FOAL, FOAL_CHANCE, horseItem, RANCH } from './ranch';
 import { HW_ALTAR, HW_BOX, HW_POINT, HW_TIERS, hwTierOf } from './halloween';
 
 /** soon：占位技能，还没有内容（养殖，用户 10-23） */
@@ -368,7 +368,7 @@ item(FOAL, '小马崽', 'misc', 0, { desc: '打败野马有几率得到。拿到
 for (let apt = APT_MIN; apt <= APT_MAX; apt++) {
   const c = coatOf(apt);
   item(horseItem(apt), `${COAT_NAME[c]}（资质 ${apt}%）`, 'gear', 0, {
-    desc: `畜牧站养大的${COAT_RARE[c]}坐骑马，速度资质 ${apt}%：骑乘时移动速度 +${apt}%。资质 50%-200% 随机，越高越稀有，毛色也不一样。`,
+    desc: `畜牧站养大的${COAT_NAME[c]}，速度资质 ${apt}%：骑乘时移动速度 +${apt}%。资质 50%-200% 随机，资质不同毛色也不一样。`,
     equip: { slot: 'mount', skill: 'hitpoints', level: 1, attack: 0, strength: 0, defence: 0, move: apt / 100 },
   });
 }

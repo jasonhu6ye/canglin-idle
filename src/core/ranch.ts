@@ -24,4 +24,3 @@ export const FOAL_CHANCE = { normal: 0.03, elite: 0.06, boss: 0.1 } as const;
 /** 毛色按资质分四档：栗色 50-99、乌骓 100-149、银白 150-189、金鬃 190-200 */
 export const coatOf = (apt: number) => (apt >= 190 ? 3 : apt >= 150 ? 2 : apt >= 100 ? 1 : 0);
 export const COAT_NAME = ['栗色骏马', '乌骓马', '银白骏马', '金鬃神驹'];
-export const COAT_RARE = ['普通', '优良', '稀有', '传说'];

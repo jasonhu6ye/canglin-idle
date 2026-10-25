@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { MapNode } from '../core/data';
-import { COAT_NAME, COAT_RARE, coatOf, FOAL, growMs, RANCH, RANCH_PENS } from '../core/ranch';
+import { COAT_NAME, coatOf, FOAL, growMs, RANCH, RANCH_PENS } from '../core/ranch';
 import { atRanch, collectHorse, level, penLeft, placeFoal } from '../core/sim';
 import type { GameState } from '../core/types';
 import { foalIconUrl, horseIconUrl, paintFoal } from '../game/horseArt';
@@ -81,7 +81,7 @@ export function RanchSheet({ s, node, onClose }: { s: GameState; node: MapNode; 
           <div>
             <div className="muted">小马长大了！速度资质揭晓：</div>
             <b>{COAT_NAME[coatOf(reveal)]} · 移速 +{reveal}%</b>
-            <div>品质：{COAT_RARE[coatOf(reveal)]} · 获得养殖经验 600</div>
+            <div>获得养殖经验 600</div>
             <div className="muted small">已放进背包（背包满了就进仓库），在「角色」页的坐骑栏装备，R 键或地图右下的马按钮上下马。</div>
           </div>
         </div>
