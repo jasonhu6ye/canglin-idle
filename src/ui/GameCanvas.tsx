@@ -2,8 +2,9 @@ import Phaser from 'phaser';
 import { store } from '../store';
 import { useEffect, useRef } from 'react';
 import { DPR } from '../game/dpr';
-import { BOSS_BANNER, MapScene, NODE_CLICK, PLAYER_CLICK, REGION_CHANGE } from '../game/MapScene';
+import { BOSS_BANNER, GATE_CLICK, GATE_OPENED, MapScene, NODE_CLICK, PLAYER_CLICK, REGION_CHANGE } from '../game/MapScene';
 import { HOME_CLICK, HOME_MSG, HOME_TOOL, IslandScene } from '../game/IslandScene';
+import { DG_CHEST, DG_MSG, DungeonScene } from '../game/DungeonScene';
 
 let game: Phaser.Game | null = null;
 
@@ -42,7 +43,7 @@ export function GameCanvas({ onNodeClick }: { onNodeClick: (nodeId: string) => v
       // 不取整：角色和镜头按屏幕像素平滑移动，否则放大后会一格一格地跳
       roundPixels: false,
       scale: { mode: Phaser.Scale.NONE, width: w, height: h, zoom: 1 / DPR },
-      scene: [MapScene, IslandScene],
+      scene: [MapScene, IslandScene, DungeonScene],
       banner: false,
       input: { touch: { capture: true } },
     });
@@ -54,6 +55,7 @@ export function GameCanvas({ onNodeClick }: { onNodeClick: (nodeId: string) => v
     g.events.on(PLAYER_CLICK, relay(PLAYER_CLICK));
     g.events.on(HOME_MSG, relay(HOME_MSG));
     g.events.on(HOME_TOOL, relay(HOME_TOOL));
+    for (const e of [GATE_CLICK, GATE_OPENED, DG_CHEST, DG_MSG]) g.events.on(e, relay(e));
     g.events.on(HOME_CLICK, (id: string) => onNodeClick(id));
     // 画布改尺寸会被浏览器清空，下一帧才重画，展开/收起面板时就会闪一下：改完当场重画一帧（用户 10-23）
     const ro = new ResizeObserver(() => {

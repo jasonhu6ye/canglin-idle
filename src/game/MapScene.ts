@@ -4,6 +4,10 @@ import { ACTIONS, CROP_DEFS, CROPS, cropsOfField, FARM_PLOTS, PLOT_BY_ID, ITEMS,
 import { unlockWaystone, useWaystone, WAYSTONE_REACH, actionDuration, combatLevel, combatStats, MONSTER_MOVES, isBankId, leaveWork, maxHp, moveSpeed, playerAttackMs, resumeWork, setLoc, startWalk, teleport as teleportState, walkPos } from '../core/sim';
 import { pickSeed, plotGrowth, plotPhase, tendPlot } from '../core/farm';
 import { paintWaystone } from './waystoneArt';
+import { paintGatePortal } from './dungeonArt';
+import { allGates, onSharedGates } from '../core/gateShare';
+import { openGate } from '../core/sim';
+import type { DungeonGate } from '../core/types';
 import { paintPortal, paintPortalSwirl, PORTAL_H } from './homeArt';
 import { animsOf, monsterFrameSize, paintMonsterSheet, type MonAnim } from './monsterArt';
 import { paintSkull } from './skullArt';
@@ -46,6 +50,12 @@ const CHIMNEY: Record<string, boolean> = { furnace: true, hall: true, smithy: tr
 export const NODE_CLICK = 'node-click';
 /** 点了地图上别的玩家 */
 export const PLAYER_CLICK = 'player-click';
+/** 点了地图上的副本洞口（10-25）：界面打开洞口面板 */
+export const GATE_CLICK = 'gate-click';
+/** 界面 → 场景：用这把钥匙开洞口 */
+export const USE_KEY = 'use-key';
+/** 场景 → 界面：洞口开好了（问要不要寻路过去） */
+export const GATE_OPENED = 'gate-opened';
 
 /** 点位周围第 i 种怪的刷新点；地图扩大后怪物也散开些，不挤在点位旁边 */
 const spotCache = new Map<string, { x: number; y: number }>();
@@ -219,31 +229,54 @@ export class MapScene extends Phaser.Scene {
         this.scene.switch('island');
         return;
       }
+      // 进了副本（10-25）：切到地下场景
+      if (store.state.dungeon && this.scene.isActive()) {
+        this.toIsland = true;
+        this.walker = undefined;
+        this.stopWorking();
+        this.scene.switch('dungeon');
+        return;
+      }
       // 人在岛上（这边睡着）：等回来 wake 时再统一同步，免得寻路请求被吃掉
       if (!this.scene.isActive()) return;
       this.syncStones();
+      this.syncGates();
       this.syncSkin();
       this.takeWalk();
       this.syncTask();
       this.updateLabels();
     }));
+    this.unsub.push(onSharedGates(() => this.scene.isActive() && this.syncGates()));
+    this.time.addEvent({ delay: 1000, loop: true, callback: () => this.scene.isActive() && this.syncGates() });
+    // 用钥匙开洞口：在角色旁边找一块空地
+    const onUseKey = (key: string) => this.useKey(key);
+    this.game.events.on(USE_KEY, onUseKey);
+    this.unsub.push(() => this.game.events.off(USE_KEY, onUseKey));
     this.unsub.push(store.onGain((s) => this.showGain(s)));
     // 从岛上回来：人站在城里的传送门前
     this.events.on('wake', () => {
       this.toIsland = false;
+      // 从副本出来：站回洞口（或回城卷轴传到的城里）
+      const l = store.state.loc;
+      this.player.setPosition(l.x * T + T / 2, l.y * T + T / 2);
+      this.cameras.main.centerOn(this.player.x, this.player.y);
+      this.syncGates();
       this.resync();
       this.syncStones();
       this.syncSkin();
       this.takeWalk();
       this.updateLabels();
     });
-    if (store.state.home?.inside) {
+    if (store.state.home?.inside || store.state.dungeon) {
       this.toIsland = true;
-      this.time.delayedCall(0, () => this.scene.switch('island'));
+      const to = store.state.dungeon ? 'dungeon' : 'island';
+      this.time.delayedCall(0, () => this.scene.switch(to));
     }
     // 人在家园岛屿上点了石碑、传送、寻路：先出岛，等大地图醒了再做
     const awake = <A extends unknown[]>(fn: (...a: A) => void) => (...a: A) => {
       if (this.scene.isActive() && !this.toIsland) return fn(...a);
+      // 在副本里：寻路、传送都不管（要离开先点「离开副本」）
+      if (store.state.dungeon) return;
       if (store.state.home?.inside) store.dispatch(leaveHome);
       this.events.once('wake', () => fn(...a));
     };
@@ -1081,6 +1114,82 @@ export class MapScene extends Phaser.Scene {
     }
   }
 
+  // ---- 副本洞口（10-25） ----
+  private gateObjs = new Map<string, { objs: Phaser.GameObjects.GameObject[]; text: Phaser.GameObjects.Text; g: DungeonGate }>();
+
+  /** 地图上画出自己和队友开的洞口：高对比的脉冲光圈 + 名字和剩余时间，过期就消失 */
+  private syncGates() {
+    const now = Date.now();
+    const list = allGates(store.state, now);
+    for (const [id, o] of this.gateObjs) {
+      if (list.some((g) => g.id === id)) continue;
+      o.objs.forEach((x) => x.destroy());
+      this.gateObjs.delete(id);
+    }
+    for (const g of list) {
+      let o = this.gateObjs.get(g.id);
+      if (!o) {
+        const key = `gate-${g.kind}`;
+        if (!this.textures.exists(key)) this.textures.addCanvas(key, paintGatePortal(g.kind));
+        const x = g.x * T + T / 2;
+        const y = g.y * T + T / 2;
+        const col = g.kind === 'green' ? 0x3aff6a : 0x3ad8ff;
+        const ring = this.add.ellipse(x, y + 2, 44, 22).setStrokeStyle(2, col, 1).setFillStyle(col, 0.12).setDepth(y + 990);
+        this.tweens.add({ targets: ring, scaleX: 1.35, scaleY: 1.35, alpha: 0.2, duration: 900, repeat: -1 });
+        const glow = this.add.image(x, y, 'glow').setTint(col).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.7).setScale(1.2).setDepth(D_GLOW);
+        this.tweens.add({ targets: glow, alpha: 0.35, yoyo: true, repeat: -1, duration: 700 });
+        const img = this.add.image(x, y, key).setDepth(y + 995).setInteractive({ useHandCursor: true }).setData('gate', g.id);
+        // 光柱：远处也看得见
+        const beam = this.add.rectangle(x, y - 40, 6, 80, col, 0.25).setBlendMode(Phaser.BlendModes.ADD).setDepth(D_GLOW);
+        this.tweens.add({ targets: beam, alpha: 0.08, yoyo: true, repeat: -1, duration: 1100 });
+        const text = this.add.text(x, y - 18, '', {
+          fontFamily: FONT, fontSize: '8px', color: g.kind === 'green' ? '#8aff9a' : '#8ae8ff', stroke: '#000', strokeThickness: 3, resolution: 4, align: 'center',
+        }).setOrigin(0.5, 1).setDepth(D_LABEL);
+        o = { objs: [ring, glow, img, beam, text], text, g };
+        this.gateObjs.set(g.id, o);
+      }
+      const left = Math.max(0, g.expires - now);
+      const mm = Math.floor(left / 60000);
+      const ss = String(Math.floor((left % 60000) / 1000)).padStart(2, '0');
+      const who = g.owner ? tl`${g.owner} 的` : '';
+      o.text.setText(`${who}${g.kind === 'green' ? tl('绿洞') : tl('蓝洞')} T${g.tier + 1}\n${mm}:${ss}`);
+    }
+  }
+
+  /** 用钥匙开洞口：在角色身边 2-6 格找一块走得到的空地 */
+  private useKey(key: string) {
+    if (!this.scene.isActive() || this.toIsland) return;
+    const me = this.playerTile();
+    let spot: { x: number; y: number } | null = null;
+    for (let r = 2; r <= 6 && !spot; r++) {
+      for (let k = 0; k < 16 && !spot; k++) {
+        const a = (k / 16) * Math.PI * 2;
+        const x = Math.round(me.x + Math.cos(a) * r);
+        const y = Math.round(me.y + Math.sin(a) * r);
+        if (!isWalkable(x, y)) continue;
+        if (!findPath(me, { x, y })) continue;
+        spot = { x, y };
+      }
+    }
+    if (!spot) {
+      this.game.events.emit(GATE_OPENED, null);
+      return;
+    }
+    let gate: DungeonGate | null = null;
+    store.dispatch((g) => {
+      const [next, made] = openGate(g, key, spot!);
+      gate = made;
+      return next;
+    });
+    this.syncGates();
+    if (gate) {
+      const g = gate as DungeonGate;
+      this.puff(g.x * T + T / 2 - this.player.x, g.y * T + T / 2 - this.player.y);
+      this.cameras.main.shake(200, 0.003);
+    }
+    this.game.events.emit(GATE_OPENED, gate);
+  }
+
   /** 角色走到没激活的石碑旁边：激活它（走路途中路过也算） */
   private checkStones() {
     const me = this.playerTile();
@@ -1506,6 +1615,11 @@ export class MapScene extends Phaser.Scene {
         store.tracking = null;
         const wp = cam.getWorldPoint(p.x, p.y);
         this.moveTo(Math.floor(wp.x / T), Math.floor(wp.y / T));
+        return;
+      }
+      const gate = over.map((o) => o.getData('gate') as string | undefined).find(Boolean);
+      if (gate) {
+        this.game.events.emit(GATE_CLICK, gate);
         return;
       }
       const player = over.map((o) => o.getData('player') as string | undefined).find(Boolean);

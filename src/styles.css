@@ -948,3 +948,23 @@ html[lang="en"] .login-box h1 { letter-spacing: 2px; }
 .news-body { max-height: 60dvh; }
 .center-pop { max-height: calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
 .chat-page .chat-box { max-height: calc(100dvh - 300px); }
+
+/* 副本（10-25） */
+.dg-hud { display: flex; flex-direction: column; align-items: stretch; gap: 4px; width: 240px; max-width: calc(100vw - 24px); padding: 6px 8px; white-space: normal; pointer-events: auto; }
+.dg-hud.dg-green { border-color: #4ad66a; }
+.dg-hud.dg-blue { border-color: #4a9cff; }
+.dg-hud .bar.wide { display: block; height: 6px; width: 100%; background: rgba(0,0,0,.4); border-radius: 3px; overflow: hidden; }
+.dg-hud .bar.wide i { display: block; height: 100%; background: #e8c24a; }
+.dg-hud button { padding: 5px 8px; }
+.dg-loot { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; font-size: 12px; }
+h2.dg-green { color: #5ee07a; }
+h2.dg-blue { color: #6ab4ff; }
+.center-pop h2 { margin: 0; font-size: 17px; }
+.center-pop .go { display: flex; flex-wrap: wrap; gap: 6px; }
+.center-pop .go button { flex: 1; padding: 8px 6px; }
+.dg-odds { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; align-items: baseline; }
+.dg-towns { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px; }
+.dg-towns button { padding: 8px 6px; }
+.dg-msg { position: fixed; left: 50%; top: calc(max(6px, env(safe-area-inset-top)) + 60px); transform: translateX(-50%); z-index: 15; }
+.dg-shop .salv-qty button { white-space: nowrap; }
+.dg-shop .pad { margin: 4px 10px; }

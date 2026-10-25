@@ -1,6 +1,7 @@
 import { QualityOdds } from './Quality';
 import { AltarSheet } from './Halloween';
 import { RanchSheet } from './Ranch';
+import { ShopSheet } from './Dungeon';
 import { RANCH } from '../core/ranch';
 import { SalvageSheet } from './Salvage';
 import { MonsterDetail, MonsterIcon, TraitChips } from './Bestiary';
@@ -40,7 +41,7 @@ function catOf(a: ActionDef): (typeof CATS)[number] {
   if (/^(plank|leather|cloth)_\d$/.test(id)) return tl('板材·皮革·布料');
   if (it.category === 'food') return tl('料理');
   if (it.category === 'potion') return tl('药水');
-  if (id.startsWith('enh_')) return tl('强化石');
+  if (id.startsWith('enhstone_') || id.startsWith('enhshard_')) return tl('强化石');
   return tl('其他');
 }
 const tierOf = (a: ActionDef) => (a.kind === 'skill' ? ITEMS[a.outputs[0]?.item]?.tier : undefined);
@@ -54,6 +55,7 @@ export function ActionSheet({ s, nodeId, onClose }: { s: GameState; nodeId: stri
   if (node.waystone) return <WaystoneSheet s={s} nodeId={nodeId} onClose={onClose} />;
   if (node.event) return <AltarSheet s={s} node={node} onClose={onClose} />;
   if (node.id === RANCH) return <RanchSheet s={s} node={node} onClose={onClose} />;
+  if (node.shop) return <ShopSheet s={s} node={node} onClose={onClose} />;
   if (node.salvage) return <SalvageSheet s={s} node={node} onClose={onClose} />;
   return <NodeSheet s={s} node={node} onClose={onClose} />;
 }

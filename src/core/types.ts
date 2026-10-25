@@ -150,6 +150,8 @@ export interface MonsterDef {
   world?: boolean;
   /** 活动限定首领（万圣节南瓜王）：要在活动祭坛召唤才能打 */
   event?: boolean;
+  /** 副本里的怪（10-25）：哪种副本、第几层（0 起），外形和配色用 base 那只 */
+  dungeon?: { kind: 'green' | 'blue'; floor: number; base: string };
 }
 
 export type RegionId = 'town' | 'snow' | 'highland' | 'coast' | 'lava' | 'abyss' | 'swamp' | 'woodland' | 'giantwood'
@@ -316,6 +318,52 @@ export interface GameState {
   /** 装了洒水器的田 */
   sprinklers?: string[];
   lastStop?: { action: string; reason: TaskEndReason; mode: TaskMode; item?: string; at: number } | null;
+  /** 副本洞口（10-25）：自己用钥匙开的，30 分钟后消失 */
+  gates?: DungeonGate[];
+  /** 进过的洞口 id（每个洞口每人只能进一次，队友的洞口也算） */
+  gatesUsed?: string[];
+  /** 正在打的副本；不在副本里是 null */
+  dungeon?: DungeonRun | null;
+}
+
+/** 副本洞口：开门时就定好层数和随机种子，队友进同一个洞口地形一样 */
+export interface DungeonGate {
+  id: string;
+  kind: 'green' | 'blue';
+  /** 阶级下标 3-7（T4-T8） */
+  tier: number;
+  x: number;
+  y: number;
+  /** 开门时间、消失时间（毫秒） */
+  at: number;
+  expires: number;
+  seed: number;
+  floors: number;
+  /** 队友的洞口：谁开的 */
+  owner?: string;
+}
+
+/**
+ * 副本进度：按层、按这一层第几个停靠点推进。
+ * phase：walk 正在走向下一个停靠点（怪、楼梯或宝箱），fight 正在打，chest 打完了等开宝箱，open 宝箱开过了。
+ */
+export interface DungeonRun {
+  gate: DungeonGate;
+  floor: number;
+  idx: number;
+  phase: 'walk' | 'fight' | 'chest' | 'open';
+  /** 走路剩余、本段总时长 */
+  ms: number;
+  total: number;
+  /** 进副本时队伍几个人（蓝洞的协战加成按这个算，离线也一样） */
+  party: number;
+  kills: number;
+  /** 宝箱品质 0 绿 1 蓝 2 紫 3 金（打完首领时定）、开出来的东西 */
+  chest?: number;
+  loot?: Record<string, number>;
+  started: number;
+  /** 这一趟打怪拿到的东西合计 */
+  got?: Record<string, number>;
 }
 
 export type TaskEndReason = 'complete' | 'noInput' | 'death' | 'level' | 'noAmmo' | 'summon';
@@ -339,4 +387,6 @@ export interface Summary {
   log?: CombatLogEntry[];
   /** 这次激活的传说石碑 */
   waystones?: string[];
+  /** 副本：这次结算里阵亡被送出副本 */
+  dungeon?: { dead?: boolean };
 }

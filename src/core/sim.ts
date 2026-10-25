@@ -2,8 +2,10 @@ import { partyXpPct } from './party';
 import { APT_MAX, APT_MIN, FOAL, growMs, HORSE_XP, horseItem, RANCH, RANCH_PENS } from './ranch';
 import { baseOf, qid, rollQuality } from './quality';
 import { HW_POINT, HW_TIERS, hwFight, hwOpen, hwTierOf, hwWait } from './halloween';
-import { BAR_VALUE, TIERS, ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAP_W, MID_BOX, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, planRoute, travelMs, type MapNode } from './data';
+import { BAR_VALUE, KEY_SHOP, keyOf, OLD_ENH, SCROLL_TOWN, SHARD_PER_STONE, TIERS, ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAP_W, MID_BOX, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, planRoute, travelMs, type MapNode } from './data';
 import { nextRandom } from './rng';
+import { coopMates, COOP_DEF, COOP_DMG, dungeonFloor, GATE_MS, GATE_REACH, legMs, rollChest, rollChestQuality, rollFloors } from './dungeon';
+import { partySize } from './party';
 import { stepQuests } from './quests';
 import { migrateMail, sendMail } from './mail';
 import { stepAutoFarm, stepRain } from './farm';
@@ -11,7 +13,7 @@ import { homeCan, homeChest, migrateHome } from './home';
 import { isRaining, RAIN_FISH } from './weather';
 import { BONUS_PER_LEVEL, levelForXp, speedForLevel, XP_TABLE } from './xp';
 import type {
-  CombatLogEntry,
+  CombatLogEntry, DungeonGate, DungeonRun,
   BeltSlot, BuffKind, CombatAction, CombatStyle, EquipSlot, GameState, MonsterDef, SkillAction, SkillId, Summary, Task, TaskEndReason, TaskMode,
 } from './types';
 import { tl } from '../i18n';
@@ -115,6 +117,15 @@ export function migrate(raw: unknown): GameState | null {
   // 采集从种植里拆出来（10-23）：旧存档的种植经验两边都保留
   xp.gathering = Math.max(0, num(xpIn.gathering, num(xpIn.farming, 0)));
   const bankIn = ammoRefund(keep(s.bank), [obj<Record<string, number>>(s.bank), obj<Record<string, number>>(s.bag)]);
+  // 原来的 4 种强化石删掉了（用户 10-25）：按原售价折成金币
+  for (const rec of [obj<Record<string, number>>(s.bank), obj<Record<string, number>>(s.bag)]) {
+    if (!rec) continue;
+    for (const [old, price] of Object.entries(OLD_ENH)) {
+      const q = rec[old];
+      if (!Number.isFinite(q) || q <= 0) continue;
+      bankIn.coins = (bankIn.coins ?? 0) + Math.floor(q) * price;
+    }
+  }
   // 金币不再放背包（10-25）：背包里的金币并进仓库
   const bagIn = keep(s.bag);
   if (bagIn.coins) { bankIn.coins = (bankIn.coins ?? 0) + bagIn.coins; delete bagIn.coins; }
@@ -160,6 +171,9 @@ export function migrate(raw: unknown): GameState | null {
     mailKeys: arr<string>(s.mailKeys).filter((k) => typeof k === 'string'),
     mailSeq: Math.max(0, num(s.mailSeq, 0), ...migrateMail(s.mail).map((m) => m.id)),
     home: migrateHome(obj(s.home)),
+    gates: arr<DungeonGate>(s.gates).filter((g) => obj(g) && (g.kind === 'green' || g.kind === 'blue') && TIERS[g.tier] && Number.isFinite(g.expires) && Number.isFinite(g.seed) && g.floors >= 1 && g.floors <= 7),
+    gatesUsed: arr<string>(s.gatesUsed).filter((id) => typeof id === 'string').slice(-50),
+    dungeon: migrateRun(obj<DungeonRun>(s.dungeon)),
     sprinklers: arr<string>(s.sprinklers).filter((id) => FARM_NODES.some((n) => n.id === id)),
     waystones: [...new Set([WAYSTONE_HOME, ...arr<string>(s.waystones).filter((id) => WAYSTONES.some((n) => n.id === id))])],
     // 地块里种的作物改过名或删掉了就清掉
@@ -461,14 +475,16 @@ export function combatStats(s: GameState, m: MonsterDef) {
   // 抗性和弱点只影响对应战斗方式的伤害
   const dmgMult = (has(`resist_${style}`) ? 0.7 : 1) * (has(`weak_${style}`) ? 1.3 : 1);
   const perks = armorPerks(s);
+  // 蓝洞协战（10-25）：队伍里每多一个人伤害 +12%、受到伤害 -6%
+  const mates = m.dungeon?.kind === 'blue' ? coopMates(s.dungeon?.party ?? partySize()) : 0;
   return {
     style,
     crit: 0.05 + perks.crit,
     critMult: 1.5,
     dodge: perks.dodge,
-    reduce: perks.reduce,
+    reduce: 1 - (1 - perks.reduce) * (1 - COOP_DEF * mates),
     playerHit: hitChance((lvl + 8) * (b.attack + 64) * (1 + buffPct(s, 'atk')), (m.defence + 8) * 64) * (has('evasive') ? 0.8 : 1),
-    playerMaxHit: Math.max(1, Math.round((((lvl + 8) * (strength + 64)) / 64) * dmgMult * (1 + buffPct(s, 'str')))),
+    playerMaxHit: Math.max(1, Math.round((((lvl + 8) * (strength + 64)) / 64) * dmgMult * (1 + buffPct(s, 'str')) * (1 + COOP_DMG * mates))),
     monsterHit: m.maxHit > 0 ? hitChance((m.attack + 8) * 64, (level(s, 'defence') + 8) * (b.defence + 64) * (1 + buffPct(s, 'def'))) : 0,
     monsterMaxHit: m.maxHit * MONSTER_DAMAGE_SCALE,
   };
@@ -716,11 +732,11 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     applyFood(s, b.id);
     return true;
   };
-  const eatIfNeeded = () => {
+  const eatIfNeeded = (dungeon = false) => {
     // 血很低先喝药水栏的药水
-    // 选了「不带药水」「不带食物」：战斗中一口都不吃（用户 10-23）
-    if (s.settings.carryPotion !== false) while (s.hp < maxHp(s) * POTION_AT && useBelt('potion'));
-    if (s.settings.carryFood === 0) return;
+    // 选了「不带药水」「不带食物」：战斗中一口都不吃（用户 10-23）；副本里不管设置，有就吃
+    if (dungeon || s.settings.carryPotion !== false) while (s.hp < maxHp(s) * POTION_AT && useBelt('potion'));
+    if (!dungeon && s.settings.carryFood === 0) return;
     const limit = maxHp(s) * s.settings.eatThreshold;
     while (s.hp < limit) {
       if (useBelt('food')) continue;
@@ -914,7 +930,137 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     return step;
   };
 
+  /**
+   * 副本（用户 10-25）：按停靠点推进，走路 → 打怪 → 走路……每层最后走到楼梯下一层，
+   * 最后一层打完首领走到宝箱旁等着开箱。阵亡就被送回城，这一趟作废。
+   */
+  const stepDungeon = (budget: number): number => {
+    const run = s.dungeon!;
+    const F = dungeonFloor(run.gate, run.floor);
+    const stop = F.stops[run.idx];
+    if (run.phase === 'chest' || run.phase === 'open' || !stop) {
+      regen(s, budget);
+      return budget;
+    }
+    if (run.phase === 'walk') {
+      const step = Math.min(budget, run.ms);
+      run.ms -= step;
+      regen(s, step);
+      if (run.ms > 0) return Math.max(step, 1);
+      if (stop.kind === 'mob') {
+        run.phase = 'fight';
+        s.combat = null;
+      } else if (stop.kind === 'stairs') {
+        run.floor++;
+        run.idx = 0;
+        run.phase = 'walk';
+        run.ms = run.total = legMs(dungeonFloor(run.gate, run.floor), 0);
+      } else {
+        run.phase = 'chest';
+      }
+      return Math.max(step, 1);
+    }
+    // 打怪：和野外一样的出手、命中、伤害规则，没有刷新
+    const m = MONSTERS[stop.monster!];
+    if (!m) {
+      run.idx++;
+      run.phase = 'walk';
+      run.ms = run.total = legMs(F, run.idx);
+      return 1;
+    }
+    if (!s.combat) s.combat = { monsterHp: m.hp, playerTimerMs: playerAttackMs(s), monsterTimerMs: m.attackMs, respawnMs: 0 };
+    const c = s.combat;
+    const has = (t: string) => m.traits.includes(t);
+    const hurt = (dmg: number) => {
+      if (dmg <= 0) return false;
+      s.hp -= dmg;
+      eatIfNeeded(true);
+      if (s.hp > 0) return false;
+      s.hp = maxHp(s);
+      s.stats.deaths++;
+      sum.deaths++;
+      log({ t: now - dt, kind: 'death', monster: m.id, xp: {}, items: {} });
+      sum.dungeon = { ...(sum.dungeon ?? {}), dead: true };
+      s.dungeon = null;
+      s.combat = null;
+      s.loc = { ...SPAWN_TILE };
+      return true;
+    };
+    const step = Math.min(budget, c.playerTimerMs, c.monsterTimerMs);
+    c.playerTimerMs -= step;
+    c.monsterTimerMs -= step;
+    regen(s, step);
+    const st = combatStats(s, m);
+    if (c.playerTimerMs <= 0) {
+      c.playerTimerMs += playerAttackMs(s);
+      c.pSwings = (c.pSwings ?? 0) + 1;
+      c.pDmg = -1;
+      c.pCrit = false;
+      if (rand() < st.playerHit) {
+        let raw = 1 + Math.floor(rand() * st.playerMaxHit);
+        if (rand() < st.crit) { raw *= st.critMult; c.pCrit = true; }
+        const dmg = Math.max(1, Math.min(c.monsterHp, Math.round(raw)));
+        c.monsterHp -= dmg;
+        c.pDmg = dmg;
+        addXp(st.style, dmg);
+        addXp('defence', dmg / 3);
+        addXp('hitpoints', dmg / 3);
+        if (has('thorns') && hurt(Math.floor(dmg * 0.15))) return Math.max(step, 1);
+      }
+      if (c.monsterHp <= 0) {
+        const got: Record<string, number> = {};
+        for (const d of m.drops) {
+          if (d.chance === undefined || rand() < d.chance) {
+            addLoot(d.item, d.qty);
+            got[d.item] = (got[d.item] ?? 0) + d.qty;
+            run.got = { ...run.got, [d.item]: (run.got?.[d.item] ?? 0) + d.qty };
+          }
+        }
+        log({ t: now - dt, kind: 'kill', monster: m.id, xp: c.gain ?? {}, items: got });
+        sum.kills[m.id] = (sum.kills[m.id] ?? 0) + 1;
+        s.stats.kills++;
+        run.kills++;
+        // 打倒最后一层的首领：宝箱品质这时候定下来
+        if (m.rank === 'boss' && F.chest) run.chest = rollChestQuality(run.gate.kind, run.gate.floors, rand());
+        s.combat = null;
+        run.idx++;
+        run.phase = 'walk';
+        run.ms = run.total = legMs(F, run.idx);
+        return Math.max(step, 1);
+      }
+    }
+    if (c.monsterTimerMs <= 0) {
+      const enraged = m.rank === 'boss' && c.monsterHp < m.hp * BOSS_ENRAGE;
+      c.monsterTimerMs += enraged ? Math.round(m.attackMs * 0.7) : m.attackMs;
+      if (enraged && !c.enraged) { c.enraged = true; c.mArt = 'enrage'; }
+      const move = moveOf(m);
+      const big = !!move && ((c.mSwings ?? 0) + 1) % move.every === 0;
+      if (big) c.mArt = m.rank;
+      else if (c.mArt !== 'enrage' || !enraged) c.mArt = undefined;
+      if (has('regen')) c.monsterHp = Math.min(m.hp, c.monsterHp + Math.ceil(m.hp * regenPct(m)));
+      c.mSwings = (c.mSwings ?? 0) + 1;
+      c.mDmg = -1;
+      if (st.monsterMaxHit > 0 && rand() < st.monsterHit && rand() >= st.dodge) {
+        const rage = has('berserk') && c.monsterHp < m.hp / 2 ? 1.5 : 1;
+        let dmg = Math.max(1, Math.round((1 + Math.floor(rand() * st.monsterMaxHit * rage)) * (1 - st.reduce) * (big && move ? move.mult : 1)));
+        if (has('venom')) dmg += Math.ceil(m.level / 8);
+        if (has('lifesteal')) c.monsterHp = Math.min(m.hp, c.monsterHp + Math.ceil(dmg / 2));
+        c.mDmg = dmg;
+        hurt(dmg);
+      }
+    }
+    return Math.max(step, 1);
+  };
+
+  // 洞口 30 分钟后消失（已经在里面的人不受影响）
+  if (s.gates?.length) s.gates = s.gates.filter((g) => g.expires > now);
   while (dt > 0) {
+    // 在副本里：队列不动，只推进副本
+    if (s.dungeon) {
+      const used = stepDungeon(dt);
+      dt -= used;
+      continue;
+    }
     const task = s.queue[0];
     if (!task || s.paused) {
       // 手动寻路：离线也照样走完
@@ -1182,7 +1328,7 @@ const nearest = (list: MapNode[], loc: { x: number; y: number }) => {
 };
 export const nearestBank = (loc: { x: number; y: number }) => nearest(BANKS, loc);
 export const nearestMarket = (loc: { x: number; y: number }) => nearest(MARKETS, loc);
-const within = (s: GameState, list: MapNode[]) => !s.travel && !s.walk && !s.home?.inside && list.some((n) => {
+const within = (s: GameState, list: MapNode[]) => !s.travel && !s.walk && !s.home?.inside && !s.dungeon && list.some((n) => {
   const st = standOf(n);
   return Math.hypot(s.loc.x - st.x, s.loc.y - st.y) <= BANK_REACH;
 });
@@ -1434,4 +1580,152 @@ export function collectHorse(prev: GameState, pen: number, now: number): [GameSt
 /** 点掉顶部的「任务停了」提示 */
 export function dismissStop(prev: GameState): GameState {
   return prev.lastStop ? { ...prev, lastStop: null } : prev;
+}
+
+// ---- 副本（用户 10-25） ----
+
+function migrateRun(r: DungeonRun | undefined): DungeonRun | null {
+  if (!r || !obj(r.gate) || !TIERS[r.gate.tier] || !(r.gate.floors >= 1) || !Number.isInteger(r.floor) || r.floor < 0 || r.floor >= r.gate.floors) return null;
+  if (!['walk', 'fight', 'chest', 'open'].includes(r.phase) || !Number.isInteger(r.idx) || r.idx < 0) return null;
+  return { ...r, ms: Math.max(0, num(r.ms, 0)), total: Math.max(0, num(r.total, 0)), party: Math.max(1, num(r.party, 1)), kills: Math.max(0, num(r.kills, 0)) };
+}
+
+/** 能不能在这里用钥匙开洞口：要在地表（不在副本、家园岛上） */
+export const onSurface = (s: GameState) => !s.dungeon && !s.home?.inside;
+
+/**
+ * 用钥匙开洞口：钥匙从背包扣（站在仓库旁也能用仓库里的），洞口开在 at（地图场景找好的空地），30 分钟后消失。
+ * 层数这时候就随机定好了。返回新状态和洞口。
+ */
+export function openGate(prev: GameState, key: string, at: { x: number; y: number }, now = Date.now()): [GameState, DungeonGate | null] {
+  const k = keyOf(key);
+  const from = (prev.bag[key] ?? 0) > 0 ? 'bag' : (prev.bank[key] ?? 0) > 0 && atBank(prev) ? 'bank' : null;
+  if (!k || !from || !onSurface(prev) || (prev.gates?.length ?? 0) >= 3) return [prev, null];
+  const s = clone(prev);
+  const src = from === 'bag' ? s.bag : s.bank;
+  src[key]--;
+  if (src[key] <= 0) delete src[key];
+  const [r1, n1] = nextRandom(s.rng);
+  const [r2, n2] = nextRandom(n1);
+  s.rng = n2;
+  const gate: DungeonGate = {
+    id: `${now.toString(36)}${Math.floor(r2 * 1e6).toString(36)}`, kind: k.kind, tier: k.tier, x: Math.round(at.x), y: Math.round(at.y),
+    at: now, expires: now + GATE_MS, seed: Math.floor(r2 * 2 ** 31), floors: rollFloors(k.kind, r1),
+  };
+  s.gates = [...(s.gates ?? []), gate];
+  return [s, gate];
+}
+
+/** 不能进洞口的原因（null = 能进）。蓝洞必须组队（队伍至少 2 人） */
+export function gateBlock(s: GameState, gate: DungeonGate, party: number, now = Date.now()): string | null {
+  if (s.dungeon) return tl('已经在副本里了');
+  if (gate.expires <= now) return tl('洞口已经消失了');
+  if (s.gatesUsed?.includes(gate.id)) return tl('这个洞口你已经进过了');
+  if (gate.kind === 'blue' && party < 2) return tl('蓝洞必须组队才能进（队伍至少 2 人）');
+  const p = walkPos(s);
+  if (s.travel || s.home?.inside || Math.hypot(p.x - gate.x, p.y - gate.y) > GATE_REACH + 0.5) return tl('要站在洞口旁边才能进');
+  return null;
+}
+
+/** 进副本：当前工作暂停，在副本里清完怪、开完宝箱后离开会回到洞口 */
+export function enterDungeon(prev: GameState, gate: DungeonGate, party: number, now = Date.now()): GameState {
+  if (gateBlock(prev, gate, party, now)) return prev;
+  const s = clone(leaveWork(prev));
+  s.walk = null;
+  s.travel = null;
+  s.combat = null;
+  s.mounted = false;
+  s.gatesUsed = [...(s.gatesUsed ?? []), gate.id].slice(-50);
+  const F = dungeonFloor(gate, 0);
+  s.dungeon = { gate: { ...gate }, floor: 0, idx: 0, phase: 'walk', ms: legMs(F, 0), total: legMs(F, 0), party: Math.max(1, party), kills: 0, started: now };
+  return s;
+}
+
+/** 离开副本：回到洞口位置。宝箱没开就走，这一趟作废 */
+export function leaveDungeon(prev: GameState): GameState {
+  if (!prev.dungeon) return prev;
+  const s = clone(prev);
+  const g = s.dungeon!.gate;
+  s.dungeon = null;
+  s.combat = null;
+  s.loc = { x: g.x, y: g.y };
+  return s;
+}
+
+/** 打开最后的宝箱（要清完所有怪，也就是走到了宝箱旁）。开出来的先进背包，放不下进仓库 */
+export function openDungeonChest(prev: GameState): [GameState, Record<string, number>] {
+  const run = prev.dungeon;
+  if (!run || run.phase !== 'chest') return [prev, {}];
+  const s = clone(prev);
+  const r = s.dungeon!;
+  const rand = () => {
+    const [x, next] = nextRandom(s.rng);
+    s.rng = next;
+    return x;
+  };
+  const q = r.chest ?? rollChestQuality(r.gate.kind, r.gate.floors, rand());
+  const got = rollChest(r.gate, q, rand);
+  for (const [item, n] of Object.entries(got)) {
+    s.seen[item] = 1;
+    if (item === 'coins') { s.bank.coins = (s.bank.coins ?? 0) + n; continue; }
+    const fit = Math.min(n, bagRoomFor(s.bag, item));
+    if (fit > 0) s.bag[item] = (s.bag[item] ?? 0) + fit;
+    if (n > fit) s.bank[item] = (s.bank[item] ?? 0) + n - fit;
+  }
+  r.chest = q;
+  r.loot = got;
+  r.phase = 'open';
+  return [s, got];
+}
+
+/** 站在商人旁边才能买 */
+export const SHOP_NODES = NODES.filter((n) => n.shop);
+export const atShop = (s: GameState) => within(s, SHOP_NODES);
+export function buyKey(prev: GameState, key: string, qty = 1): GameState {
+  const row = KEY_SHOP.find(([id]) => id === key);
+  const n = cleanQty(qty);
+  if (!row || n <= 0 || !atShop(prev) || (prev.bank.coins ?? 0) < row[1] * n) return prev;
+  const s = clone(prev);
+  s.bank.coins -= row[1] * n;
+  const fit = Math.min(n, bagRoomFor(s.bag, key));
+  if (fit > 0) s.bag[key] = (s.bag[key] ?? 0) + fit;
+  if (n > fit) s.bank[key] = (s.bank[key] ?? 0) + n - fit;
+  s.seen[key] = 1;
+  return s;
+}
+
+/** 强化石碎片：每 10 个合成 1 颗同阶强化石，能合多少合多少（仓库里的要站在仓库旁） */
+export function combineShards(prev: GameState, id: string, from: 'bag' | 'bank'): GameState {
+  const m = /^enhshard_(\d)$/.exec(id);
+  const src = from === 'bag' ? prev.bag : prev.bank;
+  const n = Math.floor((src[id] ?? 0) / SHARD_PER_STONE);
+  if (!m || n <= 0 || (from === 'bank' && !atBank(prev))) return prev;
+  const s = clone(prev);
+  const box = from === 'bag' ? s.bag : s.bank;
+  const stone = `enhstone_${m[1]}`;
+  box[id] -= n * SHARD_PER_STONE;
+  if (box[id] <= 0) delete box[id];
+  const fit = from === 'bank' ? n : Math.min(n, bagRoomFor(s.bag, stone));
+  if (fit > 0) box[stone] = (box[stone] ?? 0) + fit;
+  if (n > fit) s.bank[stone] = (s.bank[stone] ?? 0) + n - fit;
+  s.seen[stone] = 1;
+  return s;
+}
+
+/** 回城卷轴（用户 10-25）：选一座城镇直接传过去（落在那座城的仓库前）；在副本里用就直接离开副本 */
+export const TOWN_BANKS = BANKS;
+export function useTownScroll(prev: GameState, bankId: string): GameState {
+  const bank = BANKS.find((n) => n.id === bankId);
+  const from = (prev.bag[SCROLL_TOWN] ?? 0) > 0 ? 'bag' : (prev.bank[SCROLL_TOWN] ?? 0) > 0 && atBank(prev) ? 'bank' : null;
+  if (!bank || !from || prev.home?.inside) return prev;
+  const s = clone(leaveWork(prev));
+  const src = from === 'bag' ? s.bag : s.bank;
+  src[SCROLL_TOWN]--;
+  if (src[SCROLL_TOWN] <= 0) delete src[SCROLL_TOWN];
+  s.dungeon = null;
+  s.combat = null;
+  s.walk = null;
+  s.travel = null;
+  s.loc = standOf(bank);
+  return s;
 }

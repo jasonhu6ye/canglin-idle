@@ -81,11 +81,11 @@ export class OtherPlayers {
     const max = maxHp(st);
     const hp = Math.max(0, Math.round(st.hp));
     // 血量按 5% 一档比较，打怪时不用每下都发
-    const key = JSON.stringify([st.settings.skin, action, mounted, st.equipment, snap.total, snap.combat, Math.round((hp / max) * 20), rallyTime(), work?.anim, work?.flip]);
+    const key = JSON.stringify([st.settings.skin, action, mounted, st.equipment, snap.total, snap.combat, Math.round((hp / max) * 20), rallyTime(), work?.anim, work?.flip, (st.gates ?? []).map((g) => g.id).join()]);
     const moved = Math.abs(x - this.sent.x) + Math.abs(y - this.sent.y) >= 2;
     if (!moved && key === this.sent.key && now - this.sent.at < KEEPALIVE_MS) return;
     this.sent = { x, y, key, at: now };
-    online.publishPresence({ x, y, outfit: st.settings.skin, action, mounted, equip: { ...st.equipment }, total: snap.total, combat: snap.combat, hp, maxHp: max, rally: rallyTime() || undefined, anim: work?.anim, flip: work?.flip });
+    online.publishPresence({ x, y, outfit: st.settings.skin, action, mounted, equip: { ...st.equipment }, total: snap.total, combat: snap.combat, hp, maxHp: max, rally: rallyTime() || undefined, anim: work?.anim, flip: work?.flip, gates: st.gates?.length ? st.gates : undefined });
   }
 
   /** 换坐骑或上下坐骑：坐骑两层精灵，人夹在中间 */

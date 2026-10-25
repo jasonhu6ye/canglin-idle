@@ -1,13 +1,15 @@
 import { qClass } from '../core/quality';
 import { useSticky } from './sticky';
 import { useEffect, useState, type ReactNode } from 'react';
-import { ACTIONS, BUFF_NAME, buffText, cropsOfField, nodesOfAction, WAYSTONES, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, type MapNode } from '../core/data';
+import { ACTIONS, BUFF_NAME, buffText, cropsOfField, nodesOfAction, WAYSTONES, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, keyOf, SCROLL_TOWN, SHARD_PER_STONE, type MapNode } from '../core/data';
 import {
   atBank, atMarket, nearestBank, nearestMarket, BAG_SLOTS, BELT_CAP, beltSlotOf, eat, fromBelt, POTION_AT, toBelt, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, armorPerks, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip, openContainer,
   weaponStyle, buffPct, levelSpeed, maxHp, moveSpeed, playerAttackMs,
   redeemCode, toggleMount,
-  sortBank, toolSkillNames, TOOL_FOR, playerHaste,
+  sortBank, toolSkillNames, TOOL_FOR, playerHaste, combineShards,
 } from '../core/sim';
+import { USE_KEY } from '../game/MapScene';
+import { TownScrollPicker } from './Dungeon';
 import type { BuffKind, EquipSlot, GameState, ItemCategory, SkillId, Summary } from '../core/types';
 import { openCombatLog } from './CombatLog';
 import { XP_TABLE, levelProgress, speedForLevel, SPEED_CAP, BONUS_PER_LEVEL } from '../core/xp';
@@ -31,7 +33,7 @@ import { stopText } from './hud';
 import { actionName } from './format';
 import { AccountSettings, LeaderboardPage } from './Guild';
 import { online } from '../net';
-import { gameFps } from './GameCanvas';
+import { emitToGame, gameFps } from './GameCanvas';
 import { tl } from '../i18n';
 
 export const GEAR_SLOTS: [EquipSlot, string][] = [
@@ -62,6 +64,7 @@ function FarFromBank() {
 function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 'bag' }) {
   const item = ITEMS[id];
   const qty = (from === 'bank' ? s.bank[id] : s.bag[id]) ?? 0;
+  const [scroll, setScroll] = useState(false);
   if (!item || qty <= 0) return null;
   const e = item.equip;
   const near = atBank(s);
@@ -83,6 +86,15 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
         </span>
       )}
       <div className="go">
+        {keyOf(id) && from === 'bag' && <button className="primary" disabled={!!s.dungeon || !!s.home?.inside} onClick={() => emitToGame(USE_KEY, id)}>{tl('使用（在身边开洞口）')}</button>}
+        {keyOf(id) && from === 'bank' && <span className="muted">{tl('副本钥匙要放进背包才能用')}</span>}
+        {/^enhshard_/.test(id) && (
+          <button className="primary" disabled={qty < SHARD_PER_STONE || (from === 'bank' && !near)} onClick={() => store.dispatch((g) => combineShards(g, id, from))}>
+            {tl`合成（每 ${SHARD_PER_STONE} 个碎片合 1 块）`}
+          </button>
+        )}
+        {id === SCROLL_TOWN && <button className="primary" disabled={(from === 'bank' && !near) || !!s.home?.inside} onClick={() => setScroll(true)}>{tl('使用（选城镇传送）')}</button>}
+        {scroll && <TownScrollPicker onClose={() => setScroll(false)} />}
         {item.opens && (
           <>
             <button className="primary" disabled={from === 'bank' && !near} onClick={() => openBox(id, from, 1)}>{tl('打开')}</button>
@@ -135,6 +147,8 @@ function quickUse(g: GameState, id: string) {
   if (it?.equip) return equip(g, id);
   if (beltSlotOf(id)) return toBelt(g, id);
   if (it?.opens) queueMicrotask(() => openBox(id, 'bag', 1));
+  if (keyOf(id) && !g.dungeon && !g.home?.inside) queueMicrotask(() => emitToGame(USE_KEY, id));
+  if (/^enhshard_/.test(id)) return combineShards(g, id, 'bag');
   return g;
 }
 

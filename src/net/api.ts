@@ -88,6 +88,8 @@ export interface Presence {
   flip?: boolean;
   /** 队长发起召集的时间（毫秒），队友看到就寻路过来 */
   rally?: number;
+  /** 开着的副本洞口（10-25），队友可以进同一个 */
+  gates?: import('../core/types').DungeonGate[];
   at: number;
 }
 

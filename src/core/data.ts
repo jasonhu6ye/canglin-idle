@@ -259,11 +259,57 @@ TIERS.forEach((t, i) => {
   }
 });
 
-// 强化石（占位）
-const STONES: [string, string, number][] = [
-  ['enh_basic', tl('初级强化石'), 1], ['enh_mid', tl('中级强化石'), 30], ['enh_high', tl('高级强化石'), 55], ['enh_legend', tl('传说强化石'), 95],
+/*
+ * 强化石和强化石碎片（用户 10-25 副本更新）：都分 T1-T8。碎片集齐 10 个能合成 1 颗同阶强化石。
+ * 原来的初级/中级/高级/传说 4 种强化石并进这一套（旧存档在 migrate 里换算）。装备强化本身还没开放。
+ */
+export const ENH_STONE_NAMES = [tl('粗石强化石'), tl('青铜强化石'), tl('锡纹强化石'), tl('铁心强化石'), tl('钛晶强化石'), tl('秘纹强化石'), tl('陨星强化石'), tl('精金强化石')];
+export const SHARD_PER_STONE = 10;
+ENH_STONE_NAMES.forEach((name, i) => {
+  const v = Math.round(20 + TIERS[i].level * 12);
+  item(`enhstone_${i + 1}`, name, 'material', v, {
+    tier: i, desc: tl`T${i + 1} 强化石，用来强化同阶装备（强化系统即将开放，先攒着）。只能从副本里得到：副本宝箱会开出来，也能用 ${SHARD_PER_STONE} 个同阶碎片合成。`,
+  });
+  item(`enhshard_${i + 1}`, tl`${name}碎片`, 'material', Math.round(v / SHARD_PER_STONE), {
+    tier: i, desc: tl`T${i + 1} 强化石的碎片。集齐 ${SHARD_PER_STONE} 个，在背包或仓库里点「合成」得到 1 颗${name}。副本里的怪和副本宝箱会掉。`,
+  });
+});
+/** 原来的 4 种强化石 10-25 删掉了（用户要求）：旧存档里的按原售价折成金币 */
+export const OLD_ENH: Record<string, number> = { enh_basic: 32, enh_mid: 380, enh_high: 680, enh_legend: 1160 };
+
+/*
+ * 副本钥匙（用户 10-25）：绿洞（单人地下副本）、蓝洞（多人地下副本），T4-T8。
+ * 在地表用掉一把，身边开出一个 30 分钟的洞口。商人卖 T4/T5 绿洞和 T4-T6 蓝洞，其余只能从副本宝箱开出来。
+ */
+export type DungeonKind = 'green' | 'blue';
+export const KEY_TIERS = [3, 4, 5, 6, 7];
+const KEY_METAL = [tl('铁制'), tl('钛制'), tl('符文'), tl('陨铁'), tl('精金')];
+export const keyId = (kind: DungeonKind, tier: number) => `dkey_${kind === 'green' ? 'g' : 'b'}${tier + 1}`;
+export const keyOf = (id: string): { kind: DungeonKind; tier: number } | null => {
+  const m = /^dkey_([gb])(\d)$/.exec(id);
+  return m ? { kind: m[1] === 'g' ? 'green' : 'blue', tier: Number(m[2]) - 1 } : null;
+};
+/** 商人卖的钥匙和价格（金币） */
+export const KEY_SHOP: [string, number][] = [
+  ['dkey_g4', 2500], ['dkey_g5', 6000], ['dkey_b4', 5000], ['dkey_b5', 12000], ['dkey_b6', 30000],
 ];
-for (const [id, name, lvl] of STONES) item(id, name, 'material', 20 + lvl * 12);
+KEY_TIERS.forEach((t, i) => {
+  const shop = (kind: DungeonKind) => KEY_SHOP.some(([id]) => id === keyId(kind, t));
+  item(keyId('green', t), tl`${KEY_METAL[i]}绿洞钥匙`, 'misc', BAR_VALUE[t] * 15, {
+    tier: t,
+    desc: tl`绿洞（单人地下副本）钥匙。在地表使用，身边会开出一个 T${t + 1} 绿洞洞口，30 分钟后消失。绿洞 1-4 层随机，一个人或组队都能进。` +
+      (shop('green') ? tl('城镇商人有卖，副本宝箱也会开出来。') : tl('只能从副本宝箱里开出来。')),
+  });
+  item(keyId('blue', t), tl`${KEY_METAL[i]}蓝洞钥匙`, 'misc', BAR_VALUE[t] * 30, {
+    tier: t,
+    desc: tl`蓝洞（多人地下副本）钥匙。在地表使用，身边会开出一个 T${t + 1} 蓝洞洞口，30 分钟后消失。蓝洞 2-7 层随机，怪更强，必须组队才能进。` +
+      (shop('blue') ? tl('城镇商人有卖，副本宝箱也会开出来。') : tl('只能从副本宝箱里开出来。')),
+  });
+});
+export const SCROLL_TOWN = 'scroll_town';
+item(SCROLL_TOWN, tl('回城卷轴'), 'misc', 200, {
+  desc: tl('使用后选一座城镇，直接传送过去。在副本里用会直接离开副本（这一趟作废）。副本宝箱会开出来。'),
+});
 
 // ---- 装备 ----
 /*
@@ -386,7 +432,6 @@ item('mount_danmark', 'Chinese can fly', 'gear', 0, {
 
 const HERB_FOR_TIER = ['green_herb', 'fire_bloom', 'moon_herb', 'silver_leaf', 'flame_heart', 'frost_lotus', 'frost_lotus', 'frost_lotus'];
 const FISH_FOR_TIER = ['raw_minnow', 'raw_trout', 'raw_cod', 'raw_eel', 'raw_ghostfish', 'raw_abyssfish', 'raw_abyssfish', 'raw_abyssfish'];
-const ENH_FOR_TIER = ['enh_basic', 'enh_basic', 'enh_mid', 'enh_mid', 'enh_mid', 'enh_high', 'enh_high', 'enh_legend'];
 
 // ---- 精英和首领的战利品（用户 10-23）：福袋、宝箱、首领宝藏能打开；首领还有专属战利品和战旗 ----
 const BAG_NAME = [tl('粗布福袋'), tl('麻布福袋'), tl('红绸福袋'), tl('锦绣福袋'), tl('祥云福袋'), tl('紫金福袋'), tl('龙鳞福袋'), tl('天官福袋')];
@@ -446,22 +491,22 @@ const BOSS_TROPHY: Record<string, [string, string]> = {
         { item: FISH_FOR_TIER[t], min: 1, max: 3, w: 1 },
         ...MAT_LINE_IDS.map((l) => ({ item: `${l}_${n}`, min: 2, max: 5, w: 1 })),
         ...seeds.map((id) => ({ item: id, min: 1, max: 3, w: 2 / Math.max(1, seeds.length) })),
-        { item: ENH_FOR_TIER[t], min: 1, max: 1, w: 0.5 }, { item: GEM_FOR_TIER[t], min: 1, max: 1, w: 0.3 },
+        { item: GEM_FOR_TIER[t], min: 1, max: 1, w: 0.3 },
       ]) },
     });
     item(`chest_${n}`, CHEST_NAME[t], 'loot', v * 10, {
-      tier: t, desc: tl('精英和首领守着的宝箱，里面有锭、宝石、强化石，运气好有本阶装备。'),
+      tier: t, desc: tl('精英和首领守着的宝箱，里面有锭、宝石，运气好有本阶装备。'),
       opens: { coins: [v * 6, v * 15], rolls: 3, pool: pick([
         { item: `${T.id}_bar`, min: 2, max: 5, w: 4 }, { item: `core_${n}`, min: 1, max: 3, w: 3 },
-        { item: GEM_FOR_TIER[t], min: 1, max: 1, w: 1.5 }, { item: ENH_FOR_TIER[t], min: 1, max: 2, w: 1.5 },
+        { item: GEM_FOR_TIER[t], min: 1, max: 1, w: 1.5 },
         { item: `luckybag_${n}`, min: 1, max: 1, w: 2 }, ...gearPool(1.5),
       ]) },
     });
     item(`bosschest_${n}`, tl`${CHEST_NAME[t].replace(tl('宝箱'), '')}首领宝藏`, 'loot', v * 30, {
-      tier: t, desc: tl('只有首领会掉的宝藏，开出本阶装备、宝石、强化石的机会大得多。'),
+      tier: t, desc: tl('只有首领会掉的宝藏，开出本阶装备、宝石的机会大得多。'),
       opens: { coins: [v * 20, v * 50], rolls: 5, pool: pick([
         { item: `${T.id}_bar`, min: 4, max: 10, w: 3 }, { item: `core_${n}`, min: 2, max: 5, w: 3 },
-        { item: GEM_FOR_TIER[t], min: 1, max: 2, w: 2.5 }, { item: ENH_FOR_TIER[t], min: 1, max: 3, w: 2.5 },
+        { item: GEM_FOR_TIER[t], min: 1, max: 2, w: 2.5 },
         { item: `chest_${n}`, min: 1, max: 1, w: 1.5 }, { item: `luckybag_${n}`, min: 1, max: 2, w: 2 },
         ...gearPool(4),
       ]) },
@@ -477,16 +522,16 @@ const BOSS_TROPHY: Record<string, [string, string]> = {
   }
 }
 
-/** 世界首领的宝库（用户 10-24）：必掉，开出大量锭、宝石、强化石、珍材和首领宝藏。传说装备先不出，留到以后。 */
+/** 世界首领的宝库（用户 10-24）：必掉，开出大量锭、宝石、珍材和首领宝藏。传说装备先不出，留到以后。 */
 for (const sp of SPECIES.filter((x) => x.world)) {
   const t = tierForLevel(sp.level);
   const n = t + 1;
   const T = TIERS[t];
   item(`worldchest_${sp.id}`, tl`${sp.name}的宝库`, 'loot', BAR_VALUE[t] * 80, {
-    tier: t, boss: sp.id, desc: tl`击败世界首领「${sp.name}」必掉的宝库，开出大量锭、宝石、强化石、珍材和首领宝藏。`,
+    tier: t, boss: sp.id, desc: tl`击败世界首领「${sp.name}」必掉的宝库，开出大量锭、宝石、珍材和首领宝藏。`,
     opens: { coins: [BAR_VALUE[t] * 60, BAR_VALUE[t] * 150], rolls: 6, pool: [
       { item: `${T.id}_bar`, min: 6, max: 15, w: 3 }, { item: `core_${n}`, min: 3, max: 8, w: 3 },
-      { item: GEM_FOR_TIER[t], min: 1, max: 3, w: 2.5 }, { item: ENH_FOR_TIER[t], min: 2, max: 4, w: 2.5 },
+      { item: GEM_FOR_TIER[t], min: 1, max: 3, w: 2.5 },
       { item: `bosschest_${n}`, min: 1, max: 2, w: 2 }, { item: `chest_${n}`, min: 1, max: 2, w: 2 },
       ...MAT_LINE_IDS.map((l) => ({ item: `${l}_${n}`, min: 5, max: 12, w: 1 })),
     ] },
@@ -586,7 +631,7 @@ function speciesDrops(sp: Species, idx: number): Drop[] {
       : fam === 'golem' || fam === 'spirit' || fam === 'aquatic' ? 'crystal' : OUTER_MAT[sp.region] ?? 'spice';
     add(`${line}_${n}`, sp.rank === 'normal' ? 1 : 2 * k, sp.rank === 'normal' ? 0.25 : 1);
   }
-  // 精英和首领：宝石、本阶装备、强化石
+  // 精英和首领：宝石、本阶装备（强化石 10-25 起只在副本里出）
   if (sp.rank !== 'normal' || fam === 'dragon') add(GEM_FOR_TIER[t], 1, sp.rank === 'boss' ? 0.25 : sp.rank === 'elite' ? 0.03 : 0.01);
   if (sp.rank !== 'normal') {
     const gear = EQUIP_TYPES.filter((e) => !e.stats.speed);
@@ -602,12 +647,10 @@ function speciesDrops(sp: Species, idx: number): Drop[] {
     add(GEM_FOR_TIER[t], 2, 0.6);
     add(`trophy_${sp.id}`, 1, 0.6);
     add(`banner_${sp.id}`, 1, 0.06);
-    add(ENH_FOR_TIER[t], 2, 0.5);
     add(`bosschest_${n}`, 1, 0.6);
     return d;
   }
   if (sp.rank === 'boss') {
-    add(ENH_FOR_TIER[t], 1, 0.2);
     add(`luckybag_${n}`, 2, 0.5);
     add(`chest_${n}`, 1, 0.25);
     add(`bosschest_${n}`, 1, 0.3);
@@ -659,7 +702,61 @@ monsterList.push({
   hp: 30, attack: 0, defence: 0, maxHit: 0, attackMs: 3000, respawnMs: 1500, drops: [], art: { color: '#d8b060', accent: '#8a5a3a' },
 });
 
-export const MONSTERS: Record<string, MonsterDef> = Object.fromEntries(monsterList.map((m) => [m.id, m]));
+const MONSTER_TABLE: Record<string, MonsterDef> = Object.fromEntries(monsterList.map((m) => [m.id, m]));
+
+/*
+ * 副本里的怪（用户 10-25）：id 是 dg|种类|阶级|层|级别|原型，用到时按规则算出来再缓存。
+ * 不放进 MONSTERS 的键里，图鉴、刷新点这些遍历怪物的地方看不到它们。
+ * 等级 = 钥匙阶级的解锁等级 + 3 + 2×层（蓝洞再 +6）；
+ * 绿洞每深一层血 +12%、伤害 +8%；蓝洞底子血 ×1.5、伤害 ×1.25，每层血 +15%、伤害 +10%。
+ */
+const DG_CACHE = new Map<string, MonsterDef>();
+export const dungeonMonsterId = (kind: 'green' | 'blue', tier: number, floor: number, rank: MonsterDef['rank'], base: string) => `dg|${kind}|${tier}|${floor}|${rank}|${base}`;
+export function dungeonLevel(kind: 'green' | 'blue', tier: number, floor: number) {
+  return TIERS[tier].level + 3 + 2 * (floor + 1) + (kind === 'blue' ? 6 : 0);
+}
+function dungeonMonster(id: string): MonsterDef | undefined {
+  const hit = DG_CACHE.get(id);
+  if (hit) return hit;
+  const [, kind, tierS, floorS, rank, baseId] = id.split('|') as [string, 'green' | 'blue', string, string, MonsterDef['rank'], string];
+  const base = MONSTER_TABLE[baseId];
+  const tier = Number(tierS);
+  const floor = Number(floorS);
+  if (!base || !TIERS[tier] || !(floor >= 0) || !RANK_HP[rank]) return undefined;
+  const blue = kind === 'blue';
+  const L = dungeonLevel(kind, tier, floor);
+  const tr = new Set(base.traits);
+  const hpMul = (blue ? 1.5 * (1 + 0.15 * floor) : 1 + 0.12 * floor) * (tr.has('tough') ? 1.3 : 1) * (tr.has('frail') ? 0.75 : 1);
+  const dmgMul = blue ? 1.25 * (1 + 0.1 * floor) : 1 + 0.08 * floor;
+  const ms = FAMILY_MS[base.family as Family] + (rank === 'boss' ? 400 : 0);
+  const coins = Math.round(L * 3 * (rank === 'boss' ? 12 : rank === 'elite' ? 3 : 1) * (blue ? 1.4 : 1));
+  const shard = `enhshard_${tier + 1}`;
+  const m: MonsterDef = {
+    ...base, id, level: L, tier, rank, boss: rank === 'boss' || undefined,
+    // 副本里的怪都会还手（原型是温顺的也一样）
+    traits: base.traits.filter((t) => t !== 'passive'),
+    hp: Math.round(refDps(L) * 15 * RANK_HP[rank] * hpMul),
+    attack: Math.round(((L + 8) * (1 + (1.6 * POWER[tier]) / 64) - 8) * RANK_POW[rank] * (blue ? 1.08 : 1)),
+    defence: Math.round(L * RANK_POW[rank] * (tr.has('armored') ? 1.4 : 1)),
+    maxHit: Math.max(1, Math.round(0.025 * refHp(L) * (Math.round(ms / 100) / 10) * RANK_HIT[rank] * (tr.has('fierce') ? 1.25 : 1) * dmgMul)),
+    attackMs: Math.round(ms / 100) * 100,
+    respawnMs: 0,
+    drops: [
+      { item: 'coins', qty: coins },
+      rank === 'boss' ? { item: shard, qty: blue ? 5 : 3 } : { item: shard, qty: 1, chance: rank === 'elite' ? 0.35 : 0.08 },
+    ],
+    world: undefined, event: undefined,
+    dungeon: { kind, floor, base: baseId },
+  };
+  DG_CACHE.set(id, m);
+  return m;
+}
+export const MONSTERS: Record<string, MonsterDef> = new Proxy(MONSTER_TABLE, {
+  get(t, k) {
+    if (typeof k === 'string' && k.startsWith('dg|') && !(k in t)) return dungeonMonster(k);
+    return Reflect.get(t, k);
+  },
+});
 
 // ---- 动作 ----
 
@@ -805,16 +902,14 @@ HERBS.forEach(([id, name, lvl], i) => {
   make(`brew_${id}`, tl`${name}药水`, 'herblore', potionLvl, [one(id, 2)], [one(`${id}_potion`)], 1.5);
 });
 
-make('enhance_basic', tl('初级强化石'), 'enhancing', 1, [one('wood_bar', 2), one('stone', 3)], [one('enh_basic')]);
-make('enhance_mid', tl('中级强化石'), 'enhancing', 30, [one('iron_bar', 2), one('sapphire')], [one('enh_mid')], 2);
-make('enhance_high', tl('高级强化石'), 'enhancing', 55, [one('runic_bar', 2), one('ruby')], [one('enh_high')], 3);
-make('enhance_legend', tl('传说强化石'), 'enhancing', 95, [one('adamant_bar', 2), one('diamond')], [one('enh_legend')], 4);
+// 强化台（还没开放）：每阶一种强化石，用锭、宝石和碎片做
+TIERS.forEach((T, i) => make(`enhance_${i + 1}`, ENH_STONE_NAMES[i], 'enhancing', T.level,
+  [one(`${T.id}_bar`, 2), one(GEM_FOR_TIER[i]), one(`enhshard_${i + 1}`, 3)], [one(`enhstone_${i + 1}`)], 1 + Math.floor(i / 2)));
 // 打怪掉落的闭环：兽肉 → 烤兽肉（战斗食物），魔核 + 骨头 → 强化石
 TIERS.forEach((t, i) => {
   const n = i + 1;
   make(`cook_meat_${n}`, tl`烤兽肉 ${tierName(i)}`, 'cooking', t.level, [one(`meat_${n}`)], [one(`steak_${n}`)]);
-  const enh = ['enh_basic', 'enh_basic', 'enh_mid', 'enh_mid', 'enh_mid', 'enh_high', 'enh_high', 'enh_legend'][i];
-  make(`enhance_core_${n}`, tl`魔核淬炼 ${tierName(i)}`, 'enhancing', t.level, [one(`core_${n}`, 3), one('bones', 5)], [one(enh)], 1 + i * 0.3);
+  make(`enhance_core_${n}`, tl`魔核淬炼 ${tierName(i)}`, 'enhancing', t.level, [one(`core_${n}`, 3), one('bones', 5)], [one(`enhshard_${n}`, 4)], 1 + i * 0.3);
 });
 
 // ---- 料理（用户 10-22 要求）：鱼 + 配菜，回血更多，吃下后有限时增益 ----
@@ -937,7 +1032,7 @@ const filterIds = (prefix: string) => actionList.filter((a) => a.id.startsWith(p
 
 export type NodeSprite =
   | 'ore' | 'tree' | 'fish' | 'herb' | 'camp' | 'boss' | 'anvil' | 'furnace' | 'stove' | 'bench' | 'bowyer' | 'potion' | 'enhance'
-  | 'market' | 'farm' | 'bank' | 'dummy' | 'cave' | 'atelier' | 'waystone' | 'portal' | 'worldboss' | 'altar' | 'ranch' | 'salvage';
+  | 'market' | 'farm' | 'bank' | 'dummy' | 'cave' | 'atelier' | 'waystone' | 'portal' | 'worldboss' | 'altar' | 'ranch' | 'salvage' | 'shop';
 
 export interface MapNode {
   id: string;
@@ -957,6 +1052,8 @@ export interface MapNode {
   opens?: 'bank';
   /** 分解台：分解仓库里的装备换金币 */
   salvage?: boolean;
+  /** 城镇商人（10-25）：卖副本钥匙 */
+  shop?: boolean;
   /** 5088 大地图新增的特色地点：自带一片地貌、专属生物和首领，地图上标大字地名（用户 10-23） */
   site?: { kind: SiteKind; r: number };
   /** 大型洞窟入口（用户 10-23：先占位，以后开放） */
@@ -1299,6 +1396,16 @@ for (const b of NODES.filter((n) => n.opens === 'bank')) {
   NODES.push({
     id: `salvage_${b.id}`, name: town ? tl`${town}·分解台` : tl('分解台'), x: b.x + d[0], y: b.y + d[1], region: b.region, lv: [1, 1],
     town: true, townId: b.townId, sprite: 'salvage', actions: [], salvage: true,
+  });
+}
+
+/** 城镇商人（用户 10-25）：苍岭城和落霞城的仓库旁各一个，用金币买副本钥匙 */
+export const SHOP_SPOTS: Record<string, [number, number]> = { bank: [5, 3], bank2: [5, 4] };
+for (const b of NODES.filter((n) => SHOP_SPOTS[n.id])) {
+  const d = SHOP_SPOTS[b.id];
+  NODES.push({
+    id: `shop_${b.id}`, name: b.id === 'bank' ? tl('副本商人') : tl('落霞城·副本商人'), x: b.x + d[0], y: b.y + d[1], region: b.region, lv: [1, 1],
+    town: true, townId: b.townId, sprite: 'shop', actions: [], shop: true,
   });
 }
 

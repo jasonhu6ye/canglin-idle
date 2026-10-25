@@ -14,6 +14,7 @@ import { QUESTS, questText } from './core/quests';
 import { TplIcon } from './ui/icons';
 import { ItemPopup, LootReveal } from './ui/ItemPopup';
 import { Mailbox } from './ui/Mailbox';
+import { DungeonHud, DungeonPopups } from './ui/Dungeon';
 import { Guide, openGuide } from './ui/Guide';
 import { News } from './ui/News';
 import { HalloweenChip, HalloweenNotice } from './ui/Halloween';
@@ -310,8 +311,9 @@ function Game() {
         <div className="hud">
           <div className="top-left">
             <HomeHud s={s} />
+            <DungeonHud s={s} />
             <PartyFrames onPick={setPlayerPop} />
-            <QueuePanel s={s} />
+            {!s.dungeon && <QueuePanel s={s} />}
             <BuffBar s={s} region={region} />
               </div>
           <StatusChips s={s} extra={<><HalloweenChip s={s} /><QuestCard s={s} onGo={openNode} /></>} log={combatLog ? <CombatLog onClose={() => setCombatLog(false)} /> : null} chat={<ChatChip />} />
@@ -361,6 +363,7 @@ function Game() {
       <PartyInvitePopup />
       <ItemPopup s={s} />
       <Mailbox s={s} />
+      <DungeonPopups s={s} />
       <LootReveal />
       <Guide />
       {!offline && <News />}

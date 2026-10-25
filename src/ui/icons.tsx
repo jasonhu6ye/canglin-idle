@@ -8,6 +8,7 @@ import { resIconUrl } from '../game/resArt';
 import { equipIconUrl } from '../game/equipArt';
 import { bannerIconUrl, chestIconUrl, luckyBagIconUrl, trophyIconUrl, worldChestIconUrl } from '../game/lootArt';
 import { openItem } from './itemOpen';
+import { dungeonIconUrl } from '../game/dungeonArt';
 import { wolfIconUrl } from '../game/wolfArt';
 import { foalIconUrl, horseIconUrl } from '../game/horseArt';
 import { aptOf, coatOf, FOAL } from '../core/ranch';
@@ -947,7 +948,6 @@ const SPECIFIC: Record<string, [string, string]> = {
   potato: ['veg', '#b08a50'], baked_potato: ['food', '#c8803a'], bread: ['food', '#d8a060'], wheat: ['herb', '#e0c050'],
   green_herb: ['herb', '#6ac04a'], fire_bloom: ['herb', '#f07a3a'], moon_herb: ['herb', '#c0d0ff'],
   silver_leaf: ['herb', '#d0d8d8'], flame_heart: ['herb', '#ff4a2a'], frost_lotus: ['herb', '#8ad8ff'],
-  enh_basic: ['stone', '#8ad8ff'], enh_mid: ['stone', '#7ac04a'], enh_high: ['stone', '#e0a040'], enh_legend: ['stone', '#e04ae0'],
 };
 
 /** 装备 key → 图标模板 */
@@ -1028,7 +1028,11 @@ function equipUrl(id: string): string | null {
 /** 福袋、宝箱、首领宝藏、首领战利品和战旗 */
 function lootUrl(id: string): string | null {
   const it = ITEMS[id];
-  if (!it || it.tier === undefined) return null;
+  if (!it) return null;
+  // 副本钥匙、强化石和碎片、回城卷轴（10-25 副本更新）
+  const dg = dungeonIconUrl(id, it.tier);
+  if (dg) return dg;
+  if (it.tier === undefined) return null;
   if (id.startsWith('worldchest_')) return worldChestIconUrl();
   if (it.boss) {
     const m = MONSTERS[it.boss];
@@ -1068,7 +1072,8 @@ function PlainIcon({ item, size }: { item: string; size: number }) {
   if (item === FOAL) return <img className="icon" src={foalIconUrl()} width={size} height={size} alt="" draggable={false} />;
   const res = resIconUrl(item) ?? equipUrl(item) ?? lootUrl(item);
   if (res) {
-    const tier = ITEMS[item].tier!;
+    const tier = ITEMS[item].tier;
+    if (tier === undefined) return <img className="icon" src={res} width={size} height={size} alt="" draggable={false} />;
     return (
       <span className="icon-tier" style={{ width: size, height: size }}>
         <img className="icon" src={res} width={size} height={size} alt="" draggable={false} />

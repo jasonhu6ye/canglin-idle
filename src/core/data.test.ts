@@ -51,11 +51,13 @@ describe('数据闭环', () => {
     }
     // 肥料种地时用、洒水器装在田里
     for (const id of ['fert_basic', 'fert_rich', 'sprinkler']) used.add(id);
+    // 副本（10-25）：钥匙、回城卷轴、碎片从副本宝箱开出来；钥匙开洞口、卷轴回城、碎片合成强化石。强化石等强化系统开放
+    for (const it of Object.values(ITEMS)) if (/^(dkey_|enhshard_|enhstone_)/.test(it.id) || it.id === 'scroll_town') { made.add(it.id); if (!it.id.startsWith('enhstone_')) used.add(it.id); }
     for (const it of Object.values(ITEMS)) {
       expect(made.has(it.id), `${it.name} 没有来源`).toBe(true);
       const usable = used.has(it.id) || !!it.equip || !!it.heals || !!it.ammo || !!it.opens || it.category === 'loot' || it.category === 'deco';
       // 南瓜积分留给以后的兑换商店（用户 10-24）
-      if (!['coins', 'bones', 'burnt_food', 'pumpkin_pt'].includes(it.id) && !it.id.startsWith('enh_') && !/^(crystal|resin|feather)_\d$/.test(it.id)) expect(usable, `${it.name} 没有用途`).toBe(true);
+      if (!['coins', 'bones', 'burnt_food', 'pumpkin_pt'].includes(it.id) && !it.id.startsWith('enhstone_') && !/^(crystal|resin|feather)_\d$/.test(it.id)) expect(usable, `${it.name} 没有用途`).toBe(true);
     }
   });
 });
