@@ -866,4 +866,7 @@ export const EN_CORE: Record<string, string> = {
   "击败世界首领「{0}」必掉的宝库，开出大量锭、宝石、珍材和首领宝藏。": "The vault always dropped by world boss \"{0}\", full of bars, gems, rare materials and boss treasure.",
   "副本商人": "Dungeon Merchant",
   "落霞城·副本商人": "Duskhaven · Dungeon Merchant",
+  "T{0} 强化石": "T{0} Enhancement Stone",
+  "T{0} 强化石碎片": "T{0} Enhancement Shard",
+  "T{0} 强化石的碎片。集齐 {1} 个，在背包或仓库里点「合成」得到 1 颗同阶强化石。副本里的怪和副本宝箱会掉。": "A shard of a T{0} enhancement stone. Collect {1} and tap \"Combine\" in your bag or bank to get 1 stone of the same tier. Drops from dungeon monsters and dungeon chests.",
 };

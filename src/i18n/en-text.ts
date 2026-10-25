@@ -698,4 +698,5 @@ export const EN_TEXT: Record<string, string> = {
   "洞口只有开启人、队友和同公会成员看得见，陌生人看不到，地图不会被别人的洞口挤满。": "Gates are visible only to the opener, party members and guildmates. Strangers can't see them, so the map won't fill up with other people's gates.",
   "每人同时最多开着 2 个洞口，两次开洞口之间冷却 5 分钟。": "Each player can have at most 2 gates open at once, with a 5-minute cooldown between openings.",
   "钥匙改名为「T4 绿洞副本钥匙」「T4 蓝洞副本钥匙」这样；商人页「买 1 把」按钮不再溢出。": "Keys are renamed to \"T4 Green Dungeon Key\" / \"T4 Blue Dungeon Key\" and so on. The merchant's \"Buy 1\" button no longer overflows.",
+  "强化石和碎片也去掉了材质名，直接叫「T4 强化石」「T4 强化石碎片」。": "Enhancement stones and shards also drop the material names and are now simply \"T4 Enhancement Stone\" / \"T4 Enhancement Shard\".",
 };

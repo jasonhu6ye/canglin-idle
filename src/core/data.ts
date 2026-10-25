@@ -263,15 +263,16 @@ TIERS.forEach((t, i) => {
  * 强化石和强化石碎片（用户 10-25 副本更新）：都分 T1-T8。碎片集齐 10 个能合成 1 颗同阶强化石。
  * 原来的初级/中级/高级/传说 4 种强化石并进这一套（旧存档在 migrate 里换算）。装备强化本身还没开放。
  */
-export const ENH_STONE_NAMES = [tl('粗石强化石'), tl('青铜强化石'), tl('锡纹强化石'), tl('铁心强化石'), tl('钛晶强化石'), tl('秘纹强化石'), tl('陨星强化石'), tl('精金强化石')];
+/** 用户 10-25：名字就叫「T4 强化石」「T4 强化石碎片」，不带铁心之类的材质名 */
+export const ENH_STONE_NAMES = TIERS.map((_, i) => tl`T${i + 1} 强化石`);
 export const SHARD_PER_STONE = 10;
 ENH_STONE_NAMES.forEach((name, i) => {
   const v = Math.round(20 + TIERS[i].level * 12);
   item(`enhstone_${i + 1}`, name, 'material', v, {
     tier: i, desc: tl`T${i + 1} 强化石，用来强化同阶装备（强化系统即将开放，先攒着）。只能从副本里得到：副本宝箱会开出来，也能用 ${SHARD_PER_STONE} 个同阶碎片合成。`,
   });
-  item(`enhshard_${i + 1}`, tl`${name}碎片`, 'material', Math.round(v / SHARD_PER_STONE), {
-    tier: i, desc: tl`T${i + 1} 强化石的碎片。集齐 ${SHARD_PER_STONE} 个，在背包或仓库里点「合成」得到 1 颗${name}。副本里的怪和副本宝箱会掉。`,
+  item(`enhshard_${i + 1}`, tl`T${i + 1} 强化石碎片`, 'material', Math.round(v / SHARD_PER_STONE), {
+    tier: i, desc: tl`T${i + 1} 强化石的碎片。集齐 ${SHARD_PER_STONE} 个，在背包或仓库里点「合成」得到 1 颗同阶强化石。副本里的怪和副本宝箱会掉。`,
   });
 });
 /** 原来的 4 种强化石 10-25 删掉了（用户要求）：旧存档里的按原售价折成金币 */
