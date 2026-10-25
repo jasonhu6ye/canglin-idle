@@ -149,4 +149,8 @@ export const EN_SOCIAL: Record<string, string> = {
   '队长可以「召集队友」，在线的队友会自动寻路到队长身边。队长还能转让队长、踢人和解散队伍（在名片上或「好友」页的队伍栏里）。': 'The leader can Rally party, and online members will walk over automatically. Leaders can also hand over leadership, kick members and disband the party (from a player card or the party section on the Friends page).',
   '队伍：加入队伍后左上角会显示队友的头像和血量，点队友能寻路到他身边。队长可以召集队友（在线队友会自动走过来），也能转让队长、踢人和解散队伍。': 'Parties: the top-left corner shows your party members\' portraits and HP, and tapping one lets you walk to them. The leader can rally the party (online members walk over automatically), hand over leadership, kick members and disband the party.',
   '地图上的其他玩家现在会显示真实状态：挖矿、砍树、钓鱼、打怪都有对应动作；骑着狼或马的玩家能看到坐骑，干活时坐骑在旁边等着。': 'Other players on the map now show what they are really doing: mining, chopping, fishing and fighting each have their own animation, and you can see their wolf or horse when they ride. While they work, the mount waits beside them.',
+  '组队经验': 'Party XP',
+  '组队中（{0} 人）：所有技能经验 +{1}%。每个队员 +{2}%，5 人满队 +{3}%': 'In a party of {0}: +{1}% XP for every skill. Each member adds +{2}%, up to +{3}% with a full party of 5.',
+  '组队经验加成：每个队员 +5%': 'Party XP bonus: +5% per member',
+  '组队时所有技能经验增加：队伍每个人 +5%，2 人 +10%，5 人满队 +25%。左上角增益栏能看到当前加成。': 'Being in a party now boosts XP for every skill: +5% per member, so +10% for two and +25% for a full party of five. The buff bar at the top left shows your current bonus.',
 };

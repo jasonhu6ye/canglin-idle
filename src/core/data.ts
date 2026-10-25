@@ -1393,19 +1393,27 @@ export function travelMs(from: { x: number; y: number }, to: { x: number; y: num
 export const STONE_JUMP_MS = 3000;
 export interface Route { ms: number; via?: [string, string] }
 /**
- * 自动寻路的路线（用户 10-23：寻路要会自己用传送石碑）：走到离起点最近的已激活石碑、传到离终点最近的已激活石碑、
- * 再走过去，比直接走省两成以上时间才这么走。
+ * 自动寻路的路线（用户 10-23：寻路要会自己用传送石碑）：在所有已激活的石碑里挑「走到 A + 传送 + 从 B 走到终点」最快的一对，
+ * 比直接走快就用石碑（10-25 用户反馈：以前只看离起点、终点最近的两座，还要省两成才用，明明传送更快却跑过去）。
  */
 export function planRoute(stones: string[] | undefined, from: { x: number; y: number }, to: { x: number; y: number }, speed = WALK_TILES_PER_SEC): Route {
   const direct = travelMs(from, to, speed);
   const lit = WAYSTONES.filter((n) => stones?.includes(n.id));
   if (lit.length < 2) return { ms: direct };
-  const nearest = (p: { x: number; y: number }) => lit.reduce((b, n) => (Math.hypot(n.x - p.x, n.y - p.y) < Math.hypot(b.x - p.x, b.y - p.y) ? n : b));
-  const a = nearest(from);
-  const b = nearest(to);
-  if (a === b) return { ms: direct };
-  const ms = travelMs(from, standOf(a), speed) + STONE_JUMP_MS + travelMs(standOf(b), to, speed);
-  return ms < direct * 0.8 ? { ms, via: [a.id, b.id] } : { ms: direct };
+  const toA = lit.map((n) => travelMs(from, standOf(n), speed));
+  const fromB = lit.map((n) => travelMs(standOf(n), to, speed));
+  let best: Route = { ms: direct };
+  // 省不到 2 秒就别绕去石碑了，免得来回折腾
+  let bestMs = direct - 2000;
+  lit.forEach((a, i) => lit.forEach((b, j) => {
+    if (i === j) return;
+    const ms = toA[i] + STONE_JUMP_MS + fromB[j];
+    if (ms < bestMs) {
+      bestMs = ms;
+      best = { ms, via: [a.id, b.id] };
+    }
+  }));
+  return best;
 }
 
 /** 世界地图危险度：按地点最强怪物和玩家战斗等级的差距 */

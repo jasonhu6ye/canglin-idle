@@ -491,4 +491,7 @@ export const EN_TEXT: Record<string, string> = {
   '坐骑「Chinese can fly」：在「更多」页输入兑换码领取，骑乘移动速度 +100%，R 键上下坐骑。': 'The "Chinese can fly" mount: claim it with a redeem code on the More page for +100% movement speed while riding. Press R to mount and dismount.',
   '左下角日志：战斗掉落和经验、采集制作的产出，可翻页，带统计页。': 'A log at the bottom left records combat drops and XP plus gathering and crafting output, with paging and a stats view.',
   '右上角像素风昼夜时钟；电脑端世界地图可以滚轮缩放、拖动。': 'A pixel-art day/night clock at the top right. On desktop, the world map can be zoomed with the mouse wheel and dragged.',
+  '自动寻路更聪明：会挑最快的石碑路线': 'Smarter auto-travel: it now picks the fastest waystone route',
+  '自动寻路现在会比较所有已激活的传说石碑，挑「走到石碑 + 传送 + 走到目的地」最快的那条；只要比直接走快就会用石碑，不再明明传送更快还一路跑过去。': 'Auto-travel now compares every waystone you have activated and takes the fastest "walk to a stone, teleport, walk the rest" route. If teleporting is quicker than walking, it teleports instead of running the whole way.',
+  '追踪怪物、首领时的寻路也会顺路用石碑了。': 'Tracking a monster or boss now uses waystones along the way too.',
 };

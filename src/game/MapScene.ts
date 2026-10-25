@@ -317,7 +317,8 @@ export class MapScene extends Phaser.Scene {
       const spot = store.tracking ? trackSpot(store.tracking) : null;
       // 只有能准确定位的才一直标箭头
       if (store.tracking && !exactTrack(store.tracking)) store.tracking = null;
-      if (spot) this.moveTo(spot.x, spot.y);
+      // 追踪的怪也一样：远路先顺路用石碑（10-25 用户反馈追踪时非得跑过去）
+      if (spot) onWalkTile(spot.x, spot.y);
       else onWalkTo(id);
     };
     this.unsub.push(() => this.game.events.off('walkto', onWalkTo));

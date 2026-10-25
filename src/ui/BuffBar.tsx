@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ACTIONS, BUFF_NAME, ITEMS } from '../core/data';
 import { rainBonus } from '../core/sim';
+import { PARTY_MAX, PARTY_XP_PER, partySize, partyXpPct } from '../core/party';
 import { aptOf } from '../core/ranch';
 import type { BuffKind, GameState, RegionId } from '../core/types';
 import { isRaining, RAIN_FISH } from '../core/weather';
@@ -10,7 +11,7 @@ import { tl } from '../i18n';
  * 增益栏（用户 10-23）：时钟左边一排像素小图标，料理增益、雨天钓鱼、骑乘；
  * 下面写剩余时间，点一下（电脑端悬停）看说明。
  */
-type IconKey = BuffKind | 'rain' | 'mount' | 'horse';
+type IconKey = BuffKind | 'rain' | 'mount' | 'horse' | 'party';
 const PAL: Record<string, string> = {
   k: '#1a0f08', w: '#ffffff', g: '#e8b84a', G: '#a07020', r: '#e0503a', R: '#8a2a1e', b: '#6ac0ff', B: '#2a6ab0',
   s: '#c8ccd4', S: '#7a808a', n: '#8a5a30', N: '#5a3a1e', y: '#fff07a', p: '#c070ff', P: '#7030b0', e: '#7ad860', E: '#3a8a30',
@@ -23,6 +24,7 @@ const ART: Record<IconKey, string[]> = {
   speed: ['...gggg..', '..gyyyyg.', '.g.....g.', '..gyyyg..', '...gyg...', '..g.y.g..', '.g.yyy.g.', '..gyyyyg.', '...gggg..'],
   xp: ['....y....', '...yyy...', 'yyyywyyyy', '.yywwwyy.', '..yywyy..', '..yyyyy..', '.yyy.yyy.', '.yy...yy.', 'y.......y'],
   rain: ['....b....', '...bbb...', '..bbwbb..', '..bwbbb..', '...bbb...', '.........', '.B.eeE...', 'BBeeeeEk.', '.B.eeE...'],
+  party: ['...yyy...', '...yyy...', '.b..y..b.', 'bbb...bbb', 'bbbyyybbb', '.b.yyy.b.', 'bbbyyybbb', 'bbbyyybbb', 'bbbyyybbb'],
   horse: ['....NN...', '...NnnN..', '..NnnknN.', '.NnnnnnNN', 'NnnnnNnN.', 'NnwnN.NnN', '.NNN..NnN', '......NnN', '.....NnnN'],
   mount: ['.S.....S.', 'SsS...SsS', 'SssSSSssS', 'SskssskS.', 'SsssssssS', '.SsrwrsS.', '..SsssS..', '...SSS...', '.........'],
 };
@@ -41,7 +43,7 @@ function iconUrl(k: IconKey) {
   return (urls[k] = c.toDataURL());
 }
 
-const BORDER: Record<IconKey, string> = { atk: '#c5cad2', str: '#e0503a', def: '#6ac0ff', speed: '#e8b84a', xp: '#fff07a', rain: '#6ac0ff', mount: '#c070ff', horse: '#c070ff' };
+const BORDER: Record<IconKey, string> = { atk: '#c5cad2', str: '#e0503a', def: '#6ac0ff', speed: '#e8b84a', xp: '#fff07a', rain: '#6ac0ff', mount: '#c070ff', horse: '#c070ff', party: '#7ad860' };
 
 interface Buff { key: string; icon: IconKey; name: string; value: string; time?: string; desc: string; dim?: boolean }
 
@@ -55,6 +57,10 @@ function buffsOf(s: GameState, region: RegionId, now: number): Buff[] {
     const a = ACTIONS[s.queue[0]?.action ?? ''];
     const on = !s.paused && a?.kind === 'skill' && rainBonus(s, a, now) > 0;
     out.push({ key: 'rain', icon: 'rain', name: tl('雨天钓鱼'), value: `+${Math.round(RAIN_FISH * 100)}%`, time: tl('下雨'), desc: tl`正在下雨：在下雨的钓点钓鱼快 ${Math.round(RAIN_FISH * 100)}%，雨停就没了${on ? tl('（正在生效）') : ''}`, dim: !on });
+  }
+  if (partySize() > 0) {
+    const n = partySize();
+    out.push({ key: 'party', icon: 'party', name: tl('组队经验'), value: `+${Math.round(partyXpPct() * 100)}%`, desc: tl`组队中（${n} 人）：所有技能经验 +${Math.round(partyXpPct() * 100)}%。每个队员 +${PARTY_XP_PER * 100}%，5 人满队 +${PARTY_MAX * PARTY_XP_PER * 100}%` });
   }
   if (s.mounted && s.equipment.mount) {
     const mv = ITEMS[s.equipment.mount]?.equip?.move ?? 0;

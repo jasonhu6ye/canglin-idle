@@ -701,6 +701,20 @@ describe('传说石碑', () => {
     // 不站在石碑旁传不了
     expect(useWaystone({ ...t, loc: { x: 0, y: 0 } }, 'stone_town').loc).toEqual({ x: 0, y: 0 });
   });
+  it('自动寻路在所有已激活石碑里挑最快的一对，只要比走路快就用', async () => {
+    const { WAYSTONES, planRoute, standOf: st, STONE_JUMP_MS } = await import('./data');
+    const all = WAYSTONES.map((n) => n.id);
+    for (const from of WAYSTONES.slice(0, 6)) for (const to of WAYSTONES.slice(-6)) {
+      const a = st(from);
+      const b = { x: st(to).x + 3, y: st(to).y };
+      const r = planRoute(all, a, b);
+      // 至少不比「起点石碑直接传到终点石碑」慢
+      expect(r.ms).toBeLessThanOrEqual(Math.min(travelMs(a, b), STONE_JUMP_MS + travelMs(st(to), b)));
+      if (from !== to) expect(r.via).toBeDefined();
+    }
+    // 只激活一座：只能走路
+    expect(planRoute(['stone_town'], st(WAYSTONES[0]), st(WAYSTONES[WAYSTONES.length - 1])).via).toBeUndefined();
+  });
 });
 
 describe('雨天钓鱼', () => {
@@ -936,5 +950,28 @@ describe('首领再生（10-25）', () => {
       expect(est.killMs, m.id).toBeLessThan(Infinity);
       expect(est.rating, m.id).not.toBe('打不动');
     }
+  });
+});
+
+describe('组队经验加成', () => {
+  it('每个队员 +5%，5 人满队 +25%，离开队伍就没了', async () => {
+    const { setPartySize, partyXpPct } = await import('./party');
+    const run = () => {
+      const s = startHere(newGame(T0, 1), 'fish_minnow', { type: 'infinite' });
+      return advance(s, T0 + 10 * 60_000).state.xp.fishing;
+    };
+    const base = run();
+    setPartySize(5);
+    expect(partyXpPct()).toBeCloseTo(0.25);
+    const full = run();
+    setPartySize(9);
+    expect(partyXpPct()).toBeCloseTo(0.25);
+    setPartySize(2);
+    expect(partyXpPct()).toBeCloseTo(0.1);
+    setPartySize(0);
+    expect(full / base).toBeGreaterThan(1.2);
+    // 经验多了升级快、动作也快一点，所以会略高于 1.25
+    expect(full / base).toBeLessThan(1.4);
+    expect(run()).toBe(base);
   });
 });
