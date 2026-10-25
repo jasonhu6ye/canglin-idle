@@ -44,6 +44,7 @@ export class LocalApi implements OnlineApi {
   }
 
   me() { return this.db.me; }
+  async ready() { return this.db.me; }
   async signIn(email: string) {
     this.db.me ??= { id: uid(), name: email.split('@')[0].slice(0, 12) };
     this.flush();

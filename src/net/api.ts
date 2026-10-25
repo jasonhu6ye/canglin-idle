@@ -88,6 +88,8 @@ export interface OnlineApi {
   readonly kind: string;
   /** 当前登录的玩家；没登录是 null，单机照常玩 */
   me(): Profile | null;
+  /** 读出上次的登录状态；之后 me() 才准 */
+  ready(): Promise<Profile | null>;
   signIn(email: string, password: string): Promise<Profile>;
   signUp(email: string, password: string, name: string): Promise<Profile>;
   signOut(): Promise<void>;
