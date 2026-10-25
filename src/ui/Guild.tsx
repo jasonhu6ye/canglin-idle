@@ -17,7 +17,20 @@ export const onOpenGuild = (f: Fn) => {
 type Tab = 'guild' | 'rank' | 'chat' | 'account';
 const TABS: [Tab, string][] = [['guild', '公会'], ['rank', '排行榜'], ['chat', '聊天'], ['account', '账号']];
 const ROLE: Record<GuildRole, string> = { leader: '会长', officer: '副会长', member: '成员' };
-const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
+/** 服务器的英文报错翻成玩家看得懂的话 */
+const ERRS: [RegExp, string][] = [
+  [/Failed to fetch|NetworkError|Load failed/i, '连不上服务器，请检查网络后再试'],
+  [/Invalid login credentials/i, '邮箱或密码不对'],
+  [/already registered/i, '这个邮箱已经注册过了，直接登录吧'],
+  [/profiles_name_key/, '这个名字已经有人用了'],
+  [/guilds_name_key/, '这个公会名已经有人用了'],
+  [/guilds_tag_key/, '这个会标已经有人用了'],
+  [/rate limit/i, '操作太频繁，请稍等一会儿'],
+];
+const errText = (e: unknown) => {
+  const m = e instanceof Error ? e.message : String(e);
+  return ERRS.find(([re]) => re.test(m))?.[1] ?? m;
+};
 
 /** 异步按钮：转圈、出错显示 */
 function useAct() {
