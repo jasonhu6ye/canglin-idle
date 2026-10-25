@@ -155,8 +155,12 @@ export class LocalApi implements OnlineApi {
   async inviteParty() { throw new Error(tl('只能邀请好友')); }
   async answerParty() {}
   async leaveParty() {}
+  async kickParty() {}
+  async promoteParty() {}
+  async disbandParty() {}
   onSocial() { return () => {}; }
   onlineCount() { return this.me() ? 1 : 0; }
+  realtimeStatus() { return 'off' as const; }
   presenceOf() { return undefined; }
   onlineIds() { return new Set(this.me() ? [this.me()!.id] : []); }
   async trades(): Promise<Trade[]> { return []; }

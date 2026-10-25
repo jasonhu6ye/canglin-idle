@@ -779,7 +779,7 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .guild .my-id .id-row { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
 .guild .my-id .pid { font-size: 20px; letter-spacing: 2px; color: var(--gold); font-family: ui-monospace, monospace; }
 .guild .guild-list li.ghost button { opacity: 1; }
-.server-status { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 8px; margin: 4px 0 8px; text-align: center; }
+.server-status { display: grid; grid-template-columns: repeat(auto-fit, minmax(64px, 1fr)); gap: 4px; padding: 8px; margin: 4px 0 8px; text-align: center; }
 .server-status span { display: flex; flex-direction: column; gap: 2px; }
 .server-status small { color: var(--muted); font-size: 11px; }
 .server-status b { font-size: 15px; font-variant-numeric: tabular-nums; }
@@ -846,3 +846,21 @@ html[lang="en"] .login-box h1 { letter-spacing: 2px; }
 .center-pop .trade { margin: 0; }
 .center-pop .pp-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .center-pop .pp-actions button { padding: 8px 6px; }
+
+/* 左上角队伍栏 */
+.party-frames { display: flex; flex-direction: column; gap: 3px; pointer-events: auto; }
+.party-frame { display: flex; align-items: center; gap: 6px; padding: 3px 8px 3px 3px; min-width: 150px; text-align: left;
+  background: rgba(20, 12, 8, 0.82); box-shadow: 0 0 0 1px var(--edge), inset 0 0 0 1px #3a2618; border: 0; }
+.party-frame.off { opacity: 0.55; }
+.party-frame .avatar { width: 28px; height: 28px; flex: none; }
+.party-frame .avatar img { width: 24px; height: 24px; }
+.pf-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.pf-name { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pf-name small { color: var(--muted); font-size: 10px; }
+.pf-lead { color: var(--gold); margin-right: 2px; }
+.party-frame .bar { width: 100%; height: 6px; }
+.party-frame .bar i { background: linear-gradient(#ff8a9a, var(--red) 50%, #a03040); }
+.pf-hp { font-size: 10px; color: var(--muted); line-height: 1; }
+.pf-rally { align-self: flex-start; font-size: 12px; }
+.pf-note { font-size: 12px; max-width: 240px; }
+.party-ops { display: inline-flex; gap: 4px; margin-left: 6px; }

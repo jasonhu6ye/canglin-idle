@@ -563,6 +563,7 @@ function ServerStatus() {
   }, []);
   const n = online.onlineCount();
   const fps = gameFps();
+  const rt = online.realtimeStatus();
   const lvl = (ms: number) => (ms < 0 ? 'bad' : ms < 150 ? 'good' : ms < 400 ? 'mid' : 'bad');
   return (
     <div className="server-status frame">
@@ -570,6 +571,7 @@ function ServerStatus() {
       <span><small>{tl('延迟')}</small><b className={ping == null ? '' : lvl(ping)}>{ping == null ? '…' : ping < 0 ? tl('连不上') : `${ping} ms`}</b></span>
       <span><small>FPS</small><b className={fps >= 50 ? 'good' : fps >= 25 ? 'mid' : 'bad'}>{fps ? Math.round(fps) : '…'}</b></span>
       <span><small>{tl('每帧')}</small><b>{fps ? `${(1000 / fps).toFixed(1)} ms` : '…'}</b></span>
+      {rt !== 'off' && <span><small>{tl('实时同步')}</small><b className={rt === 'ok' ? 'good' : rt === 'failed' ? 'mid' : ''}>{rt === 'ok' ? tl('正常') : rt === 'failed' ? tl('慢速同步') : '…'}</b></span>}
     </div>
   );
 }

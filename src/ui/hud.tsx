@@ -15,7 +15,7 @@ import { tl } from '../i18n';
 
 /** 顶栏头像：取当前外观正面站立帧的上半身 */
 const portraits = new Map<string, string>();
-function portrait(skin?: string): string {
+export function portrait(skin?: string): string {
   const o = outfitOf(skin);
   let url = portraits.get(o.id);
   if (!url) {

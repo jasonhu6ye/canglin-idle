@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ITEMS } from '../core/data';
 import type { GameState } from '../core/types';
 import { online, type Friend, type Trade } from '../net';
-import { lacking, refreshSocial, useSocial } from '../net/social';
+import { lacking, refreshSocial, sendRally, useSocial } from '../net/social';
 import { pushNow, useOnline } from '../net/sync';
 import { openChatPage } from './ChatDock';
 import { fmtNum } from './format';
@@ -38,6 +38,7 @@ export function FriendsPage({ s, onClose }: { s: GameState; onClose: () => void 
   const [pick, setPick] = useState<string | null>(null);
   const [pid, setPid] = useState('');
   const [note, setNote] = useState('');
+  const [partyNote, setPartyNote] = useState('');
   const act = useAct();
   const [, tick] = useState(0);
   useEffect(() => { void refreshSocial(); const t = setInterval(() => tick((n) => n + 1), 5000); return () => clearInterval(t); }, []);
@@ -54,6 +55,7 @@ export function FriendsPage({ s, onClose }: { s: GameState; onClose: () => void 
     .sort((a, b) => Number(onlineIds.has(b.playerId)) - Number(onlineIds.has(a.playerId)) || (b.totalLevel ?? 0) - (a.totalLevel ?? 0));
   const incoming = st.friends.filter((f) => !f.accepted && f.incoming);
   const outgoing = st.friends.filter((f) => !f.accepted && !f.incoming);
+  const lead = st.party?.leader === me.id;
   const sel = mine.find((f) => f.playerId === pick);
   if (sel) return <FriendDetail s={s} f={sel} online={onlineIds.has(sel.playerId)} onBack={() => setPick(null)} />;
   const openTrades = st.trades.filter((t) => t.status === 'open');
@@ -129,13 +131,22 @@ export function FriendsPage({ s, onClose }: { s: GameState; onClose: () => void 
               <li key={m.playerId}>
                 <span>{m.name}{m.playerId === me.id && <small className="muted">{tl('（你）')}</small>}</span>
                 <small className="muted">{m.playerId === st.party!.leader ? tl('队长') : tl('队员')}</small>
+                {lead && m.playerId !== me.id && (
+                  <span className="party-ops">
+                    <button className="small" disabled={act.busy} onClick={() => confirm(tl`把队长转给 ${m.name}？`) && void act.run(() => online.promoteParty(m.playerId))}>{tl('转让队长')}</button>
+                    <button className="small" disabled={act.busy} onClick={() => confirm(tl`把 ${m.name} 踢出队伍？`) && void act.run(() => online.kickParty(m.playerId))}>{tl('踢出')}</button>
+                  </span>
+                )}
               </li>
             ))}
           </ul>
           <div className="go">
             <button onClick={() => openChatPage('party')}>{tl('队伍聊天')}</button>
+            {lead && <button onClick={() => { sendRally(); setPartyNote(tl('已发出召集，在线队友会自动寻路到你身边')); }}>{tl('召集队友')}</button>}
             <button disabled={act.busy} onClick={() => confirm(tl('退出队伍？')) && void act.run(() => online.leaveParty())}>{tl('退出队伍')}</button>
+            {lead && <button className="danger" disabled={act.busy} onClick={() => confirm(tl('解散队伍？所有人都会离队。')) && void act.run(() => online.disbandParty())}>{tl('解散队伍')}</button>}
           </div>
+          {partyNote && <p className="muted small-note">{partyNote}</p>}
         </>
       )}
 

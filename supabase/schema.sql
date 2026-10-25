@@ -360,6 +360,37 @@ begin
   end if;
 end $$;
 
+-- 队长：踢人、转让队长、解散（用户 10-25）
+create or replace function public.kick_party(p_player uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare pt uuid;
+begin
+  pt := my_party();
+  if pt is null or not exists (select 1 from parties where id = pt and leader = auth.uid()) then raise exception '只有队长能踢人'; end if;
+  if p_player = auth.uid() then raise exception '不能踢自己'; end if;
+  delete from party_members where party_id = pt and player_id = p_player;
+  if (select count(*) from party_members where party_id = pt) < 2 then delete from parties where id = pt; end if;
+end $$;
+
+create or replace function public.promote_party(p_player uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare pt uuid;
+begin
+  pt := my_party();
+  if pt is null or not exists (select 1 from parties where id = pt and leader = auth.uid()) then raise exception '只有队长能转让'; end if;
+  if not exists (select 1 from party_members where party_id = pt and player_id = p_player) then raise exception '对方不在队伍里'; end if;
+  update parties set leader = p_player where id = pt;
+end $$;
+
+create or replace function public.disband_party() returns void
+language plpgsql security definer set search_path = public as $$
+declare pt uuid;
+begin
+  pt := my_party();
+  if pt is null or not exists (select 1 from parties where id = pt and leader = auth.uid()) then raise exception '只有队长能解散队伍'; end if;
+  delete from parties where id = pt;
+end $$;
+
 -- ========== 聊天：世界 / 公会 / 队伍 / 私聊 ==========
 create table if not exists public.chat (
   id bigint generated always as identity primary key,
@@ -491,3 +522,34 @@ end $$;
 
 do $$ begin alter publication supabase_realtime add table public.trades; exception when duplicate_object then null; end $$;
 
+
+-- ============ 在线玩家位置（10-25）============
+-- Realtime presence 连不上时的后备：每人一行，几秒写一次，别人轮询最近 45 秒更新过的
+create table if not exists public.positions (
+  player_id uuid primary key references public.profiles(id) on delete cascade,
+  data jsonb not null default '{}',
+  updated_at timestamptz not null default now()
+);
+create index if not exists positions_updated on public.positions (updated_at desc);
+alter table public.positions enable row level security;
+drop policy if exists "positions 所有人可看" on public.positions;
+create policy "positions 所有人可看" on public.positions for select using (true);
+
+create or replace function public.put_position(p_data jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception '请先登录'; end if;
+  if pg_column_size(p_data) > 4000 then raise exception '数据太大'; end if;
+  insert into positions (player_id, data, updated_at) values (auth.uid(), p_data, now())
+  on conflict (player_id) do update set data = excluded.data, updated_at = now();
+end $$;
+
+create or replace function public.online_positions()
+returns table (player_id uuid, data jsonb, updated_at timestamptz)
+language sql stable security definer set search_path = public as $$
+  select player_id, data, updated_at from positions
+  where updated_at > now() - interval '45 seconds'
+  order by updated_at desc limit 500;
+$$;
+grant execute on function public.put_position(jsonb) to authenticated;
+grant execute on function public.online_positions() to authenticated;

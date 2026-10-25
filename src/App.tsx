@@ -20,6 +20,7 @@ import { GuildPanel, onOpenGuild } from './ui/Guild';
 import { LoginGate } from './ui/Login';
 import { useOnline } from './net/sync';
 import { FriendsPage } from './ui/FriendsPage';
+import { PartyFrames } from './ui/PartyFrames';
 import { PlayerPopup } from './ui/PlayerPopup';
 import { PartyInvitePopup, TradePopup } from './ui/SocialPopups';
 import { PLAYER_CLICK } from './game/MapScene';
@@ -283,6 +284,7 @@ function Game() {
         <div className="hud">
           <div className="top-left">
             <HomeHud s={s} />
+            <PartyFrames onPick={setPlayerPop} />
             <QueuePanel s={s} />
             <BuffBar s={s} region={region} />
               </div>
