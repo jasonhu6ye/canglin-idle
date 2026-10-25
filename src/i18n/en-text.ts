@@ -540,6 +540,7 @@ export const EN_TEXT: Record<string, string> = {
   '新武器单手斧：伤害比剑高一点、出手稍慢，可以配副手。': 'New weapon, the Hatchet: hits a bit harder than a sword but swings slightly slower, and works with an off-hand.',
   '新武器双手大盾：攻击低，但防御很高，适合扛首领。双手持握，装上会自动卸下副手；反过来装副手也会卸下大盾。': 'New weapon, the Tower Shield: low attack but very high defence, great for tanking bosses. It is two-handed: equipping it removes your off-hand, and equipping an off-hand removes the shield.',
   '火把在制弓台做，单手斧、副手盾、双手大盾在铁匠铺，箭袋、魔法书在工坊。和其他装备一样会随机出品质。': 'Torches are made at the fletching bench; hatchets, bucklers and tower shields at the smithy; quivers and spellbooks at the workshop. Like other gear, they roll a random quality.',
+  "手机端：「有新版本」提示挪到顶栏下面，不再被状态栏挡住点不到；各种弹窗避开刘海和底部横条，高度按实际可见区域算，底部按钮不会跑到屏幕外。": "Mobile: the \"new version\" banner now sits below the top bar instead of under the status bar where it couldn't be tapped. Pop-ups avoid the notch and the home bar and size to the visible screen, so their bottom buttons stay on screen.",
   "地图下方的战斗统计改成显示每小时击杀数（按最近一小时实际击杀算，刚开打时先显示预估值）。": "The combat stats under the map now show kills per hour (measured over the last hour; right after you start fighting it shows an estimate).",
   "武器攻击动作，金币不占背包": "Weapon attack animations; coins no longer take bag space",
   "打怪、偷窃、开宝箱得到的金币不再占背包格子，直接进钱包（仓库金币），顶栏的金币数会马上涨。以前背包里的金币也已经并进去了。": "Coins from monsters, thieving and chests no longer take bag slots. They go straight into your wallet (bank coins), and the coin count at the top goes up right away. Coins already in your bag have been moved there too.",
