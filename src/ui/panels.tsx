@@ -6,7 +6,7 @@ import {
   atBank, atMarket, nearestBank, nearestMarket, BAG_SLOTS, BELT_CAP, beltSlotOf, eat, fromBelt, POTION_AT, toBelt, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, armorPerks, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip, openContainer,
   weaponStyle, buffPct, levelSpeed, maxHp, moveSpeed, playerAttackMs,
   redeemCode, toggleMount,
-  sortBank, toolSkillNames, TOOL_FOR,
+  sortBank, toolSkillNames, TOOL_FOR, playerHaste,
 } from '../core/sim';
 import type { BuffKind, EquipSlot, GameState, ItemCategory, SkillId, Summary } from '../core/types';
 import { openCombatLog } from './CombatLog';
@@ -35,7 +35,7 @@ import { gameFps } from './GameCanvas';
 import { tl } from '../i18n';
 
 export const GEAR_SLOTS: [EquipSlot, string][] = [
-  ['head', tl('头部')], ['neck', tl('项链')], ['weapon', tl('武器')], ['body', tl('身体')], ['hands', tl('手部')], ['feet', tl('脚部')], ['ring', tl('戒指')],
+  ['head', tl('头部')], ['neck', tl('项链')], ['weapon', tl('武器')], ['offhand', tl('副手')], ['body', tl('身体')], ['hands', tl('手部')], ['feet', tl('脚部')], ['ring', tl('戒指')],
 ];
 export const TOOL_SLOTS: [EquipSlot, string, SkillId][] = [
   ['axe', tl('斧头'), 'woodcutting'], ['pickaxe', tl('镐子'), 'mining'], ['sickle', tl('镰刀'), 'gathering'], ['knife', tl('刮皮刀'), 'hunting'],
@@ -78,6 +78,7 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
         <span className={canEquip ? '' : 'warn'}>
           {e.move ? tl`坐骑 · 骑乘时移动速度 +${Math.round(e.move * 100)}%` : tl`需要${SKILLS[e.skill].name} ${e.level} 级`}
           {e.move ? '' : e.speed ? tl` · ${toolSkillNames(e.slot) || SKILLS[e.skill].name}速度 +${Math.round(e.speed * 100)}%` : tl` · 攻 +${e.attack} 力 +${e.strength} 防 +${e.defence}${e.attackMs ? tl` · 攻速 ${(e.attackMs / 1000).toFixed(1)} 秒` : ''}`}
+          {!e.move && !e.speed && e.haste ? tl` · 攻速 +${Math.round(e.haste * 100)}%` : ''}{e.twoHanded ? tl(' · 双手持握，不能用副手') : ''}
           {e.style && e.slot !== 'weapon' && tl`（攻、力只对${STYLE_NAME[e.style]}生效）`}
         </span>
       )}
@@ -198,6 +199,8 @@ export function gearStats(id: string) {
   if (e.defence) out.push(tl`防御 ${e.defence}`);
   if (e.speed) out.push(tl`速度 +${Math.round(e.speed * 100)}%`);
   if (e.move) out.push(tl`移速 +${Math.round(e.move * 100)}%`);
+  if (e.haste) out.push(tl`攻速 +${Math.round(e.haste * 100)}%`);
+  if (e.twoHanded) out.push(tl('双手'));
   return out.join(' · ');
 }
 
@@ -353,7 +356,7 @@ function Attributes({ s }: { s: GameState }) {
         {row(tl('攻击加成'), `+${b.attack}`, <>{tl('装备')}{atkBuff > 0 && <>{tl` · 料理命中 +${pct(atkBuff)}`}</>}{tl` · ${STYLE_NAME[style]}等级 ${lvl}`}</>)}
         {row(tl('力量加成'), `+${b.strength}`, <>{tl`装备 +${b.strength}`}{strBuff > 0 && <>{tl` · 料理伤害 +${pct(strBuff)}`}</>}</>)}
         {row(tl('最高伤害'), maxHit, tl`${STYLE_NAME[style]}等级 ${lvl} 和力量加成算出`)}
-        {row(tl('攻击间隔'), tl`${(atkMs / 1000).toFixed(1)} 秒`, weapon ? tl('看武器种类：匕首快、长枪和弩慢') : tl('默认'))}
+        {row(tl('攻击间隔'), tl`${(atkMs / 1000).toFixed(1)} 秒`, <>{weapon ? tl('看武器种类：匕首快、长枪和弩慢') : tl('默认')}{playerHaste(s) > 0 && <>{tl` · 火把攻速 +${pct(playerHaste(s))}`}</>}</>)}
         {(() => {
           const perks = armorPerks(s);
           return <>

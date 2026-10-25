@@ -508,6 +508,219 @@ function tool(p: Pix, key: string, t: number) {
   axis(p, parts, 3.5, 20.5);
 }
 
+// ---- 副手和新武器（用户 10-25）：单手斧、双手大盾、火把、副手盾、箭袋、魔法书 ----
+
+function handaxe(p: Pix, t: number) {
+  // 单手斧：短柄，斧头比工具斧大，背面带尖刺或第二片刃，每阶刃形不同
+  const M = ramp(METAL[t]);
+  const A = ramp(ACCENT[t]);
+  const W = ramp(WOODS[t]);
+  const parts: Part[] = [shaft(-1, 16, 0.85, W)];
+  parts.push(grip(-1, 4.5, 1, t >= 2 ? A[1] : W[1], t >= 2 ? A[2] : W[3]));
+  const reachMax = [5.5, 6.5, 6, 7, 6.5, 7.5, 7, 8][t];
+  const head = (u: number, v: number) => {
+    if (v < 0.6 || v > reachMax) return false;
+    const r = v / reachMax;
+    // 刃从斧颈张开：t0 方刃、t1 胡子斧（下缘拖长）、t2 月牙、t3 宽刃、t4 窄长刃、t5 双弧、t6 锯齿、t7 宽月牙
+    const half = [1.6 + r * 1.2, 1.4 + r * 2.2, 1.2 + r * r * 3.6, 1.8 + r * 2.4, 1.2 + r * 1.4, 1.4 + r * 3, 1.6 + r * 2.6, 1.6 + r * r * 4.4][t];
+    const off = t === 1 ? -r * r * 2 : t === 4 ? r * 0.8 : 0;
+    let du = u - 14 - off;
+    if (t === 6 && v > reachMax - 1.4 && Math.floor(u) % 2 === 0) return false;
+    if (t === 2 || t === 7) du *= 1 + (1 - r) * 0.2;
+    return Math.abs(du) <= half;
+  };
+  parts.push((u, v) => (head(u, v) ? (v > reachMax - 1.1 ? M[4] : u > 14 ? M[3] : M[2]) : null));
+  // 背面：尖刺、锤头或第二片刃
+  if (t === 3 || t === 6) parts.push((u, v) => (v < -0.5 && v > -4 - t * 0.2 && Math.abs(u - 14) < (4 + v) * 0.4 + 0.3 ? M[2] : null));
+  if (t === 5 || t === 7) parts.push((u, v) => (head(u, -v) && -v < reachMax * 0.7 ? (u > 14 ? M[3] : M[1]) : null));
+  if (t === 2 || t === 4) parts.push(bar(14, 2.2, 1.2, M));
+  parts.push(bar(14, 1.1, 1.9, M));
+  if (t >= 4) parts.push(ball(14, 0, 0.9, A));
+  if (t >= 5) parts.push(ball(-1.3, 0, 1.1, A));
+  if (t === 6) parts.push((u, v) => (v > 1 && v < reachMax - 1.6 && Math.abs(u - 14) < 0.5 ? A[3] : null));
+  axis(p, parts, 3.5, 20.5);
+}
+
+/** 盾面配色：木头、金属或者两者 */
+function shieldFace(t: number) {
+  return { M: ramp(METAL[t]), A: ramp(ACCENT[t]), W: ramp(WOODS[t === 0 ? 0 : 3]), T: ramp(TRIM[t]) };
+}
+
+function greatshield(p: Pix, t: number) {
+  // 双手大盾：几乎占满整个格子的塔盾，每阶外形和纹饰不同
+  const { M, A, W, T } = shieldFace(t);
+  sym(p, (dx, y) => {
+    if (y < 1 || y > 22) return null;
+    // 外形：t0 平顶长方木盾、t1 圆顶、t2 尖顶、t3 平顶带收腰、t4 鸢形、t5 八角、t6 带刺、t7 双翼
+    let half = 9.5;
+    if (t === 1 && y < 6) half = Math.sqrt(Math.max(0, 25 - (6 - y) ** 2)) * 1.9;
+    if (t === 2 && y < 7) half = (y - 1) * 1.6;
+    if (t === 3) half = y > 8 && y < 15 ? 8.6 : 9.5;
+    if (t === 4) half = y < 12 ? 9.5 : 9.5 - (y - 12) * 0.85;
+    if (t === 5) half = y < 4 ? 6.5 + (y - 1) : y > 19 ? 9.5 - (y - 19) * 1.2 : 9.5;
+    if (t === 6) half = (y === 2 || y === 21) && dx > 7 ? 11 : 9;
+    if (t === 7) half = y < 9 ? 10.5 - (9 - y) * 0.2 + (y < 4 ? 1.2 : 0) : y > 17 ? 10 - (y - 17) * 1.6 : 10;
+    if (t !== 1 && t !== 2 && y > 20) half = Math.min(half, (22 - y) * 3 + 4);
+    if (dx > half) return null;
+    const rim = dx > half - 1.1 || y <= 2 || (y >= 21 && t < 4);
+    if (rim) return t === 0 ? M[2] : dx > half - 0.6 ? T[1] : T[3];
+    // 盾面
+    if (t === 0) return y === 7 || y === 15 ? M[1] : Math.floor(dx) % 4 === 3 ? W[1] : W[2];
+    if (t === 3 && (Math.abs(dx) < 1 || y === 11)) return A[2];
+    if (t === 5 && Math.abs(Math.hypot(dx, y - 11) - 5) < 0.7) return A[3];
+    if ((t === 2 || t === 7) && Math.hypot(dx, y - 11) < 2.6) return A[t === 7 ? 3 : 2];
+    if (t === 4 && y > 4 && y < 18 && Math.abs(dx - (y - 4) * 0.25) < 0.6) return A[2];
+    if (t === 6 && (y + Math.floor(dx)) % 6 === 0) return M[1];
+    if (t === 1 && y > 8 && y < 14 && dx < 3) return A[2];
+    return dx > 6 ? M[1] : y < 6 ? M[3] : M[2];
+  });
+}
+
+function buckler(p: Pix, t: number) {
+  // 副手盾：小圆盾或小鸢盾，正中一个盾心
+  const { M, A, W, T } = shieldFace(t);
+  sym(p, (dx, y) => {
+    const cy = 12;
+    const r = [8, 8.5, 9, 9, 9.5, 9.5, 10, 10][t];
+    let inside: boolean;
+    if (t === 2) {
+      // 鸢形小盾
+      const half = y < 8 ? r : r - (y - 8) * 0.65;
+      inside = y >= 3 && y <= 22 && dx <= half;
+    } else if (t === 4) {
+      // 圆角方盾
+      inside = dx <= r - 0.5 && Math.abs(y - cy) <= r - 0.5 && Math.hypot(Math.max(0, dx - r + 3.5), Math.max(0, Math.abs(y - cy) - r + 3.5)) <= 3;
+    } else if (t === 5) {
+      inside = dx + Math.abs(y - cy) * 0.42 <= r && Math.abs(y - cy) <= r * 0.92; // 八角
+    } else if (t === 6) {
+      const ang = Math.atan2(y - cy, dx);
+      inside = Math.hypot(dx, y - cy) <= r - 1.4 + Math.abs(Math.cos(ang * 4)) * 1.8; // 星形
+    } else {
+      inside = Math.hypot(dx, y - cy) <= r;
+    }
+    if (!inside) return null;
+    const d = Math.hypot(dx, y - cy);
+    if (d < 2.2) return t >= 5 ? A[d < 1.2 ? 4 : 2] : M[d < 1.2 ? 4 : 3]; // 盾心
+    if (t === 3 && d < 3.4) return M[1];
+    if (d > r - 1.1 && t !== 2 && t !== 4) return T[t === 0 ? 1 : 3];
+    if (t === 4 && (dx > r - 1.6 || Math.abs(y - cy) > r - 1.6)) return T[3];
+    if (t === 0) return Math.floor(dx + y * 0.1) % 3 === 2 ? W[1] : W[2];
+    if (t === 1 && Math.abs(d - 5) < 0.5) return A[2];
+    if (t === 7 && Math.abs(dx - Math.abs(y - cy) * 0.6) < 0.5) return A[3];
+    return dx > 5 ? M[1] : y < cy - 3 ? M[3] : M[2];
+  });
+}
+
+function torch(p: Pix, t: number) {
+  // 火把：木柄 + 火盆 + 火焰；火盆和火焰颜色逐阶不同（高阶是冰焰、奥术火、熔岩火、金焰）
+  const M = ramp(METAL[t]);
+  const A = ramp(ACCENT[t]);
+  const W = ramp(WOODS[t]);
+  const fire = [['#ff6a1a', '#ffb43a', '#fff0a0'], ['#ff6a1a', '#ffb43a', '#fff0a0'], ['#ff8a1a', '#ffd04a', '#fffad0'], ['#e8401a', '#ff9a3a', '#ffe08a'],
+    ['#3aa8ff', '#8ae0ff', '#f0ffff'], ['#8a3aff', '#c08aff', '#f4e8ff'], ['#c8200a', '#ff6a1a', '#ffd04a'], ['#e8b020', '#fff060', '#ffffff']][t];
+  const parts: Part[] = [shaft(-1, 12, 0.8, W)];
+  if (t >= 3) parts.push(grip(-1, 4, 0.95, A[1], A[2]));
+  // 火盆：t0 缠布、t1 铜箍、t2 笼子、t3 铁篮、更高阶带尖角或宝石
+  if (t === 0) parts.push(grip(9, 13, 1.4, '#c8b088', '#8a7050', 1));
+  else parts.push((u, v) => {
+    if (u < 10 || u > 14) return null;
+    const w = 1.1 + (u - 10) * (t === 2 || t === 3 ? 0.55 : 0.35);
+    if (Math.abs(v) > w) return null;
+    if ((t === 2 || t === 3) && u > 11 && Math.abs(v) < w - 0.7 && Math.floor(v + 10) % 2 === 0) return fire[0];
+    return v < 0 ? M[3] : M[2];
+  });
+  if (t >= 5) parts.push((u, v) => (u > 13 && u < 15 && Math.abs(Math.abs(v) - 3) < 0.6 ? M[3] : null));
+  // 火焰：一团往上（往 u 正方向）收尖的火，带里外三层
+  parts.push((u, v) => {
+    const k = (u - 12) / 11;
+    if (k < 0 || k > 1) return null;
+    const flick = Math.sin(v * 2.2 + t) * 0.4;
+    const w = (t >= 4 ? 3.4 : 3) * Math.sin(Math.PI * Math.min(1, k * 1.05)) * (1 - k * 0.5) + flick * (1 - k);
+    const d = Math.abs(v + Math.sin(k * 5) * 0.4);
+    if (d > w) return null;
+    return d < w * 0.35 && k < 0.6 ? fire[2] : d < w * 0.7 ? fire[1] : fire[0];
+  });
+  if (t === 7) parts.push(ball(12, 0, 1, A));
+  axis(p, parts, 3.5, 20.5);
+}
+
+function quiver(p: Pix, t: number) {
+  // 箭袋：皮筒斜挎，顶上露出三支箭的羽毛；箍和羽毛颜色、袋口样式逐阶不同
+  const H = ramp(HIDE[t]);
+  const T = ramp(TRIM[t]);
+  const A = ramp(ACCENT[t]);
+  const parts: Part[] = [];
+  const top = 14;
+  // 三支箭（先画，皮筒盖在下面那段）
+  for (const vo of [-1.6, 0, 1.6]) {
+    parts.push((u, v) => (u > top - 2 && u < top + 4.5 && Math.abs(v - vo) < 0.4 ? WOODS[t === 6 ? 6 : 0] : null));
+    parts.push((u, v) => {
+      if (u < top + 3 || u > top + 7.5 || Math.abs(v - vo) > 1.1) return null;
+      return Math.abs(v - vo) < 0.35 ? '#e8e0d0' : (Math.floor(u) % 2 ? A[2] : A[3]);
+    });
+  }
+  // 皮筒：底部收圆
+  parts.push((u, v) => {
+    if (u < 1 || u > top) return null;
+    const w = 3 + (t >= 4 ? 0.4 : 0) - (u < 3 ? (3 - u) * 0.8 : 0);
+    if (Math.abs(v) > w) return null;
+    // 箍：每阶数量不同
+    const bands = [[top - 1], [top - 1, 3], [top - 1, 7, 3], [top - 1, 9, 5], [top - 1, 8], [top - 1, 10, 6, 2], [top - 1, 7], [top - 1, 10, 7, 4]][t];
+    if (bands.some((b) => Math.abs(u - b) < 0.6)) return v < 0 ? T[3] : T[2];
+    if (t === 2 && Math.abs(v) < 0.5 && u > 4 && u < 11) return T[2]; // 一道缝线
+    if (t >= 5 && Math.hypot(u - 7.5, v) < 1.4) return A[3]; // 徽记宝石
+    if (t === 6 && Math.floor(u) % 3 === 0 && Math.abs(v) > w - 0.8) return T[1];
+    return v < -w * 0.4 ? H[3] : v > w * 0.4 ? H[1] : H[2];
+  });
+  // 背带
+  parts.push((u, v) => (Math.abs(v - 3.6 - (u - 8) * 0.0) < 0.5 && u > 4 && u < 12 && t !== 0 ? T[1] : null));
+  axis(p, parts, 5, 19);
+}
+
+function tome(p: Pix, t: number) {
+  // 魔法书：正面封皮 + 右侧书页 + 书脊，中间的纹章每阶不同
+  const C = ramp([HIDE[t], CLOTH[3], '#5a2a7a', '#2a3a6a', '#e8f0f8', '#3a1a5a', '#2a1a1a', '#1a5a4a'][t]);
+  const T = ramp(TRIM[t]);
+  const A = ramp(ACCENT[t]);
+  const x0 = 5;
+  const x1 = 18;
+  const y0 = 3;
+  const y1 = 21;
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1 + 2; x++) {
+      let c: string | null = null;
+      if (x > x1) c = y > y0 && y < y1 ? (x === x1 + 1 ? '#f0e8d0' : (y % 2 ? '#d8ccb0' : '#e8dcc0')) : null; // 书页
+      else if (x <= x0 + 1) c = T[x === x0 ? 1 : 2]; // 书脊
+      else {
+        const cx = (x0 + x1) / 2 + 0.5;
+        const cy = (y0 + y1) / 2;
+        const dx = x - cx;
+        const dy = y - cy;
+        const corner = t >= 3 && (x <= x0 + 3 || x >= x1 - 1) && (y <= y0 + 1 || y >= y1 - 1);
+        if (corner) c = T[3];
+        else if (y === y0 || y === y1 || x === x1) c = T[1];
+        else {
+          // 纹章：t0 圆、t1 十字星、t2 眼睛、t3 菱形、t4 雪花、t5 五芒星环、t6 火焰、t7 发光宝石
+          const r = Math.hypot(dx, dy);
+          let em = false;
+          if (t === 0) em = Math.abs(r - 3) < 0.6;
+          else if (t === 1) em = (Math.abs(dx) < 0.6 && Math.abs(dy) < 4) || (Math.abs(dy) < 0.6 && Math.abs(dx) < 3);
+          else if (t === 2) em = Math.abs((dx / 4) ** 2 + (dy / 2.2) ** 2 - 1) < 0.35 || r < 1.2;
+          else if (t === 3) em = Math.abs(Math.abs(dx) + Math.abs(dy) * 0.8 - 3.4) < 0.6;
+          else if (t === 4) em = r < 4.2 && (Math.abs(dx) < 0.5 || Math.abs(dy) < 0.5 || Math.abs(Math.abs(dx) - Math.abs(dy)) < 0.6);
+          else if (t === 5) em = Math.abs(r - 4) < 0.5 || (r < 4 && Math.abs(Math.sin(Math.atan2(dy, dx) * 2.5)) < 0.18);
+          else if (t === 6) em = dy > -4 && dy < 3 && Math.abs(dx) < (3 - dy) * 0.45 * (1 + Math.sin(dy * 1.4) * 0.3);
+          else em = r < 2.6;
+          c = em ? (r < 1.4 ? A[4] : A[t === 6 ? 2 : 3]) : dx > 3 ? C[1] : dy < -5 ? C[3] : C[2];
+        }
+      }
+      if (c) p.set(x, y, c);
+    }
+  }
+  // 书签丝带
+  for (let y = y1; y <= y1 + 2; y++) p.set(x1 - 3, y, A[2]);
+}
+
 // ---- 盔甲（正面，左右对称） ----
 
 /** 以 x=11.5 为中线对称画：fn(dx, y) 给 dx≥0 的颜色，左边自动镜像，左半边稍亮 */
@@ -876,6 +1089,12 @@ export function equipIconUrl(key: string, tier: number): string | null {
   else if (key === 'longbow') bow(p, tier, true);
   else if (key === 'crossbow') crossbow(p, tier);
   else if (key === 'staff') staff(p, tier);
+  else if (key === 'handaxe') handaxe(p, tier);
+  else if (key === 'greatshield') greatshield(p, tier);
+  else if (key === 'buckler') buckler(p, tier);
+  else if (key === 'torch') torch(p, tier);
+  else if (key === 'quiver') quiver(p, tier);
+  else if (key === 'tome') tome(p, tier);
   else if (['axe', 'pickaxe', 'sickle', 'knife', 'rod', 'hoe', 'hammer', 'needle', 'pan'].includes(key)) tool(p, key, tier);
   else if (part === 'head') (mat === 'plate' ? helm : mat === 'leather' ? capLeather : hatCloth)(p, tier);
   else if (part === 'body') bodyArmor(p, tier, mat as 'plate');

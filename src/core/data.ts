@@ -110,6 +110,8 @@ export const tierName = (i: number) => `T${i + 1}`;
 export const tierForLevel = (level: number) => TIERS.reduce((best, t, i) => (t.level <= level ? i : best), 0);
 const POWER = [5, 10, 17, 25, 34, 45, 58, 72];
 const TOOL_SPEED = [0.04, 0.08, 0.12, 0.16, 0.2, 0.24, 0.28, 0.32];
+/** 火把每阶的攻速加成（用户 10-25） */
+const TORCH_HASTE = [0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.12];
 export const BAR_VALUE = [5, 12, 30, 60, 120, 250, 520, 1000];
 const RES_VALUE = [2, 5, 12, 25, 50, 100, 200, 400];
 
@@ -280,7 +282,7 @@ export interface EquipType {
   maker: SkillId;
   mats: [Mat, number][];
   plus: number;
-  stats: { attack?: number; strength?: number; defence?: number; style?: CombatStyle; speed?: boolean; attackMs?: number };
+  stats: { attack?: number; strength?: number; defence?: number; style?: CombatStyle; speed?: boolean; attackMs?: number; haste?: boolean; twoHanded?: boolean };
   group: string;
 }
 const W = (key: string, name: string, skill: SkillId, maker: SkillId, mats: [Mat, number][], plus: number, attack: number, strength: number, attackMs: number, style: CombatStyle): EquipType =>
@@ -294,6 +296,8 @@ const A = (type: string, names: string[], mat: Mat, maker: SkillId, def: number,
     key: `${type}_${slot}`, name: names[j], slot, skill: 'defence' as SkillId, maker, mats: [[mat, [2, 4, 2, 1][j]]] as [Mat, number][], plus,
     stats: { defence: def * k, attack: attack * k, strength: strength * k, style }, group: { plate: tl('板甲'), leather: tl('皮甲'), cloth: tl('布甲') }[type]!,
   }));
+const OH = (key: string, name: string, skill: SkillId, maker: SkillId, mats: [Mat, number][], plus: number, stats: EquipType['stats']): EquipType =>
+  ({ key, name, slot: 'offhand', skill, maker, mats, plus, stats, group: tl('副手') });
 const TL = (key: string, name: string, slot: EquipSlot, skill: SkillId, maker: SkillId, mats: [Mat, number][], plus: number): EquipType =>
   ({ key, name, slot, skill, maker, mats, plus, stats: { speed: true }, group: tl('工具') });
 
@@ -302,6 +306,10 @@ export const EQUIP_TYPES: EquipType[] = [
   W('sword', tl('剑'), 'melee', 'smithing', [['bar', 2]], 1, 1.0, 1.0, 2400, 'melee'),
   W('spear', tl('长枪'), 'melee', 'smithing', [['bar', 2], ['plank', 1]], 3, 0.8, 1.4, 3000, 'melee'),
   W('dagger', tl('匕首'), 'melee', 'smithing', [['bar', 1]], 0, 1.25, 0.65, 2000, 'melee'),
+  // 单手斧（用户 10-25）：伤害偏高、稍慢，单手，能配副手
+  W('handaxe', tl('单手斧'), 'melee', 'smithing', [['bar', 2], ['plank', 1]], 2, 0.85, 1.2, 2600, 'melee'),
+  // 双手大盾（用户 10-25）：攻击低、防御很高，双手持握，装上就不能用副手
+  { ...W('greatshield', tl('双手大盾'), 'melee', 'smithing', [['bar', 4], ['plank', 1]], 5, 0.55, 0.6, 2800, 'melee'), stats: { attack: 0.55, strength: 0.6, defence: 1.5, attackMs: 2800, style: 'melee', twoHanded: true } },
   // 远程：皮革 + 加工木材
   W('shortbow', tl('短弓'), 'ranged', 'fletching', [['plank', 2], ['leather', 1]], 1, 1.0, 1.1, 2200, 'ranged'),
   W('longbow', tl('长弓'), 'ranged', 'fletching', [['plank', 3], ['leather', 1]], 4, 1.25, 1.3, 2800, 'ranged'),
@@ -312,6 +320,11 @@ export const EQUIP_TYPES: EquipType[] = [
   ...A('plate', [tl('板甲头盔'), tl('板甲胸甲'), tl('板甲战靴'), tl('板甲护手')], 'bar', 'smithing', 2.0, 0, 0.25, 'melee'),
   ...A('leather', [tl('皮帽'), tl('皮甲'), tl('皮靴'), tl('皮手套')], 'leather', 'crafting', 1.4, 0.5, 0, 'ranged'),
   ...A('cloth', [tl('布帽'), tl('布袍'), tl('布鞋'), tl('布手套')], 'cloth', 'crafting', 1.0, 0.3, 0.4, 'magic'),
+  // 副手（用户 10-25）：火把加攻速（任何战斗方式），副手盾加防御，箭袋只加远程，魔法书只加魔法
+  OH('torch', tl('火把'), 'defence', 'fletching', [['plank', 1], ['cloth', 1]], 1, { haste: true }),
+  OH('buckler', tl('副手盾'), 'defence', 'smithing', [['bar', 2]], 3, { defence: 0.6 }),
+  OH('quiver', tl('箭袋'), 'ranged', 'crafting', [['leather', 2]], 2, { attack: 0.3, strength: 0.35, style: 'ranged' }),
+  OH('tome', tl('魔法书'), 'magic', 'crafting', [['cloth', 2]], 2, { attack: 0.3, strength: 0.35, style: 'magic' }),
   // 工具
   TL('axe', tl('斧头'), 'axe', 'woodcutting', 'smithing', [['bar', 1], ['plank', 1]], 1),
   TL('pickaxe', tl('镐子'), 'pickaxe', 'mining', 'smithing', [['bar', 1], ['plank', 1]], 1),
@@ -339,6 +352,7 @@ TIERS.forEach((t, i) => {
         slot: e.slot, skill: e.skill, level: t.level,
         attack: Math.round(p * (st.attack ?? 0)), strength: Math.round(p * (st.strength ?? 0)), defence: Math.round(p * (st.defence ?? 0)),
         style: st.style, speed: st.speed ? TOOL_SPEED[i] : undefined, attackMs: st.attackMs,
+        ...(st.haste ? { haste: TORCH_HASTE[i] } : {}), ...(st.twoHanded ? { twoHanded: true } : {}),
       },
     });
   }
@@ -496,6 +510,7 @@ for (const it of itemList.filter((x) => x.equip && !x.equip.move)) {
       equip: {
         ...e, attack: Math.round(e.attack * QUALITY_STAT[q]), strength: Math.round(e.strength * QUALITY_STAT[q]), defence: Math.round(e.defence * QUALITY_STAT[q]),
         speed: e.speed ? Math.round(e.speed * QUALITY_SPEED[q] * 1000) / 1000 : undefined,
+        ...(e.haste ? { haste: Math.round(e.haste * QUALITY_SPEED[q] * 1000) / 1000 } : {}),
       },
     };
     if (q === 0) Object.assign(it, def);

@@ -380,7 +380,9 @@ export function rainBonus(s: GameState, a: SkillAction, t = Date.now()) {
 }
 
 /** 玩家攻击间隔：看武器，匕首快、长枪和弩慢 */
-export const playerAttackMs = (s: GameState) => ITEMS[s.equipment.weapon ?? '']?.equip?.attackMs ?? PLAYER_ATTACK_MS;
+/** 攻速加成（火把，用户 10-25） */
+export const playerHaste = (s: GameState) => ITEMS[s.equipment.offhand ?? '']?.equip?.haste ?? 0;
+export const playerAttackMs = (s: GameState) => Math.round((ITEMS[s.equipment.weapon ?? '']?.equip?.attackMs ?? PLAYER_ATTACK_MS) / (1 + playerHaste(s)));
 
 const healOf = (id: string) => ITEMS[id]?.heals ?? 0;
 /** 每格能叠多少个：装备和工具一件占一格，其余 100 个一格 */
@@ -438,7 +440,7 @@ const moveOf = (m: MonsterDef) => (m.rank === 'normal' ? undefined : m.world || 
 export function armorPerks(s: GameState) {
   const n = { plate: 0, leather: 0, cloth: 0 };
   for (const [slot, id] of Object.entries(s.equipment)) {
-    const e = id && slot !== 'weapon' ? ITEMS[id]?.equip : undefined;
+    const e = id && slot !== 'weapon' && slot !== 'offhand' ? ITEMS[id]?.equip : undefined;
     if (!e || !e.style || !e.defence) continue;
     if (e.style === 'melee') n.plate++;
     else if (e.style === 'ranged') n.leather++;
@@ -1148,6 +1150,13 @@ export function equip(prev: GameState, item: string): GameState {
   const old = s.equipment[e.slot];
   s.equipment[e.slot] = item;
   if (old) stow(s, old);
+  // 双手武器和副手不能同时装（用户 10-25）：装双手武器就卸下副手，装副手就卸下双手武器
+  const w = s.equipment.weapon;
+  if (s.equipment.offhand && w && ITEMS[w]?.equip?.twoHanded) {
+    const off = e.slot === 'offhand' ? 'weapon' : 'offhand';
+    stow(s, s.equipment[off]!);
+    delete s.equipment[off];
+  }
   return s;
 }
 

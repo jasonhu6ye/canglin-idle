@@ -1,4 +1,4 @@
-import { actionDuration, advance, buySeed, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour, openContainer, redeemCode, toggleMount, moveSpeed, rainBonus, summonPumpkin, placeFoal, collectHorse, RANCH_NODE, bagRoomFor, salvage, salvageValue, sortBank, SALVAGE_NODES, SALVAGE_BONUS } from './sim';
+import { actionDuration, advance, buySeed, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour, openContainer, redeemCode, toggleMount, moveSpeed, rainBonus, summonPumpkin, placeFoal, collectHorse, RANCH_NODE, bagRoomFor, playerAttackMs, playerBonuses, salvage, salvageValue, sortBank, SALVAGE_NODES, SALVAGE_BONUS } from './sim';
 import { baseOf, qid, qualityOdds, rollQuality } from './quality';
 import { claimMail, clearMail, HW_DAILY_BOXES, stepMail, unreadMail } from './mail';
 import { HW_BOX, HW_END, HW_POINT, HW_TIERS, hwFight } from './halloween';
@@ -1101,5 +1101,37 @@ describe('邮箱（10-25）', () => {
     expect(s.mail).toHaveLength(2);
     expect(s.mail![1].items).toEqual([]);
     expect(s.mailSeq).toBe(9);
+  });
+});
+
+describe('副手和新武器（10-25）', () => {
+  const give = (s: GameState, ...ids: string[]) => { for (const id of ids) s.bag[id] = (s.bag[id] ?? 0) + 1; return s; };
+  it('火把加攻速，箭袋只在用远程武器时加攻击', () => {
+    let s = newGame(T0, 1);
+    s.xp.defence = XP_TABLE[99]; s.xp.ranged = XP_TABLE[99]; s.xp.melee = XP_TABLE[99];
+    give(s, 'wood_torch', 'wood_quiver', 'wood_shortbow');
+    const base = playerAttackMs(s);
+    s = equip(s, 'wood_torch');
+    expect(s.equipment.offhand).toBe('wood_torch');
+    expect(playerAttackMs(s)).toBeLessThan(base);
+    s = equip(s, 'wood_quiver');
+    expect(s.bag.wood_torch).toBe(1);
+    const melee = playerBonuses(s).attack;
+    s = equip(s, 'wood_shortbow');
+    expect(playerBonuses(s).attack).toBeGreaterThan(melee);
+  });
+  it('双手大盾和副手不能同时装', () => {
+    let s = newGame(T0, 1);
+    s.xp.defence = XP_TABLE[99]; s.xp.melee = XP_TABLE[99];
+    give(s, 'wood_buckler', 'wood_greatshield');
+    s = equip(s, 'wood_buckler');
+    s = equip(s, 'wood_greatshield');
+    expect(s.equipment.weapon).toBe('wood_greatshield');
+    expect(s.equipment.offhand).toBeUndefined();
+    expect(s.bag.wood_buckler).toBe(1);
+    s = equip(s, 'wood_buckler');
+    expect(s.equipment.offhand).toBe('wood_buckler');
+    expect(s.equipment.weapon).toBeUndefined();
+    expect(s.bag.wood_greatshield).toBe(1);
   });
 });

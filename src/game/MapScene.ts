@@ -21,6 +21,7 @@ import { paintArrow, paintCrop, paintHit, paintSlash } from './fxArt';
 import { paintBuilding, paintCave, paintDot, paintGlow, paintProp, paintWindmillBlades, PROP_GLOW } from './art';
 import { DPR } from './dpr';
 import { paintResNode, resGlow, resOf, type ResKind } from './resArt';
+import { baseOf } from '../core/quality';
 import { NODE_MARKER, paintSprite, SPRITE_VARIANTS, SPRITES } from './sprites';
 import { OtherPlayers } from './others';
 import { online } from '../net';
@@ -2061,7 +2062,7 @@ export class MapScene extends Phaser.Scene {
 
   /** 主角出手：按武器放刀光 / 箭 / 法球，打到之后再闪白、击退、飘数字 */
   private playerSwingFx(foe: Phaser.GameObjects.Sprite, m: MonsterDef, dmg: number, crit = false) {
-    const w = store.state.equipment.weapon ?? '';
+    const w = baseOf(store.state.equipment.weapon ?? '');
     const key = w.slice(w.indexOf('_') + 1);
     const S = monsterFrameSize(m);
     const tx = foe.x;
@@ -2603,7 +2604,7 @@ export class MapScene extends Phaser.Scene {
     const a = this.currentAction ? ACTIONS[this.currentAction] : undefined;
     if (!a) return `idle-${this.facing}`;
     if (a.kind === 'combat') {
-      const w = store.state.equipment.weapon ?? '';
+      const w = baseOf(store.state.equipment.weapon ?? '');
       const key = w.slice(w.indexOf('_') + 1);
       if (key === 'spear' || key === 'dagger') return `fight-${key}`;
       if (['shortbow', 'longbow', 'crossbow'].includes(key)) return 'fight-bow';

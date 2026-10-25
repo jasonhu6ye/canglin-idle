@@ -835,4 +835,11 @@ export const EN_CORE: Record<string, string> = {
   '{0}分钟': '{0} min',
   '{0}秒': '{0}s',
   '锅铲': 'Spatula',
+  // 副手和新武器（10-25）
+  '副手': 'Off-hand',
+  '单手斧': 'Hatchet',
+  '双手大盾': 'Tower Shield',
+  '副手盾': 'Buckler',
+  '箭袋': 'Quiver',
+  '魔法书': 'Spellbook',
 };

@@ -796,4 +796,9 @@ export const EN_UI: Record<string, string> = {
   '野外区域': 'Wilds',
   '特色地点': 'Landmarks',
   '寻路前往 · 经石碑约 {0} 秒': 'Go there · about {0}s via waystones',
+  ' · 攻速 +{0}%': ' · Attack speed +{0}%',
+  ' · 双手持握，不能用副手': ' · Two-handed, no off-hand',
+  '攻速 +{0}%': 'Atk speed +{0}%',
+  '双手': 'Two-handed',
+  ' · 火把攻速 +{0}': ' · Torch +{0}',
 };

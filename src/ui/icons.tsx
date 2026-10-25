@@ -953,6 +953,7 @@ const SPECIFIC: Record<string, [string, string]> = {
 /** 装备 key → 图标模板 */
 const EQUIP_TPL: Record<string, string> = {
   sword: 'sword', spear: 'spear', dagger: 'dagger', shortbow: 'bow', longbow: 'longbow', crossbow: 'crossbow', staff: 'staff',
+  handaxe: 'axe', greatshield: 'shield', buckler: 'shield', torch: 'staff', quiver: 'arrow', tome: 'rune',
   plate_head: 'helm', plate_body: 'body', plate_feet: 'boots', plate_hands: 'gauntlet',
   leather_head: 'cap', leather_body: 'jacket', leather_feet: 'boots', leather_hands: 'gloves',
   cloth_head: 'hood', cloth_body: 'robe', cloth_feet: 'shoes', cloth_hands: 'gloves',

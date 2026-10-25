@@ -11,7 +11,7 @@ export type SkillGroup = 'gather' | 'produce' | 'combat';
 export type CombatStyle = 'melee' | 'ranged' | 'magic';
 
 /** mount：坐骑栏（用户 10-23 要求先留好栏位，坐骑以后加） */
-export type GearSlot = 'weapon' | 'head' | 'body' | 'feet' | 'hands' | 'neck' | 'ring' | 'mount';
+export type GearSlot = 'weapon' | 'offhand' | 'head' | 'body' | 'feet' | 'hands' | 'neck' | 'ring' | 'mount';
 export type ToolSlot = 'axe' | 'pickaxe' | 'sickle' | 'knife' | 'rod' | 'hoe' | 'hammer' | 'needle' | 'pan';
 export type EquipSlot = GearSlot | ToolSlot;
 
@@ -69,6 +69,10 @@ export interface ItemDef {
     attackMs?: number;
     /** 坐骑：骑上后移动速度加成，1 = +100% */
     move?: number;
+    /** 火把：攻击速度加成，0.1 = 出手间隔 ÷1.1 */
+    haste?: number;
+    /** 双手武器（双手大盾）：装上就不能用副手 */
+    twoHanded?: boolean;
   };
 }
 

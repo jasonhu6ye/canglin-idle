@@ -465,8 +465,11 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .guild-perks { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
 .guild-perks > div { padding: 8px; display: flex; flex-direction: column; gap: 2px; }
 
-.update-banner { position: fixed; left: 50%; top: 8px; transform: translateX(-50%); z-index: 30; padding: 8px 16px; font-size: 14px; font-weight: 700;
-  color: #2a1a08; background: linear-gradient(#ffe08a, #e8b84a); border: 2px solid #8a5a10; border-radius: 3px; box-shadow: 0 2px 10px rgba(0,0,0,0.5); cursor: pointer; }
+.update-banner { position: fixed; left: 50%; top: 8px; transform: translateX(-50%); z-index: 30; display: flex; align-items: stretch; max-width: calc(100% - 32px);
+  background: linear-gradient(#ffe08a, #e8b84a); border: 2px solid #8a5a10; border-radius: 3px; box-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+.update-banner button { background: none; border: 0; color: #2a1a08; font-weight: 700; cursor: pointer; }
+.update-banner .ub-go { padding: 8px 12px 8px 16px; font-size: 14px; }
+.update-banner .ub-x { padding: 0 12px; font-size: 18px; border-left: 1px solid rgba(138, 90, 16, 0.5); }
 
 .redeem-input { flex: 1; min-width: 0; padding: 8px; font-size: 16px; background: #1d130c; color: var(--gold); border: 0; border-radius: 2px; box-shadow: 0 0 0 1px var(--edge); }
 .redeem .good { color: #8ee08a; }

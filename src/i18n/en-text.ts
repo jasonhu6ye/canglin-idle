@@ -535,4 +535,9 @@ export const EN_TEXT: Record<string, string> = {
   '新增烹饪工具「锅铲」，T1 到 T8 共 8 阶，在铁匠铺用锭和板材打造，装在角色页的锅铲栏，烹饪越做越快。和其他装备一样会随机出品质。': 'New cooking tool: the Spatula, in 8 tiers from T1 to T8. Forge it at the smithy from bars and planks and equip it in the spatula slot on the Character page to cook faster. Like other gear, it rolls a random quality.',
   '锻造锤现在同时给锻造和制弓加速，制弓不用再单独找工具。工艺照旧用缝纫针。': 'Smithing hammers now speed up both smithing and fletching, so fletching needs no separate tool. Crafting still uses needles.',
   '角色页「属性 → 干活加速」把制弓、烹饪也列出来了。': 'Character → Attributes → Work speed now lists fletching and cooking too.',
+  '副手栏和新武器': 'Off-hand slot and new weapons',
+  '角色页加了副手栏，有 4 种副手，T1 到 T8 各 8 阶：火把（攻击速度 +4% 到 +12%，任何战斗方式都有效）、副手盾（加防御）、箭袋（加远程攻击和力量）、魔法书（加魔法攻击和力量）。': 'The Character page has a new off-hand slot, with 4 off-hand types in 8 tiers each (T1 to T8): Torch (attack speed +4% to +12%, works with every combat style), Buckler (defence), Quiver (ranged attack and strength) and Spellbook (magic attack and strength).',
+  '新武器单手斧：伤害比剑高一点、出手稍慢，可以配副手。': 'New weapon, the Hatchet: hits a bit harder than a sword but swings slightly slower, and works with an off-hand.',
+  '新武器双手大盾：攻击低，但防御很高，适合扛首领。双手持握，装上会自动卸下副手；反过来装副手也会卸下大盾。': 'New weapon, the Tower Shield: low attack but very high defence, great for tanking bosses. It is two-handed: equipping it removes your off-hand, and equipping an off-hand removes the shield.',
+  '火把在制弓台做，单手斧、副手盾、双手大盾在铁匠铺，箭袋、魔法书在工坊。和其他装备一样会随机出品质。': 'Torches are made at the fletching bench; hatchets, bucklers and tower shields at the smithy; quivers and spellbooks at the workshop. Like other gear, they roll a random quality.',
 };

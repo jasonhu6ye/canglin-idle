@@ -71,7 +71,7 @@ describe('装备体系', () => {
         expect(it?.equip, `${t.id}_${e.key}`).toBeDefined();
         expect(makers.has(it.id), `${it.name} 做不出来`).toBe(true);
         const q = it.equip!;
-        expect(q.attack + q.strength + q.defence + (q.speed ?? 0), `${it.name} 没有属性`).toBeGreaterThan(0);
+        expect(q.attack + q.strength + q.defence + (q.speed ?? 0) + (q.haste ?? 0), `${it.name} 没有属性`).toBeGreaterThan(0);
       }
     }
   });
