@@ -603,7 +603,9 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     if (s.travel.ms <= 0) {
       s.loc = dest;
       s.travel = null;
-      const keep = (id: string) => healOf(id) > 0;
+      // 只有打怪时才把食物留在身上；采集制作时食物也存掉，不然背包被食物占满（用户 10-25）
+      const fighting = ACTIONS[s.queue[0]?.action ?? '']?.kind === 'combat';
+      const keep = (id: string) => fighting && healOf(id) > 0;
       for (const pass of [false, true]) {
         for (const [id, q] of Object.entries(s.bag)) {
           if (!pass && keep(id)) continue;
@@ -1211,12 +1213,11 @@ export function toBank(prev: GameState, item: string, qty: number): GameState {
   return s;
 }
 
-/** 背包里除了食物，全部存进仓库 */
+/** 背包里的东西全部存进仓库（食物也存，用户 10-25；打怪前会按设置自动回来拿） */
 export function depositLoot(prev: GameState): GameState {
   if (!atBank(prev)) return prev;
   const s = clone(prev);
   for (const [id, q] of Object.entries(s.bag)) {
-    if (healOf(id) > 0) continue;
     s.bank[id] = (s.bank[id] ?? 0) + q;
     delete s.bag[id];
   }

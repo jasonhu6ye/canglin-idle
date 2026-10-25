@@ -1,10 +1,13 @@
+import { useSticky } from './sticky';
 import { useMemo, useState } from 'react';
-import { ACTIONS, buffText, CROP_DEFS, fieldOfCrop, ITEMS, MONSTERS, nodeOfAction, SKILLS, TIERS, tierName } from '../core/data';
+import { ACTIONS, buffText, CROP_DEFS, fieldOfCrop, ITEMS, MONSTERS, nodeOfAction, nodesOfAction, SKILLS, TIERS, tierName } from '../core/data';
 import { maxHp, POTION_AT } from '../core/sim';
 import type { GameState, ItemDef } from '../core/types';
 import { Icon } from './icons';
 import { Bestiary } from './Bestiary';
 import { tl } from '../i18n';
+import { store } from '../store';
+import { openItem } from './itemOpen';
 
 /** 图鉴的类型分类：按顺序匹配，第一个符合的就是它的类型 */
 const ORE_IDS = new Set(TIERS.map((t) => t.ore));
@@ -31,15 +34,17 @@ const typeOf = (it: ItemDef) => TYPES.find((t) => t.test(it))!.id;
 const STYLE_NAME = { melee: tl('近战'), ranged: tl('远程'), magic: tl('魔法') };
 
 /** 物品的来源和用途 */
+/** 来源一行：能寻路的带上地点和动作，点了直接走过去（用户 10-25） */
+type Src = { text: string; node?: string; action?: string; monster?: string };
 function sourcesOf(id: string) {
-  const make: string[] = [];
+  const make: Src[] = [];
   const use: string[] = [];
   for (const a of Object.values(ACTIONS)) {
     if (a.kind !== 'skill') continue;
-    const node = nodeOfAction(a.id);
-    const where = node ? `${node.name}` : '';
     if (a.outputs.some((o) => o.item === id) || a.fail?.item === id) {
-      make.push(tl`${SKILLS[a.skill].name} ${a.level} 级 · ${a.name}${where ? ` @ ${where}` : ''}`);
+      const nodes = nodesOfAction(a.id).filter((n) => !n.closed);
+      if (!nodes.length) make.push({ text: tl`${SKILLS[a.skill].name} ${a.level} 级 · ${a.name}` });
+      for (const n of nodes) make.push({ text: tl`${SKILLS[a.skill].name} ${a.level} 级 · ${a.name}${` @ ${n.name}`}`, node: n.id, action: a.id });
     }
     if (a.inputs?.some((i) => i.item === id)) {
       const out = a.outputs[0] ? ITEMS[a.outputs[0].item].name : a.name;
@@ -49,23 +54,34 @@ function sourcesOf(id: string) {
   // 种田：作物和种子来自地块收获，种子种在地块里
   for (const c of Object.values(CROP_DEFS)) {
     const field = fieldOfCrop(c.id)?.name ?? '';
-    if (c.outputs.some((o) => o.item === id)) make.push(tl`种植 ${c.level} 级 · 种${c.name} @ ${field}`);
+    if (c.outputs.some((o) => o.item === id)) make.push({ text: tl`种植 ${c.level} 级 · 种${c.name} @ ${field}`, node: fieldOfCrop(c.id)?.id });
     if (id === `seed_${c.id}`) use.push(tl`种植 ${c.level} 级 · 种${c.name} @ ${field}`);
   }
   const drops = Object.values(MONSTERS)
     .filter((m) => m.drops.some((d) => d.item === id))
     .map((m) => {
       const d = m.drops.find((x) => x.item === id)!;
-      return tl`${m.name}（${m.level} 级）掉落${d.chance ? ` ${Math.round(d.chance * 1000) / 10}%` : ''}`;
+      return { text: tl`${m.name}（${m.level} 级）掉落${d.chance ? ` ${Math.round(d.chance * 1000) / 10}%` : ''}`, monster: nodeOfAction(`fight_${m.id}`) ? m.id : undefined } as Src;
     });
-  return { make: [...new Set(make)], drops, use: [...new Set(use)] };
+  const seen = new Set<string>();
+  return { make: make.filter((x) => !seen.has(x.text) && !!seen.add(x.text)), drops, use: [...new Set(use)] };
+}
+
+/** 点来源：走过去，到了自动打开地点并选好这一项；怪物就追踪过去 */
+function goSource(x: Src) {
+  if (x.monster) store.track(x.monster);
+  else if (x.node) {
+    store.focusAction = x.action ?? null;
+    store.requestWalk(x.node);
+  } else return;
+  openItem(null);
 }
 
 export function Codex({ s, onClose }: { s: GameState; onClose: () => void }) {
-  const [tier, setTier] = useState<number | 'all' | 'none'>('all');
-  const [type, setType] = useState('all');
-  const [sel, setSel] = useState<string | null>(null);
-  const [tab, setTab] = useState<'items' | 'monsters'>('items');
+  const [tier, setTier] = useSticky<number | 'all' | 'none'>('codex.tier', 'all');
+  const [type, setType] = useSticky('codex.type', 'all');
+  const [sel, setSel] = useSticky<string | null>('codex.sel', null);
+  const [tab, setTab] = useSticky<'items' | 'monsters'>('codex.tab', 'items');
   const all = useMemo(() => Object.values(ITEMS).filter((it) => it.id !== 'coins'), []);
   const got = all.filter((it) => s.seen[it.id]).length;
   const shown = all.filter((it) =>
@@ -167,8 +183,9 @@ export function CodexDetail({ s, id, reveal = false }: { s: GameState; id: strin
         </span>
       )}
       {(src.make.length > 0 || src.drops.length > 0) && <b className="sub">{tl('来源')}</b>}
-      {src.make.map((t) => <span key={t} className="muted">· {t}</span>)}
-      {src.drops.map((t) => <span key={t} className="muted">· {t}</span>)}
+      {[...src.make, ...src.drops].map((x) => (x.node || x.monster
+        ? <button key={x.text} className="src-go" onClick={() => goSource(x)}><span>· {x.text}</span><b>{tl('寻路 ›')}</b></button>
+        : <span key={x.text} className="muted">· {x.text}</span>))}
       {src.use.length > 0 && <b className="sub">{tl('用途')}</b>}
       {src.use.slice(0, 12).map((t) => <span key={t} className="muted">· {t}</span>)}
       {src.use.length > 12 && <span className="muted">{tl`· 还有 ${src.use.length - 12} 种配方`}</span>}
