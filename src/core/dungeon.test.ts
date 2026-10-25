@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ITEMS, MONSTERS, TIERS, keyId } from './data';
-import { buffMob, chestOdds, dungeonFloor, mobBuff, rollChest, rollFloors, teamChest, totalMobs } from './dungeon';
-import { advance, combatEstimate, enterDungeon, syncDungeon, gateBlock, leaveDungeon, migrate, newGame, openDungeonChest, openGate, useTownScroll } from './sim';
+import { buffMob, chestOdds, dungeonFloor, GATE_CD, mobBuff, rollChest, rollFloors, teamChest, totalMobs } from './dungeon';
+import { advance, combatEstimate, enterDungeon, syncDungeon, gateBlock, gateOpenBlock, leaveDungeon, migrate, newGame, openDungeonChest, openGate, useTownScroll } from './sim';
 import { nextRandom } from './rng';
 import { XP_TABLE } from './xp';
 import type { DungeonGate, GameState } from './types';
@@ -196,6 +196,22 @@ describe('副本组队同步', () => {
 });
 
 describe('打副本', () => {
+  it('每人同时最多 2 个洞口，两次之间冷却 5 分钟', () => {
+    let s = strong(3);
+    s.bag[keyId('green', 3)] = 5;
+    s.loc = { x: 300, y: 300 };
+    const [s1, g1] = openGate(s, keyId('green', 3), { x: 302, y: 300 }, T0);
+    expect(g1).toBeTruthy();
+    const [, cd] = openGate(s1, keyId('green', 3), { x: 320, y: 300 }, T0 + 60_000);
+    expect(cd, '冷却中').toBeNull();
+    const [s2, g2] = openGate(s1, keyId('green', 3), { x: 320, y: 300 }, T0 + GATE_CD);
+    expect(g2).toBeTruthy();
+    const [, g3] = openGate(s2, keyId('green', 3), { x: 340, y: 300 }, T0 + 3 * GATE_CD);
+    expect(g3, '已经开着 2 个').toBeNull();
+    expect(gateOpenBlock(s2, T0 + 3 * GATE_CD)).toBeTruthy();
+    expect(migrate(JSON.parse(JSON.stringify(s2)))!.lastGateAt).toBe(T0 + GATE_CD);
+  });
+
   it('开门 → 进去 → 清完所有怪 → 开宝箱 → 离开回到洞口，离线也能打完', () => {
     let s = strong(3);
     s.bag[keyId('green', 3)] = 1;

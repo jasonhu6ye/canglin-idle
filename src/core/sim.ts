@@ -2,9 +2,9 @@ import { partyXpPct } from './party';
 import { APT_MAX, APT_MIN, FOAL, growMs, HORSE_XP, horseItem, RANCH, RANCH_PENS } from './ranch';
 import { baseOf, qid, rollQuality } from './quality';
 import { HW_POINT, HW_TIERS, hwFight, hwOpen, hwTierOf, hwWait } from './halloween';
-import { BAR_VALUE, KEY_SHOP, keyOf, OLD_ENH, SCROLL_TOWN, SHARD_PER_STONE, TIERS, ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAP_W, MID_BOX, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, planRoute, travelMs, type MapNode } from './data';
+import { BAR_VALUE, inTownArea, KEY_SHOP, keyOf, OLD_ENH, SCROLL_TOWN, SHARD_PER_STONE, TIERS, ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAP_W, MID_BOX, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, planRoute, travelMs, type MapNode } from './data';
 import { nextRandom } from './rng';
-import { buffMob, coopMates, COOP_DEF, COOP_DMG, dungeonFloor, GATE_MS, GATE_REACH, legMs, rollChest, rollChestQuality, rollFloors, teamChest, teamChestQuality, type TeamMember } from './dungeon';
+import { buffMob, coopMates, COOP_DEF, COOP_DMG, dungeonFloor, GATE_CD, GATE_MAX, GATE_MS, GATE_REACH, legMs, rollChest, rollChestQuality, rollFloors, teamChest, teamChestQuality, type TeamMember } from './dungeon';
 import { partySize } from './party';
 import { stepQuests } from './quests';
 import { migrateMail, sendMail } from './mail';
@@ -173,6 +173,7 @@ export function migrate(raw: unknown): GameState | null {
     home: migrateHome(obj(s.home)),
     gates: arr<DungeonGate>(s.gates).filter((g) => obj(g) && (g.kind === 'green' || g.kind === 'blue') && TIERS[g.tier] && Number.isFinite(g.expires) && Number.isFinite(g.seed) && g.floors >= 1 && g.floors <= 7),
     gatesUsed: arr<string>(s.gatesUsed).filter((id) => typeof id === 'string').slice(-50),
+    lastGateAt: Number.isFinite(s.lastGateAt) ? s.lastGateAt : undefined,
     dungeon: migrateRun(obj<DungeonRun>(s.dungeon)),
     sprinklers: arr<string>(s.sprinklers).filter((id) => FARM_NODES.some((n) => n.id === id)),
     waystones: [...new Set([WAYSTONE_HOME, ...arr<string>(s.waystones).filter((id) => WAYSTONES.some((n) => n.id === id))])],
@@ -1598,10 +1599,19 @@ export const onSurface = (s: GameState) => !s.dungeon && !s.home?.inside;
  * 用钥匙开洞口：钥匙从背包扣（站在仓库旁也能用仓库里的），洞口开在 at（地图场景找好的空地），30 分钟后消失。
  * 层数这时候就随机定好了。返回新状态和洞口。
  */
+/** 现在能不能开洞口（null = 能）：同时最多 GATE_MAX 个、两次之间冷却 GATE_CD */
+export function gateOpenBlock(s: GameState, now = Date.now()): string | null {
+  if (!onSurface(s)) return tl('家园岛上和副本里不能开洞口');
+  if ((s.gates ?? []).filter((g) => g.expires > now).length >= GATE_MAX) return tl`同时最多开着 ${GATE_MAX} 个洞口，等洞口消失再开`;
+  const wait = (s.lastGateAt ?? 0) + GATE_CD - now;
+  if (wait > 0) return tl`开洞口冷却中，还要 ${Math.ceil(wait / 1000)} 秒`;
+  return null;
+}
+
 export function openGate(prev: GameState, key: string, at: { x: number; y: number }, now = Date.now()): [GameState, DungeonGate | null] {
   const k = keyOf(key);
   const from = (prev.bag[key] ?? 0) > 0 ? 'bag' : (prev.bank[key] ?? 0) > 0 && atBank(prev) ? 'bank' : null;
-  if (!k || !from || !onSurface(prev) || (prev.gates?.length ?? 0) >= 3) return [prev, null];
+  if (!k || !from || gateOpenBlock(prev, now) || inTownArea(Math.round(at.x), Math.round(at.y))) return [prev, null];
   const s = clone(prev);
   const src = from === 'bag' ? s.bag : s.bank;
   src[key]--;
@@ -1614,6 +1624,7 @@ export function openGate(prev: GameState, key: string, at: { x: number; y: numbe
     at: now, expires: now + GATE_MS, seed: Math.floor(r2 * 2 ** 31), floors: rollFloors(k.kind, r1),
   };
   s.gates = [...(s.gates ?? []), gate];
+  s.lastGateAt = now;
   return [s, gate];
 }
 

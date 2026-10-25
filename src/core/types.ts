@@ -322,6 +322,8 @@ export interface GameState {
   gates?: DungeonGate[];
   /** 进过的洞口 id（每个洞口每人只能进一次，队友的洞口也算） */
   gatesUsed?: string[];
+  /** 上次开洞口的时间（冷却用） */
+  lastGateAt?: number;
   /** 正在打的副本；不在副本里是 null */
   dungeon?: DungeonRun | null;
 }

@@ -166,7 +166,7 @@ export function CodexDetail({ s, id, reveal = false }: { s: GameState; id: strin
   return (
     <div className="item-detail frame">
       <div className="row1">
-        <span className="with-icon"><Icon item={id} size={28} /> <b className={qClass(it.quality)}>{it.tier !== undefined && `${tierName(it.tier)} `}{it.name}</b></span>
+        <span className="with-icon"><Icon item={id} size={28} /> <b className={qClass(it.quality)}>{it.tier !== undefined && !/^T\d/.test(it.name) && `${tierName(it.tier)} `}{it.name}</b></span>
         <span className="muted">{tl`${type} · 单价 ${it.value} · 拥有 ${owned}`}</span>
       </div>
       {it.heals && (

@@ -413,21 +413,82 @@ export function paintDgChest(q: number, open: boolean): HTMLCanvasElement {
 }
 
 /**
- * 地表的副本洞口：地上裂开一道发光的口子，绿洞绿光、蓝洞青光，四周碎石。32×24
+ * 地表的副本洞口（用户 10-25 改：要像洞窟）：一座岩石小山丘，正面一个拱形洞口，洞里透出绿光（绿洞）或青蓝光（蓝洞），
+ * 洞口上沿垂着石笋，门口散着碎石；绿洞长青苔，蓝洞挂冰晶。蓝洞的洞窟更大：绿 44×34，蓝 60×46。
  */
+export const GATE_SIZE = { green: { w: 44, h: 34 }, blue: { w: 60, h: 46 } } as const;
 export function paintGatePortal(kind: 'green' | 'blue'): HTMLCanvasElement {
-  const G = kind === 'green' ? ['#0a3a14', '#1e8a3a', '#4ae07a', '#d8ffe0'] : ['#0a2a4a', '#1e6ab0', '#4ac8ff', '#e0f8ff'];
-  const p = new Pix(32, 24);
-  // 外圈碎石
-  for (let a = 0; a < 14; a++) {
-    const t = (a / 14) * Math.PI * 2;
-    p.blob(16 + Math.cos(t) * 13, 14 + Math.sin(t) * 7, 2.2, 1.6, ['#2a2620', '#4a443a', '#6a6254', '#8a8270'], a);
+  const { w: W, h: H } = GATE_SIZE[kind];
+  const G = kind === 'green' ? ['#06200c', '#14602a', '#3ad06a', '#c8ffd8'] : ['#061a34', '#145aa0', '#3ab8ff', '#d8f4ff'];
+  const R = kind === 'green' ? ['#2a2a24', '#4a4838', '#6e6a52', '#948e72'] : ['#262a34', '#424a5a', '#66708a', '#9aa4bc'];
+  const p = new Pix(W, H);
+  const cx = W / 2;
+  const base = H - 3;
+  // 山丘：半椭圆，左上亮、右下暗，带几道岩缝
+  const rx = W / 2 - 1;
+  const ry = H - 6;
+  for (let y = 0; y <= base; y++) for (let x = 0; x < W; x++) {
+    const dx = (x - cx) / rx;
+    const dy = (base - y) / ry;
+    const bump = 0.06 * Math.sin(x * 0.9) + 0.05 * Math.sin(x * 0.37 + 1);
+    const d = dx * dx + dy * dy;
+    if (d > 1 + bump) continue;
+    const lit = -dx * 0.6 + dy * 0.5 + (phash(x, y, 31) - 0.5) * 0.5;
+    p.set(x, y, lit > 0.55 ? R[3] : lit > 0.1 ? R[2] : lit > -0.35 ? R[1] : R[0]);
   }
-  // 洞口：椭圆，中心最亮
-  for (let y = 0; y < 24; y++) for (let x = 0; x < 32; x++) {
-    const d = Math.hypot((x - 16) / 11, (y - 14) / 6);
+  for (let k = 0; k < (kind === 'blue' ? 7 : 5); k++) {
+    let x = Math.floor(phash(k, 1, 33) * W);
+    let y = Math.floor(phash(k, 2, 33) * (base - 8)) + 4;
+    for (let n = 0; n < 4; n++) { if (p.get(x, y)) p.set(x, y, R[0]); x += phash(k, n, 34) > 0.5 ? 1 : -1; y++; }
+  }
+  // 洞口：拱形，越往里越亮
+  const ow = kind === 'blue' ? 15 : 11;
+  const oh = kind === 'blue' ? 24 : 17;
+  for (let y = base - oh; y <= base; y++) for (let x = Math.floor(cx - ow); x <= Math.ceil(cx + ow); x++) {
+    const dx = (x - cx) / ow;
+    const dy = (base - y) / oh;
+    const d = dx * dx + dy * dy;
     if (d > 1) continue;
-    p.set(x, y, d < 0.35 ? G[3] : d < 0.6 ? G[2] : d < 0.85 ? G[1] : G[0]);
+    // 光从洞里深处（下方中间）透出来
+    const glow = Math.hypot(dx * 0.9, (y - (base - oh * 0.35)) / oh);
+    p.set(x, y, d > 0.82 ? '#050608' : glow < 0.22 ? G[3] : glow < 0.42 ? G[2] : glow < 0.7 ? G[1] : G[0]);
   }
+  // 洞口边一圈大石头（门框）
+  for (let a = 0; a <= 10; a++) {
+    const t = Math.PI * (a / 10);
+    const x = cx - Math.cos(t) * (ow + 1.5);
+    const y = base - Math.sin(t) * (oh + 1.5);
+    p.blob(x, y, 2.4, 2, R, 40 + a);
+  }
+  // 洞顶垂下的石笋
+  for (let k = -3; k <= 3; k++) {
+    const x = Math.round(cx + k * (ow / 4));
+    const top = Math.round(base - Math.sqrt(Math.max(0, 1 - (k / 4) ** 2)) * oh) + 1;
+    const len = 2 + Math.floor(phash(k, 5, 35) * (kind === 'blue' ? 5 : 4));
+    for (let i = 0; i < len; i++) p.set(x, top + i, i === len - 1 ? R[1] : R[2]);
+  }
+  // 门口的碎石和一条发光的小路
+  for (let k = 0; k < 6; k++) p.blob(cx + (k - 2.5) * (ow / 2.2) + (phash(k, 7, 36) - 0.5) * 3, base + 1, 1.6, 1.1, R, 50 + k);
+  for (let x = Math.floor(cx - ow * 0.5); x <= cx + ow * 0.5; x++) p.set(x, base, G[2]);
+  // 绿洞：青苔和藤蔓；蓝洞：冰晶
+  if (kind === 'green') {
+    const M = ['#1e4a1a', '#3a7a2a', '#6ab03a'];
+    for (let k = 0; k < 40; k++) {
+      const x = Math.floor(phash(k, 8, 37) * W);
+      const y = Math.floor(phash(k, 9, 37) * (base - 6)) + 2;
+      if (p.get(x, y) && p.get(x, y) !== '#050608' && !G.includes(p.get(x, y)!)) p.set(x, y, M[k % 3]);
+    }
+    for (const vx of [cx - ow - 3, cx + ow + 2]) for (let i = 0; i < 7; i++) if (p.get(vx, base - oh * 0.6 + i)) p.set(vx + (i % 2), base - oh * 0.6 + i, M[1]);
+  } else {
+    const I = ['#3a7ab0', '#7ac8f0', '#e0f8ff'];
+    for (const [x, y, h] of [[cx - ow - 5, base - 4, 7], [cx + ow + 4, base - 3, 6], [cx - 6, base - oh - 6, 5], [cx + 8, base - oh - 4, 4], [cx + ow + 9, base - 10, 5]] as [number, number, number][]) {
+      for (let i = 0; i < h; i++) {
+        const half = Math.max(0, Math.floor((h - i) / 3));
+        for (let d = -half; d <= half; d++) p.set(Math.round(x) + d, Math.round(y) - i, d === -half ? I[2] : d === half ? I[0] : I[1]);
+      }
+    }
+  }
+  // 洞口飘出来的光点
+  for (let k = 0; k < (kind === 'blue' ? 7 : 5); k++) p.set(Math.round(cx + (phash(k, 3, 38) - 0.5) * ow * 1.4), Math.round(base - oh * (0.3 + phash(k, 4, 38) * 0.6)), G[3]);
   return p.outline().canvas();
 }

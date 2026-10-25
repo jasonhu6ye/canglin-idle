@@ -982,3 +982,4 @@ h2.dg-blue { color: #6ab4ff; }
 .dg-green-t { color: #5ee07a; }
 .dg-blue-t { color: #6ab4ff; }
 @media (max-width: 520px) { .dg-keys-card .dg-keys { aspect-ratio: 2 / 1; } }
+.dg-shop .salv-qty button.primary { width: auto; min-width: 64px; padding: 6px 10px; }

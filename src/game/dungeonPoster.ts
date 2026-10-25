@@ -101,7 +101,8 @@ export const dgBannerUrl = () => once('banner', () => {
   for (const [x, kind, col] of [[150, 'green', 'rgba(80,230,120,0.55)'], [206, 'blue', 'rgba(80,190,255,0.55)']] as const) {
     glowAt(ctx, x, 70, 40, col);
     beam(ctx, x, 70, 60, col);
-    whole(ctx, paintGatePortal(kind), x - 32, 56, 2);
+    const cv = paintGatePortal(kind);
+    whole(ctx, cv, x - cv.width / 2, 92 - cv.height);
   }
   for (const [x, y, k] of [[8, 70, 0], [34, 82, 1], [226, 40, 2], [92, 84, 3], [60, 36, 4]]) ctx.drawImage(paintDgDecor('crystal', k), x, y);
   hero(ctx, 0, 'idle-up', 0, 98, 104, 2);
@@ -126,7 +127,8 @@ export const dgGateUrl = () => once('gate', () => {
   sparkles(ctx, 120, 38, ['#ffffff', '#a0b8d8'], 18, 3);
   glowAt(ctx, 70, 66, 36, 'rgba(80,230,120,0.5)');
   beam(ctx, 70, 66, 64, 'rgba(80,230,120,0.5)');
-  whole(ctx, paintGatePortal('green'), 38, 44, 2);
+  const cv = paintGatePortal('green');
+  whole(ctx, cv, 70 - cv.width, 84 - cv.height * 2, 2);
   glowAt(ctx, 24, 30, 16, 'rgba(255,230,120,0.5)');
   whole(ctx, keyCanvas('green', 4), 8, 12, 1.6 as number);
   ctx.font = 'bold 9px monospace';

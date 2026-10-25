@@ -7,7 +7,7 @@ import { syncDungeon, atShop, buyKey, enterDungeon, gateBlock, leaveDungeon, ope
 import type { DungeonGate, GameState } from '../core/types';
 import { DG_CHEST } from '../game/DungeonScene';
 import { GATE_CLICK, GATE_OPENED } from '../game/MapScene';
-import { online } from '../net';
+import { online, type Presence } from '../net';
 import { sendRally, useSocial } from '../net/social';
 import { store } from '../store';
 import { tl } from '../i18n';
@@ -36,14 +36,19 @@ function useTick(ms = 1000) {
   }, [ms]);
 }
 
-/** 队友的洞口：从队友的在线状态里拿，地图上也画出来 */
+/**
+ * 别人开的洞口：只有队友和同公会的人看得见，陌生人看不见（用户 10-25：人多时满地洞窟会卡）。
+ * 从他们的在线状态里拿，地图上也画出来。
+ */
 export function useSharedGates() {
   const st = useSocial();
-  const [, bump] = useState(0);
-  useEffect(() => online.onPresence(() => bump((n) => n + 1)), []);
+  const [all, setAll] = useState<Presence[]>([]);
+  useEffect(() => online.onPresence(setAll), []);
   const me = online.me();
-  const mates = st.party?.members.filter((m) => m.playerId !== me?.id) ?? [];
-  const list: DungeonGate[] = mates.flatMap((m) => (online.presenceOf(m.playerId)?.gates ?? []).map((g) => ({ ...g, owner: m.name })));
+  const mates = new Set(st.party?.members.map((m) => m.playerId) ?? []);
+  const list: DungeonGate[] = all
+    .filter((p) => p.playerId !== me?.id && p.gates?.length && (mates.has(p.playerId) || (!!me?.guildTag && p.guildTag === me.guildTag)))
+    .flatMap((p) => p.gates!.map((g) => ({ ...g, owner: p.name })));
   const key = list.map((g) => g.id).sort().join();
   useEffect(() => { setSharedGates(list); }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
 }
@@ -72,7 +77,9 @@ export function DungeonPopups({ s }: { s: GameState }) {
   const [opened, setOpened] = useState<DungeonGate | null | undefined>(undefined);
   const [msg, setMsg] = useState('');
   useEffect(() => onGameEvent(GATE_CLICK, (id: string) => setGateId(id)), []);
-  useEffect(() => onGameEvent(GATE_OPENED, (g: DungeonGate | null) => setOpened(g)), []);
+  const [outside, setOutside] = useState(false);
+  const [why, setWhy] = useState('');
+  useEffect(() => onGameEvent(GATE_OPENED, (g: DungeonGate | null, fromTown?: boolean, reason?: string) => { setOpened(g); setOutside(!!fromTown); setWhy(reason ?? ''); }), []);
   useEffect(() => onGameEvent(DG_CHEST, () => {
     const run = store.state.dungeon;
     if (!run) return;
@@ -93,6 +100,7 @@ export function DungeonPopups({ s }: { s: GameState }) {
               <>
                 <h2 className={`dg-${opened.kind}`}>{tl`${dgName(opened.kind)}洞口已开启`}</h2>
                 <p>{tl`T${opened.tier + 1} ${dgName(opened.kind)}，${left(opened.expires - Date.now())} 后洞口消失。地图上已经用光柱标出位置。层数进去后才知道。`}</p>
+                {outside && <p className="gold">{tl('城里不能开洞口，洞口开在了离你最近的城外空地。')}</p>}
                 {opened.kind === 'blue' && <p className="warn">{tl('蓝洞必须组队才能进。可以先召集队友过来。')}</p>}
                 <div className="go">
                   <button className="primary" onClick={() => { emitToGame('walktile', opened.x, opened.y); setOpened(undefined); }}>{tl('自动寻路前往')}</button>
@@ -102,7 +110,7 @@ export function DungeonPopups({ s }: { s: GameState }) {
             ) : (
               <>
                 <h2>{tl('这里开不了洞口')}</h2>
-                <p>{tl('身边没有能开洞口的空地，或者已经开着 3 个洞口了。换个开阔的地方再试试（家园岛上和副本里都不能用）。')}</p>
+                <p>{why || tl('身边没有能开洞口的空地，换个开阔的地方再试试（在城里用会开到城外）。')}</p>
                 <button className="primary" onClick={() => setOpened(undefined)}>{tl('知道了')}</button>
               </>
             )}

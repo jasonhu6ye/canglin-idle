@@ -72,7 +72,7 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
   return (
     <div className="item-detail frame">
       <div className="row1">
-        <span className="with-icon"><Icon item={id} size={28} /> <b className={qClass(item.quality)}>{item.tier !== undefined && `${tierName(item.tier)} `}{item.name}</b></span>
+        <span className="with-icon"><Icon item={id} size={28} /> <b className={qClass(item.quality)}>{item.tier !== undefined && !/^T\d/.test(item.name) && `${tierName(item.tier)} `}{item.name}</b></span>
         <span className="muted">{tl`×${fmtNum(qty)} · 单价 ${item.value}`}</span>
       </div>
       {item.heals && <span>{tl`回复 ${item.heals} 生命`}{item.buff && <b className="gold"> · {buffText(item.buff)}</b>}</span>}

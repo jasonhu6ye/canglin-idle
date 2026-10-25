@@ -283,24 +283,30 @@ export const OLD_ENH: Record<string, number> = { enh_basic: 32, enh_mid: 380, en
  */
 export type DungeonKind = 'green' | 'blue';
 export const KEY_TIERS = [3, 4, 5, 6, 7];
-const KEY_METAL = [tl('铁制'), tl('钛制'), tl('符文'), tl('陨铁'), tl('精金')];
 export const keyId = (kind: DungeonKind, tier: number) => `dkey_${kind === 'green' ? 'g' : 'b'}${tier + 1}`;
 export const keyOf = (id: string): { kind: DungeonKind; tier: number } | null => {
   const m = /^dkey_([gb])(\d)$/.exec(id);
   return m ? { kind: m[1] === 'g' ? 'green' : 'blue', tier: Number(m[2]) - 1 } : null;
 };
+/** 城镇范围（用户 10-25：城里不能开副本洞口）：城镇设施周围 10 格、新城镇的布局范围 */
+const TOWN_PAD = 10;
+export function inTownArea(x: number, y: number): boolean {
+  for (const t of TOWNS) if (x >= t.c.x + t.clear[0] && x <= t.c.x + t.clear[2] && y >= t.c.y + t.clear[1] && y <= t.c.y + t.clear[3]) return true;
+  return NODES.some((n) => n.town && Math.abs(n.x - x) <= TOWN_PAD && Math.abs(n.y - y) <= TOWN_PAD);
+}
 /** 商人卖的钥匙和价格（金币） */
 export const KEY_SHOP: [string, number][] = [
   ['dkey_g4', 2500], ['dkey_g5', 6000], ['dkey_b4', 5000], ['dkey_b5', 12000], ['dkey_b6', 30000],
 ];
-KEY_TIERS.forEach((t, i) => {
+// 名字直接写「T4 绿洞副本钥匙」（用户 10-25）
+KEY_TIERS.forEach((t) => {
   const shop = (kind: DungeonKind) => KEY_SHOP.some(([id]) => id === keyId(kind, t));
-  item(keyId('green', t), tl`${KEY_METAL[i]}绿洞钥匙`, 'misc', BAR_VALUE[t] * 15, {
+  item(keyId('green', t), tl`T${t + 1} 绿洞副本钥匙`, 'misc', BAR_VALUE[t] * 15, {
     tier: t,
     desc: tl`绿洞（单人地下副本）钥匙。在地表使用，身边会开出一个 T${t + 1} 绿洞洞口，30 分钟后消失。绿洞 1-4 层随机，一个人或组队都能进。` +
       (shop('green') ? tl('城镇商人有卖，副本宝箱也会开出来。') : tl('只能从副本宝箱里开出来。')),
   });
-  item(keyId('blue', t), tl`${KEY_METAL[i]}蓝洞钥匙`, 'misc', BAR_VALUE[t] * 30, {
+  item(keyId('blue', t), tl`T${t + 1} 蓝洞副本钥匙`, 'misc', BAR_VALUE[t] * 30, {
     tier: t,
     desc: tl`蓝洞（多人地下副本）钥匙。在地表使用，身边会开出一个 T${t + 1} 蓝洞洞口，30 分钟后消失。蓝洞 2-7 层随机，怪更强，必须组队才能进。` +
       (shop('blue') ? tl('城镇商人有卖，副本宝箱也会开出来。') : tl('只能从副本宝箱里开出来。')),

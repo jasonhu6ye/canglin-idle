@@ -14,6 +14,9 @@ import { tl } from '../i18n';
  */
 
 export const GATE_MS = 30 * 60_000;
+/** 每人同时最多开着几个洞口、两次开洞口之间的冷却（用户 10-25：不能开太多） */
+export const GATE_MAX = 2;
+export const GATE_CD = 5 * 60_000;
 /** 站在洞口几格内才能进 */
 export const GATE_REACH = 3;
 /** 副本里走一格多少毫秒（每秒 4 格，和步行一样，副本里不能骑坐骑） */

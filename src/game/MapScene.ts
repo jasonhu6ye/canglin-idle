@@ -1,12 +1,12 @@
 import { leaveHome } from '../core/home';
 import Phaser from 'phaser';
-import { ACTIONS, CROP_DEFS, CROPS, cropsOfField, FARM_PLOTS, PLOT_BY_ID, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, DANGER, dangerLevel, nodeOfAction, nodesOfAction, planRoute, standOf, STONE_JUMP_MS, WAYSTONES, travelMs, WALK_TILES_PER_SEC, type MapNode, type Route } from '../core/data';
+import { ACTIONS, CROP_DEFS, CROPS, cropsOfField, FARM_PLOTS, PLOT_BY_ID, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, inTownArea, keyOf, DANGER, dangerLevel, nodeOfAction, nodesOfAction, planRoute, standOf, STONE_JUMP_MS, WAYSTONES, travelMs, WALK_TILES_PER_SEC, type MapNode, type Route } from '../core/data';
 import { unlockWaystone, useWaystone, WAYSTONE_REACH, actionDuration, combatLevel, combatStats, MONSTER_MOVES, isBankId, leaveWork, maxHp, moveSpeed, playerAttackMs, resumeWork, setLoc, startWalk, teleport as teleportState, walkPos } from '../core/sim';
 import { pickSeed, plotGrowth, plotPhase, tendPlot } from '../core/farm';
 import { paintWaystone } from './waystoneArt';
-import { paintGatePortal } from './dungeonArt';
+import { GATE_SIZE, paintGatePortal } from './dungeonArt';
 import { allGates, onSharedGates } from '../core/gateShare';
-import { openGate } from '../core/sim';
+import { gateOpenBlock, openGate } from '../core/sim';
 import type { DungeonGate } from '../core/types';
 import { paintPortal, paintPortalSwirl, PORTAL_H } from './homeArt';
 import { animsOf, monsterFrameSize, paintMonsterSheet, type MonAnim } from './monsterArt';
@@ -1129,20 +1129,22 @@ export class MapScene extends Phaser.Scene {
     for (const g of list) {
       let o = this.gateObjs.get(g.id);
       if (!o) {
-        const key = `gate-${g.kind}`;
+        const key = `gate-cave-${g.kind}`;
         if (!this.textures.exists(key)) this.textures.addCanvas(key, paintGatePortal(g.kind));
+        const { h } = GATE_SIZE[g.kind];
         const x = g.x * T + T / 2;
-        const y = g.y * T + T / 2;
+        // 洞窟底边落在格子下沿，洞口的光在洞里（蓝洞更大）
+        const y = g.y * T + T;
         const col = g.kind === 'green' ? 0x3aff6a : 0x3ad8ff;
-        const ring = this.add.ellipse(x, y + 2, 44, 22).setStrokeStyle(2, col, 1).setFillStyle(col, 0.12).setDepth(y + 990);
-        this.tweens.add({ targets: ring, scaleX: 1.35, scaleY: 1.35, alpha: 0.2, duration: 900, repeat: -1 });
-        const glow = this.add.image(x, y, 'glow').setTint(col).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.7).setScale(1.2).setDepth(D_GLOW);
+        const ring = this.add.ellipse(x, y - 2, g.kind === 'blue' ? 70 : 52, g.kind === 'blue' ? 22 : 16).setStrokeStyle(2, col, 1).setFillStyle(col, 0.1).setDepth(y + 980);
+        this.tweens.add({ targets: ring, scaleX: 1.25, scaleY: 1.25, alpha: 0.15, duration: 1000, repeat: -1 });
+        const glow = this.add.image(x, y - h * 0.3, 'glow').setTint(col).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.7).setScale(g.kind === 'blue' ? 1.7 : 1.3).setDepth(D_GLOW);
         this.tweens.add({ targets: glow, alpha: 0.35, yoyo: true, repeat: -1, duration: 700 });
-        const img = this.add.image(x, y, key).setDepth(y + 995).setInteractive({ useHandCursor: true }).setData('gate', g.id);
+        const img = this.add.image(x, y, key).setOrigin(0.5, 1).setDepth(y + 995).setInteractive({ useHandCursor: true }).setData('gate', g.id);
         // 光柱：远处也看得见
-        const beam = this.add.rectangle(x, y - 40, 6, 80, col, 0.25).setBlendMode(Phaser.BlendModes.ADD).setDepth(D_GLOW);
+        const beam = this.add.rectangle(x, y - h - 40, 6, 80, col, 0.25).setBlendMode(Phaser.BlendModes.ADD).setDepth(D_GLOW);
         this.tweens.add({ targets: beam, alpha: 0.08, yoyo: true, repeat: -1, duration: 1100 });
-        const text = this.add.text(x, y - 18, '', {
+        const text = this.add.text(x, y - h - 2, '', {
           fontFamily: FONT, fontSize: '8px', color: g.kind === 'green' ? '#8aff9a' : '#8ae8ff', stroke: '#000', strokeThickness: 3, resolution: 4, align: 'center',
         }).setOrigin(0.5, 1).setDepth(D_LABEL);
         o = { objs: [ring, glow, img, beam, text], text, g };
@@ -1159,14 +1161,31 @@ export class MapScene extends Phaser.Scene {
   /** 用钥匙开洞口：在角色身边 2-6 格找一块走得到的空地 */
   private useKey(key: string) {
     if (!this.scene.isActive() || this.toIsland) return;
+    const why = gateOpenBlock(store.state);
+    if (why) {
+      this.game.events.emit(GATE_OPENED, null, false, why);
+      return;
+    }
     const me = this.playerTile();
+    // 城里不能开洞口（用户 10-25）：在城里用钥匙，洞口开到最近的城外空地
+    const inTown = inTownArea(me.x, me.y);
+    // 洞窟占地：脚下和上方几格都要是空地（不压房子、树），离别的洞口远一点
+    const kind = keyOf(key)?.kind ?? 'green';
+    const half = Math.ceil(GATE_SIZE[kind].w / T / 2);
+    const tall = Math.ceil(GATE_SIZE[kind].h / T);
+    const others = allGates(store.state);
+    const roomy = (x: number, y: number) => {
+      for (let dy = -tall + 1; dy <= 0; dy++) for (let dx = -half; dx <= half; dx++) if (!isWalkable(x + dx, y + dy)) return false;
+      return !others.some((g) => Math.abs(g.x - x) < half * 2 + 2 && Math.abs(g.y - y) < tall + 2);
+    };
     let spot: { x: number; y: number } | null = null;
-    for (let r = 2; r <= 6 && !spot; r++) {
-      for (let k = 0; k < 16 && !spot; k++) {
-        const a = (k / 16) * Math.PI * 2;
+    for (let r = 2; r <= (inTown ? 90 : 6) && !spot; r++) {
+      const n = Math.max(16, r * 4);
+      for (let k = 0; k < n && !spot; k++) {
+        const a = (k / n) * Math.PI * 2;
         const x = Math.round(me.x + Math.cos(a) * r);
         const y = Math.round(me.y + Math.sin(a) * r);
-        if (!isWalkable(x, y)) continue;
+        if (!roomy(x, y) || inTownArea(x, y)) continue;
         if (!findPath(me, { x, y })) continue;
         spot = { x, y };
       }
@@ -1187,7 +1206,7 @@ export class MapScene extends Phaser.Scene {
       this.puff(g.x * T + T / 2 - this.player.x, g.y * T + T / 2 - this.player.y);
       this.cameras.main.shake(200, 0.003);
     }
-    this.game.events.emit(GATE_OPENED, gate);
+    this.game.events.emit(GATE_OPENED, gate, inTown);
   }
 
   /** 角色走到没激活的石碑旁边：激活它（走路途中路过也算） */
