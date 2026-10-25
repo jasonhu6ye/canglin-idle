@@ -39,7 +39,7 @@ export const GEAR_SLOTS: [EquipSlot, string][] = [
 ];
 export const TOOL_SLOTS: [EquipSlot, string, SkillId][] = [
   ['axe', tl('斧头'), 'woodcutting'], ['pickaxe', tl('镐子'), 'mining'], ['sickle', tl('镰刀'), 'gathering'], ['knife', tl('刮皮刀'), 'hunting'],
-  ['rod', tl('鱼竿'), 'fishing'], ['hoe', tl('锄头'), 'farming'], ['hammer', tl('锻造锤'), 'smithing'], ['needle', tl('缝纫针'), 'crafting'], ['pan', tl('炒锅'), 'cooking'],
+  ['rod', tl('鱼竿'), 'fishing'], ['hoe', tl('锄头'), 'farming'], ['hammer', tl('锻造锤'), 'smithing'], ['needle', tl('缝纫针'), 'crafting'], ['pan', tl('锅铲'), 'cooking'],
 ];
 const STYLE_NAME = { melee: tl('近战'), ranged: tl('远程'), magic: tl('魔法') };
 

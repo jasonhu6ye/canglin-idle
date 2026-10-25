@@ -834,5 +834,5 @@ export const EN_CORE: Record<string, string> = {
   '{0}小时': '{0}h',
   '{0}分钟': '{0} min',
   '{0}秒': '{0}s',
-  '炒锅': 'Frying Pan',
+  '锅铲': 'Spatula',
 };

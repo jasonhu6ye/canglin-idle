@@ -28,18 +28,18 @@ const FIXED: Record<string, string> = {
 
 const TPL: Record<string, string[]> = {
   pan: [
-    '............',
-    '......kkkk..',
-    '.....kbccbk.',
-    '....kbaaacbk',
-    '....kbaaaabk',
-    '....kbaaaabk',
-    '.....kbaabk.',
-    '....okkkkk..',
-    '...oO.......',
+    '.......kkkk.',
+    '......kbccbk',
+    '......kbkcbk',
+    '.....kbbkcbk',
+    '.....kbkbbk.',
+    '.....kbbbk..',
+    '....kkkkk...',
+    '...okk......',
     '..oO........',
     '.oO.........',
-    'kO..........',
+    'oO..........',
+    'k...........',
   ],
   mail: [
     '............',

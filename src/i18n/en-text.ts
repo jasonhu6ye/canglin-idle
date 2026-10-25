@@ -531,8 +531,8 @@ export const EN_TEXT: Record<string, string> = {
   '世界地图上「寻路前往」显示的时间按真正的路线算，经过石碑会写「经石碑约 X 秒」。': 'The time on the world map\'s "Go there" button now follows the real route, and says "via waystones" when it uses them.',
   '传说石碑列表分成城镇、野外区域、特色地点、已激活几类，激活过的排在前面，会记住上次选的分类。': 'The waystone list is now split into Towns, Wilds, Landmarks and Activated. Activated stones come first, and your last tab is remembered.',
   '制作页底部（开始按钮上面）显示当前任务的名字、进度条和完成数量，手机上不用退出页面也能看进度。': 'The bottom of the crafting page (above the start buttons) now shows your current task, its progress bar and count, so you can watch progress on mobile without leaving the page.',
-  '烹饪工具炒锅，锻造锤也给制弓加速': 'Frying pans for cooking, and hammers now speed up fletching',
-  '新增烹饪工具「炒锅」，T1 到 T8 共 8 阶，在铁匠铺用锭和板材打造，装在角色页的炒锅栏，烹饪越做越快。和其他装备一样会随机出品质。': 'New cooking tool: the Frying Pan, in 8 tiers from T1 to T8. Forge it at the smithy from bars and planks and equip it in the pan slot on the Character page to cook faster. Like other gear, it rolls a random quality.',
+  '烹饪工具锅铲，锻造锤也给制弓加速': 'Spatulas for cooking, and hammers now speed up fletching',
+  '新增烹饪工具「锅铲」，T1 到 T8 共 8 阶，在铁匠铺用锭和板材打造，装在角色页的锅铲栏，烹饪越做越快。和其他装备一样会随机出品质。': 'New cooking tool: the Spatula, in 8 tiers from T1 to T8. Forge it at the smithy from bars and planks and equip it in the spatula slot on the Character page to cook faster. Like other gear, it rolls a random quality.',
   '锻造锤现在同时给锻造和制弓加速，制弓不用再单独找工具。工艺照旧用缝纫针。': 'Smithing hammers now speed up both smithing and fletching, so fletching needs no separate tool. Crafting still uses needles.',
   '角色页「属性 → 干活加速」把制弓、烹饪也列出来了。': 'Character → Attributes → Work speed now lists fletching and cooking too.',
 };

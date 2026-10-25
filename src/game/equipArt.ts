@@ -456,25 +456,34 @@ function tool(p: Pix, key: string, t: number) {
       break;
     }
     case 'pan': {
-      // 炒锅（烹饪工具，用户 10-25）：短柄 + 圆锅，锅形各阶不同（平底锅、深锅、双耳锅、宽口炒锅……）
+      // 锅铲（烹饪工具，用户 10-25 从炒锅改成锅铲）：长柄 + 细颈 + 扁铲面。
+      // 每阶铲面不同：方头、圆头、开槽、斜口、宽铲、镂空……
       parts.length = 0;
-      parts.push(shaft(-1, 9.5, 0.75, W));
+      parts.push(shaft(-1, 12, 0.75, W));
       if (wrap) parts.push(grip(-1, 4, 0.9, A[1], A[2]));
-      const r = [4, 4.3, 4.5, 4.8, 5, 5.2, 5.4, 5.6][t];
-      const sq = [1, 1, 0.85, 1, 0.8, 1, 0.9, 1][t];
-      const cu = 10 + r;
+      parts.push(bar(12.5, 0.45, 1.2, M)); // 细颈
+      const len = [6, 6.5, 6.5, 7, 7, 7.5, 7.5, 8][t];
+      const half = [2, 2.2, 2.4, 2.4, 2.8, 2.6, 2.8, 3][t];
+      const u0 = 14;
+      const slotted = t === 2 || t === 5 || t === 7;
+      const round = t % 2 === 1;
+      const skew = t === 3 || t === 6 ? 0.35 : 0;
       parts.push((u, v) => {
-        const d = Math.hypot((u - cu) * sq, v);
-        if (d > r) return null;
-        if (d > r - 0.9) return t >= 5 ? (v < 0 ? A[3] : A[2]) : v < 0 ? M[4] : M[3];
-        // 锅底：左上亮、右下暗，中间一圈油光
-        if (Math.abs(d - r * 0.45) < 0.4 && u < cu && v < 0) return mix(M[3], '#1a1410', 0.25);
-        return mix(v < -1 ? M[1] : M[0], '#1a1410', 0.45);
+        const k = (u - u0) / len;
+        if (k < 0 || k > 1) return null;
+        const vc = (u - u0) * skew * 0.5;
+        // 铲面从颈部张开，圆头的末端收成弧
+        let w = half * Math.min(1, 0.45 + k * 2.2);
+        if (round && k > 0.75) w *= Math.sqrt(Math.max(0, 1 - ((k - 0.75) / 0.25) ** 2));
+        const dv = v - vc;
+        if (Math.abs(dv) > w) return null;
+        if (slotted && k > 0.3 && k < 0.85 && Math.abs(dv) < w - 0.7 && Math.abs((dv + half) % 1.6 - 0.8) < 0.3) return '#1a1410';
+        if (t === 7 && Math.abs(dv) > w - 0.6) return A[3];
+        if (k > 0.92) return M[4];
+        return dv < 0 ? M[3] : M[2];
       });
-      if (t === 2 || t === 4 || t === 6) parts.push(ball(cu + r - 0.3, 0, 1, M)); // 对面的小耳
-      if (t >= 2) parts.push(ball(10.3, 0, 0.7, M)); // 柄和锅的铆钉
-      if (t === 7) parts.push(ball(cu, 0, 1.2, A));
-      if (t === 3 || t === 6) parts.push(dots(cu - r * 0.4, cu + r * 0.4, r * 0.4, 0, A[3]));
+      if (t === 4 || t === 7) parts.push(ball(13, 0, 1, A));
+      if (t >= 5 && t !== 7) parts.push(ball(-1.2, 0, 1, A));
       break;
     }
     default: { // needle 针：一根针 + 旁边一轴线，线的颜色和线轴样式逐阶不同

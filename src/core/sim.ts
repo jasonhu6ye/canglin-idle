@@ -233,7 +233,7 @@ export function playerBonuses(s: GameState, style = weaponStyle(s)) {
 
 export const TOOL_FOR: Partial<Record<SkillId, EquipSlot>> = {
   mining: 'pickaxe', woodcutting: 'axe', fishing: 'rod', gathering: 'sickle', farming: 'hoe', hunting: 'knife', smithing: 'hammer', crafting: 'needle',
-  // 制弓和锻造共用锻造锤（用户 10-25）；烹饪用炒锅
+  // 制弓和锻造共用锻造锤（用户 10-25）；烹饪用锅铲（slot pan）
   fletching: 'hammer', cooking: 'pan',
 };
 
