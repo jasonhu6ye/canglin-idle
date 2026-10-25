@@ -1,7 +1,7 @@
 import { leaveHome } from '../core/home';
 import Phaser from 'phaser';
 import { ACTIONS, CROP_DEFS, CROPS, cropsOfField, FARM_PLOTS, PLOT_BY_ID, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, DANGER, dangerLevel, nodeOfAction, nodesOfAction, planRoute, standOf, STONE_JUMP_MS, WAYSTONES, travelMs, WALK_TILES_PER_SEC, type MapNode, type Route } from '../core/data';
-import { unlockWaystone, useWaystone, WAYSTONE_REACH, actionDuration, combatLevel, combatStats, MONSTER_MOVES, isBankId, leaveWork, maxHp, moveSpeed, resumeWork, setLoc, startWalk, teleport as teleportState, walkPos } from '../core/sim';
+import { unlockWaystone, useWaystone, WAYSTONE_REACH, actionDuration, combatLevel, combatStats, MONSTER_MOVES, isBankId, leaveWork, maxHp, moveSpeed, playerAttackMs, resumeWork, setLoc, startWalk, teleport as teleportState, walkPos } from '../core/sim';
 import { pickSeed, plotGrowth, plotPhase, tendPlot } from '../core/farm';
 import { paintWaystone } from './waystoneArt';
 import { paintPortal, paintPortalSwirl, PORTAL_H } from './homeArt';
@@ -13,7 +13,7 @@ import { WOLF_FEET, WOLF_H } from './wolfArt';
 import { paintFoal, paintRanch, PADDOCK_SPOTS, RANCH_H, RANCH_W } from './horseArt';
 import { RANCH } from '../core/ranch';
 import { besideXOf, ensureMountTex, mountKindOf, saddleBob, seatOf } from './mounts';
-import { FRAME_H, FRAME_W, HERO_ANIMS, HERO_FEET, HERO_PAD, NPC_ANIMS, NPC_OUTFITS, outfitOf, paintHeroSheet, type HeroDir } from './hero';
+import { FIGHT, fightWeapon, FRAME_H, FRAME_W, HERO_ANIMS, HERO_FEET, HERO_PAD, NPC_ANIMS, NPC_OUTFITS, outfitOf, paintHeroSheet, type HeroDir } from './hero';
 import type { MonsterDef, RegionId, Summary } from '../core/types';
 import { store } from '../store';
 import { Ambience, D_FLOAT, D_GLOW, D_LABEL, D_PARTICLE, D_SMOKE } from './ambience';
@@ -364,7 +364,7 @@ export class MapScene extends Phaser.Scene {
     for (const a of HERO_ANIMS) {
       if (this.anims.exists(a.key)) continue;
       this.anims.create({
-        key: a.key, frameRate: a.rate, repeat: -1,
+        key: a.key, frameRate: a.rate, repeat: a.once ? 0 : -1,
         frames: Array.from({ length: a.frames }, (_, i) => ({ key: 'hero', frame: `${a.key}-${i}` })),
       });
     }
@@ -915,7 +915,9 @@ export class MapScene extends Phaser.Scene {
     playerPos.y = py;
     this.others.step(delta, playerPos);
     // 正在干活就把当前的动作动画发给别人（挖矿、砍树、打怪…）
-    const anim = this.working && !this.manual && !this.mountBusy ? this.playerBody.anims.currentAnim?.key : undefined;
+    const cur = this.working && !this.manual && !this.mountBusy ? this.playerBody.anims.currentAnim?.key : undefined;
+    // 出手动作只播一遍，别人那边循环播会像一直在挥，所以发架势
+    const anim = cur && /^fight-[a-z]+$/.test(cur) ? `${cur}-ready` : cur;
     this.others.publish(store.state, playerPos.x, playerPos.y, anim && /^(work|fight)-/.test(anim) ? { anim, flip: this.playerBody.flipX } : undefined);
     // 登录后头顶显示自己的名字
     const me = online.me();
@@ -2041,7 +2043,12 @@ export class MapScene extends Phaser.Scene {
     const prev = this.foeSeen;
     this.foeSeen = { hp: c.monsterHp, timer: c.monsterTimerMs, respawn: c.respawnMs, p: c.pSwings ?? 0, m: c.mSwings ?? 0 };
     if (!prev) return;
-    if (this.foeSeen.p > prev.p) this.playerSwingFx(foe, m, c.pDmg ?? -1, !!c.pCrit);
+    if (this.foeSeen.p > prev.p) {
+      const dmg = c.pDmg ?? -1;
+      const crit = !!c.pCrit;
+      const hitIn = this.playerStrike();
+      this.time.delayedCall(hitIn, () => this.foe === foe && this.playerSwingFx(foe, m, dmg, crit));
+    }
     const big = this.foeSeen.m > prev.m && c.mArt === 'world';
     if (this.foeSeen.m > prev.m) this.monsterSwingFx(c.mDmg ?? -1, c.mArt, foe, m);
     if (c.respawnMs > 0 && prev.respawn <= 0) {
@@ -2056,6 +2063,27 @@ export class MapScene extends Phaser.Scene {
       else if (c.monsterTimerMs > prev.timer + 200) this.playMon(foe, m, 'attack', true);
       else if (c.monsterHp < prev.hp) this.playMon(foe, m, 'hurt', true);
     }
+  }
+
+  /**
+   * 主角真正出手的这一下：播一遍当前武器的出手动作，播完回到架势。
+   * 动作时长跟攻速走：攻击间隔比动作本身短时把动作压快，保证每次出手都播得完。
+   * 返回多少毫秒后打中（特效那时候放）。
+   */
+  private playerStrike(): number {
+    const w = fightWeapon(baseOf(store.state.equipment.weapon ?? ''));
+    const f = FIGHT[w];
+    const dur = Math.min(f.ms, playerAttackMs(store.state) * 0.85);
+    const body = this.playerBody;
+    if (!this.working || this.mountMode === 'ride' || this.mountBusy || !body.anims.currentAnim?.key.startsWith('fight-')) return 0;
+    const key = `fight-${w}`;
+    body.anims.timeScale = 1;
+    body.play({ key, frameRate: (body.anims.animationManager.get(key).frames.length * 1000) / dur }, false);
+    body.off(Phaser.Animations.Events.ANIMATION_COMPLETE_KEY + key);
+    body.once(Phaser.Animations.Events.ANIMATION_COMPLETE_KEY + key, () => {
+      if (this.working && body.anims.currentAnim?.key === key) body.play(this.workAnim(), true);
+    });
+    return Math.round(dur * f.hit);
   }
 
   // ---- 战斗特效 ----
@@ -2604,12 +2632,8 @@ export class MapScene extends Phaser.Scene {
     const a = this.currentAction ? ACTIONS[this.currentAction] : undefined;
     if (!a) return `idle-${this.facing}`;
     if (a.kind === 'combat') {
-      const w = baseOf(store.state.equipment.weapon ?? '');
-      const key = w.slice(w.indexOf('_') + 1);
-      if (key === 'spear' || key === 'dagger') return `fight-${key}`;
-      if (['shortbow', 'longbow', 'crossbow'].includes(key)) return 'fight-bow';
-      if (key === 'staff') return 'fight-staff';
-      return 'fight-sword';
+      // 两次攻击之间停在架势里，真正出手时 syncFoe 再播一遍出手动作
+      return `fight-${fightWeapon(baseOf(store.state.equipment.weapon ?? ''))}-ready`;
     }
     const bySkill: Partial<Record<string, string>> = {
       mining: 'work-mine', woodcutting: 'work-chop', fishing: 'work-fish', hunting: 'work-skin', thieving: 'work-steal',

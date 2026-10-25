@@ -540,4 +540,7 @@ export const EN_TEXT: Record<string, string> = {
   '新武器单手斧：伤害比剑高一点、出手稍慢，可以配副手。': 'New weapon, the Hatchet: hits a bit harder than a sword but swings slightly slower, and works with an off-hand.',
   '新武器双手大盾：攻击低，但防御很高，适合扛首领。双手持握，装上会自动卸下副手；反过来装副手也会卸下大盾。': 'New weapon, the Tower Shield: low attack but very high defence, great for tanking bosses. It is two-handed: equipping it removes your off-hand, and equipping an off-hand removes the shield.',
   '火把在制弓台做，单手斧、副手盾、双手大盾在铁匠铺，箭袋、魔法书在工坊。和其他装备一样会随机出品质。': 'Torches are made at the fletching bench; hatchets, bucklers and tower shields at the smithy; quivers and spellbooks at the workshop. Like other gear, they roll a random quality.',
+  "每种武器都有自己的攻击动作": "Every weapon has its own attack animation",
+  "战斗时角色只在真正出手的那一下挥武器，两次攻击之间摆好架势等着，挥动节奏跟攻击速度一致，攻速越快挥得越快。": "In combat your character now swings only when an attack actually lands, holding a ready stance in between. The swing follows your attack speed, so faster weapons swing faster.",
+  "剑、长枪、匕首、单手斧、双手大盾、短弓、长弓、弩、法杖和空手各有一套攻击动作，手里也会拿着对应的武器：长枪是突刺，单手斧是过头劈砍，大盾是盾击冲撞，弩是平端射击后重新上弦，长弓拉得更满更慢。": "Sword, spear, dagger, hand axe, great shield, shortbow, longbow, crossbow, staff and bare hands each have their own attack, with the matching weapon drawn in hand: spears thrust, hand axes chop overhead, great shields bash, crossbows fire level and then reload, and longbows draw deeper and slower.",
 };
