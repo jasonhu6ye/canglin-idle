@@ -7,7 +7,7 @@ import { store } from '../store';
 const PREVIEW = ['walk-down', 'idle-side', 'walk-side', 'walk-up', 'work-chop', 'fight-sword'];
 
 /** 衣橱里的小人：轮流播放几段动作 */
-function HeroPreview({ outfit, scale = 3 }: { outfit: Outfit; scale?: number }) {
+export function HeroPreview({ outfit, scale = 3 }: { outfit: Outfit; scale?: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const sheet = useMemo(() => paintHeroSheet(outfit), [outfit]);
   useEffect(() => {

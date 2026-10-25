@@ -17,6 +17,8 @@ import { News } from './ui/News';
 import { HalloweenChip, HalloweenNotice } from './ui/Halloween';
 import { BuffBar } from './ui/BuffBar';
 import { GuildPanel, onOpenGuild } from './ui/Guild';
+import { LoginGate } from './ui/Login';
+import { useOnline } from './net/sync';
 import { CombatLog, onOpenCombatLog } from './ui/CombatLog';
 import { UpdateBanner } from './ui/UpdateBanner';
 import { DayClock } from './ui/DayClock';
@@ -117,6 +119,13 @@ function useWide() {
 }
 
 export function App() {
+  const { phase } = useOnline();
+  // 进游戏要先登录、建角色（10-25 用户要求）；连不上服务器时可以先离线玩
+  if (phase !== 'play' && phase !== 'offline') return <LoginGate />;
+  return <Game />;
+}
+
+function Game() {
   const s = useGame();
   const offline = useOffline();
   const inactive = useInactive();
