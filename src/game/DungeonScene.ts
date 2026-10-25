@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { MONSTERS } from '../core/data';
-import { DG_TILE_MS, dungeonFloor, type DgFloor } from '../core/dungeon';
+import { DG_TILE_MS, dungeonFloor, type DgFloor, type DgStop } from '../core/dungeon';
 import { baseOf } from '../core/quality';
 import { combatStats } from '../core/sim';
 import type { DungeonRun, MonsterDef } from '../core/types';
@@ -8,7 +8,7 @@ import { store } from '../store';
 import { tl } from '../i18n';
 import { DPR } from './dpr';
 import { paintDgChest, paintDgDecor, paintDgFloor, paintDgWall, paintStairs, themeAccent, themeFog, type DgThemeId } from './dungeonArt';
-import { FIGHT, fightWeapon, FRAME_H, HERO_FEET, HERO_PAD } from './hero';
+import { FIGHT, FIGHT_RANGE, fightWeapon, FRAME_H, HERO_FEET, HERO_PAD } from './hero';
 import { animsOf, monsterFrameSize, paintMonsterSheet } from './monsterArt';
 import { T } from './tiles';
 
@@ -270,9 +270,40 @@ export class DungeonScene extends Phaser.Scene {
       const k = f - i;
       return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, dx: b.x - a.x || b.y - a.y ? b.x - a.x : 0 };
     }
-    const at = px(legEnd(run.idx));
     const st = F.stops[run.idx];
+    if (run.phase === 'fight' && st) return this.fightSpot(st, legEnd(run.idx));
+    const at = px(legEnd(run.idx));
     return { ...at, dx: st ? st.x * T + T / 2 - at.x : 0 };
+  }
+
+  /**
+   * 打怪站位（用户 10-25）：尽量站在怪的左右两侧（不压住怪），
+   * 远程武器顺着这个方向往后退几格，退到墙为止。
+   */
+  private fightSpot(st: DgStop, from: { x: number; y: number }) {
+    const F = this.F!;
+    const open = (x: number, y: number) => x >= 0 && y >= 0 && x < F.w && y < F.h && F.grid[Math.round(y) * F.w + Math.round(x)] === 1;
+    let dx = Math.sign(from.x - st.x);
+    let dy = Math.sign(from.y - st.y);
+    if (dx === 0) {
+      // 从上下方走过来：挪到侧面
+      const side = open(st.x - 1, st.y) ? -1 : open(st.x + 1, st.y) ? 1 : 0;
+      if (side) { dx = side; dy = 0; }
+    }
+    if (!dx && !dy) dx = -1;
+    // 近战也要隔开一点，不和怪的身子叠在一起（大块头隔得更开）
+    const spr = this.mobs.get(this.F!.stops.indexOf(st));
+    const look = spr ? MONSTERS[spr.getData('look') as string] : undefined;
+    const body = look ? monsterFrameSize(look) * (spr?.scaleX ?? 1) : 24;
+    const melee = Math.max(1.75, (body * 0.6) / T);
+    const want = melee + FIGHT_RANGE[this.weapon()];
+    let k = 1;
+    for (let r = 1; r <= want + 1e-6; r = Math.min(want, r + 0.25)) {
+      if (!open(st.x + dx * r, st.y + dy * r)) break;
+      k = r;
+      if (r >= want) break;
+    }
+    return { x: (st.x + dx * k) * T + T / 2, y: (st.y + dy * k) * T + T / 2, dx: -dx || 1 };
   }
 
   private faceLeft = false;
@@ -284,6 +315,16 @@ export class DungeonScene extends Phaser.Scene {
     const moving = run.phase === 'walk' && (Math.abs(p.x - this.player.x) > 0.05 || Math.abs(p.y - this.player.y) > 0.05);
     const vx = p.x - this.player.x;
     const vy = p.y - this.player.y;
+    // 开打时从路口走到站位（远程往后退几格），不瞬移
+    const adjust = run.phase === 'fight' && Math.hypot(vx, vy) > 1;
+    if (adjust) {
+      const step = Math.min(1, (90 * this.game.loop.delta / 1000) / Math.hypot(vx, vy));
+      this.player.setPosition(this.player.x + vx * step, this.player.y + vy * step).setDepth(this.player.y + 1000);
+      const back = Math.sign(vx) === Math.sign(p.dx) || !vx;
+      this.body.setFlipX(back ? p.dx < 0 : vx < 0);
+      this.play(Math.abs(vy) > Math.abs(vx) * 1.2 ? (vy > 0 ? 'walk-down' : 'walk-up') : 'walk-side');
+      return;
+    }
     this.player.setPosition(p.x, p.y).setDepth(p.y + 1000);
     if (run.phase === 'walk') {
       if (Math.abs(vx) > 0.01) this.faceLeft = vx < 0;
@@ -343,7 +384,19 @@ export class DungeonScene extends Phaser.Scene {
       this.body.play({ key, frameRate: (this.anims.get(key).frames.length * 1000) / dur }, false);
       const dmg = c.pDmg ?? -1;
       const crit = !!c.pCrit;
-      this.time.delayedCall(dur * f.hit, () => {
+      const shoot = (land: () => void) => {
+        const from = { x: this.player.x + (this.body.flipX ? -6 : 6), y: this.player.y - 4 };
+        const to = { x: spr.x, y: spr.y - 8 };
+        const far = Math.hypot(to.x - from.x, to.y - from.y);
+        if (FIGHT_RANGE[w] < 1 || far < T * 1.5) return land();
+        const magic = w === 'staff';
+        const pr = magic
+          ? this.add.image(from.x, from.y - 4, 'glow').setTint(0x7ac8ff).setBlendMode(Phaser.BlendModes.ADD).setScale(0.18)
+          : this.add.image(from.x, from.y, 'fx-arrow').setRotation(Math.atan2(to.y - from.y, to.x - from.x));
+        pr.setDepth(D_FLOAT - 2);
+        this.tweens.add({ targets: pr, x: to.x, y: to.y, duration: far * (magic ? 3.6 : 2.6), ease: magic ? 'Quad.easeIn' : 'Linear', onComplete: () => { pr.destroy(); land(); } });
+      };
+      this.time.delayedCall(dur * f.hit, () => shoot(() => {
         if (!spr.active) return;
         if (dmg < 0) return this.popText(spr.x + 4, spr.y - 22, tl('未命中'), '#b8b8c0', 7);
         spr.setTintFill(0xffffff);
@@ -351,12 +404,22 @@ export class DungeonScene extends Phaser.Scene {
         const heavy = crit || dmg >= Math.max(3, st.playerMaxHit * 0.85);
         this.popText(spr.x + 4, spr.y - 22, crit ? tl`暴击 ${dmg}!` : `${dmg}`, crit ? '#ff7a30' : heavy ? '#ffb030' : '#ffffff', crit ? 11 : heavy ? 10 : 8);
         if (crit) this.cameras.main.shake(110, 0.003);
-      });
+      }));
     }
     if ((c.mSwings ?? 0) > prev.m) {
       if (this.anims.exists(`mon-${look}-attack`)) {
         spr.play(`mon-${look}-attack`, true);
         spr.once('animationcomplete', () => spr.active && spr.play(`mon-${look}-idle`));
+      }
+      // 主角站远了：怪扑过去打一下再退回原位
+      const gx = this.player.x - spr.x;
+      const gy = this.player.y - spr.y;
+      const gap = Math.hypot(gx, gy);
+      if (gap > T * 1.5 && !this.tweens.isTweening(spr)) {
+        const x0 = spr.x;
+        const y0 = spr.y;
+        const k = (gap - T) / gap;
+        this.tweens.add({ targets: spr, x: x0 + gx * k, y: y0 + gy * k, duration: 160, ease: 'Quad.easeOut', yoyo: true, hold: 120, onComplete: () => spr.setPosition(x0, y0) });
       }
       const d = c.mDmg ?? -1;
       this.popText(this.player.x - 6, this.player.y - 30, d < 0 ? tl('闪避') : `-${d}`, d < 0 ? '#a8d8ff' : '#ff5a4a', 8);

@@ -119,6 +119,9 @@ function GateSheet({ s, gate, onClose }: { s: GameState; gate: DungeonGate; onCl
   const p = walkPos(s);
   const far = Math.hypot(p.x - gate.x, p.y - gate.y) > GATE_REACH + 0.5;
   const lead = st.party && st.party.leader === me?.id;
+  // 组队进：记下队员名单，最后宝箱全队掷点分
+  const team = st.party && me && st.party.members.length > 1
+    ? { members: st.party.members.map((m) => ({ id: m.playerId, name: m.name })), me: me.id } : undefined;
   const odds = chestOdds(gate.kind, gate.kind === 'green' ? 2.5 : 4.5);
   return (
     <div className="center-pop-back" onClick={onClose}>
@@ -137,7 +140,7 @@ function GateSheet({ s, gate, onClose }: { s: GameState; gate: DungeonGate; onCl
         <div className="go">
           {far && !s.dungeon && <button onClick={() => { emitToGame('walktile', gate.x, gate.y); onClose(); }}>{tl('寻路前往')}</button>}
           {lead && <button onClick={() => { sendRally(); onClose(); }}>{tl('召集队友')}</button>}
-          <button className="primary" disabled={!!why} onClick={() => { store.dispatch((g) => enterDungeon(g, gate, party)); onClose(); }}>{tl('进入副本')}</button>
+          <button className="primary" disabled={!!why} onClick={() => { store.dispatch((g) => enterDungeon(g, gate, party, Date.now(), team)); onClose(); }}>{tl('进入副本')}</button>
         </div>
         <button className="pill" onClick={onClose}>{tl('关闭')}</button>
       </div>
@@ -178,8 +181,26 @@ export function DungeonHud({ s }: { s: GameState }) {
           {Object.entries(run.loot).map(([id, n]) => <span key={id} className="with-icon"><Icon item={id} size={18} /> {id === 'coins' ? fmtNum(n) : `×${n}`}</span>)}
         </div>
       )}
+      {run.phase === 'open' && run.split && run.members && <TeamSplit run={run} />}
       {confirm && <small className="warn">{tl('宝箱还没开，现在离开这一趟就作废了。再点一次确认离开。')}</small>}
       <button className={run.phase === 'open' ? 'pill primary' : 'pill'} onClick={leave}>{confirm ? tl('确认离开') : tl('离开副本')}</button>
+    </div>
+  );
+}
+
+/** 组队宝箱：开箱时全部归属已经定好，列出宝箱里全部东西和各归谁 */
+function TeamSplit({ run }: { run: NonNullable<GameState['dungeon']> }) {
+  const ms = run.members!;
+  return (
+    <div className="dg-rolls">
+      <small className="muted">{tl('宝箱里的全部战利品（打开时已定好归属）：')}</small>
+      {run.split!.map((share, i) => (
+        <div key={i} className={`dg-roll ${ms[i]?.id === run.me ? 'me' : ''}`}>
+          <b className={ms[i]?.id === run.me ? 'gold' : ''}>{ms[i]?.id === run.me ? tl('你') : ms[i]?.name}</b>
+          {Object.entries(share).map(([id, n]) => <span key={id} className="with-icon"><Icon item={id} size={16} /> {id === 'coins' ? fmtNum(n) : `×${n}`}</span>)}
+        </div>
+      ))}
+      <small className="muted">{tl('金币和材料全队平分，装备、钥匙、强化石按运气归属；什么好东西都没分到的人有保底碎片。')}</small>
     </div>
   );
 }

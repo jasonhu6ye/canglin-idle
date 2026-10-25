@@ -395,3 +395,60 @@ export function rollChest(gate: DungeonGate, q: number, rand: () => number): Rec
   }
   return out;
 }
+
+/**
+ * 组队宝箱分配（用户 10-25，学阿尔比恩：看运气，但每人保底有一份）：
+ * 打开宝箱的那一刻归属就全部定好（不用一件件去点），全队都能看到宝箱里全部东西各归谁。
+ * - 宝箱按人数开出几份合在一起；金币和材料这类成堆的东西平分，零头随机归属；
+ * - 装备、钥匙、强化石每件全队暗中掷 1-100 点，最高的拿走；
+ * - 一件好东西都没分到的人额外拿一份保底碎片。
+ * 全部按洞口种子和队员名单算，每个队员在自己那边算出来的结果一样，不需要服务器。
+ */
+export interface TeamMember { id: string; name: string }
+export interface LootRoll { item: string; rolls: number[]; winner: number }
+
+const hashStr = (s: string) => {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
+};
+function seeded(seed: number) {
+  let r = seed || 1;
+  return () => { const [x, n] = nextRandom(r); r = n; return x; };
+}
+/** 组队时宝箱品质按洞口算，全队一样 */
+export const teamChestQuality = (gate: DungeonGate) => rollChestQuality(gate.kind, gate.floors, seeded(gate.seed ^ 0x5bd1e995)());
+
+const rolled = (id: string) => !!ITEMS[id]?.equip || id.startsWith('dkey_') || id.startsWith('enhstone_');
+
+export function teamChest(gate: DungeonGate, q: number, members: TeamMember[]) {
+  const ids = members.map((m) => m.id);
+  const rand = seeded(gate.seed ^ hashStr(ids.join('|')));
+  const pool: Record<string, number> = {};
+  for (let i = 0; i < members.length; i++) for (const [id, n] of Object.entries(rollChest(gate, q, rand))) pool[id] = (pool[id] ?? 0) + n;
+  const shares: Record<string, number>[] = members.map(() => ({}));
+  const give = (i: number, id: string, n: number) => { if (n > 0) shares[i][id] = (shares[i][id] ?? 0) + n; };
+  const rolls: LootRoll[] = [];
+  const roll = (item: string) => {
+    const pts = members.map(() => 1 + Math.floor(rand() * 100));
+    let w = 0;
+    pts.forEach((p, i) => { if (p > pts[w]) w = i; });
+    rolls.push({ item, rolls: pts, winner: w });
+    return w;
+  };
+  const won = members.map(() => false);
+  for (const id of Object.keys(pool).sort()) {
+    const n = pool[id];
+    if (rolled(id)) {
+      for (let k = 0; k < n; k++) { const w = roll(id); give(w, id, 1); won[w] = true; }
+      continue;
+    }
+    const each = Math.floor(n / members.length);
+    members.forEach((_, i) => give(i, id, each));
+    if (id === 'coins') { give(0, id, n - each * members.length); continue; }
+    for (let k = n - each * members.length; k > 0; k--) give(roll(id), id, 1);
+  }
+  // 保底：一件都没掷到的人
+  won.forEach((ok, i) => { if (!ok) give(i, `enhshard_${gate.tier + 1}`, 2 + q * 2); });
+  return { shares, rolls };
+}

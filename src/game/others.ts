@@ -3,7 +3,7 @@ import { levelSnapshot, online, type Presence } from '../net';
 import { rallyTime } from '../net/social';
 import { maxHp } from '../core/sim';
 import type { GameState } from '../core/types';
-import { FRAME_H, FRAME_W, HERO_ANIMS, HERO_FEET, HERO_PAD, outfitOf, paintHeroSheet } from './hero';
+import { FIGHT_RANGE, FRAME_H, FRAME_W, HERO_ANIMS, type FightWeapon, HERO_FEET, HERO_PAD, outfitOf, paintHeroSheet } from './hero';
 import { besideXOf, ensureMountTex, mountKindOf, saddleBob, seatOf } from './mounts';
 import { T } from './tiles';
 import { WOLF_FEET, WOLF_H } from './wolfArt';
@@ -17,6 +17,9 @@ const FONT = 'system-ui, sans-serif';
 const VIEW_TILES = 80;
 /** 自己的位置多久发一次（没变化时） */
 const KEEPALIVE_MS = 15_000;
+
+/** 同一格的站位：第 0 个是原位，往后排在左上、左下、更靠后 */
+const CROWD: [number, number][] = [[0, 0], [-6, -10], [-6, 10], [-14, 0], [-14, -14], [-14, 14], [-22, -6], [-22, 8]];
 
 interface Other {
   box: Phaser.GameObjects.Container;
@@ -139,10 +142,22 @@ export class OtherPlayers {
 
   step(delta: number, near: { x: number; y: number }) {
     const seen = new Set<string>();
+    // 同一格上一起干活、打怪的人各站各的位置（自己占第 0 个位置），远程往后站（用户 10-25）
+    const crowd = new Map<string, number>();
+    crowd.set(`${Math.round(near.x)},${Math.round(near.y)}`, 1);
     for (const p of this.latest) {
       if (Math.abs(p.x - near.x) > VIEW_TILES || Math.abs(p.y - near.y) > VIEW_TILES) continue;
       seen.add(p.playerId);
-      const tx = p.x * T + T / 2, ty = p.y * T + T / 2 + 7;
+      let tx = p.x * T + T / 2, ty = p.y * T + T / 2 + 7;
+      if (p.anim) {
+        const cell = `${p.x},${p.y}`;
+        const i = crowd.get(cell) ?? 0;
+        crowd.set(cell, i + 1);
+        const [ox, oy] = CROWD[i % CROWD.length];
+        const w = /^fight-(\w+)-ready$/.exec(p.anim)?.[1] as FightWeapon | undefined;
+        tx += ox - (w ? (FIGHT_RANGE[w] ?? 0) * T : 0);
+        ty += oy;
+      }
       const key = this.sheet(p.outfit);
       let o = this.others.get(p.playerId);
       if (o && o.key !== key) { o.box.destroy(); o = undefined; }

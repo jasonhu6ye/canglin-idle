@@ -17,7 +17,7 @@ import { WOLF_FEET, WOLF_H } from './wolfArt';
 import { paintFoal, paintRanch, PADDOCK_SPOTS, RANCH_H, RANCH_W } from './horseArt';
 import { RANCH } from '../core/ranch';
 import { besideXOf, ensureMountTex, mountKindOf, saddleBob, seatOf } from './mounts';
-import { FIGHT, fightWeapon, FRAME_H, FRAME_W, HERO_ANIMS, HERO_FEET, HERO_PAD, NPC_ANIMS, NPC_OUTFITS, outfitOf, paintHeroSheet, type HeroDir } from './hero';
+import { FIGHT, FIGHT_RANGE, fightWeapon, FRAME_H, FRAME_W, HERO_ANIMS, HERO_FEET, HERO_PAD, NPC_ANIMS, NPC_OUTFITS, outfitOf, paintHeroSheet, type HeroDir } from './hero';
 import type { MonsterDef, RegionId, Summary } from '../core/types';
 import { store } from '../store';
 import { Ambience, D_FLOAT, D_GLOW, D_LABEL, D_PARTICLE, D_SMOKE } from './ambience';
@@ -2174,7 +2174,10 @@ export class MapScene extends Phaser.Scene {
       this.tweens.add({ targets: foe, alpha: 1, duration: 300 });
     } else if (c.respawnMs <= 0) {
       if (big) this.playMon(foe, m, 'skill', true);
-      else if (c.monsterTimerMs > prev.timer + 200) this.playMon(foe, m, 'attack', true);
+      else if (c.monsterTimerMs > prev.timer + 200) {
+        this.playMon(foe, m, 'attack', true);
+        this.lunge(foe);
+      }
       else if (c.monsterHp < prev.hp) this.playMon(foe, m, 'hurt', true);
     }
   }
@@ -2225,11 +2228,11 @@ export class MapScene extends Phaser.Scene {
     const from = { x: this.player.x + 6, y: this.player.y - 4 };
     if (['shortbow', 'longbow', 'crossbow'].includes(key)) {
       const a = this.add.image(from.x, from.y, 'fx-arrow').setDepth(D_FLOAT - 2).setRotation(Math.atan2(ty - from.y, tx - from.x));
-      this.tweens.add({ targets: a, x: tx - 3, y: ty, duration: 160, onComplete: () => { a.destroy(); land(); } });
+      this.tweens.add({ targets: a, x: tx - 3, y: ty, duration: Math.max(140, Math.hypot(tx - from.x, ty - from.y) * 2.6), onComplete: () => { a.destroy(); land(); } });
     } else if (key === 'staff') {
       const orb = this.add.image(from.x, from.y - 4, 'glow').setTint(0x7ac8ff).setBlendMode(Phaser.BlendModes.ADD).setDepth(D_FLOAT - 2).setScale(0.18);
       this.tweens.add({
-        targets: orb, x: tx, y: ty, duration: 260, ease: 'Quad.easeIn',
+        targets: orb, x: tx, y: ty, duration: Math.max(240, Math.hypot(tx - from.x, ty - from.y) * 3.6), ease: 'Quad.easeIn',
         onUpdate: () => {
           if (Math.random() < 0.5) return;
           const p = this.add.image(orb.x, orb.y, 'p-spark').setDepth(D_FLOAT - 3).setBlendMode(Phaser.BlendModes.ADD);
@@ -2243,6 +2246,14 @@ export class MapScene extends Phaser.Scene {
       this.tweens.add({ targets: sl, alpha: 0, scale: sl.scaleX * 1.3, duration: 200, onComplete: () => sl.destroy() });
       this.time.delayedCall(60, land);
     }
+  }
+
+  /** 主角站得远（远程武器）时，怪物出手先扑过来再退回原位 */
+  private lunge(foe: Phaser.GameObjects.Sprite) {
+    const reach = (foe.getData('reach') as number) ?? 0;
+    if (reach <= 4 || this.tweens.isTweening(foe)) return;
+    const x0 = foe.x;
+    this.tweens.add({ targets: foe, x: x0 - reach * 0.8, duration: 160, ease: 'Quad.easeOut', yoyo: true, hold: 120, onComplete: () => { foe.x = x0; } });
   }
 
   /** 怪物出手：打中主角就闪红、往后一顿、飘红字；没打中飘「闪避」 */
@@ -2762,8 +2773,11 @@ export class MapScene extends Phaser.Scene {
     if (!a || this.manual) return;
     if (a.kind === 'combat') {
       const m = MONSTERS[a.monster];
-      const gap = Math.max(26, monsterFrameSize(m) * monScale(m) * (big96(m) ? 0.4 : 0.55));
-      this.foe = this.monSprite(m, this.player.x + gap, this.player.y + 7).setFlipX(true);
+      const melee = Math.max(26, monsterFrameSize(m) * monScale(m) * (big96(m) ? 0.4 : 0.55));
+      // 远程武器隔几格开打，不贴脸（用户 10-25）
+      const reach = FIGHT_RANGE[fightWeapon(baseOf(store.state.equipment.weapon ?? ''))] * T;
+      this.foe = this.monSprite(m, this.player.x + melee + reach, this.player.y + 7).setFlipX(true);
+      this.foe.setData('reach', reach);
       this.foe.setDepth(this.foe.y + 1000);
       this.foeSeen = undefined;
       // 普通怪平时不挂血条，正在打的这只也挂一条，看得出还剩多少血

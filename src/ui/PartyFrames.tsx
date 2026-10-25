@@ -4,11 +4,18 @@ import { sendRally, useSocial } from '../net/social';
 import { tl } from '../i18n';
 import { actionName } from './format';
 import { emitToGame } from './GameCanvas';
+import { ACTIONS } from '../core/data';
+import { startNow, walkPos } from '../core/sim';
+import { store } from '../store';
 import { portrait } from './hud';
 
 /** 召集只认最近 2 分钟的，刷新页面不会被旧召集拉走 */
 const RALLY_FRESH = 120_000;
 let answered = 0;
+/** 自动跟随队长（用户 10-25）：跟着队长走，队长打哪只怪就一起打 */
+const FOLLOW_KEY = 'canglin-follow-leader';
+let follow = (() => { try { return localStorage.getItem(FOLLOW_KEY) === '1'; } catch { return false; } })();
+let lastChase = 0;
 
 /**
  * 左上角队伍栏（用户 10-25）：队友头像、名字、血量，点一下看名片（能寻路过去）。
@@ -32,6 +39,30 @@ export function PartyFrames({ onPick }: { onPick: (playerId: string) => void }) 
     emitToGame('walktile', leader.x, leader.y);
     setNote(tl`队长 ${leader.name} 发起召集，正在赶过去`);
   }, [leader?.rally]);
+  // 跟随队长：队长在打怪就开打同一只（角色会自己走过去）；没在打怪就走到队长身边
+  const [followOn, setFollowOn] = useState(follow);
+  const toggleFollow = () => {
+    follow = !follow;
+    setFollowOn(follow);
+    try { localStorage.setItem(FOLLOW_KEY, follow ? '1' : '0'); } catch { /* 存不了就算了 */ }
+    setNote(follow ? tl('开始跟随队长：跟着队长走，队长打哪只怪就一起打') : tl('已停止跟随队长'));
+  };
+  useEffect(() => {
+    if (!followOn || !leader) return;
+    const s = store.state;
+    if (s.dungeon || s.home?.inside) return;
+    const a = leader.action ? ACTIONS[leader.action] : undefined;
+    if (a?.kind === 'combat') {
+      if (s.queue[0]?.action !== leader.action || s.paused) store.dispatch((g) => startNow(g, leader.action!, { type: 'infinite' }));
+      return;
+    }
+    const me = walkPos(s);
+    const far = Math.abs(leader.x - me.x) + Math.abs(leader.y - me.y) > 3;
+    if (far && Date.now() - lastChase > 3000) {
+      lastChase = Date.now();
+      emitToGame('walktile', leader.x, leader.y);
+    }
+  }, [followOn, leader?.x, leader?.y, leader?.action]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!note) return; const t = setTimeout(() => setNote(''), 6000); return () => clearTimeout(t); }, [note]);
   const mates = party?.members.filter((m) => m.playerId !== me?.id) ?? [];
   if (!mates.length) return null;
@@ -57,6 +88,7 @@ export function PartyFrames({ onPick }: { onPick: (playerId: string) => void }) 
           </button>
         );
       })}
+      {!lead && party && <button className={`pill pf-rally ${followOn ? 'on' : ''}`} onClick={toggleFollow}>{followOn ? tl('跟随队长中（点击停止）') : tl('跟随队长')}</button>}
       {lead && <button className="pill pf-rally" onClick={() => { sendRally(); setNote(tl('已发出召集，在线队友会自动寻路到你身边')); }}>{tl('召集队友')}</button>}
       {note && <div className="chip pf-note">{note}</div>}
     </div>

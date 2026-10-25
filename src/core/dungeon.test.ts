@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ITEMS, MONSTERS, TIERS, keyId } from './data';
-import { chestOdds, dungeonFloor, rollChest, rollFloors, totalMobs } from './dungeon';
+import { chestOdds, dungeonFloor, rollChest, rollFloors, teamChest, totalMobs } from './dungeon';
 import { advance, combatEstimate, enterDungeon, gateBlock, leaveDungeon, migrate, newGame, openDungeonChest, openGate, useTownScroll } from './sim';
 import { nextRandom } from './rng';
 import { XP_TABLE } from './xp';
@@ -119,6 +119,39 @@ describe('宝箱', () => {
     }
     expect(gear).toBeGreaterThan(100);
     expect(high / gear).toBeLessThan(0.08);
+  });
+});
+
+describe('组队宝箱掷点分配', () => {
+  const team = [{ id: 'a', name: '甲' }, { id: 'b', name: '乙' }, { id: 'c', name: '丙' }];
+  it('每个人算出来的结果一样，人人有份，装备钥匙强化石按掷点给最高的人', () => {
+    for (let seed = 1; seed < 60; seed++) {
+      const g = gate('blue', 5, 5, seed);
+      const x = teamChest(g, seed % 4, team);
+      const y = teamChest(g, seed % 4, [...team]);
+      expect(y).toEqual(x);
+      for (const sh of x.shares) {
+        expect(sh.coins).toBeGreaterThan(0);
+        expect(Object.keys(sh).length).toBeGreaterThan(1);
+      }
+      for (const r of x.rolls) {
+        expect(r.rolls.length).toBe(3);
+        expect(r.rolls[r.winner]).toBe(Math.max(...r.rolls));
+      }
+    }
+  });
+
+  it('副本里组队开箱：拿到自己那一份', () => {
+    let s = strong(4);
+    s.loc = { x: 300, y: 300 };
+    const g = { ...gate('blue', 4, 2, 31), x: 300, y: 300 };
+    s = enterDungeon(s, g, 3, T0, { members: team, me: 'b' });
+    s = advance(s, T0 + 3 * 3600_000).state;
+    expect(s.dungeon?.phase).toBe('chest');
+    const [s2, got] = openDungeonChest(s);
+    const t = teamChest(g, s2.dungeon!.chest!, team);
+    expect(got).toEqual(t.shares[1]);
+    expect(s2.dungeon!.split).toEqual(t.shares);
   });
 });
 

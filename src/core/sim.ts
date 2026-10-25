@@ -4,7 +4,7 @@ import { baseOf, qid, rollQuality } from './quality';
 import { HW_POINT, HW_TIERS, hwFight, hwOpen, hwTierOf, hwWait } from './halloween';
 import { BAR_VALUE, KEY_SHOP, keyOf, OLD_ENH, SCROLL_TOWN, SHARD_PER_STONE, TIERS, ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAP_W, MID_BOX, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, planRoute, travelMs, type MapNode } from './data';
 import { nextRandom } from './rng';
-import { coopMates, COOP_DEF, COOP_DMG, dungeonFloor, GATE_MS, GATE_REACH, legMs, rollChest, rollChestQuality, rollFloors } from './dungeon';
+import { coopMates, COOP_DEF, COOP_DMG, dungeonFloor, GATE_MS, GATE_REACH, legMs, rollChest, rollChestQuality, rollFloors, teamChest, teamChestQuality, type TeamMember } from './dungeon';
 import { partySize } from './party';
 import { stepQuests } from './quests';
 import { migrateMail, sendMail } from './mail';
@@ -1021,7 +1021,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         s.stats.kills++;
         run.kills++;
         // 打倒最后一层的首领：宝箱品质这时候定下来
-        if (m.rank === 'boss' && F.chest) run.chest = rollChestQuality(run.gate.kind, run.gate.floors, rand());
+        if (m.rank === 'boss' && F.chest) run.chest = isTeam(run) ? teamChestQuality(run.gate) : rollChestQuality(run.gate.kind, run.gate.floors, rand());
         s.combat = null;
         run.idx++;
         run.phase = 'walk';
@@ -1628,7 +1628,11 @@ export function gateBlock(s: GameState, gate: DungeonGate, party: number, now = 
 }
 
 /** 进副本：当前工作暂停，在副本里清完怪、开完宝箱后离开会回到洞口 */
-export function enterDungeon(prev: GameState, gate: DungeonGate, party: number, now = Date.now()): GameState {
+/** 组队进的副本：宝箱全队掷点分 */
+const isTeam = (r: DungeonRun) => (r.members?.length ?? 0) > 1 && !!r.me && r.members!.some((m) => m.id === r.me);
+
+/** team：组队时的队员名单和自己的 id，宝箱按它掷点分配 */
+export function enterDungeon(prev: GameState, gate: DungeonGate, party: number, now = Date.now(), team?: { members: TeamMember[]; me: string }): GameState {
   if (gateBlock(prev, gate, party, now)) return prev;
   const s = clone(leaveWork(prev));
   s.walk = null;
@@ -1638,6 +1642,10 @@ export function enterDungeon(prev: GameState, gate: DungeonGate, party: number, 
   s.gatesUsed = [...(s.gatesUsed ?? []), gate.id].slice(-50);
   const F = dungeonFloor(gate, 0);
   s.dungeon = { gate: { ...gate }, floor: 0, idx: 0, phase: 'walk', ms: legMs(F, 0), total: legMs(F, 0), party: Math.max(1, party), kills: 0, started: now };
+  if (team && team.members.length > 1) {
+    s.dungeon.members = [...team.members].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    s.dungeon.me = team.me;
+  }
   return s;
 }
 
@@ -1663,8 +1671,17 @@ export function openDungeonChest(prev: GameState): [GameState, Record<string, nu
     s.rng = next;
     return x;
   };
-  const q = r.chest ?? rollChestQuality(r.gate.kind, r.gate.floors, rand());
-  const got = rollChest(r.gate, q, rand);
+  let got: Record<string, number>;
+  let q: number;
+  if (isTeam(r)) {
+    q = r.chest ?? teamChestQuality(r.gate);
+    const t = teamChest(r.gate, q, r.members!);
+    got = t.shares[r.members!.findIndex((m) => m.id === r.me)];
+    r.split = t.shares;
+  } else {
+    q = r.chest ?? rollChestQuality(r.gate.kind, r.gate.floors, rand());
+    got = rollChest(r.gate, q, rand);
+  }
   for (const [item, n] of Object.entries(got)) {
     s.seen[item] = 1;
     if (item === 'coins') { s.bank.coins = (s.bank.coins ?? 0) + n; continue; }

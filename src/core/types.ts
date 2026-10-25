@@ -364,6 +364,10 @@ export interface DungeonRun {
   started: number;
   /** 这一趟打怪拿到的东西合计 */
   got?: Record<string, number>;
+  /** 组队进的：进副本时的队员（按 id 排好）和自己是谁；开箱时定好的每人一份（下标对应 members） */
+  members?: { id: string; name: string }[];
+  me?: string;
+  split?: Record<string, number>[];
 }
 
 export type TaskEndReason = 'complete' | 'noInput' | 'death' | 'level' | 'noAmmo' | 'summon';

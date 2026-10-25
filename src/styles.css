@@ -968,3 +968,7 @@ h2.dg-blue { color: #6ab4ff; }
 .dg-msg { position: fixed; left: 50%; top: calc(max(6px, env(safe-area-inset-top)) + 60px); transform: translateX(-50%); z-index: 15; }
 .dg-shop .salv-qty button { white-space: nowrap; }
 .dg-shop .pad { margin: 4px 10px; }
+.pf-rally.on { color: #8aff9a; box-shadow: 0 0 0 1px var(--edge), 0 0 0 2px #3a9a4a; }
+.dg-rolls { display: flex; flex-direction: column; gap: 3px; font-size: 11px; max-height: 40vh; overflow-y: auto; }
+.dg-roll { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: center; }
+.dg-roll.me { background: rgba(232,194,74,.12); border-radius: 3px; padding: 1px 3px; }

@@ -1233,6 +1233,11 @@ export const FIGHT: Record<FightWeapon, { hit: number; ms: number }> = {
   staff: { hit: 0.55, ms: 800 },
   fist: { hit: 0.3, ms: 520 },
 };
+/** 战斗站位（用户 10-25）：离怪多远开打，单位格。近战贴身，长枪隔半格，远程隔几格 */
+export const FIGHT_RANGE: Record<FightWeapon, number> = {
+  sword: 0, spear: 0.6, dagger: 0, handaxe: 0, greatshield: 0, fist: 0,
+  shortbow: 3, longbow: 4, crossbow: 3.5, staff: 3,
+};
 /** 装备的武器 id（已去掉品质后缀）对应哪套动作 */
 export function fightWeapon(base: string): FightWeapon {
   const key = base.slice(base.indexOf('_') + 1);
