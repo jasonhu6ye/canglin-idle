@@ -8,7 +8,7 @@ import { MonsterDetail, MonsterIcon, TraitChips } from './Bestiary';
 import { useEffect, useRef, useState } from 'react';
 import { ACTIONS, nodeOfAction, ITEMS, MONSTERS, NODES, REGIONS, SEED_PRICE, SEED_SHOP, SKILLS, tierName } from '../core/data';
 import {
-  actionDuration, atMarket, bestFood, buySeed, combatEstimate, combatStats, enqueue, level, MAX_QUEUE, nearNode, setSettings, startNow, weaponStyle, xpPerHour,
+  actionDuration, atMarket, bestFood, buySeed, combatEstimate, combatStats, enqueue, level, MAX_QUEUE, moveSpeed, nearNode, setSettings, startNow, weaponStyle, xpPerHour,
 } from '../core/sim';
 import type { ActionDef, GameState, SkillAction, TaskMode } from '../core/types';
 import type { MapNode } from '../core/data';
@@ -230,7 +230,7 @@ export function producerOf(s: GameState, item: string): { action: string; node: 
   const all = Object.values(ACTIONS).filter((x): x is SkillAction => x.kind === 'skill' && x.outputs.some((o) => o.item === item && o.chance === undefined));
   if (!all.length) return undefined;
   const best = all.sort((x, y) => Number(level(s, y.skill) >= y.level) - Number(level(s, x.skill) >= x.level) || x.level - y.level)[0];
-  const node = nodeOfAction(best.id, s.loc);
+  const node = nodeOfAction(best.id, s.loc, s.waystones, moveSpeed(s));
   return node ? { action: best.id, node: node.id } : undefined;
 }
 

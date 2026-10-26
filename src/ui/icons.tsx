@@ -1020,6 +1020,7 @@ export function Icon({ item, size = 32, info = true }: { item: string; size?: nu
 function equipUrl(id: string): string | null {
   const it = ITEMS[id];
   if (!it?.equip || it.tier === undefined) return null;
+  if (it.equip.slot === 'pack') return equipIconUrl(it.equip.sage ? 'sagepack' : 'pack', it.tier);
   const base = baseOf(id);
   const prefix = base.split('_')[0];
   return equipIconUrl(base.slice(prefix.length + 1), it.tier);

@@ -17,6 +17,8 @@ export const GATE_MS = 30 * 60_000;
 /** 每人同时最多开着几个洞口、两次开洞口之间的冷却（用户 10-25：不能开太多） */
 export const GATE_MAX = 2;
 export const GATE_CD = 5 * 60_000;
+/** 通关（开了宝箱）后洞口只再留多久（用户 10-26） */
+export const GATE_AFTER_CLEAR = 60_000;
 /** 站在洞口几格内才能进 */
 export const GATE_REACH = 3;
 /** 副本里走一格多少毫秒（每秒 4 格，和步行一样，副本里不能骑坐骑） */
@@ -350,6 +352,7 @@ const Q_UP1 = [0.02, 0.03, 0.05, 0.08];
 const Q_UP2 = [0, 0.002, 0.005, 0.01];
 const Q_KEY = [0.06, 0.1, 0.15, 0.22];
 const Q_POTION = [0.3, 0.4, 0.5, 0.6];
+const Q_EYE = [0.06, 0.1, 0.16, 0.26];
 const POTIONS = () => Object.values(ITEMS).filter((i) => i.category === 'potion').sort((a, b) => a.value - b.value).map((i) => i.id);
 const GEAR = EQUIP_TYPES.filter((e) => !e.stats.speed && e.slot !== 'ring' && e.slot !== 'neck').map((e) => e.key);
 
@@ -396,6 +399,9 @@ export function rollChest(gate: DungeonGate, q: number, rand: () => number): Rec
     const kt = rand() < 0.12 ? Math.min(7, t + 1) : t;
     add(keyId(kind, kt), 1);
   }
+  // 洞察之瞳（10-26）：本阶的不常出，低阶的多一些（T1-T3 只能这样得到）
+  if (rand() < Q_EYE[q] * (gate.kind === 'blue' ? 1.3 : 1)) add(`sageeye_${n}`, q >= 3 ? ri(1, 2) : 1);
+  if (t > 0 && rand() < Q_EYE[q] * 1.6) add(`sageeye_${ri(1, t)}`, ri(1, 2));
   return out;
 }
 

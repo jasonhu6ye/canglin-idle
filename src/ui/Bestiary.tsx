@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ITEMS, MONSTERS, nodeOfAction, REGIONS, TIERS, tierName } from '../core/data';
+import { ITEMS, MONSTERS, nodesOfAction, REGIONS, TIERS, tierName } from '../core/data';
 import { FAMILY_NAME, TRAITS, WORLD_SKILL, type Family, type TraitId } from '../core/bestiary';
 import type { GameState, MonsterDef } from '../core/types';
 import { MONSTER_DAMAGE_SCALE, WORLD_MOVE } from '../core/sim';
@@ -8,6 +8,7 @@ import { Icon } from './icons';
 import { fmtNum } from './format';
 import { store } from '../store';
 import { tl } from '../i18n';
+import { etaText, nearestNode } from './eta';
 
 export const RANK_NAME = { normal: tl('普通'), elite: tl('精英'), boss: tl('首领') };
 
@@ -70,7 +71,8 @@ export function Bestiary({ s }: { s: GameState }) {
 
 /** reveal：地图上点怪物时直接给全部信息（图鉴里要先打败一次） */
 export function MonsterDetail({ m, kills, reveal = false }: { m: MonsterDef; kills: number; reveal?: boolean }) {
-  const node = nodeOfAction(`fight_${m.id}`);
+  const near = nearestNode(store.state, nodesOfAction(`fight_${m.id}`).filter((n) => !n.closed));
+  const node = near?.node;
   const where = node ? tl`${node.name}（${REGIONS[node.region].name}）` : REGIONS[m.region].name;
   return (
     <div className="item-detail frame mon-detail">
@@ -83,7 +85,7 @@ export function MonsterDetail({ m, kills, reveal = false }: { m: MonsterDef; kil
           <b>{tl('☠ 世界首领')}</b>{tl` 专属大招「${WORLD_SKILL[m.id].name}」：${WORLD_SKILL[m.id].desc}。每 ${WORLD_MOVE.every} 下出手放一次，伤害 ×${WORLD_MOVE.mult}。击败后 ${Math.round(m.respawnMs / 60000)} 分钟才会再出现，必掉宝库。`}</span>
       )}
       <span className="muted">{tl`${m.kind === 'creature' ? tl('生物') : tl('怪物')} · ${FAMILY_NAME[m.family as Family]} · 出没：${where}`}</span>
-      {!reveal && node && <button className="primary" onClick={() => store.track(m.id)}>{tl('在地图上追踪')}</button>}
+      {!reveal && node && <button className="primary" onClick={() => store.track(m.id)}>{tl('在地图上追踪')} <small>{etaText(near!.route)}</small></button>}
       {!kills && !reveal ? (
         <span className="muted">{tl('尚未击败。打败一次后可查看属性、特性和掉落。')}</span>
       ) : (

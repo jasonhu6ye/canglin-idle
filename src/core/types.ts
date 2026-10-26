@@ -12,7 +12,7 @@ export type CombatStyle = 'melee' | 'ranged' | 'magic';
 export type ArmorKind = 'plate' | 'leather' | 'cloth';
 
 /** mount：坐骑栏（用户 10-23 要求先留好栏位，坐骑以后加） */
-export type GearSlot = 'weapon' | 'offhand' | 'head' | 'body' | 'feet' | 'hands' | 'neck' | 'ring' | 'mount';
+export type GearSlot = 'weapon' | 'offhand' | 'head' | 'body' | 'feet' | 'hands' | 'neck' | 'ring' | 'mount' | 'pack';
 export type ToolSlot = 'axe' | 'pickaxe' | 'sickle' | 'knife' | 'rod' | 'hoe' | 'hammer' | 'needle' | 'pan';
 export type EquipSlot = GearSlot | ToolSlot;
 
@@ -88,6 +88,10 @@ export interface ItemDef {
     move?: number;
     /** 火把：攻击速度加成，0.1 = 出手间隔 ÷1.1 */
     haste?: number;
+    /** 背包（10-26）：多几格背包 */
+    bag?: number;
+    /** 洞察者背包（10-26）：经验多拿这么多（0.1 = 10%），每多拿 1 点经验扣 1 金币，金币不够就不加 */
+    sage?: number;
     /** 双手武器（双手大盾）：装上就不能用副手 */
     twoHanded?: boolean;
     /** 饰品（10-26）：生命上限（点数）、经验、掉率、暴击、闪避、干活速度（0.05 = 5%） */
@@ -313,7 +317,7 @@ export interface GameState {
   settings: Settings;
   /** 非战斗时回血的计时 */
   regenMs: number;
-  stats: { kills: number; deaths: number };
+  stats: { kills: number; deaths: number; /** 洞察者背包一共烧掉的金币 */ sageCoins?: number };
   /** 每种怪物击杀数（怪物图鉴用），旧存档没有 */
   /** 装备栏里的食物栏和药水栏：各放一种，不占背包格子 */
   belt?: Partial<Record<BeltSlot, { id: string; qty: number }>>;

@@ -8,6 +8,7 @@ import { ACTIONS } from '../core/data';
 import { startNow, walkPos } from '../core/sim';
 import { store } from '../store';
 import { portrait } from './hud';
+import { setAutoGate } from './Dungeon';
 
 /** 召集只认最近 2 分钟的，刷新页面不会被旧召集拉走 */
 const RALLY_FRESH = 120_000;
@@ -16,6 +17,7 @@ let answered = 0;
 const FOLLOW_KEY = 'canglin-follow-leader';
 let follow = (() => { try { return localStorage.getItem(FOLLOW_KEY) === '1'; } catch { return false; } })();
 let lastChase = 0;
+let chaseTo: { x: number; y: number } | null = null;
 
 /**
  * 左上角队伍栏（用户 10-25）：队友头像、名字、血量，点一下看名片（能寻路过去）。
@@ -45,12 +47,18 @@ export function PartyFrames({ onPick }: { onPick: (playerId: string) => void }) 
     follow = !follow;
     setFollowOn(follow);
     try { localStorage.setItem(FOLLOW_KEY, follow ? '1' : '0'); } catch { /* 存不了就算了 */ }
+    if (!follow) setAutoGate(null);
     setNote(follow ? tl('开始跟随队长：跟着队长走，队长打哪只怪就一起打') : tl('已停止跟随队长'));
   };
   useEffect(() => {
     if (!followOn || !leader) return;
     const s = store.state;
     if (s.dungeon || s.home?.inside) return;
+    // 队长进了副本（用户 10-26：以前队员走到洞口就发呆）：走到同一个洞口进去，阵亡了也会再走回来
+    if (leader.dg?.gate) {
+      if (!s.gatesUsed?.includes(leader.dg.gate)) setAutoGate(leader.dg.gate, 'follow');
+      return;
+    }
     const a = leader.action ? ACTIONS[leader.action] : undefined;
     if (a?.kind === 'combat') {
       if (s.queue[0]?.action !== leader.action || s.paused) store.dispatch((g) => startNow(g, leader.action!, { type: 'infinite' }));
@@ -58,11 +66,14 @@ export function PartyFrames({ onPick }: { onPick: (playerId: string) => void }) 
     }
     const me = walkPos(s);
     const far = Math.abs(leader.x - me.x) + Math.abs(leader.y - me.y) > 3;
-    if (far && Date.now() - lastChase > 3000) {
+    // 远路重新规划很费时：还在往队长那边走、队长也没走远，就不重算（以前每 3 秒重算一次，远路会一顿一顿的）
+    const moved = !chaseTo || Math.hypot(leader.x - chaseTo.x, leader.y - chaseTo.y) > 6;
+    if (far && (moved || !s.walk) && Date.now() - lastChase > 3000) {
       lastChase = Date.now();
+      chaseTo = { x: leader.x, y: leader.y };
       emitToGame('walktile', leader.x, leader.y);
     }
-  }, [followOn, leader?.x, leader?.y, leader?.action]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [followOn, leader?.x, leader?.y, leader?.action, leader?.dg?.gate, store.state.dungeon?.gate.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!note) return; const t = setTimeout(() => setNote(''), 6000); return () => clearTimeout(t); }, [note]);
   const mates = party?.members.filter((m) => m.playerId !== me?.id) ?? [];
   if (!mates.length) return null;

@@ -2,17 +2,15 @@ import { ACTIONS, ITEMS } from '../core/data';
 import type { ItemStack, TaskMode } from '../core/types';
 import { isEn, tl } from '../i18n';
 
+/** 数字（用户 10-26）：不到 10 万照常显示，10 万起写成 100K、1.5M、2B、1T，中英文一样 */
 export function fmtNum(n: number): string {
   n = Math.floor(n);
-  if (isEn) {
-    if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
-    if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
-    if (n >= 1e4) return `${(n / 1e3).toFixed(1)}K`;
-    return n.toLocaleString('en-US');
-  }
-  if (n >= 1e8) return tl`${(n / 1e8).toFixed(1)}亿`;
-  if (n >= 1e4) return tl`${(n / 1e4).toFixed(1)}万`;
-  return n.toLocaleString('zh-CN');
+  const a = Math.abs(n);
+  if (a < 1e5) return n.toLocaleString(isEn ? 'en-US' : 'zh-CN');
+  const [d, u] = a >= 1e12 ? [1e12, 'T'] : a >= 1e9 ? [1e9, 'B'] : a >= 1e6 ? [1e6, 'M'] : [1e3, 'K'];
+  const v = n / d;
+  const txt = Math.abs(v) >= 100 ? String(Math.floor(v)) : (Math.floor(v * 10) / 10).toFixed(1).replace(/\.0$/, '');
+  return `${txt}${u}`;
 }
 
 export function fmtDuration(ms: number): string {
@@ -76,6 +74,8 @@ export function gearLine(e: NonNullable<import('../core/types').ItemDef['equip']
   if (e.work) out.push(tl`采集和制作速度 +${pc(e.work)}`);
   if (e.leech) out.push(tl`吸血 ${Math.round(e.leech * 100)}%（打出伤害的 ${Math.round(e.leech * 100)}% 回成生命）`);
   if (e.threat) out.push(tl`嘲讽值 +${e.threat}`);
+  if (e.bag) out.push(tl`背包 +${e.bag} 格`);
+  if (e.sage) out.push(tl`经验 +${pc(e.sage)}（每多 1 点经验扣 1 金币）`);
   if (e.twoHanded) out.push(tl('双手持握，不能用副手'));
   if (e.style && e.slot !== 'weapon') out.push(tl`（只对${STYLE_WORD[e.style]}生效）`);
   return out.join(' · ');

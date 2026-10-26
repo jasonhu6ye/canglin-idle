@@ -1,3 +1,4 @@
+import { fmtNum } from './format';
 import { useSticky } from './sticky';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GameState, SkillId } from '../core/types';
@@ -10,7 +11,6 @@ import { openChatPage } from './ChatDock';
 import { tl } from '../i18n';
 import { GuildPlay, weeklyOf } from './GuildPlay';
 import { setGuildLv } from '../core/guild';
-import { fmtNum } from './format';
 
 /** 公会页（G 键）。排行榜、账号设置也在这个文件里，分别从「更多」打开；好友在聊天页 */
 type Fn = () => void;
@@ -257,7 +257,7 @@ function NoGuild({ s, onJoined }: { s: GameState; onJoined: () => Promise<void> 
           </li>
         ))}
       </ul>
-      <h3>{tl('创建公会 ')}<small className="muted">{tl`需要 ${GUILD_COST} 金币（仓库有 ${coins}）`}</small></h3>
+      <h3>{tl('创建公会 ')}<small className="muted">{tl`需要 ${GUILD_COST} 金币（仓库有 ${fmtNum(coins)}）`}</small></h3>
       <form className="search-row" onSubmit={(e) => { e.preventDefault(); create(); }}>
         <input placeholder={tl("公会名")} maxLength={12} value={name} onChange={(e) => setName(e.target.value)} />
         <input className="tag-input" placeholder={tl("会标")} maxLength={4} value={tag} onChange={(e) => setTag(e.target.value)} />

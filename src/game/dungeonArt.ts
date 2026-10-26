@@ -212,6 +212,42 @@ export function enhStoneIconUrl(tier: number, isShard: boolean): string {
   return done(k, p);
 }
 
+// ---- 洞察之瞳（10-26：洞察者背包的特殊材料，只从副本宝箱开出来） ----
+
+const EYE_IRIS = ['#9ab8c8', '#a060e0', '#f0c040', '#3ab070', '#3a8ae0', '#7ae8ff', '#ff7a2a', '#c060ff'];
+export function sageEyeIconUrl(tier: number): string {
+  const k = `eye${tier}`;
+  const hit = cache.get(k);
+  if (hit) return hit;
+  const p = new Pix(20, 20);
+  const iris = EYE_IRIS[tier] ?? EYE_IRIS[0];
+  // 外面一圈光晕（高阶更大）
+  const glow = 6.5 + tier * 0.35;
+  for (let y = 0; y < 20; y++) for (let x = 0; x < 20; x++) {
+    const d = Math.hypot(x + 0.5 - 10, (y + 0.5 - 10) * 1.3);
+    if (d < glow && d > glow - 1 && (x + y + tier) % 2 === 0) p.set(x, y, mix(iris, '#ffffff', 0.4));
+  }
+  // 杏仁形的眼白，外描深边
+  for (let y = 4; y < 16; y++) for (let x = 2; x < 18; x++) {
+    const X = (x + 0.5 - 10) / 7.5;
+    const Y = (y + 0.5 - 10) / 4.2;
+    const v = Math.abs(Y) - (1 - X * X);
+    if (v < -0.22) p.set(x, y, Y < -0.2 ? '#fffaf0' : '#e4dccc');
+    else if (v < 0.05) p.set(x, y, '#3a2a40');
+  }
+  // 虹膜和瞳孔
+  disc(p, 10, 10, 3.2, mix(iris, '#140c18', 0.25));
+  disc(p, 10, 10, 2.5, iris);
+  disc(p, 10, 10, 1.1, '#140c18');
+  p.set(9, 8, '#ffffff');
+  p.set(8, 9, mix(iris, '#ffffff', 0.6));
+  // 阶级装饰：T3 起上下各一道光芒，T5 起四周四颗小星，T7 起头顶一枚金色符印
+  if (tier >= 2) { p.set(10, 2, iris); p.set(10, 1, '#ffffff'); p.set(10, 17, iris); p.set(10, 18, '#ffffff'); }
+  if (tier >= 4) for (const [x, y] of [[2, 3], [17, 3], [2, 16], [17, 16]]) p.set(x, y, '#ffffff');
+  if (tier >= 6) { p.set(9, 0, '#f0d060'); p.set(10, 0, '#fff0a0'); p.set(11, 0, '#f0d060'); }
+  return done(k, p);
+}
+
 // ---- 回城卷轴 ----
 
 export function scrollIconUrl(): string {
@@ -249,6 +285,7 @@ export function dungeonIconUrl(id: string, tier?: number): string | null {
   if (tier === undefined) return null;
   if (id.startsWith('enhstone_')) return enhStoneIconUrl(tier, false);
   if (id.startsWith('enhshard_')) return enhStoneIconUrl(tier, true);
+  if (id.startsWith('sageeye_')) return sageEyeIconUrl(tier);
   return null;
 }
 

@@ -156,6 +156,19 @@ describe('组队宝箱掷点分配', () => {
     expect(s2.dungeon!.split).toEqual(t.shares);
   });
 
+  it('通关开箱后，自己开的洞口只再留 1 分钟（10-26）', () => {
+    let s = strong(4);
+    s.loc = { x: 300, y: 300 };
+    const g = { ...gate('green', 4, 1, 7), x: 300, y: 300 };
+    s = { ...s, gates: [g] };
+    s = enterDungeon(s, g, 1, T0);
+    s = advance(s, T0 + 3 * 3600_000).state;
+    expect(s.dungeon?.phase).toBe('chest');
+    const now = T0 + 3 * 3600_000;
+    const [s2] = openDungeonChest({ ...s, gates: [{ ...g, expires: now + 19 * 60_000 }] }, now);
+    expect(s2.gates![0].expires).toBe(now + 60_000);
+  });
+
   it('只分给打出过伤害的队友：没参与的不分，只有自己打就按单人开', () => {
     let s = strong(4);
     s.loc = { x: 300, y: 300 };

@@ -1397,6 +1397,127 @@ function ring(p: Pix, kind: string, t: number) {
   if (t >= 6) for (const sg of [-1, 1]) for (let k = 0; k < 3; k++) p.set(cx + sg * (5 + k), 9 - k, GOLDS[3 - (k % 2)]);
 }
 
+// ---- 背包（用户 10-26）：T1-T8 每阶造型不同，洞察者背包是一只带「眼睛」徽记的挎包 ----
+
+/** 背包：正面朝前，主袋 + 翻盖 + 背带，每阶加不同的部件 */
+function backpack(p: Pix, t: number) {
+  const H = ramp(t === 0 ? CLOTH[0] : t === 1 ? HIDE[1] : t === 2 ? HIDE[3] : t === 7 ? '#2a2a5a' : HIDE[t]);
+  const C = ramp(CLOTH[t]);
+  const T = ramp(TRIM[t]);
+  const A = ramp(ACCENT[t]);
+  const G = CRYSTAL[t];
+  const cx = 12;
+  if (t === 0) {
+    // 粗布行囊：鼓鼓的布袋，口子用绳子扎紧，打了两块补丁
+    fill(p, 4, 7, 19, 22, (x, y) => {
+      const w = y < 10 ? 3 + (y - 7) * 1.4 : 7.2 - Math.max(0, y - 18) * 0.9;
+      const dx = Math.abs(x - cx);
+      return dx > w ? 0 : dx > w - 1 || y > 21 ? 1 : 2;
+    }, H[1], H[2]);
+    for (let y = 11; y < 21; y += 3) for (let x = 6; x < 18; x += 4) p.set(x + (y % 2), y, H[3]);
+    fill(p, 8, 2, 15, 7, (x, y) => (Math.abs(x - cx) < 2.6 - (y - 2) * 0.25 ? (y < 3 ? 1 : 2) : 0), H[1], H[2]);
+    for (let x = 8; x <= 15; x++) p.set(x, 7, '#8a6a40');
+    p.set(16, 8, '#8a6a40'); p.set(17, 9, '#8a6a40');
+    p.rect(6, 15, 3, 3, '#b8a888'); p.rect(14, 12, 3, 2, '#9a8a70');
+    return;
+  }
+  const top = t >= 4 ? 5 : 6;
+  const y1 = 21;
+  // 背带露在两边
+  for (let y = top + 2; y <= y1 - 2; y++) { p.set(4, y, T[1]); p.set(19, y, T[1]); }
+  // 主袋：圆角方形，T5 起更高
+  fill(p, 5, top, 18, y1, (x, y) => {
+    const rx = Math.min(x - 5, 19 - x);
+    const ry = Math.min(y - top, y1 + 1 - y);
+    if (rx < 1.2 && ry < 1.2) return 0;
+    return rx < 1 || ry < 1 ? 1 : 2;
+  }, H[0], H[2]);
+  // 左亮右暗
+  for (let y = top + 1; y < y1; y++) { p.set(6, y, H[3]); p.set(17, y, H[1]); }
+  // 翻盖：上半截，下沿弧形
+  fill(p, 5, top, 18, top + 7, (x, y) => {
+    const edge = top + 5.5 + Math.cos(((x - cx) / 7) * Math.PI * 0.5) * 1.2;
+    if (y > edge) return 0;
+    return y > edge - 1 ? 1 : 2;
+  }, T[1], t >= 6 ? C[2] : H[3]);
+  // 扣带和扣子
+  for (let y = top + 6; y <= top + 9; y++) p.set(cx, y, T[2]);
+  if (t >= 5) gem(p, cx, top + 9.5, 1.4, 1.4, G);
+  else p.rect(cx - 1, top + 9, 3, 2, T[3]);
+  // 前面的小口袋（T2 起）
+  if (t >= 1) {
+    const py = t >= 4 ? 15 : 14;
+    fill(p, 7, py, 16, y1 - 1, (x, y) => (y > py + 0.5 && (Math.abs(x - 11.5) < 4.3) ? (y < py + 1.6 || Math.abs(x - 11.5) > 3.4 ? 1 : 2) : 0), H[1], t === 1 ? H[2] : C[1]);
+  }
+  // 每阶的特色部件
+  if (t === 2) {
+    // 猎人背囊：翻盖上一圈毛边，侧面挂一根羽毛
+    for (let x = 6; x <= 17; x++) p.set(x, top - 1 + (x % 2), '#d8c8a8');
+    for (let y = 9; y < 16; y++) p.set(20, y, y % 2 ? '#e8e0d0' : A[2]);
+  }
+  if (t === 3 || t === 4) {
+    // 冒险、远征：顶上绑一卷睡袋
+    fill(p, 4, top - 4, 19, top, (x, y) => (y > top - 3.5 && y < top + 0.5 ? (Math.floor(x) % 3 === 0 ? 1 : 2) : 0), C[1], C[2]);
+    p.set(8, top - 2, T[2]); p.set(15, top - 2, T[2]);
+  }
+  if (t === 3) { fill(p, 1, 12, 4, 19, (x, y) => (y > 12 && y < 19 ? (x < 2 ? 1 : 2) : 0), H[0], H[1]); }
+  if (t === 4) {
+    // 远征：两根架子从顶上伸出来，侧面挂一只小水壶
+    for (let y = 1; y < top; y++) { p.set(5, y, M8(t)[3]); p.set(18, y, M8(t)[2]); }
+    gem(p, 20.5, 16, 1.6, 2.6, '#8a9a70');
+  }
+  if (t === 5) {
+    // 精工：四角包金属，两道横带
+    for (const [x, y] of [[5, top], [18, top], [5, y1], [18, y1]]) { p.set(x, y, T[3]); p.set(x + (x < 10 ? 1 : -1), y, T[2]); }
+    for (let x = 6; x <= 17; x++) { p.set(x, 13, T[2]); p.set(x, 18, T[1]); }
+  }
+  if (t === 6) {
+    // 秘纹：袋身刻着发光的符文
+    for (const [x, y] of [[8, 16], [9, 17], [10, 16], [13, 17], [14, 16], [15, 17], [11, 19], [12, 19]]) p.set(x, y, A[3]);
+    for (let y = top + 1; y < top + 5; y++) p.set(cx, y, A[4]);
+  }
+  if (t === 7) {
+    // 星辰：深蓝底点满星星，金边，顶上一颗星
+    for (const [x, y] of [[8, 14], [15, 13], [10, 18], [14, 19], [16, 16], [7, 19], [12, 16]]) p.set(x, y, '#ffffff');
+    for (let y = top + 1; y < y1; y++) { p.set(5, y, GOLDS[2]); p.set(18, y, GOLDS[1]); }
+    for (const [x, y] of [[12, 0], [11, 1], [12, 1], [13, 1], [12, 2]]) p.set(x, y, GOLDS[3]);
+  }
+}
+const M8 = (t: number) => ramp(METAL[t]);
+
+/** 洞察者背包：斜挎的书包，翻盖正中一只「眼睛」徽记（经验），高阶多一圈光纹 */
+function sagePack(p: Pix, t: number) {
+  const C = ramp(['#6a5a8a', '#5a4a7a', '#4a5a9a', '#3a4a7a', '#5a6aa8', '#3a2a6a', '#2a1a4a', '#1a1a3a'][t]);
+  const T = ramp(t === 7 ? GOLDS[2] : TRIM[t]);
+  const G = CRYSTAL[t];
+  const cx = 12;
+  // 斜挎带
+  for (let i = 0; i < 16; i++) { p.set(3 + i, 2 + Math.round(i * 0.45), T[1]); }
+  // 包身：扁圆角
+  fill(p, 4, 8, 19, 21, (x, y) => {
+    const rx = Math.min(x - 4, 20 - x);
+    const ry = Math.min(y - 8, 22 - y);
+    if (rx < 1.5 && ry < 1.5) return 0;
+    return rx < 1 || ry < 1 ? 1 : 2;
+  }, C[0], C[2]);
+  for (let y = 9; y < 21; y++) p.set(5, y, C[3]);
+  // 翻盖，下沿是尖角
+  fill(p, 4, 8, 19, 17, (x, y) => {
+    const edge = 14 + (4 - Math.abs(x - cx) * 0.55);
+    return y > edge ? 0 : y > edge - 1 ? 1 : 2;
+  }, T[1], C[3]);
+  // 眼睛徽记
+  fill(p, 7, 10, 17, 15, (x, y) => (Math.abs(y - 12.5) < 2.3 * (1 - ((x - cx) / 4.6) ** 2) ? 2 : 0), '', '#f4f0e0');
+  gem(p, cx, 12.5, 1.5, 1.5, G);
+  p.set(cx, 12, '#140c18');
+  // 阶级：T3 起眼睛上下各一道光芒，T5 起四角铆钉，T7 起翻盖边缘一圈星光
+  if (t >= 2) { p.set(cx, 9, T[3]); p.set(cx, 16, T[3]); p.set(cx - 5, 12, T[3]); p.set(cx + 5, 12, T[3]); }
+  if (t >= 4) for (const [x, y] of [[5, 19], [18, 19], [5, 10], [18, 10]]) p.set(x, y, T[4]);
+  if (t >= 6) for (const [x, y] of [[7, 17], [17, 17], [9, 18], [15, 18], [12, 19]]) p.set(x, y, '#ffffff');
+  // 挂着的小金币（烧钱练级）
+  gem(p, 18.5, 20, 1.6, 1.6, GOLDS[2]);
+}
+
 // ---- 入口 ----
 
 const urlCache = new Map<string, string>();
@@ -1410,6 +1531,8 @@ export function equipIconUrl(key: string, tier: number): string | null {
   const [mat, part] = key.includes('_') ? key.split('_') : ['', key];
   if (mat === 'neck') necklace(p, part, tier);
   else if (mat === 'ring') ring(p, part, tier);
+  else if (key === 'pack') backpack(p, tier);
+  else if (key === 'sagepack') sagePack(p, tier);
   else if (key === 'sword') sword(p, tier);
   else if (key === 'spear') spear(p, tier);
   else if (key === 'dagger') dagger(p, tier);

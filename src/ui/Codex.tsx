@@ -3,7 +3,8 @@ import { qClass, qid, QUALITY_NAME } from '../core/quality';
 import { QualityTable } from './Quality';
 import { useSticky } from './sticky';
 import { useMemo, useState } from 'react';
-import { ACTIONS, buffText, CROP_DEFS, fieldOfCrop, ITEMS, MONSTERS, nodeOfAction, nodesOfAction, SKILLS, TIERS, tierName } from '../core/data';
+import { ACTIONS, buffText, CROP_DEFS, fieldOfCrop, ITEMS, MONSTERS, NODES, nodeOfAction, nodesOfAction, SKILLS, TIERS, tierName } from '../core/data';
+import { etaText, nearestNode } from './eta';
 import { maxHp, POTION_AT, startAt, toolSkillNames } from '../core/sim';
 import type { GameState, ItemDef } from '../core/types';
 import { Icon } from './icons';
@@ -78,6 +79,17 @@ function goSource(x: Src) {
   else if (x.node) store.requestWalk(x.node);
   else return;
   openItem(null);
+}
+
+/** 每条来源离角色多远（用户 10-26：寻路的东西都写哪个最近、多久能到），能去的按远近排，最近的标出来 */
+function withEta(s: GameState, list: Src[]) {
+  const rows = list.map((x) => {
+    const nodes = x.monster ? nodesOfAction(`fight_${x.monster}`).filter((n) => !n.closed) : x.node ? NODES.filter((n) => n.id === x.node) : [];
+    return { x, r: nearestNode(s, nodes)?.route, first: false };
+  });
+  const go = rows.filter((a) => a.r).sort((a, b) => a.r!.ms - b.r!.ms);
+  if (go.length > 1) go[0].first = true;
+  return [...go, ...rows.filter((a) => !a.r)];
 }
 
 /** 装备任何品质拿到过都算见过 */
@@ -187,10 +199,10 @@ export function CodexDetail({ s, id, reveal = false }: { s: GameState; id: strin
           {e.move ? '' : e.speed ? tl` · ${toolSkillNames(e.slot) || SKILLS[e.skill].name}速度 +${Math.round(e.speed * 100)}%` : ` · ${gearLine(e)}`}
         </span>
       )}
-      {e && !e.move && <QualityTable id={id} />}
+      {e && !e.move && e.slot !== 'pack' && <QualityTable id={id} />}
       {(src.make.length > 0 || src.drops.length > 0) && <b className="sub">{tl('来源')}</b>}
-      {[...src.make, ...src.drops].map((x) => (x.node || x.monster
-        ? <button key={x.text} className="src-go" onClick={() => goSource(x)}><span>· {x.text}</span><b>{tl('寻路 ›')}</b></button>
+      {withEta(s, [...src.make, ...src.drops]).map(({ x, r, first }) => (r
+        ? <button key={x.text} className="src-go" onClick={() => goSource(x)}><span>· {first && <b className="near-tag">{tl('最近')}</b>}{x.text}</span><b>{etaText(r)} ›</b></button>
         : <span key={x.text} className="muted">· {x.text}</span>))}
       {src.use.length > 0 && <b className="sub">{tl('用途')}</b>}
       {src.use.slice(0, 12).map((t) => <span key={t} className="muted">· {t}</span>)}

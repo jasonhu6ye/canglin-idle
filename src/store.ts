@@ -1,7 +1,7 @@
 import { leaveHome } from './core/home';
 import { useSyncExternalStore } from 'react';
 import { nodeOfAction } from './core/data';
-import { advance, LOG_CAP, migrate, newGame } from './core/sim';
+import { advance, LOG_CAP, migrate, moveSpeed, newGame, walkPos } from './core/sim';
 import { stepMail } from './core/mail';
 import type { CombatLogEntry, GameState, Summary } from './core/types';
 
@@ -144,7 +144,8 @@ class Store {
   }
   /** 寻路去找某只怪 */
   track(monsterId: string) {
-    const n = nodeOfAction(`fight_${monsterId}`);
+    const s = this.state;
+    const n = nodeOfAction(`fight_${monsterId}`, walkPos(s), s.waystones, moveSpeed(s));
     if (n) this.requestWalk(n.id, monsterId);
   }
 
@@ -198,7 +199,7 @@ class Store {
     };
   }
 
-  private emit() {
+  emit() {
     this.listeners.forEach((l) => l());
   }
 }
