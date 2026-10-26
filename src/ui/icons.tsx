@@ -952,7 +952,7 @@ const SPECIFIC: Record<string, [string, string]> = {
 
 /** 装备 key → 图标模板 */
 const EQUIP_TPL: Record<string, string> = {
-  sword: 'sword', spear: 'spear', dagger: 'dagger', shortbow: 'bow', longbow: 'longbow', crossbow: 'crossbow', staff: 'staff',
+  sword: 'sword', spear: 'spear', dagger: 'dagger', shortbow: 'bow', longbow: 'longbow', crossbow: 'crossbow', staff: 'staff', warbow: 'bow', arbalest: 'crossbow',
   handaxe: 'axe', greatshield: 'shield', buckler: 'shield', torch: 'staff', quiver: 'arrow', tome: 'rune',
   plate_head: 'helm', plate_body: 'body', plate_feet: 'boots', plate_hands: 'gauntlet',
   leather_head: 'cap', leather_body: 'jacket', leather_feet: 'boots', leather_hands: 'gloves',
@@ -992,7 +992,7 @@ export function itemIcon(id: string): [string, string] {
     const key = id.slice(prefix.length + 1);
     // 皮甲用皮革色，布甲用布料色，弓和法杖用本阶木色，其余用金属色
     const tint = key.startsWith('leather_') ? HIDE_TINT[tier] : key.startsWith('cloth_') ? CLOTH_TINT[tier]
-      : ['shortbow', 'longbow', 'crossbow', 'staff', 'rod'].includes(key) ? WOOD[TIERS[tier].wood] : METAL[prefix] ?? '#c8c8c8';
+      : ['shortbow', 'longbow', 'crossbow', 'warbow', 'arbalest', 'staff', 'rod'].includes(key) ? WOOD[TIERS[tier].wood] : METAL[prefix] ?? '#c8c8c8';
     return [EQUIP_TPL[key] ?? 'bag', tint];
   }
   return ['bag', '#a08060'];

@@ -367,6 +367,10 @@ export const EQUIP_TYPES: EquipType[] = [
   W('shortbow', tl('短弓'), 'ranged', 'fletching', [['plank', 2], ['leather', 1]], 1, 1.0, 1.1, 2200, 'ranged'),
   W('longbow', tl('长弓'), 'ranged', 'fletching', [['plank', 3], ['leather', 1]], 4, 1.25, 1.3, 2800, 'ranged'),
   W('crossbow', tl('弩'), 'ranged', 'fletching', [['plank', 3], ['leather', 2]], 6, 0.85, 1.8, 3400, 'ranged'),
+  // 单手战弓（用户 10-26）：远程里出手最快，单发伤害低，单手（配箭袋、火把都行）
+  W('warbow', tl('单手战弓'), 'ranged', 'fletching', [['plank', 2], ['leather', 1]], 2, 0.95, 0.6, 1700, 'ranged'),
+  // 十字弩（用户 10-26）：最重的远程，出手最慢、单发伤害最高、命中准，双手持握不能用副手；带金属件
+  { ...W('arbalest', tl('十字弩'), 'ranged', 'fletching', [['plank', 2], ['bar', 2], ['leather', 1]], 7, 1.3, 3.6, 4400, 'ranged'), stats: { attack: 1.3, strength: 3.6, attackMs: 4400, style: 'ranged', twoHanded: true } },
   // 魔法：加工木材 + 布料
   W('staff', tl('法杖'), 'magic', 'crafting', [['plank', 2], ['cloth', 1]], 4, 1.0, 1.1, 2400, 'magic'),
   // 护甲：头、身、脚、手

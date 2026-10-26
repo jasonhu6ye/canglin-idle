@@ -194,7 +194,7 @@ const STEEL = ['#3e444c', '#7a828c', '#bcc4ce', '#f4f8fc'];
 const BELT = ['#1e120a', '#3a2414', '#5a3a20'];
 
 export type HeroDir = 'down' | 'up' | 'side';
-export type HeroTool = 'pickaxe' | 'axe' | 'hoe' | 'sickle' | 'rod' | 'hammer' | 'knife' | 'sword' | 'spear' | 'dagger' | 'bow' | 'staff' | 'handaxe' | 'greatshield' | 'longbow' | 'crossbow' | 'none';
+export type HeroTool = 'pickaxe' | 'axe' | 'hoe' | 'sickle' | 'rod' | 'hammer' | 'knife' | 'sword' | 'spear' | 'dagger' | 'bow' | 'staff' | 'handaxe' | 'greatshield' | 'longbow' | 'crossbow' | 'warbow' | 'arbalest' | 'none';
 
 interface Pose {
   dir: HeroDir;
@@ -391,10 +391,10 @@ function drawTool(p: Pix, tool: HeroTool, hx: number, hy: number, a: number, pos
       p.set(bx, by, '#e04a4a');
       p.set(bx, by - 1, '#ffffff');
     }
-  } else if (tool === 'bow' || tool === 'longbow') {
-    // 弓竖在手里，弓背朝前；长弓更高、弯得更深、拉得更开
-    const L = tool === 'longbow' ? 10 : 7;
-    const pull = (pose.draw ?? 0) * (tool === 'longbow' ? 7 : 5);
+  } else if (tool === 'bow' || tool === 'longbow' || tool === 'warbow') {
+    // 弓竖在手里，弓背朝前；长弓更高、弯得更深、拉得更开；单手战弓短小、两端反曲
+    const L = tool === 'longbow' ? 10 : tool === 'warbow' ? 6 : 7;
+    const pull = (pose.draw ?? 0) * (tool === 'longbow' ? 7 : tool === 'warbow' ? 4.5 : 5);
     p.line(hx, hy - L, hx - pull, hy, '#e8e8e8');
     p.line(hx - pull, hy, hx, hy + L, '#e8e8e8');
     for (let i = -L; i <= L; i++) {
@@ -403,6 +403,8 @@ function drawTool(p: Pix, tool: HeroTool, hx: number, hy: number, a: number, pos
       p.set(hx + bulge + 1, hy + i, WOOD[0]);
     }
     if (tool === 'longbow') for (const i of [-L, L]) p.set(hx + 0.6, hy + i, GOLD[2]);
+    // 战弓：两端往前翻卷的弓梢
+    if (tool === 'warbow') for (const sg of [-1, 1]) { p.set(hx + 1, hy + sg * (L + 1), WOOD[0]); p.set(hx + 2, hy + sg * (L + 1), WOOD[2]); p.set(hx + 2, hy + sg * L, STEEL[2]); }
     p.rect(Math.round(hx + 2), Math.round(hy) - 1, 2, 2, '#e0d0a8');
     if (pose.draw && pose.draw > 0.2) {
       p.line(hx - pull, hy, hx + 4, hy, WOOD[2]);
@@ -433,6 +435,36 @@ function drawTool(p: Pix, tool: HeroTool, hx: number, hy: number, a: number, pos
       p.set(ex, ey, STEEL[3]);
     }
     p.set(...perp(...along(0.6), -1.2), STEEL[0]);
+  } else if (tool === 'arbalest') {
+    // 十字弩：比弩更长更粗的木托，钢弩臂很宽，前端有脚蹬；draw=1 时上好一支粗弩矢
+    handle(-4.5, 7.5);
+    p.set(...along(-4.8), STEEL[1]);
+    p.set(...perp(...along(-3.6), -1.6), STEEL[2]);
+    const [nx, ny] = along(6.4);
+    for (let i = -12; i <= 12; i++) {
+      const k = i / 12;
+      const [x, y] = perp(...along(6.4 - k * k * 2), k * 6.2);
+      p.set(x, y, Math.abs(k) > 0.85 ? STEEL[3] : STEEL[1]);
+      const [x2, y2] = perp(...along(6.9 - k * k * 2), k * 6);
+      p.set(x2, y2, STEEL[0]);
+    }
+    p.set(nx, ny, GOLD[2]);
+    const [sx, sy] = along(8.4);
+    p.set(sx, sy, STEEL[2]);
+    p.set(...perp(sx, sy, 1), STEEL[2]);
+    p.set(...perp(sx, sy, -1), STEEL[2]);
+    const loaded = (pose.draw ?? 0) > 0.5;
+    const [tx, ty] = loaded ? along(0.6) : along(5.2);
+    p.line(...perp(...along(4.6), 6.2), tx, ty, '#e8e8e8');
+    p.line(...perp(...along(4.6), -6.2), tx, ty, '#e8e8e8');
+    if (loaded) {
+      const [bx, by] = along(0.8);
+      const [ex, ey] = along(9.6);
+      p.line(bx, by, ex, ey, WOOD[2]);
+      p.line(...perp(bx, by, 0.6), ...perp(ex, ey, 0.6), WOOD[1]);
+      p.set(ex, ey, STEEL[3]);
+      p.set(...along(10.4), STEEL[3]);
+    }
   } else if (tool === 'handaxe') {
     // 单手斧：短柄，斧刃朝挥砍的方向，带一个下勾的斧须
     handle(-1.5, 6.6);
@@ -1220,7 +1252,7 @@ const ride = (dir: HeroDir, run: boolean): HeroAnim => ({
  * 出手只在真正攻击的那一下播一遍（地图场景按攻速缩放），两次攻击之间停在架势里不乱挥。
  * 出手动作开头的蓄力要短，hit 是打中的时刻（0-1），特效在这时候放。
  */
-export type FightWeapon = 'sword' | 'spear' | 'dagger' | 'handaxe' | 'greatshield' | 'shortbow' | 'longbow' | 'crossbow' | 'staff' | 'fist';
+export type FightWeapon = 'sword' | 'spear' | 'dagger' | 'handaxe' | 'greatshield' | 'shortbow' | 'longbow' | 'crossbow' | 'warbow' | 'arbalest' | 'staff' | 'fist';
 export const FIGHT: Record<FightWeapon, { hit: number; ms: number }> = {
   sword: { hit: 0.42, ms: 640 },
   spear: { hit: 0.4, ms: 700 },
@@ -1230,13 +1262,15 @@ export const FIGHT: Record<FightWeapon, { hit: number; ms: number }> = {
   shortbow: { hit: 0.55, ms: 720 },
   longbow: { hit: 0.6, ms: 900 },
   crossbow: { hit: 0.22, ms: 1100 },
+  warbow: { hit: 0.42, ms: 460 },
+  arbalest: { hit: 0.2, ms: 1400 },
   staff: { hit: 0.55, ms: 800 },
   fist: { hit: 0.3, ms: 520 },
 };
 /** 战斗站位（用户 10-25）：离怪多远开打，单位格。近战贴身，长枪隔半格，远程隔几格 */
 export const FIGHT_RANGE: Record<FightWeapon, number> = {
   sword: 0, spear: 0.6, dagger: 0, handaxe: 0, greatshield: 0, fist: 0,
-  shortbow: 3, longbow: 4, crossbow: 3.5, staff: 3,
+  shortbow: 3, longbow: 4, crossbow: 3.5, warbow: 3, arbalest: 4.5, staff: 3,
 };
 /** 装备的武器 id（已去掉品质后缀）对应哪套动作 */
 export function fightWeapon(base: string): FightWeapon {
@@ -1322,6 +1356,25 @@ const FIGHT_ANIMS: HeroAnim[] = [
       armB: keys([[0, 1.35], [0.45, 1.0], [0.6, 0.4], [0.75, 1.0], [1, 1.35]], t),
       reach: keys([[0, 0], [0.2, 0], [0.3, -2], [0.45, 0], [1, 0]], t),
       crouch: t > 0.45 && t < 0.85 ? 1 : 0, legF: 0.4, legB: -0.4,
+    })),
+  // 单手战弓（10-26）：弓斜握在腰间；出手是一个快速的抬手速射，几乎不停顿，放完箭弓往下一甩
+  ...fight('warbow', 8,
+    (t) => ({ dir: 'side', tool: 'warbow', armF: 1.2, armB: 0.7, legF: 0.5, legB: -0.45, bob: breathe(t), crouch: 1 }),
+    (t) => ({
+      dir: 'side', tool: 'warbow', crouch: 1, legF: 0.5, legB: -0.45,
+      armF: keys([[0, 1.2], [0.18, 1.6], [0.6, 1.6], [1, 1.2]], t), armB: keys([[0, 0.7], [0.18, 1.55], [0.42, 1.3], [0.6, 0.9], [1, 0.7]], t),
+      draw: keys([[0, 0], [0.15, 0.6], [0.38, 1], [0.44, 0], [1, 0]], t), reach: keys([[0, 0], [0.42, 0], [0.5, -1], [0.7, 0]], t),
+    })),
+  // 十字弩（10-26）：半蹲架稳瞄准；扣扳机后整个人被后坐力顶退，再脚踩脚蹬、两手拉弦上新弩矢
+  ...fight('arbalest', 14,
+    (t) => ({ dir: 'side', tool: 'arbalest', armF: 1.5, elbowF: 0.1, armB: 1.35, draw: 1, crouch: 1, legF: 0.6, legB: -0.5, bob: breathe(t) }),
+    (t) => ({
+      dir: 'side', tool: 'arbalest', elbowF: 0.1, draw: t < 0.18 || t > 0.88 ? 1 : 0,
+      armF: keys([[0, 1.5], [0.18, 1.55], [0.26, 1.95], [0.4, 1.3], [0.55, 0.9], [0.85, 1.2], [1, 1.5]], t),
+      armB: keys([[0, 1.35], [0.4, 1.1], [0.5, 0.3], [0.62, 1.2], [0.72, 0.3], [0.84, 1.1], [1, 1.35]], t),
+      reach: keys([[0, 0], [0.18, 0], [0.26, -3.5], [0.4, -1], [0.5, 0], [1, 0]], t),
+      crouch: keys([[0, 1], [0.26, 0], [0.45, 2], [0.85, 2], [1, 1]], t), legF: keys([[0, 0.6], [0.45, 0.9], [0.85, 0.9], [1, 0.6]], t), legB: -0.5,
+      cape: t > 0.2 && t < 0.45 ? 2 : 0,
     })),
   // 法杖：杖立在身前，顶端微微发亮；出手是举杖蓄力，往前一指放出法球
   ...fight('staff', 10,

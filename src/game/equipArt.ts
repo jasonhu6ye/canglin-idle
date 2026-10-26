@@ -15,6 +15,7 @@ const N = 24;
 const METAL = ['#b08a58', '#d07a3a', '#c8ccd4', '#8a8f99', '#9ad8f0', '#7a7aa0', '#5a4a48', '#4ad898'];
 const ACCENT = ['#6a9a3a', '#3aa89a', '#3a6ae0', '#c83a3a', '#e8f8ff', '#b070ff', '#ff8a2a', '#f0e070'];
 const WOODS = ['#a87a48', '#e0d8c0', '#d0a860', '#8a6a40', '#d08060', '#a82a2a', '#4a4440', '#f4ecc8'];
+const GOLDS = ['#8a6a1a', '#c8a030', '#f0d060', '#fff0a0'];
 const HIDE = ['#a07a50', '#b8925a', '#7e7e84', '#6a4430', '#c8ccd8', '#8a3a22', '#3a3238', '#5a3e8a'];
 const CLOTH = ['#d8d4cc', '#e8d090', '#e8a0b0', '#7aa0d8', '#e8f0f8', '#c87a30', '#c84a2a', '#8a6ad8'];
 const TRIM = ['#8a6a40', '#c87a3a', '#c8ccd4', '#e8c050', '#9ad8f0', '#b070ff', '#ffb040', '#f0e070'];
@@ -303,6 +304,99 @@ function crossbow(p: Pix, t: number) {
     case 5: parts.push(dots(2, 14, 3, 0, A[3])); break;
     case 6: parts.push(ball(prodU - prodBend, 0, 1.2, A)); break;
     case 7: parts.push(ball(prodU - prodBend, 0, 1.4, A), ball(1, 0, 1.1, A)); break;
+  }
+  axis(p, parts, 3, 20);
+}
+
+/** 单手战弓（用户 10-26）：短而反曲很深的骑射弓，搭着一支箭，每阶换一种弓臂和装饰 */
+function warbow(p: Pix, t: number) {
+  const W = ramp(WOODS[t]);
+  const M = ramp(METAL[t]);
+  const A = ramp(ACCENT[t]);
+  const u0 = 0.5;
+  const u1 = 22.5;
+  const mid = (u0 + u1) / 2;
+  const bend = [4.2, 4.4, 4, 4.6, 3.8, 4.4, 4.8, 5][t];
+  const limb = t === 4 || t === 7 ? M : W;
+  const parts: Part[] = [string(u0 + 0.6, u1 - 0.6, t >= 5 ? A[3] : '#e8e0d0', 1.6)];
+  parts.push(bowLimb(u0, u1, bend, 1.7, limb, 2.2));
+  // 搭在弦上的箭：箭杆横穿弓把，箭头冒出弓背
+  parts.push((u, v) => (Math.abs(u - mid) < 0.45 && v > -bend - 4.2 && v < 3 ? (v < -bend - 2.6 ? M[3] : '#c8a070') : null),
+    (u, v) => (Math.abs(u - mid) < 1.3 && v > 2.4 && v < 3.6 && Math.abs(u - mid) > 0.4 ? '#e8e8e8' : null));
+  // 握把：皮绳缠绕
+  parts.push((u, v) => (Math.abs(u - mid) <= 1.5 && Math.abs(v + bend) <= 1.5 ? (Math.floor(u * 1.4) % 2 ? '#4a2e1a' : '#7a5232') : null));
+  switch (t) {
+    case 0: // 木战弓：握把绑一截红布条
+      parts.push((u, v) => (u > mid + 1.4 && u < mid + 3 && v > -bend + 0.6 && v < -bend + 3 ? '#c03a2a' : null)); break;
+    case 1: // 铜战弓：铜弓梢 + 箭台
+      parts.push(ball(u0 + 0.7, 0.8, 1.1, M), ball(u1 - 0.7, 0.8, 1.1, M), bar(mid - 2, 1, 0.5, M)); break;
+    case 2: // 锡刃战弓：两端弓梢是小刀刃
+      parts.push(blade(u0 - 2.5, u0 + 0.8, (q) => 1.2 * q, M, { c: () => 1 }), blade(u1 - 0.8, u1 + 2.5, (q) => 1.2 * (1 - q), M, { c: () => 1 })); break;
+    case 3: // 铁护手战弓：握把外面一圈铁护指
+      parts.push((u, v) => (Math.abs(Math.hypot(u - mid, v + bend + 1.2) - 2.6) < 0.5 && v < -bend + 0.4 ? M[2] : null)); break;
+    case 4: // 钛骨架战弓：弓臂镂空，两端滑轮
+      parts.push(ball(u0 + 0.9, 0.4, 1.3, M), ball(u1 - 0.9, 0.4, 1.3, M), dots(u0 + 3, u1 - 3, 2.4, -bend * 0.7, '#1a2a3a')); break;
+    case 5: // 符文战弓：弓臂一串发光符文，弦也发光
+      parts.push(dots(u0 + 2.5, u1 - 2.5, 2.6, -bend * 0.75, A[3])); break;
+    case 6: // 陨铁战弓：弓梢烧着火羽，箭头通红
+      parts.push((u, v) => (u < u0 + 3 && u > u0 - 1 && v > 0 && v < 3 - (u - u0) * 0.6 ? (v > 1.6 ? A[3] : A[2]) : null),
+        (u, v) => (u > u1 - 3 && u < u1 + 1 && v > 0 && v < 3 - (u1 - u) * 0.6 ? (v > 1.6 ? A[3] : A[2]) : null),
+        (u, v) => (Math.abs(u - mid) < 0.7 && v > -bend - 4.4 && v < -bend - 2.6 ? A[3] : null)); break;
+    case 7: // 精金翼弓：弓臂外侧展开金色羽翼，握把镶宝石
+      parts.push((u, v) => {
+        const q = (u - u0) / (u1 - u0);
+        if (q < 0.05 || q > 0.95 || Math.abs(q - 0.5) < 0.12) return null;
+        const vc = -bend * Math.sin(q * Math.PI) - 1.4;
+        return v < vc && v > vc - 1.6 * Math.sin(q * Math.PI) && Math.round(u * 1.5) % 2 ? GOLDS[2] : null;
+      }, ball(mid, -bend - 0.2, 1.3, A)); break;
+  }
+  axis(p, parts, 3.5, 20.5);
+}
+
+/** 十字弩（用户 10-26）：比弩更重的双手攻城弩，钢弩臂又宽又长，前端脚蹬、后端绞盘，搭一支粗弩矢 */
+function arbalest(p: Pix, t: number) {
+  const W = ramp(WOODS[t]);
+  const M = ramp(METAL[t]);
+  const A = ramp(ACCENT[t]);
+  const parts: Part[] = [];
+  const prodU = 17;
+  const prodLen = [8.5, 9, 9, 9.5, 9.5, 9.5, 10, 10][t];
+  const bend = [2.2, 2.4, 2.6, 2.8, 1.6, 2.8, 3, 3.2][t];
+  const prod = (du: number, len: number, th: number, pal: string[]): Part => (u, v) => {
+    if (Math.abs(v) > len) return null;
+    const d = u - (prodU + du - bend * (1 - (v / len) ** 2));
+    const w = th * (0.6 + (1 - Math.abs(v) / len) * 0.6);
+    return Math.abs(d) <= w ? (d > 0.25 ? pal[3] : d < -0.25 ? pal[1] : pal[2]) : null;
+  };
+  // 粗木托 + 包铁的前段
+  parts.push(shaft(-1, 20, 1.7, W), shaft(11, 18, 1.8, M), grip(-1, 3.5, 1.8, W[1], W[2], 1.6));
+  // 弦拉到扳机前（已上弦）
+  parts.push((u, v) => (Math.abs(v) <= prodLen && Math.abs(u - (prodU - bend * (1 - (v / prodLen) ** 2) - (1 - Math.abs(v) / prodLen) * 8)) < 0.5 ? '#e8e0d0' : null));
+  parts.push(prod(0, prodLen, 1, t === 0 ? W : M));
+  // 粗弩矢：方头
+  parts.push((u, v) => (u > 8 && u < 22.5 && Math.abs(v) < 0.6 ? (u > 20.5 ? M[4] : u < 10 ? '#e8e8e8' : '#b88a58') : null),
+    (u, v) => (u > 20.5 && u < 22.5 && Math.abs(v) < 1.2 - (u - 20.5) * 0.5 ? M[3] : null));
+  // 扳机
+  parts.push((u, v) => (u > 5 && u < 7 && v > 1.6 && v < 3.6 ? M[1] : null));
+  switch (t) {
+    case 0: // 木十字弩：弩臂绑着麻绳
+      parts.push((u, v) => (Math.abs(u - prodU + bend) < 1 && Math.abs(v) < 2.4 && Math.round(v * 2) % 2 ? '#d8c8a0' : null)); break;
+    case 1: // 铜箍十字弩：木托上两道铜箍
+      parts.push(bar(5.5, 2, 0.6, M), bar(9, 2, 0.6, M)); break;
+    case 2: // 锡十字弩：前端一个脚蹬
+      parts.push((u, v) => (Math.abs(Math.hypot(u - 21.5, v) - 1.9) < 0.55 && u > 20.6 ? M[2] : null)); break;
+    case 3: // 铁十字弩：后端带齿轮绞盘
+      parts.push(ball(0.5, -2.6, 1.7, M), dots(-1, 2, 1, -2.6, M[0])); break;
+    case 4: // 钛连发十字弩：双层弩臂 + 上方箭匣
+      parts.push(prod(-2.6, prodLen - 1.5, 0.8, M), (u, v) => (u > 9 && u < 15 && v > -3.8 && v < -1.6 ? (Math.floor(u) % 2 ? M[2] : M[1]) : null)); break;
+    case 5: // 符文十字弩：木托上一串发光符文，弩臂两端发光
+      parts.push(dots(0, 10, 2.5, 0, A[3]), ball(prodU - 0.4, prodLen, 0.9, A), ball(prodU - 0.4, -prodLen, 0.9, A)); break;
+    case 6: // 陨铁十字弩：弩矢头烧红，弩臂带倒刺
+      parts.push((u, v) => (u > 20 && u < 23 && Math.abs(v) < 1.4 ? A[3] : null),
+        (u, v) => (Math.abs(Math.abs(v) - prodLen * 0.7) < 0.5 && u > prodU - bend * 0.4 && u < prodU - bend * 0.4 + 2 ? M[4] : null)); break;
+    case 7: // 精金十字弩：双弩臂、金色鹰翼护板、托上镶宝石
+      parts.push(prod(-2.6, prodLen - 1, 0.8, ramp(GOLDS[2])), ball(prodU - bend, 0, 1.4, A), ball(1.5, 0, 1.2, A),
+        (u, v) => (u > 12 && u < 16 && Math.abs(v) > 1.8 && Math.abs(v) < 3.6 - (u - 12) * 0.35 ? GOLDS[2] : null)); break;
   }
   axis(p, parts, 3, 20);
 }
@@ -1088,6 +1182,8 @@ export function equipIconUrl(key: string, tier: number): string | null {
   else if (key === 'shortbow') bow(p, tier, false);
   else if (key === 'longbow') bow(p, tier, true);
   else if (key === 'crossbow') crossbow(p, tier);
+  else if (key === 'warbow') warbow(p, tier);
+  else if (key === 'arbalest') arbalest(p, tier);
   else if (key === 'staff') staff(p, tier);
   else if (key === 'handaxe') handaxe(p, tier);
   else if (key === 'greatshield') greatshield(p, tier);

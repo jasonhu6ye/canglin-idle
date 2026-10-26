@@ -419,11 +419,30 @@ export class DungeonScene extends Phaser.Scene {
         const far = Math.hypot(to.x - from.x, to.y - from.y);
         if (FIGHT_RANGE[w] < 1 || far < T * 1.5) return land();
         const magic = w === 'staff';
+        const heavy = w === 'arbalest' && this.textures.exists('fx-bolt');
+        const ang = Math.atan2(to.y - from.y, to.x - from.x);
         const pr = magic
           ? this.add.image(from.x, from.y - 4, 'glow').setTint(0x7ac8ff).setBlendMode(Phaser.BlendModes.ADD).setScale(0.18)
-          : this.add.image(from.x, from.y, 'fx-arrow').setRotation(Math.atan2(to.y - from.y, to.x - from.x));
+          : this.add.image(from.x, from.y, heavy ? 'fx-bolt' : 'fx-arrow').setRotation(ang);
         pr.setDepth(D_FLOAT - 2);
-        this.tweens.add({ targets: pr, x: to.x, y: to.y, duration: far * (magic ? 3.6 : 2.6), ease: magic ? 'Quad.easeIn' : 'Linear', onComplete: () => { pr.destroy(); land(); } });
+        // 战弓箭快、带残影；十字弩弩矢快、打中把怪顶退一下（10-26）
+        const k = magic ? 3.6 : w === 'warbow' ? 1.9 : heavy ? 1.7 : 2.6;
+        if (w === 'warbow') {
+          const ghost = this.add.image(from.x, from.y, 'fx-arrow').setRotation(ang).setAlpha(0.35).setTint(0xfff0c0).setDepth(D_FLOAT - 3);
+          this.tweens.add({ targets: ghost, x: to.x, y: to.y, delay: 40, duration: far * k, onComplete: () => ghost.destroy() });
+        }
+        this.tweens.add({
+          targets: pr, x: to.x, y: to.y, duration: far * k, ease: magic ? 'Quad.easeIn' : 'Linear',
+          onComplete: () => {
+            pr.destroy();
+            land();
+            if (heavy && dmg > 0 && spr.active && !this.tweens.isTweening(spr)) {
+              const x0 = spr.x;
+              this.tweens.add({ targets: spr, x: x0 + (spr.x > this.player.x ? 4 : -4), duration: 80, yoyo: true, onComplete: () => { spr.x = x0; } });
+              this.cameras.main.shake(70, 0.0018);
+            }
+          },
+        });
       };
       this.time.delayedCall(dur * f.hit, () => shoot(() => {
         if (!spr.active) return;

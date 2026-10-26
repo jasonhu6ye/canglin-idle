@@ -21,7 +21,7 @@ import { FIGHT, FIGHT_RANGE, fightWeapon, FRAME_H, FRAME_W, HERO_ANIMS, HERO_FEE
 import type { MonsterDef, RegionId, Summary } from '../core/types';
 import { store } from '../store';
 import { Ambience, D_FLOAT, D_GLOW, D_LABEL, D_PARTICLE, D_SMOKE } from './ambience';
-import { paintArrow, paintCrop, paintHit, paintSlash } from './fxArt';
+import { paintArrow, paintBolt, paintCrop, paintHit, paintSlash } from './fxArt';
 import { paintBuilding, paintCave, paintDot, paintGlow, paintProp, paintWindmillBlades, PROP_GLOW } from './art';
 import { DPR } from './dpr';
 import { paintResNode, resGlow, resOf, type ResKind } from './resArt';
@@ -426,6 +426,7 @@ export class MapScene extends Phaser.Scene {
     for (const [k, size, c] of dots) this.textures.addCanvas(k, paintDot(size, c));
     this.textures.addCanvas('fx-slash', paintSlash());
     this.textures.addCanvas('fx-arrow', paintArrow());
+    if (!this.textures.exists('fx-bolt')) this.textures.addCanvas('fx-bolt', paintBolt());
     this.textures.addCanvas('fx-hit', paintHit());
     this.tilesetCanvas = document.createElement('canvas');
     paintTileset(this.tilesetCanvas);
@@ -2245,9 +2246,38 @@ export class MapScene extends Phaser.Scene {
       if (heavy) this.cameras.main.shake(crit ? 130 : 90, crit ? 0.003 : 0.002);
     };
     const from = { x: this.player.x + 6, y: this.player.y - 4 };
-    if (['shortbow', 'longbow', 'crossbow'].includes(key)) {
-      const a = this.add.image(from.x, from.y, 'fx-arrow').setDepth(D_FLOAT - 2).setRotation(Math.atan2(ty - from.y, tx - from.x));
-      this.tweens.add({ targets: a, x: tx - 3, y: ty, duration: Math.max(140, Math.hypot(tx - from.x, ty - from.y) * 2.6), onComplete: () => { a.destroy(); land(); } });
+    if (key === 'arbalest') {
+      // 十字弩（10-26）：粗弩矢飞得快，出膛一团烟；打中时火花更大、怪被顶退一下、镜头小震
+      const ang = Math.atan2(ty - from.y, tx - from.x);
+      const smoke = this.add.image(from.x + 4, from.y, 'p-smoke').setDepth(D_FLOAT - 2).setAlpha(0.7).setScale(0.6);
+      this.tweens.add({ targets: smoke, x: smoke.x - 6, scale: 1.4, alpha: 0, duration: 380, onComplete: () => smoke.destroy() });
+      const b = this.add.image(from.x, from.y, 'fx-bolt').setDepth(D_FLOAT - 2).setRotation(ang);
+      this.tweens.add({
+        targets: b, x: tx - 4, y: ty, duration: Math.max(110, Math.hypot(tx - from.x, ty - from.y) * 1.7),
+        onComplete: () => {
+          b.destroy();
+          land();
+          if (dmg <= 0 || !foe.active) return;
+          const boom = this.add.image(tx, ty, 'fx-hit').setDepth(D_FLOAT - 1).setBlendMode(Phaser.BlendModes.ADD).setTint(0xffe0a0);
+          this.tweens.add({ targets: boom, scale: 2.8, alpha: 0, angle: 90, duration: 300, onComplete: () => boom.destroy() });
+          if (!this.tweens.isTweening(foe)) {
+            const x0 = foe.x;
+            this.tweens.add({ targets: foe, x: x0 + 4, duration: 80, yoyo: true, ease: 'Quad.easeOut', onComplete: () => { foe.x = x0; } });
+          }
+          if (!crit) this.cameras.main.shake(70, 0.0018);
+        },
+      });
+    } else if (['shortbow', 'longbow', 'crossbow', 'warbow'].includes(key)) {
+      // 单手战弓（10-26）：箭飞得更快，后面拖一道残影
+      const fast = key === 'warbow';
+      const ang = Math.atan2(ty - from.y, tx - from.x);
+      const ms = Math.max(fast ? 100 : 140, Math.hypot(tx - from.x, ty - from.y) * (fast ? 1.9 : 2.6));
+      const a = this.add.image(from.x, from.y, 'fx-arrow').setDepth(D_FLOAT - 2).setRotation(ang);
+      if (fast) {
+        const ghost = this.add.image(from.x, from.y, 'fx-arrow').setDepth(D_FLOAT - 3).setRotation(ang).setAlpha(0.35).setTint(0xfff0c0);
+        this.tweens.add({ targets: ghost, x: tx - 3, y: ty, delay: 40, duration: ms, onComplete: () => ghost.destroy() });
+      }
+      this.tweens.add({ targets: a, x: tx - 3, y: ty, duration: ms, onComplete: () => { a.destroy(); land(); } });
     } else if (key === 'staff') {
       const orb = this.add.image(from.x, from.y - 4, 'glow').setTint(0x7ac8ff).setBlendMode(Phaser.BlendModes.ADD).setDepth(D_FLOAT - 2).setScale(0.18);
       this.tweens.add({

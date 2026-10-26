@@ -71,6 +71,18 @@ export function paintArrow(): HTMLCanvasElement {
   return p.canvas();
 }
 
+/** 十字弩的粗弩矢（10-26）：更长更粗，方头钢簇，尾部两片硬翎 */
+export function paintBolt(): HTMLCanvasElement {
+  const p = new Pix(13, 5);
+  p.rect(2, 2, 8, 1, '#8a6a3a');
+  p.rect(2, 1, 8, 1, '#b88a58');
+  p.rect(10, 1, 2, 3, '#c8ccd4');
+  p.set(12, 2, '#ffffff');
+  p.set(10, 0, '#8a9098'); p.set(10, 4, '#8a9098');
+  p.rect(0, 0, 2, 1, '#e8e0d0'); p.rect(0, 4, 2, 1, '#e8e0d0'); p.set(2, 0, '#c84a3a'); p.set(2, 4, '#c84a3a');
+  return p.canvas();
+}
+
 /** 命中火花：十字星芒 */
 export const paintHit = () => canvasOf(9, 9, (ctx) => {
   const px = (x: number, y: number, a: number) => { ctx.fillStyle = `rgba(255,248,220,${a})`; ctx.fillRect(x, y, 1, 1); };

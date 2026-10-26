@@ -715,4 +715,9 @@ export const EN_TEXT: Record<string, string> = {
   "点开其他玩家的名片和好友信息，能看到对方的注册时间和账号年龄（注册了多少天）。": "Player cards and friend details now show when the account was created and how old it is (days since joining).",
   "地点页的「城镇设施」只列你所在的城镇；在野外就列离你最近的城镇，上面的下拉框也能换别的城看。": "\"Town facilities\" on the Locations page now lists only the town you're in, or the nearest one when you're in the wild. Use the dropdown above to view another town.",
   "玩家注册时间、城镇设施列表": "Join dates and town facility list",
+  "新武器：单手战弓、十字弩": "New weapons: Warbow and Arbalest",
+  "单手战弓：远程里出手最快（1.7 秒一箭），单发伤害偏低，单手武器，能配箭袋或火把。制弓台制作，木板 ×2 + 皮革 ×1。": "Warbow: the fastest ranged weapon (one arrow every 1.7s) with lower damage per shot. It's one-handed, so it pairs with a quiver or torch. Made at the Fletching Bench from 2 planks + 1 leather.",
+  "十字弩：最重的远程武器，4.4 秒一发，单发伤害和命中最高，站得最远；双手持握，不能用副手。制弓台制作，木板 ×2 + 锭 ×2 + 皮革 ×1。": "Arbalest: the heaviest ranged weapon, one shot every 4.4s with the highest damage and accuracy per shot, fired from the farthest range. It's two-handed, so no off-hand. Made at the Fletching Bench from 2 planks + 2 bars + 1 leather.",
+  "两种武器 T1-T8 都有，每一阶造型都不一样，宝箱和副本也会掉。": "Both come in T1-T8 with a different look at every tier, and drop from chests and dungeons too.",
+  "战斗表现：战弓是快速抬手速射，箭更快还带残影；十字弩半蹲瞄准，开火有后坐和烟，弩矢打中会把怪顶退一下，再低头拉弦上箭。": "Combat visuals: the Warbow snaps off quick shots with faster arrows and an afterimage. The Arbalest fires from a crouch with recoil and smoke, its bolt knocks the target back, then you crank it to reload.",
 };

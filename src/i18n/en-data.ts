@@ -365,6 +365,8 @@ export const EN_DATA: Record<string, string> = {
   '匕首': 'Dagger',
   '短弓': 'Shortbow',
   '长弓': 'Longbow',
+  '单手战弓': 'Warbow',
+  '十字弩': 'Arbalest',
   '弩': 'Crossbow',
   '法杖': 'Staff',
   '板甲头盔': 'Plate Helm',
