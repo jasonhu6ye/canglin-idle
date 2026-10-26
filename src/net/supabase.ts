@@ -330,7 +330,7 @@ export class SupabaseApi implements OnlineApi {
 
   async friends(): Promise<Friend[]> {
     const me = this.need().id;
-    const who = 'name, pid, last_seen, guild_id, ranks(total, combat)';
+    const who = 'name, pid, last_seen, created_at, guild_id, ranks(total, combat)';
     const rows = ok(await this.sb.from('friends')
       .select(`from_id, to_id, accepted, a:profiles!friends_from_id_fkey(${who}), b:profiles!friends_to_id_fkey(${who})`)) as Row[];
     const list = rows.map((r) => ({ r, incoming: r.to_id === me, o: (r.to_id === me ? r.a : r.b) as Row | null }));
@@ -342,6 +342,7 @@ export class SupabaseApi implements OnlineApi {
       playerId: incoming ? r.from_id : r.to_id, pid: Number(o?.pid), name: o?.name ?? '?', accepted: r.accepted, incoming,
       totalLevel: o?.ranks?.total, combat: o?.ranks?.combat, guildTag: o?.guild_id ? tags.get(o.guild_id) : undefined,
       lastSeen: o?.last_seen ? Date.parse(o.last_seen) : undefined,
+      createdAt: o?.created_at ? Date.parse(o.created_at) : undefined,
     }));
   }
   async addFriend(pid: number) { return ok(await this.sb.rpc('add_friend', { p_pid: pid })) as 'sent' | 'accepted'; }
@@ -373,6 +374,10 @@ export class SupabaseApi implements OnlineApi {
     let n = 0;
     const t = setInterval(() => { n++; if (this.rt_ !== 'ok' || n % 4 === 0) f(); }, 15_000);
     return () => { clearInterval(t); void this.sb.removeChannel(ch); };
+  }
+  async joinedAt(playerId: string) {
+    const r = ok(await this.sb.from('profiles').select('created_at').eq('id', playerId).maybeSingle());
+    return r?.created_at ? Date.parse(r.created_at) : null;
   }
   // ---- GM 增益（10-26）----
   async myGmBuffs(): Promise<GmBuff[]> {

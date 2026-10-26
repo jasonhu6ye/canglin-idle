@@ -131,6 +131,8 @@ export interface Friend {
   combat?: number;
   guildTag?: string;
   lastSeen?: number;
+  /** 注册时间（毫秒） */
+  createdAt?: number;
 }
 /** 好友交易：mine / theirs 是 {物品 id: 数量}，东西都从仓库出 */
 export interface Trade {
@@ -233,6 +235,8 @@ export interface OnlineApi {
   ping(): Promise<number>;
   /** 好友申请、组队邀请、队伍成员有变化 */
   onSocial(f: () => void): () => void;
+  /** 玩家的注册时间（点开名片看，10-26） */
+  joinedAt(playerId: string): Promise<number | null>;
 
   /** GM 增益（10-26）：自己身上的（全服的 + 单独给自己的），登录后定时拉 */
   myGmBuffs(): Promise<GmBuff[]>;

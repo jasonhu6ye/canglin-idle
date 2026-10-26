@@ -5,7 +5,7 @@ import { refreshSocial, useSocial } from '../net/social';
 import { tl } from '../i18n';
 import { openChatPage } from './ChatDock';
 import { emitToGame } from './GameCanvas';
-import { actionName } from './format';
+import { actionName, joinedText } from './format';
 import { Icon } from './icons';
 import { errText } from './Login';
 import { GEAR_SLOTS, gearStats, TOOL_SLOTS } from './panels';
@@ -18,6 +18,8 @@ export function PlayerPopup({ playerId, onClose }: { playerId: string; onClose: 
   const [view, setView] = useState<'info' | 'gear'>('info');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
+  const [joined, setJoined] = useState<number | null | undefined>(undefined);
+  useEffect(() => { let live = true; online.joinedAt(playerId).then((t) => live && setJoined(t)).catch(() => live && setJoined(null)); return () => { live = false; }; }, [playerId]);
   // 对方还在线就跟着刷新
   useEffect(() => { const t = setInterval(() => setP(online.presenceOf(playerId) ?? p), 2000); return () => clearInterval(t); }, [playerId]);
   useEffect(() => {
@@ -56,6 +58,8 @@ export function PlayerPopup({ playerId, onClose }: { playerId: string; onClose: 
             <div><small>{tl('战斗等级')}</small><b>{p.combat ?? '—'}</b></div>
             <div><small>{tl('公会')}</small><b>{p.guildTag ? `[${p.guildTag}]` : tl('无')}</b></div>
             <div><small>{tl('正在')}</small><b className="pp-doing">{p.action ? actionName(p.action) : tl('空闲')}</b></div>
+            <div><small>{tl('注册时间')}</small><b>{joined ? joinedText(joined).date : joined === undefined ? '…' : '—'}</b></div>
+            <div><small>{tl('账号年龄')}</small><b>{joined ? joinedText(joined).age : joined === undefined ? '…' : '—'}</b></div>
           </div>
         ) : (
           <ul className="trade-items pp-gear">

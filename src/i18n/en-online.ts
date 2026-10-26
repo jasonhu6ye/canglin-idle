@@ -214,4 +214,9 @@ export const EN_ONLINE: Record<string, string> = {
   "GM 面板 ": "GM Panel ",
   "管理员专用：给全服或指定玩家发增益": "Admins only: grant buffs to everyone or to one player",
   "打开 GM 面板": "Open GM Panel",
+  "注册时间": "Joined",
+  "账号年龄": "Account age",
+  "今天刚注册": "Joined today",
+  "{0} 天": "{0} days",
+  "{0} 年 {1} 天": "{0} y {1} d",
 };

@@ -5,7 +5,7 @@ import { online, type Friend, type Trade } from '../net';
 import { lacking, refreshSocial, sendRally, useSocial } from '../net/social';
 import { pushNow, useOnline } from '../net/sync';
 import { openChatPage } from './ChatDock';
-import { fmtNum } from './format';
+import { fmtNum, joinedText } from './format';
 import { Icon } from './icons';
 import { errText } from './Login';
 import { openTrade } from './SocialPopups';
@@ -195,6 +195,8 @@ function FriendDetail({ s, f, online: on, onBack }: { s: GameState; f: Friend; o
         <div><small>{tl('总等级')}</small><b>{f.totalLevel ?? '—'}</b></div>
         <div><small>{tl('战斗等级')}</small><b>{f.combat ?? '—'}</b></div>
         <div><small>{tl('公会')}</small><b>{f.guildTag ? `[${f.guildTag}]` : tl('无')}</b></div>
+        <div><small>{tl('注册时间')}</small><b>{f.createdAt ? joinedText(f.createdAt).date : '—'}</b></div>
+        <div><small>{tl('账号年龄')}</small><b>{f.createdAt ? joinedText(f.createdAt).age : '—'}</b></div>
       </div>
       <div className="go friend-actions">
         <button className="primary" onClick={() => openChatPage('private', f.playerId)}>{tl('私聊')}</button>

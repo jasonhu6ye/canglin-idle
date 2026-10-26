@@ -8,6 +8,12 @@ import { tl } from '../i18n';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-10-26-b', date: tl('10 月 26 日'), title: tl('玩家名片显示注册时间'),
+    lines: [
+      tl('点开其他玩家的名片和好友信息，能看到对方的注册时间和账号年龄（注册了多少天）。'),
+    ],
+  },
+  {
     id: '2026-10-26-a', date: tl('10 月 26 日'), title: tl('物品来源一键开工'),
     lines: [
       tl('物品详情的来源里点「寻路」，现在会直接开始这项工作：角色自己走到你选的那个地点，到了就开挖，不再走过去站着发呆。离线也照常算。'),

@@ -711,4 +711,6 @@ export const EN_TEXT: Record<string, string> = {
   "开了最后的宝箱才算通关，通关后这个洞口就不能再进了。": "A dungeon counts as cleared once you open the final chest; after that the gate can't be entered again.",
   "物品来源一键开工": "One-tap gathering from item sources",
   "物品详情的来源里点「寻路」，现在会直接开始这项工作：角色自己走到你选的那个地点，到了就开挖，不再走过去站着发呆。离线也照常算。": "Tapping \"Go\" on a source in item details now starts that job right away: your character walks to the spot you picked and gets to work on arrival instead of standing around. Works offline too.",
+  "玩家名片显示注册时间": "Player cards show join date",
+  "点开其他玩家的名片和好友信息，能看到对方的注册时间和账号年龄（注册了多少天）。": "Player cards and friend details now show when the account was created and how old it is (days since joining).",
 };

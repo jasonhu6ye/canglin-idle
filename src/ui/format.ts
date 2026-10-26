@@ -35,3 +35,12 @@ export const actionName = (id: string) => ACTIONS[id]?.name ?? id;
 
 export const stacks = (list: ItemStack[] | undefined) =>
   (list ?? []).map((s) => `${ITEMS[s.item].name}×${s.qty}`).join(' + ');
+
+/** 注册时间和账号年龄（点开玩家名片看，用户 10-26）：「2026-10-25」「3 天」 */
+export function joinedText(t: number, now = Date.now()) {
+  const d = new Date(t);
+  const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const days = Math.max(0, Math.floor((now - t) / 86_400_000));
+  const age = days === 0 ? tl('今天刚注册') : days < 365 ? tl`${days} 天` : tl`${Math.floor(days / 365)} 年 ${days % 365} 天`;
+  return { date, age };
+}

@@ -172,6 +172,7 @@ export class LocalApi implements OnlineApi {
   async cancelTrade() {}
   async claimTrade() { return false; }
   async ping() { return 0; }
+  async joinedAt() { return null; }
   // GM 增益：本地假后端里自己就是管理员（测试用）
   async myGmBuffs() { return (this.db.gm ?? []).filter((b) => b.targetPid == null || b.targetPid === this.db.me?.pid).map(({ targetPid, targetName: _n, ...b }) => ({ ...b, all: targetPid == null })); }
   async gmList() { return [...(this.db.gm ?? [])]; }

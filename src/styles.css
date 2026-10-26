@@ -808,7 +808,7 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .guild .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #5a4a3a; margin-right: 6px; vertical-align: middle; }
 .guild .dot.on { background: #6ae05a; box-shadow: 0 0 4px #6ae05a; }
 .guild .good { color: #8ee08a; }
-.friend-card { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 10px 6px; margin: 6px 0; text-align: center; }
+.friend-card { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 10px 6px; margin: 6px 0; text-align: center; }
 .friend-card div { display: flex; flex-direction: column; gap: 2px; }
 .friend-card small { color: var(--muted); font-size: 11px; }
 .friend-actions button { flex: 1; }
