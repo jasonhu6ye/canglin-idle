@@ -9,6 +9,8 @@ import { retry, signOut, useOnline } from '../net/sync';
 import { errText as baseErr } from './Login';
 import { openChatPage } from './ChatDock';
 import { tl } from '../i18n';
+import { GuildPlay, weeklyOf } from './GuildPlay';
+import { setGuildLv } from '../core/guild';
 
 /** 公会页（G 键）。排行榜、账号设置也在这个文件里，分别从「更多」打开；好友在聊天页 */
 type Fn = () => void;
@@ -149,9 +151,12 @@ function GuildTab({ s }: { s: GameState }) {
     setMembers(g ? await online.guildMembers(g.id) : []);
   }, []);
   useEffect(() => { void load().catch((e) => act.setErr(errText(e))); }, [load, me?.guildId]);
+  // 不在公会了：公会加成也去掉
+  useEffect(() => { if (guild === null) store.dispatch((g) => setGuildLv(g, 0)); }, [guild]);
   if (guild === undefined) return <p className="muted">{tl('读取中…')}{act.err && <span className="err"> {act.err}</span>}</p>;
   if (!guild) return <NoGuild s={s} onJoined={load} />;
-  const myRole = members.find((m) => m.playerId === me?.id)?.role ?? 'member';
+  const mine = members.find((m) => m.playerId === me?.id);
+  const myRole = mine?.role ?? 'member';
   const isLead = myRole === 'leader';
   const canManage = myRole !== 'member';
   return (
@@ -171,13 +176,14 @@ function GuildTab({ s }: { s: GameState }) {
           }}>{tl('改公告')}</button>
         </div>
       )}
+      <GuildPlay s={s} guild={guild} members={members} me={mine} role={myRole} act={act} reload={load} />
       <h3>{tl('成员 ')}<small className="muted">{members.length} / {guild.maxMembers}</small></h3>
       <ul className="guild-list">
-        {members.sort((a, b) => order(a.role) - order(b.role) || b.totalLevel - a.totalLevel).map((m) => (
+        {members.sort((a, b) => order(a.role) - order(b.role) || weeklyOf(b) - weeklyOf(a) || b.contrib - a.contrib).map((m) => (
           <li key={m.playerId}>
             <span>{m.name} <small className="muted">{ROLE[m.role]}</small></span>
             <span className="row-tools">
-              <small className="muted">{tl`总等级 ${m.totalLevel}`}</small>
+              <small className="muted">{tl`总等级 ${m.totalLevel} · 贡献 ${fmtNum(m.contrib)}（本周 ${fmtNum(weeklyOf(m))}）`}</small>
               {m.playerId !== me?.id && isLead && (
                 <select value={m.role} disabled={act.busy} onChange={(e) => {
                   const r = e.target.value as GuildRole;
@@ -198,9 +204,8 @@ function GuildTab({ s }: { s: GameState }) {
       <div className="go">
         <button onClick={() => openChatPage('guild')}>{tl('公会聊天')}</button>
         <button disabled={act.busy} onClick={() => confirm(isLead && members.length > 1 ? tl('你是会长，退出后会长自动传给副会长或最早入会的成员。确定退出？') : tl('确定退出公会？'))
-          && void act.run(async () => { await online.leaveGuild(); await load(); })}>{tl('退出公会')}</button>
+          && void act.run(async () => { await online.leaveGuild(); store.dispatch((g) => setGuildLv(g, 0)); await load(); })}>{tl('退出公会')}</button>
       </div>
-      <p className="muted small-note">{tl('公会任务、公会仓库和公会加成下一步开放。')}</p>
     </>
   );
 }

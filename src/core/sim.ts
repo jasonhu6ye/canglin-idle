@@ -1,5 +1,6 @@
 import { partyXpPct } from './party';
 import { cleanGm, gmPct, setGmClock } from './gm';
+import { GUILD_MAX_LV, guildPct } from './guild';
 import { APT_MAX, APT_MIN, FOAL, growMs, HORSE_XP, horseItem, RANCH, RANCH_PENS } from './ranch';
 import { baseOf, qid, QUALITY_VALUE, rollQuality } from './quality';
 import { HW_POINT, HW_TIERS, hwFight, hwOpen, hwTierOf, hwWait } from './halloween';
@@ -176,6 +177,7 @@ export function migrate(raw: unknown): GameState | null {
     lastStop: obj<NonNullable<GameState['lastStop']>>(s.lastStop) && ACTIONS[s.lastStop!.action] && okMode(s.lastStop!.mode) ? s.lastStop : null,
     quest: obj<GameState['quest']>(s.quest) && Number.isInteger(s.quest!.i) && s.quest!.i >= 0 ? { i: s.quest!.i, n: Math.max(0, num(s.quest!.n, 0)) } : { i: 0, n: 0 },
     gmBuffs: cleanGm(s.gmBuffs),
+    guildLv: Number.isInteger(s.guildLv) && s.guildLv! > 0 ? Math.min(GUILD_MAX_LV, s.guildLv!) : undefined,
     buffs: Object.fromEntries(Object.entries(obj<GameState['buffs']>(s.buffs) ?? {}).filter(([, b]) => b && Number.isFinite(b.pct) && Number.isFinite(b.ms) && b.ms > 0)),
     mounted: !!s.mounted && !!equipment.mount,
     redeemed: arr<string>(s.redeemed).filter((c) => typeof c === 'string'),
@@ -366,10 +368,10 @@ export const levelBonus = (s: GameState, a: SkillAction) => Math.max(0, level(s,
 /** 当前生效的料理增益比例 */
 export const buffPct = (s: GameState, k: BuffKind) => s.buffs?.[k]?.pct ?? 0;
 /** 料理增益 + GM 增益：结算都用这个 */
-export const boostPct = (s: GameState, k: BuffKind) => buffPct(s, k) + gmPct(s, k);
+export const boostPct = (s: GameState, k: BuffKind) => buffPct(s, k) + gmPct(s, k) + guildPct(s, k);
 /** GM 稀有掉落：几率掉落的掉率按比例提高，最多到必掉 */
 const dropChance = (s: GameState, c: number) => Math.min(1, c * (1 + gmPct(s, 'drop') + gearSum(s, 'luck')));
-const coinQty = (s: GameState, item: string, n: number) => (item === 'coins' ? Math.round(n * (1 + gmPct(s, 'coins'))) : n);
+const coinQty = (s: GameState, item: string, n: number) => (item === 'coins' ? Math.round(n * (1 + gmPct(s, 'coins') + guildPct(s, 'coins'))) : n);
 
 /** 吃下一份食物：回血，有增益就挂上（同类只留一个，新的覆盖旧的） */
 export function applyFood(s: GameState, id: string) {
@@ -1528,18 +1530,22 @@ export function salvage(prev: GameState, items: Record<string, number>): [GameSt
 
 /** 仓库「整理」（用户 10-25）：按种类、阶级、名字、品质重新排好 */
 const SORT_CAT = ['gear', 'tool', 'food', 'potion', 'resource', 'material', 'seed', 'loot', 'deco', 'misc'];
-export function sortBank(prev: GameState): GameState {
+/** 仓库「整理」的顺序：按类别、阶级、同名、品质高的在前（公会仓库也用） */
+export function sortItemIds(list: string[]) {
   const key = (id: string) => {
     const it = ITEMS[id];
     if (!it) return [99, 0, id, 0] as const;
     const cat = SORT_CAT.indexOf(it.category);
     return [cat < 0 ? 98 : cat, it.tier ?? -1, baseOf(id), -(it.quality ?? 0)] as const;
   };
-  const ids = Object.keys(prev.bank).filter((id) => id !== 'coins').sort((a, b) => {
+  return [...list].sort((a, b) => {
     const x = key(a);
     const y = key(b);
     return x[0] - y[0] || x[1] - y[1] || (x[2] < y[2] ? -1 : x[2] > y[2] ? 1 : 0) || x[3] - y[3];
   });
+}
+export function sortBank(prev: GameState): GameState {
+  const ids = sortItemIds(Object.keys(prev.bank).filter((id) => id !== 'coins'));
   const bank: Record<string, number> = {};
   if (prev.bank.coins) bank.coins = prev.bank.coins;
   for (const id of ids) bank[id] = prev.bank[id];

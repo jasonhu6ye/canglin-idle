@@ -325,6 +325,8 @@ export interface GameState {
   buffs?: Partial<Record<BuffKind, { pct: number; ms: number }>>;
   /** GM 增益（服务器下发） */
   gmBuffs?: GmBuff[];
+  /** 所在公会的等级（公会加成用，登录后从服务器同步；没加公会是空） */
+  guildLv?: number;
   /** 新手任务：第几个、当前进度 */
   quest?: { i: number; n: number };
   bestiary?: Record<string, number>;
