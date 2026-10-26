@@ -276,6 +276,12 @@ ENH_STONE_NAMES.forEach((name, i) => {
     tier: i, desc: tl`T${i + 1} 强化石的碎片。集齐 ${SHARD_PER_STONE} 个，在背包或仓库里点「合成」得到 1 颗同阶强化石。副本里的怪和副本宝箱会掉。`,
   });
 });
+/** 洞察之瞳（用户 10-26）：洞察者背包的特殊材料，只能开副本宝箱得到（宝箱越好越容易出，也会开出比钥匙低阶的） */
+TIERS.forEach((t, i) => {
+  item(`sageeye_${i + 1}`, tl`T${i + 1} 洞察之瞳`, 'material', Math.round(60 + t.level * 20), {
+    tier: i, desc: tl`T${i + 1} 洞察者背包的特殊材料。只能从副本宝箱里开出来：宝箱品质越好越容易出，T4 以上的副本也会开出更低阶的洞察之瞳。`,
+  });
+});
 /** 原来的 4 种强化石 10-25 删掉了（用户要求）：旧存档里的按原售价折成金币 */
 export const OLD_ENH: Record<string, number> = { enh_basic: 32, enh_mid: 380, enh_high: 680, enh_legend: 1160 };
 
@@ -495,6 +501,30 @@ TIERS.forEach((t, i) => {
     });
   }
 });
+/*
+ * 背包（用户 10-26）：T1-T8，装在角色的背包栏，多给背包格子。名字每阶不同，不再叫「x制背包」。
+ * 洞察者背包：不加格子，改成按百分比多拿经验，但每多拿 1 点经验要从仓库扣 1 金币（烧钱练级），金币不够就不加。
+ * 两种都占背包栏，二选一。工艺制作，没有品质。
+ */
+export const PACK_NAMES = [tl('粗布行囊'), tl('旅行背包'), tl('猎人背囊'), tl('冒险背包'), tl('远征背包'), tl('精工背包'), tl('秘纹背包'), tl('星辰背包')];
+export const PACK_SLOTS = [4, 6, 8, 10, 12, 14, 16, 20];
+export const SAGE_PCT = [0.05, 0.08, 0.11, 0.14, 0.18, 0.22, 0.26, 0.32];
+export const packId = (tier: number) => `pack_${tier + 1}`;
+export const sagePackId = (tier: number) => `sagepack_${tier + 1}`;
+export const packMats = (i: number): [string, number][] => [[`leather_${i + 1}`, 3], [`cloth_${i + 1}`, 2], [`${TIERS[i].id}_bar`, 1]];
+// 洞察者背包比普通背包难做（用户 10-26）：材料更多，还要副本宝箱才出的洞察之瞳，等级要求更高
+export const sagePackMats = (i: number): [string, number][] => [[`cloth_${i + 1}`, 4], [`leather_${i + 1}`, 3], [`crystal_${i + 1}`, 3], [`sageeye_${i + 1}`, 2]];
+const packValue = (mats: [string, number][]) => Math.round(mats.reduce((v, [id, q]) => v + ITEMS_SO_FAR(id) * q, 0) * 1.6);
+TIERS.forEach((t, i) => {
+  item(packId(i), `T${i + 1} ${PACK_NAMES[i]}`, 'gear', packValue(packMats(i)), {
+    tier: i, desc: tl`背在身上，背包多 ${PACK_SLOTS[i]} 格。`,
+    equip: { slot: 'pack', skill: 'hitpoints', level: t.level, attack: 0, strength: 0, defence: 0, bag: PACK_SLOTS[i] },
+  });
+  item(sagePackId(i), `T${i + 1} ${tl('洞察者背包')}`, 'gear', packValue(sagePackMats(i)), {
+    tier: i, desc: tl`所有技能获得的经验 +${Math.round(SAGE_PCT[i] * 100)}%，但每多拿 1 点经验要从仓库扣 1 金币，金币不够时不加成。不加背包格子。`,
+    equip: { slot: 'pack', skill: 'hitpoints', level: t.level, attack: 0, strength: 0, defence: 0, sage: SAGE_PCT[i] },
+  });
+});
 /** 删掉的旧饰品（10-26）：id → 普通品质售价，读档时折成金币 */
 export const OLD_JEWELS: Record<string, number> = {
   sapphire_ring: 520, sapphire_amulet: 540, ruby_ring: 720, ruby_amulet: 740, diamond_ring: 1000, diamond_amulet: 1020,
@@ -631,7 +661,7 @@ item(HW_BOX, tl('南瓜礼盒'), 'loot', 0, {
 });
 
 // 装备和工具的品质（用户 10-25）：每件装备再生成 5 个品质版本，属性和价格按品质放大；普通版名字也带「普通·」
-for (const it of itemList.filter((x) => x.equip && !x.equip.move)) {
+for (const it of itemList.filter((x) => x.equip && !x.equip.move && x.equip.slot !== 'pack')) {
   const base = { ...it, equip: { ...it.equip! } };
   for (let q = 0; q < QUALITY_NAME.length; q++) {
     const e = base.equip;
@@ -970,6 +1000,9 @@ TIERS.forEach((t, i) => {
     const inputs = jewelMats(j, i).map(([m, q]) => one(m, q));
     make(`craft_${id}`, ITEMS[id].name, 'crafting', t.level + j.plus, inputs, [one(id)], Math.max(1.5, inputs.reduce((a, x) => a + x.qty, 0) * 0.6));
   }
+  // 背包（10-26）
+  make(`craft_${packId(i)}`, ITEMS[packId(i)].name, 'crafting', t.level + 3, packMats(i).map(([m, q]) => one(m, q)), [one(packId(i))], 4);
+  make(`craft_${sagePackId(i)}`, ITEMS[sagePackId(i)].name, 'crafting', t.level + 8, sagePackMats(i).map(([m, q]) => one(m, q)), [one(sagePackId(i))], 8);
 });
 
 for (const [fish, name, lvl] of FISH) {
@@ -1598,11 +1631,21 @@ const NODES_OF: Record<string, MapNode[]> = {};
 for (const n of NODES) if (!n.sea) for (const a of n.actions) (NODES_OF[a] ??= []).push(n);
 /** 能做这个动作的所有地点（两座城的同类建筑会重复） */
 export const nodesOfAction = (id: string | undefined): MapNode[] => (id ? NODES_OF[id] ?? [] : []);
-/** 动作所在地点；给了位置就挑离它最近的那个 */
-export function nodeOfAction(id: string | undefined, near?: { x: number; y: number }): MapNode | undefined {
+/** 动作所在地点；给了位置就挑过去最快的那个（按真实步行距离，给了石碑就把传送也算上） */
+export function nodeOfAction(id: string | undefined, near?: { x: number; y: number }, stones?: string[], speed?: number): MapNode | undefined {
   const all = nodesOfAction(id);
   if (!near || all.length < 2) return all[0];
-  return all.reduce((a, b) => (Math.hypot(b.x - near.x, b.y - near.y) < Math.hypot(a.x - near.x, a.y - near.y) ? b : a));
+  return fastest(all, near, stones, speed)?.node;
+}
+/** 一组地点里从 from 过去最快的那个，和要走多久 */
+export function fastest(nodes: MapNode[], from: { x: number; y: number }, stones?: string[], speed = WALK_TILES_PER_SEC): { node: MapNode; route: Route } | undefined {
+  const r = routeFrom(stones, from, speed);
+  let best: { node: MapNode; route: Route } | undefined;
+  for (const node of nodes) {
+    const route = r(standOf(node));
+    if (!best || route.ms < best.route.ms) best = { node, route };
+  }
+  return best;
 }
 /** 干活时站的格子：地点正下方一格 */
 export const standOf = (n: MapNode) => ({ x: n.x, y: n.y + 1 });
@@ -1610,36 +1653,78 @@ export const standOf = (n: MapNode) => ({ x: n.x, y: n.y + 1 });
 export const SPAWN_TILE = townXY(167, 175);
 /** 步行速度（格/秒），坐骑以后乘倍率 */
 export const WALK_TILES_PER_SEC = 4;
-/** 自动寻路要走多久：直线距离 × 1.25 估算绕路 */
-export function travelMs(from: { x: number; y: number }, to: { x: number; y: number }, speed = WALK_TILES_PER_SEC) {
-  return Math.round((Math.hypot(to.x - from.x, to.y - from.y) * 1.25 * 1000) / speed);
+type Pt = { x: number; y: number };
+/** 步行距离场（地图模块注册）：从几个起点出发，到某点最近走多远（格）、从第几个起点出发；走不到 d = Infinity */
+export type NavField = (seeds: Pt[]) => (p: Pt) => { d: number; i: number };
+let navField: NavField | undefined;
+/** 地图加载后注册真实的步行距离；没注册（单元测试、地图还没载入）就按直线 × 1.25 估 */
+export const setNavField = (f: NavField | undefined) => { navField = f; };
+const straight = (from: Pt) => (p: Pt) => Math.hypot(p.x - from.x, p.y - from.y) * 1.25;
+/** 从 from 出发走到各处要走多少格 */
+export function walkFrom(from: Pt): (to: Pt) => number {
+  if (!navField) return straight(from);
+  const f = navField([from]);
+  const s = straight(from);
+  return (to) => {
+    const d = f(to).d;
+    return Number.isFinite(d) ? d : s(to);
+  };
+}
+/** 自动寻路要走多久：按真实的绕路距离（隔着河湖要绕的都算上） */
+export function travelMs(from: Pt, to: Pt, speed = WALK_TILES_PER_SEC) {
+  return Math.round((walkFrom(from)(to) * 1000) / speed);
 }
 
 /** 自动寻路顺路用石碑传送时，传送本身算多久 */
 export const STONE_JUMP_MS = 3000;
 export interface Route { ms: number; via?: [string, string] }
 /**
- * 自动寻路的路线（用户 10-23：寻路要会自己用传送石碑）：在所有已激活的石碑里挑「走到 A + 传送 + 从 B 走到终点」最快的一对，
- * 比直接走快就用石碑（10-25 用户反馈：以前只看离起点、终点最近的两座，还要省两成才用，明明传送更快却跑过去）。
+ * 从 from 出发去各处的最快路线（用户 10-23：寻路要会自己用传送石碑）：
+ * 直接走，或者「走到最近的石碑 A + 传送 + 从离终点最近的石碑 B 走过去」，哪个快用哪个。
+ * 10-26 用户反馈：以前按直线估算，隔着河、湖的地方明明传送更快却跑过去；现在按真实步行距离比较。
  */
-export function planRoute(stones: string[] | undefined, from: { x: number; y: number }, to: { x: number; y: number }, speed = WALK_TILES_PER_SEC): Route {
-  const direct = travelMs(from, to, speed);
+export function routeFrom(stones: string[] | undefined, from: Pt, speed = WALK_TILES_PER_SEC): (to: Pt) => Route {
+  const walk = walkFrom(from);
+  const ms = (tiles: number) => Math.round((tiles * 1000) / speed);
   const lit = WAYSTONES.filter((n) => stones?.includes(n.id));
-  if (lit.length < 2) return { ms: direct };
-  const toA = lit.map((n) => travelMs(from, standOf(n), speed));
-  const fromB = lit.map((n) => travelMs(standOf(n), to, speed));
-  let best: Route = { ms: direct };
-  // 省不到 2 秒就别绕去石碑了，免得来回折腾
-  let bestMs = direct - 2000;
-  lit.forEach((a, i) => lit.forEach((b, j) => {
-    if (i === j) return;
-    const ms = toA[i] + STONE_JUMP_MS + fromB[j];
-    if (ms < bestMs) {
-      bestMs = ms;
-      best = { ms, via: [a.id, b.id] };
+  if (lit.length < 2) return (to) => ({ ms: ms(walk(to)) });
+  const stands = lit.map(standOf);
+  const toA = stands.map((p) => ms(walk(p)));
+  // 走到哪座石碑最快；终点最近的石碑正好是它时用第二快的
+  const order = toA.map((_, i) => i).sort((a, b) => toA[a] - toA[b]);
+  const field = navField?.(stands);
+  const fromB = (to: Pt): { i: number; ms: number }[] => {
+    const hit = field?.(to);
+    if (hit && hit.i >= 0 && Number.isFinite(hit.d)) {
+      const out = [{ i: hit.i, ms: ms(hit.d) }];
+      // 离终点最近的石碑正好是走过去最快的那座：再看看除它以外离终点最近的
+      if (hit.i === order[0] && stands.length > 1) {
+        const rest = stands.map((_, j) => j).filter((j) => j !== order[0]);
+        const h2 = navField!(rest.map((j) => stands[j]))(to);
+        if (h2.i >= 0 && Number.isFinite(h2.d)) out.push({ i: rest[h2.i], ms: ms(h2.d) });
+      }
+      return out;
     }
-  }));
-  return best;
+    return stands.map((p, i) => ({ i, ms: ms(walkFrom(p)(to)) }));
+  };
+  return (to) => {
+    const direct = ms(walk(to));
+    let best: Route = { ms: direct };
+    // 省不到 2 秒就别绕去石碑了，免得来回折腾
+    let bestMs = direct - 2000;
+    for (const b of fromB(to)) {
+      const a = order[0] === b.i ? order[1] : order[0];
+      const t = toA[a] + STONE_JUMP_MS + b.ms;
+      if (t < bestMs) {
+        bestMs = t;
+        best = { ms: t, via: [lit[a].id, lit[b.i].id] };
+      }
+    }
+    return best;
+  };
+}
+export function planRoute(stones: string[] | undefined, from: Pt, to: Pt, speed = WALK_TILES_PER_SEC): Route {
+  return routeFrom(stones, from, speed)(to);
 }
 
 /** 世界地图危险度：按地点最强怪物和玩家战斗等级的差距 */

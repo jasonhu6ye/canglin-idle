@@ -1,4 +1,4 @@
-import { FARM_RECTS, MAP_H, MAP_W, MID_BOX, NODES, OLD_BOX, town2XY, TOWN2_CENTER, townXY, type MapNode } from '../core/data';
+import { FARM_RECTS, setNavField, MAP_H, MAP_W, MID_BOX, NODES, OLD_BOX, town2XY, TOWN2_CENTER, townXY, type MapNode } from '../core/data';
 import { TOWNS, type TownDef, type TownTheme } from '../core/towns';
 import type { RegionId } from '../core/types';
 
@@ -873,6 +873,8 @@ const coarsePrev = new Int32Array(CW * CH);
 let coarseId = 0;
 const cellOf = (p: Pt) => (clampY(p.y) >> CS) * CW + (clampX(p.x) >> CS);
 
+/** 粗寻路时路上便宜多少：太便宜（以前 0.55）会为了走路绕一大圈 */
+let ROAD_K = 0.85;
 /** 粗网格 A*：返回从起点格到终点格的格子序列（含两端） */
 function coarsePath(from: Pt, to: Pt): number[] | null {
   const id = ++coarseId;
@@ -883,7 +885,7 @@ function coarsePath(from: Pt, to: Pt): number[] | null {
   const h = (i: number) => {
     const dx = Math.abs((i % CW) - gx);
     const dy = Math.abs(((i / CW) | 0) - gy);
-    return (Math.max(dx, dy) + 0.414 * Math.min(dx, dy)) * 0.55;
+    return (Math.max(dx, dy) + 0.414 * Math.min(dx, dy)) * ROAD_K;
   };
   coarseSeen[start] = id;
   coarseG[start] = 0;
@@ -905,7 +907,7 @@ function coarsePath(from: Pt, to: Pt): number[] | null {
       if (!coarseOpen[j] && j !== goal) continue;
       if (dx && dy && (!coarseOpen[y * CW + nx] || !coarseOpen[ny * CW + x])) continue;
       if (riverBetween(i, j)) continue;
-      const ng = g0 + c * (coarseRoad[j] ? 0.55 : 1);
+      const ng = g0 + c * (coarseRoad[j] ? ROAD_K : 1);
       if (coarseSeen[j] === id && coarseG[j] <= ng + 1e-3) continue;
       coarseSeen[j] = id;
       coarseG[j] = ng;
@@ -930,12 +932,13 @@ function rvAt(c: number) {
   return v;
 }
 function riverBetween(i: number, j: number) {
-  if ((rvAt(i) > 0) === (rvAt(j) > 0)) return false;
-  if (coarseRoad[i] && coarseRoad[j]) return false;
   const x = clampX((j % CW) * C + 4);
   const y = clampY(Math.floor(j / CW) * C + 4);
+  // 先看这个区域有没有河（便宜），没有就不用算噪声
   const g = RIVER[REGION_IDS[regionIdx(x, y)]];
   if (!g || !blockedG[G[g]]) return false;
+  if ((rvAt(i) > 0) === (rvAt(j) > 0)) return false;
+  if (coarseRoad[i] && coarseRoad[j]) return false;
   // 城镇周围、特色地点里没有河（见 landform）
   if (Math.hypot(x - SPAWN_GUESS.x, y - SPAWN_GUESS.y) < 74 || (Math.abs(x - T2.x) < 74 && Math.abs(y - T2.y) < 64) || townClearAt(x, y)) return false;
   return siteGround(x, y) === undefined;
@@ -1343,12 +1346,23 @@ export function findPath(from: Pt, to: Pt, maxNodes = MAX_NODES): Pt[] | null {
   const far = Math.max(Math.abs(from.x - to.x), Math.abs(from.y - to.y)) > 48;
   // 远路：先在粗网格上找走廊，再沿走廊一段一段细找；绕湖绕河也很快
   if (far) {
+    // 先找最短的走廊（不太偏向大路）；走不通几次就退回沿大路走（路都是连通的，一定到得了）
+    const p = farPath(from, to, ROAD_K, 3, true) ?? farPath(from, to, 0.55, 12, false);
+    if (p) return p;
+  }
+  return astar(from, to, maxNodes);
+}
+
+function farPath(from: Pt, to: Pt, roadK: number, rounds: number, restart: boolean): Pt[] | null {
+  const keepK = ROAD_K;
+  ROAD_K = roadK;
+  try {
     const out: Pt[] = [];
     let cur = from;
-    // 粗网格每格只采一个点，会漏看细山脊、窄河：某段细找走不通，就把那几格粗格子标成不通，从当前位置重新找走廊
-    for (let round = 0; round < 12; round++) {
+    // 粗网格每格只采一个点，会漏看细山脊、窄河：某段细找走不通，就把那几格粗格子标成不通，重新找走廊
+    for (let round = 0; round < rounds; round++) {
       const cp = coarsePath(cur, to);
-      if (!cp) break;
+      if (!cp) return null;
       let k = 0;
       let stuck = false;
       while (k < cp.length - 1) {
@@ -1367,10 +1381,17 @@ export function findPath(from: Pt, to: Pt, maxNodes = MAX_NODES): Pt[] | null {
         k = next;
       }
       if (!stuck) return out;
-      if (!learnBlocked(cp.slice(k, k + 14), cellOf(to))) break;
+      if (!learnBlocked(cp.slice(k, k + 14), cellOf(to))) return null;
+      // 从起点重新规划：接着走过的半截路找，会先钻进死路再折回来（10-26 用户反馈绕很多弯路）
+      if (restart) {
+        out.length = 0;
+        cur = from;
+      }
     }
+    return null;
+  } finally {
+    ROAD_K = keepK;
   }
-  return astar(from, to, maxNodes);
 }
 
 /** 把走廊上压着障碍（1/8 以上走不了：山脊、成排的石头树木）的粗格子标成不通；返回标了几格 */
@@ -1432,6 +1453,241 @@ function astar(from: Pt, to: Pt, maxNodes: number): Pt[] | null {
   const path: Pt[] = [];
   for (let k = goal; k !== start; k = prevBuf.get(k)!) path.push({ x: k % MAP_W, y: (k / MAP_W) | 0 });
   return path.reverse();
+}
+
+// ---- 寻路估时：粗格子 4×4 一组按连通块切开，块之间连边，在块图上跑 Dijkstra ----
+// 以前按直线 ×1.25 估算，隔着河、湖、海峡的地方明明要绕一大圈，也会觉得走过去比传送快（10-26 用户反馈）
+
+const NB = 4;
+let navComp: Int32Array | null = null;
+let navX = new Float32Array(0);
+let navY = new Float32Array(0);
+let navStart = new Int32Array(0);
+let navAdj = new Int32Array(0);
+let navW = new Float32Array(0);
+let navN = 0;
+
+const NAV_DX = [1, -1, 0, 0, 1, 1, -1, -1];
+const NAV_DY = [0, 0, 1, -1, 1, -1, 1, -1];
+/** 每个粗格子往 8 个方向能不能走（位掩码），和粗寻路的规则一样 */
+function* navMasks(m: Uint8Array) {
+  for (let y = 0; y < CH; y++) {
+    if (!(y & 7)) yield;
+    for (let x = 0; x < CW; x++) {
+    const i = y * CW + x;
+    if (!coarseOpen[i]) continue;
+    let bits = 0;
+    for (let d = 0; d < 8; d++) {
+      const nx = x + NAV_DX[d];
+      const ny = y + NAV_DY[d];
+      if (nx < 0 || ny < 0 || nx >= CW || ny >= CH) continue;
+      const j = ny * CW + nx;
+      if (!coarseOpen[j]) continue;
+      if (d >= 4 && (!coarseOpen[y * CW + nx] || !coarseOpen[ny * CW + x])) continue;
+      if (riverBetween(i, j)) continue;
+      bits |= 1 << d;
+    }
+    m[i] = bits;
+    }
+  }
+}
+
+/** 分步建块图（第一次算河的噪声要一两秒，切成小段在空闲时做，不卡画面） */
+function* buildNav() {
+  const mask = new Uint8Array(CW * CH);
+  yield* navMasks(mask);
+  const comp = new Int32Array(CW * CH).fill(-1);
+  const sx: number[] = [];
+  const sy: number[] = [];
+  const cnt: number[] = [];
+  const stack: number[] = [];
+  const order: number[] = [];
+  const members: number[] = [];
+  for (let by = 0; by < CH; by += NB) for (let bx = 0; bx < CW; bx += NB) {
+    if (!bx) yield;
+    for (let y = by; y < Math.min(CH, by + NB); y++) for (let x = bx; x < Math.min(CW, bx + NB); x++) {
+      const c0 = y * CW + x;
+      if (!coarseOpen[c0] || comp[c0] >= 0) continue;
+      const id = cnt.length;
+      cnt.push(0);
+      sx.push(0);
+      sy.push(0);
+      comp[c0] = id;
+      stack.push(c0);
+      while (stack.length) {
+        const c = stack.pop()!;
+        order.push(id);
+        members.push(c);
+        cnt[id]++;
+        sx[id] += (c % CW) * C + C / 2;
+        sy[id] += ((c / CW) | 0) * C + C / 2;
+        for (let d = 0; d < 8; d++) {
+          if (!(mask[c] & (1 << d))) continue;
+          const j = c + NAV_DY[d] * CW + NAV_DX[d];
+          if (comp[j] >= 0) continue;
+          const jx = j % CW;
+          const jy = (j / CW) | 0;
+          if (jx < bx || jx >= bx + NB || jy < by || jy >= by + NB) continue;
+          comp[j] = id;
+          stack.push(j);
+        }
+      }
+    }
+  }
+  const n = cnt.length;
+  yield;
+  navX = new Float32Array(n);
+  navY = new Float32Array(n);
+  for (let k = 0; k < n; k++) {
+    navX[k] = sx[k] / cnt[k];
+    navY[k] = sy[k] / cnt[k];
+  }
+  // 块是按顺序泛洪出来的：记下每块伸到块外的邻格，按块号顺序就是 CSR
+  const outStart = new Int32Array(n + 1);
+  const outCells: number[] = [];
+  for (let k = 0, c = 0; k < n; k++) {
+    if (!(k & 4095)) yield;
+    outStart[k] = outCells.length;
+    for (; c < order.length && order[c] === k; c++) {
+      const cell = members[c];
+      for (let d = 0; d < 8; d++) {
+        if (!(mask[cell] & (1 << d))) continue;
+        const j = cell + NAV_DY[d] * CW + NAV_DX[d];
+        if (comp[j] !== k) outCells.push(j);
+      }
+    }
+  }
+  outStart[n] = outCells.length;
+  yield;
+  const adj: number[] = [];
+  navStart = new Int32Array(n + 1);
+  for (let k = 0; k < n; k++) {
+    if (!(k & 4095)) yield;
+    navStart[k] = adj.length;
+    for (let e = outStart[k]; e < outStart[k + 1]; e++) {
+      const b = comp[outCells[e]];
+      if (b < 0) continue;
+      let dup = false;
+      for (let q = navStart[k]; q < adj.length; q++) if (adj[q] === b) { dup = true; break; }
+      if (!dup) adj.push(b);
+    }
+  }
+  navStart[n] = adj.length;
+  navAdj = Int32Array.from(adj);
+  navW = new Float32Array(adj.length);
+  for (let k = 0; k < n; k++) for (let e = navStart[k]; e < navStart[k + 1]; e++) {
+    const b = navAdj[e];
+    navW[e] = Math.hypot(navX[b] - navX[k], navY[b] - navY[k]);
+  }
+  navN = n;
+  navComp = comp;
+}
+
+/** 点所在的块；落在走不了的粗格子里（桥头、建筑边）就找附近的 */
+function navCompOf(p: Pt): number {
+  const comp = navComp!;
+  const c = cellOf(p);
+  if (comp[c] >= 0) return comp[c];
+  const x = c % CW;
+  const y = (c / CW) | 0;
+  for (let r = 1; r <= 3; r++) {
+    let best = -1;
+    let bd = Infinity;
+    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= CW || ny >= CH) continue;
+      const k = comp[ny * CW + nx];
+      if (k < 0) continue;
+      const d = Math.hypot(navX[k] - p.x, navY[k] - p.y);
+      if (d < bd) {
+        bd = d;
+        best = k;
+      }
+    }
+    if (best >= 0) return best;
+  }
+  return -1;
+}
+
+/** 走路比直线多出来的部分（细路径拐弯、绕树绕石头），按实际寻路结果校准 */
+export const NAV_WIGGLE = 1.03;
+export type NavHit = { d: number; i: number };
+const navCache: { key: string; f: (p: Pt) => NavHit }[] = [];
+
+/**
+ * 从几个起点出发的步行距离场（格）：返回「到某点最近要走多远、从第几个起点出发」。
+ * 走不到返回 d = Infinity。结果按起点缓存。
+ */
+export function navField(seeds: Pt[]): (p: Pt) => NavHit {
+  const key = seeds.map((p) => `${Math.round(p.x)},${Math.round(p.y)}`).join(';');
+  const hit = navCache.findIndex((c) => c.key === key);
+  if (hit >= 0) {
+    const [c] = navCache.splice(hit, 1);
+    navCache.unshift(c);
+    return c.f;
+  }
+  if (!navComp) for (const _ of buildNav());
+  const dist = new Float64Array(navN).fill(Infinity);
+  const from = new Int16Array(navN).fill(-1);
+  const heap = new Heap();
+  const sc = seeds.map(navCompOf);
+  sc.forEach((k, i) => {
+    if (k < 0) return;
+    const d = Math.hypot(navX[k] - seeds[i].x, navY[k] - seeds[i].y);
+    if (d < dist[k]) {
+      dist[k] = d;
+      from[k] = i;
+      heap.push(k, d);
+    }
+  });
+  while (heap.size) {
+    const k = heap.popId();
+    const d = heap.lastKey;
+    if (d > dist[k]) continue;
+    for (let e = navStart[k]; e < navStart[k + 1]; e++) {
+      const b = navAdj[e];
+      const nd = d + navW[e];
+      if (nd < dist[b]) {
+        dist[b] = nd;
+        from[b] = from[k];
+        heap.push(b, nd);
+      }
+    }
+  }
+  const f = (p: Pt): NavHit => {
+    // 离某个起点很近、同一块里：直接算直线
+    let near = -1;
+    let nd = Infinity;
+    const pc = navCompOf(p);
+    seeds.forEach((s, i) => {
+      const d = Math.hypot(s.x - p.x, s.y - p.y);
+      if ((pc >= 0 && pc === sc[i]) || d < 24) if (d < nd) { nd = d; near = i; }
+    });
+    if (pc < 0 || dist[pc] === Infinity) return near >= 0 ? { d: nd * NAV_WIGGLE, i: near } : { d: Infinity, i: -1 };
+    const far = (dist[pc] + Math.hypot(navX[pc] - p.x, navY[pc] - p.y)) * NAV_WIGGLE;
+    const straight = Math.hypot(seeds[from[pc]].x - p.x, seeds[from[pc]].y - p.y) * NAV_WIGGLE;
+    const d = Math.max(far, straight);
+    return near >= 0 && nd * NAV_WIGGLE <= d ? { d: nd * NAV_WIGGLE, i: near } : { d, i: from[pc] };
+  };
+  navCache.unshift({ key, f });
+  if (navCache.length > 8) navCache.pop();
+  return f;
+}
+let navJob: Generator | null = null;
+/** 空闲时调：建块图建一小段（最多 budget 毫秒），建好了就把真实步行距离交给寻路估时；返回是否已建好 */
+export function warmNav(budget = 8): boolean {
+  if (navComp) return true;
+  navJob ??= buildNav();
+  const t0 = performance.now();
+  while (performance.now() - t0 < budget) {
+    if (navJob.next().done) {
+      navJob = null;
+      setNavField(navField);
+      return true;
+    }
+  }
+  return false;
 }
 
 // ---- 镇上走动的村民 ----

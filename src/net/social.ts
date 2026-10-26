@@ -85,9 +85,15 @@ export function syncSocial() {
   void pullGm();
   const t = setInterval(() => void pullGm(), GM_POLL_MS);
   offs.push(() => clearInterval(t));
+  // 队伍、好友、交易每 30 秒对一次（10-26）：实时推送偶尔会漏，漏了以前要刷新页面才看得到；切回页面时也马上对一次
+  const r = setInterval(() => { if (!document.hidden) void refreshSocial(); }, SOCIAL_POLL_MS);
+  const vis = () => { if (!document.hidden) void refreshSocial(); };
+  document.addEventListener('visibilitychange', vis);
+  offs.push(() => { clearInterval(r); document.removeEventListener('visibilitychange', vis); });
 }
 
 const GM_POLL_MS = 60_000;
+const SOCIAL_POLL_MS = 30_000;
 export async function pullGm() {
   if (!online.me()) return;
   try {

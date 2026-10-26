@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ITEMS } from '../core/data';
 import { HW_DAILY_BOXES, claimMail, clearMail, readMail, unreadMail } from '../core/mail';
 import { QUESTS, questText } from '../core/quests';
-import { bagRoomFor } from '../core/sim';
+import { bagRoomFor, bagSlots } from '../core/sim';
 import type { GameState, Mail } from '../core/types';
 import { store } from '../store';
 import { tl } from '../i18n';
@@ -53,7 +53,7 @@ const when = (t: number) => {
 function claim(id: number | 'all', from: string) {
   let got: Record<string, number> = {};
   store.dispatch((g) => {
-    const [next, r] = claimMail(g, id, bagRoomFor);
+    const [next, r] = claimMail(g, id, (bag, item) => bagRoomFor(bag, item, bagSlots(g)));
     got = r;
     return next;
   });

@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { ACTIONS, ITEMS, MONSTERS, nodeOfAction, NODES, SKILLS } from '../core/data';
 import { QUESTS, questProgress, questText } from '../core/quests';
-import { actionDuration, beltSlotOf, combatEstimate, combatLevel, dismissStop, enqueue, rainBonus, isBankId, level, maxHp, removeTask, resumeWork, toggleMount, weaponStyle } from '../core/sim';
+import { actionDuration, beltSlotOf, combatEstimate, combatLevel, dismissStop, enqueue, rainBonus, isBankId, level, maxHp, moveSpeed, removeTask, resumeWork, toggleMount, weaponStyle } from '../core/sim';
 import { jumpTo, producerOf } from './ActionSheet';
 import { openNodeSheet } from './itemOpen';
 import { openCombatLog } from './CombatLog';
@@ -120,7 +120,7 @@ function StopChip({ s }: { s: GameState }) {
   const st = s.lastStop;
   if (!st || !ACTIONS[st.action]) return null;
   const src = st.reason === 'noInput' && st.item ? producerOf(s, st.item) : undefined;
-  const node = nodeOfAction(st.action, s.loc);
+  const node = nodeOfAction(st.action, s.loc, s.waystones, moveSpeed(s));
   const again = () => store.dispatch((g) => enqueue(g, st.action, st.mode));
   return (
     <div className={`chip stop-chip ${st.reason === 'complete' ? '' : 'bad'}`}>
@@ -230,7 +230,7 @@ export function QuestCard({ s, onGo }: { s: GameState; onGo: (nodeId: string) =>
   };
   const p = questProgress(s);
   if (!p) return null;
-  const node = NODES.find((n) => n.id === p.q.hint) ?? nodeOfAction(p.q.hint, s.loc);
+  const node = NODES.find((n) => n.id === p.q.hint) ?? nodeOfAction(p.q.hint, s.loc, s.waystones, moveSpeed(s));
   const idx = (s.quest?.i ?? 0) + 1;
   return (
     <div className={`chip quest ${open ? '' : 'folded'}`}>

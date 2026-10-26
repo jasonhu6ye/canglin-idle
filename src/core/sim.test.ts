@@ -1031,7 +1031,7 @@ describe('装备品质、分解台、仓库整理（10-25）', () => {
   });
 
   it('每件装备都有 6 个品质，属性和售价逐级变高；做出来的装备随机品质', () => {
-    const gear = Object.values(ITEMS).filter((it) => it.equip && !it.equip.move && !it.quality);
+    const gear = Object.values(ITEMS).filter((it) => it.equip && !it.equip.move && it.equip.slot !== 'pack' && !it.quality);
     for (const it of gear) for (let q = 1; q < 6; q++) {
       const lo = ITEMS[qid(it.id, q - 1)];
       const hi = ITEMS[qid(it.id, q)];
@@ -1039,7 +1039,7 @@ describe('装备品质、分解台、仓库整理（10-25）', () => {
       expect(hi.value).toBeGreaterThan(lo.value);
       expect(hi.equip!.attack + hi.equip!.strength + hi.equip!.defence).toBeGreaterThanOrEqual(lo.equip!.attack + lo.equip!.strength + lo.equip!.defence);
     }
-    const a = Object.values(ACTIONS).find((x) => x.kind === 'skill' && x.outputs.some((o) => ITEMS[o.item]?.equip && ITEMS[o.item].tier === 0 && !ITEMS[o.item].equip!.move)) as SkillAction;
+    const a = Object.values(ACTIONS).find((x) => x.kind === 'skill' && x.outputs.some((o) => ITEMS[o.item]?.equip && ITEMS[o.item].tier === 0 && !ITEMS[o.item].equip!.move && ITEMS[o.item].equip!.slot !== 'pack')) as SkillAction;
     let s = newGame(T0, 3);
     for (const st of a.inputs ?? []) s.bank[st.item] = st.qty * 400;
     s.xp[a.skill] = XP_TABLE[a.level];

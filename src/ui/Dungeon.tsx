@@ -85,6 +85,72 @@ function useDungeonSync() {
   }, []);
 }
 
+/**
+ * 自动回副本（用户 10-26）：跟随队长时队长进了副本，队员自己走到洞口进去；副本里阵亡被送回城后，自己走回洞口接着打。
+ * 目标洞口记在这里，每秒看一次：到了洞口旁就进，没到就寻路过去（远路自动用石碑）。
+ */
+let autoGate: { id: string; why: 'follow' | 'death'; at: number } | null = null;
+let autoWalkAt = 0;
+const autoSubs = new Set<() => void>();
+export function setAutoGate(id: string | null, why: 'follow' | 'death' = 'follow') {
+  if ((autoGate?.id ?? null) === id && (!id || autoGate?.why === why)) return;
+  autoGate = id ? { id, why, at: Date.now() } : null;
+  autoWalkAt = 0;
+  autoSubs.forEach((f) => f());
+}
+const teamOf = (st: ReturnType<typeof useSocial>) => {
+  const me = online.me();
+  return st.party && me && st.party.members.length > 1 ? { members: st.party.members.map((m) => ({ id: m.playerId, name: m.name })), me: me.id } : undefined;
+};
+function useDungeonAuto(setMsg: (m: string) => void) {
+  const st = useSocial();
+  const [, bump] = useState(0);
+  useEffect(() => { const f = () => bump((n) => n + 1); autoSubs.add(f); return () => { autoSubs.delete(f); }; }, []);
+  // 副本里阵亡：记下这个洞口，回城后自己走回去
+  useEffect(() => {
+    let prev = store.state.dungeon;
+    let deaths = store.state.stats.deaths;
+    return store.subscribe(() => {
+      const s = store.state;
+      if (prev && !s.dungeon && s.stats.deaths > deaths && prev.gate.expires > Date.now() && s.dgResume?.some((r) => r.gate.id === prev!.gate.id)) {
+        setAutoGate(prev.gate.id, 'death');
+        setMsg(tl('阵亡了，休整后自动走回洞口接着打'));
+      }
+      prev = s.dungeon;
+      deaths = s.stats.deaths;
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const t = setInterval(() => {
+      const a = autoGate;
+      const s = store.state;
+      if (!a || s.home?.inside) return;
+      if (s.dungeon) {
+        if (s.dungeon.gate.id === a.id || a.why === 'death') setAutoGate(null);
+        return;
+      }
+      const g = allGates(s).find((x) => x.id === a.id) ?? s.dgResume?.find((r) => r.gate.id === a.id)?.gate;
+      if (!g || g.expires <= Date.now() || s.gatesUsed?.includes(g.id)) { setAutoGate(null); return; }
+      const p = walkPos(s);
+      const party = Math.max(1, st.party?.members.length ?? partySize());
+      if (!s.travel && !s.walk && Math.hypot(p.x - g.x, p.y - g.y) <= GATE_REACH + 0.5) {
+        const why = gateBlock(s, g, party);
+        if (why) { setMsg(why); setAutoGate(null); return; }
+        store.dispatch((x) => enterDungeon(x, g, party, Date.now(), teamOf(st)));
+        setMsg(a.why === 'death' ? tl('回到洞口，接着上次的进度打') : tl('跟随队长进入副本'));
+        return;
+      }
+      // 没在走（或者走停了）才重新寻路，免得每秒重算路线
+      if (!s.walk && !s.travel && Date.now() - autoWalkAt > 4000) {
+        autoWalkAt = Date.now();
+        emitToGame('walktile', g.x, g.y);
+      }
+    }, 1000);
+    return () => clearInterval(t);
+  }, [st.party?.members.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  return autoGate;
+}
+
 /** 地图上点了洞口、刚开了洞口 */
 export function DungeonPopups({ s }: { s: GameState }) {
   useSharedGates();
@@ -105,6 +171,7 @@ export function DungeonPopups({ s }: { s: GameState }) {
     setMsg(tl`还有 ${rest} 只怪没清完，清完所有怪才能打开宝箱`);
   }), []);
   useEffect(() => { if (!msg) return; const t = setTimeout(() => setMsg(''), 3500); return () => clearTimeout(t); }, [msg]);
+  const auto = useDungeonAuto(setMsg);
   const gate = gateId ? allGates(s).find((g) => g.id === gateId) : undefined;
   return (
     <>
@@ -134,6 +201,11 @@ export function DungeonPopups({ s }: { s: GameState }) {
         </div>
       )}
       {msg && <div className="chip dg-msg">{msg}</div>}
+      {auto && !s.dungeon && (
+        <button className="chip dg-auto" onClick={() => setAutoGate(null)}>
+          {auto.why === 'death' ? tl('正在返回副本洞口') : tl('跟随队长前往副本')}{tl(' · 点击取消')}
+        </button>
+      )}
     </>
   );
 }

@@ -3,9 +3,9 @@ import { cleanGm, gmPct, setGmClock } from './gm';
 import { APT_MAX, APT_MIN, FOAL, growMs, HORSE_XP, horseItem, RANCH, RANCH_PENS } from './ranch';
 import { baseOf, qid, QUALITY_VALUE, rollQuality } from './quality';
 import { HW_POINT, HW_TIERS, hwFight, hwOpen, hwTierOf, hwWait } from './halloween';
-import { OLD_JEWELS, BAR_VALUE, inTownArea, KEY_SHOP, keyOf, OLD_ENH, SCROLL_TOWN, SHARD_PER_STONE, TIERS, ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAP_W, MID_BOX, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, planRoute, travelMs, type MapNode } from './data';
+import { OLD_JEWELS, BAR_VALUE, inTownArea, KEY_SHOP, keyOf, OLD_ENH, SCROLL_TOWN, SHARD_PER_STONE, TIERS, ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAP_W, MID_BOX, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, fastest, planRoute, travelMs, type MapNode } from './data';
 import { nextRandom } from './rng';
-import { buffMob, coopMates, COOP_DEF, COOP_DMG, dungeonFloor, GATE_CD, GATE_MAX, GATE_MS, GATE_REACH, legMs, rollChest, rollChestQuality, rollFloors, teamChest, teamChestQuality, type TeamMember } from './dungeon';
+import { buffMob, coopMates, COOP_DEF, COOP_DMG, dungeonFloor, GATE_AFTER_CLEAR, GATE_CD, GATE_MAX, GATE_MS, GATE_REACH, legMs, rollChest, rollChestQuality, rollFloors, teamChest, teamChestQuality, type TeamMember } from './dungeon';
 import { partySize } from './party';
 import { aggroMates, dgCrew, stopKey, takeMateHits, targetChance, threatOf } from './aggro';
 import { stepQuests } from './quests';
@@ -165,7 +165,7 @@ export function migrate(raw: unknown): GameState | null {
     combat: sameTask && combat && Number.isFinite(combat.monsterHp) ? combat : null,
     settings: { ...fresh.settings, ...obj<GameState['settings']>(s.settings) },
     regenMs: Math.max(0, num(s.regenMs, 0)),
-    stats: { kills: Math.max(0, num(obj<GameState['stats']>(s.stats)?.kills, 0)), deaths: Math.max(0, num(obj<GameState['stats']>(s.stats)?.deaths, 0)) },
+    stats: { kills: Math.max(0, num(obj<GameState['stats']>(s.stats)?.kills, 0)), deaths: Math.max(0, num(obj<GameState['stats']>(s.stats)?.deaths, 0)), ...(num(obj<GameState['stats']>(s.stats)?.sageCoins, 0) > 0 ? { sageCoins: num(obj<GameState['stats']>(s.stats)?.sageCoins, 0) } : {}) },
     // 旧存档没有位置：当作已经站在当前任务的地点
     loc: okPos(s.loc) ? rescaleLoc(s.loc, oldSize) : node0 ? standOf(node0) : fresh.loc,
     mapSize: MAP_W,
@@ -393,7 +393,7 @@ export function toBelt(prev: GameState, id: string): GameState {
   s.belt ??= {};
   const cur = s.belt[slot];
   if (cur && cur.id !== id) {
-    const back = Math.min(cur.qty, bagRoomFor(s.bag, cur.id));
+    const back = Math.min(cur.qty, bagRoomFor(s.bag, cur.id, bagSlots(s)));
     if (back < cur.qty && !atBank(s)) return prev;
     if (back > 0) s.bag[cur.id] = (s.bag[cur.id] ?? 0) + back;
     if (cur.qty > back) s.bank[cur.id] = (s.bank[cur.id] ?? 0) + cur.qty - back;
@@ -415,7 +415,7 @@ export function toBelt(prev: GameState, id: string): GameState {
 export function fromBelt(prev: GameState, slot: BeltSlot): GameState {
   const cur = prev.belt?.[slot];
   if (!cur) return prev;
-  const room = bagRoomFor(prev.bag, cur.id);
+  const room = bagRoomFor(prev.bag, cur.id, bagSlots(prev));
   if (room < cur.qty && !atBank(prev)) return prev;
   const s = clone(prev);
   const n = Math.min(room, cur.qty);
@@ -441,7 +441,7 @@ export const actionDuration = (s: GameState, a: SkillAction, t = Date.now()) =>
 /** 雨天钓鱼增益：钓点所在区域正在下雨时，钓鱼更快（用户 10-23） */
 export function rainBonus(s: GameState, a: SkillAction, t = Date.now()) {
   if (a.skill !== 'fishing') return 0;
-  const n = nodeOfAction(a.id, s.loc);
+  const n = nodeOfAction(a.id, s.loc, s.waystones, moveSpeed(s));
   return n && isRaining(n.region, t) ? RAIN_FISH : 0;
 }
 
@@ -459,16 +459,32 @@ export function bagSlotsUsed(bag: Record<string, number>) {
 }
 
 /** 背包里还能放下多少个这种物品 */
-export function bagRoomFor(bag: Record<string, number>, item: string) {
+export function bagRoomFor(bag: Record<string, number>, item: string, cap = BAG_SLOTS) {
   const stack = stackOf(item);
   const have = bag[item] ?? 0;
   const partial = have % stack ? stack - (have % stack) : 0;
-  return partial + Math.max(0, BAG_SLOTS - bagSlotsUsed(bag)) * stack;
+  return partial + Math.max(0, cap - bagSlotsUsed(bag)) * stack;
 }
+/**
+ * 洞察者背包（用户 10-26，烧钱练级）：经验再多拿 sage%（按原始经验算），每多 1 点扣仓库 1 金币；金币不够就只加付得起的部分。
+ * 返回加完的经验，s 里直接扣钱。
+ */
+export function sageXp(s: GameState, amount: number, base: number): number {
+  const k = ITEMS[s.equipment.pack ?? '']?.equip?.sage ?? 0;
+  if (!(k > 0) || base <= 0) return amount;
+  const extra = Math.min(Math.round(base * k), Math.floor(s.bank.coins ?? 0));
+  if (extra <= 0) return amount;
+  s.bank.coins -= extra;
+  if (s.bank.coins <= 0) delete s.bank.coins;
+  s.stats.sageCoins = (s.stats.sageCoins ?? 0) + extra;
+  return amount + extra;
+}
+/** 背包格数：基础 24 格 + 背上背包加的格子（用户 10-26） */
+export const bagSlots = (s: GameState) => BAG_SLOTS + (ITEMS[s.equipment.pack ?? '']?.equip?.bag ?? 0);
 
 /** 放一件东西回身上：背包放得下就进背包，否则进仓库。返回去了哪里 */
 function stow(s: GameState, id: string): 'bag' | 'bank' {
-  if (bagRoomFor(s.bag, id) > 0) {
+  if (bagRoomFor(s.bag, id, bagSlots(s)) > 0) {
     s.bag[id] = (s.bag[id] ?? 0) + 1;
     return 'bag';
   }
@@ -597,7 +613,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   /** 采集、制作、打怪的产出进背包；万一放不下，多出来的才进仓库 */
   const addLoot = (item: string, qty: number) => {
     // 金币不占背包格子，直接进钱包（仓库金币，用户 10-25）
-    const n = item === 'coins' ? 0 : Math.min(qty, bagRoomFor(s.bag, item));
+    const n = item === 'coins' ? 0 : Math.min(qty, bagRoomFor(s.bag, item, bagSlots(s)));
     if (n > 0) s.bag[item] = (s.bag[item] ?? 0) + n;
     if (qty > n) s.bank[item] = (s.bank[item] ?? 0) + qty - n;
     s.seen[item] = 1;
@@ -628,7 +644,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   const fits = (items: string[], from: Record<string, number> = s.bag) => {
     const bag = { ...from };
     for (const id of items) {
-      if (bagRoomFor(bag, id) < 1) return false;
+      if (bagRoomFor(bag, id, bagSlots(s)) < 1) return false;
       bag[id] = (bag[id] ?? 0) + 1;
     }
     return true;
@@ -661,8 +677,8 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     const stack = stackOf(id);
     const held = s.bag[id] ?? 0;
     const partial = held % stack ? stack - (held % stack) : 0;
-    const free = BAG_SLOTS - bagSlotsUsed(s.bag) - lootRoom();
-    return Math.min(bagRoomFor(s.bag, id), partial + Math.max(0, free) * stack);
+    const free = bagSlots(s) - bagSlotsUsed(s.bag) - lootRoom();
+    return Math.min(bagRoomFor(s.bag, id, bagSlots(s)), partial + Math.max(0, free) * stack);
   };
 
   /** 背包满了：走回仓库，存下除食物和弹药外的东西，再走回来接着干。
@@ -671,7 +687,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     // 回最近的仓库（落霞城也有一个）；在家园岛上有储物箱就直接存，不用走
     const atHome = homeChest(s);
     if (s.home?.inside && !atHome) s.home.inside = false;
-    const bank = s.travel && isBankId(s.travel.to) ? NODES.find((n) => n.id === s.travel!.to)! : nearestBank(s.loc);
+    const bank = s.travel && isBankId(s.travel.to) ? NODES.find((n) => n.id === s.travel!.to)! : nearestBank(s.loc, s.waystones, moveSpeed(s));
     const dest = atHome ? s.loc : standOf(bank);
     if (atHome) s.travel = { to: bank.id, ms: 0, total: 0 };
     else if (!s.travel || s.travel.to !== bank.id) {
@@ -693,7 +709,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
           delete s.bag[id];
         }
         // 食物留着；剩下的格子装得下这次的战利品就够了，装不下连食物也存
-        if (!pass && (s.queue[0] ? fits(lootOf(ACTIONS[s.queue[0].action])) : BAG_SLOTS - bagSlotsUsed(s.bag) >= 5)) break;
+        if (!pass && (s.queue[0] ? fits(lootOf(ACTIONS[s.queue[0].action])) : bagSlots(s) - bagSlotsUsed(s.bag) >= 5)) break;
       }
       if (supply) {
         refillBelt();
@@ -713,7 +729,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   };
 
   const addXp = (skill: SkillId, amount: number) => {
-    amount = Math.round(amount * (1 + boostPct(s, 'xp') + gearSum(s, 'xp') + partyXpPct()));
+    amount = sageXp(s, Math.round(amount * (1 + boostPct(s, 'xp') + gearSum(s, 'xp') + partyXpPct())), amount);
     if (tally) tally.xp[skill] = (tally.xp[skill] ?? 0) + amount;
     // 打怪的经验记在这只怪头上，打死时一起写进战斗日志
     if (s.combat && amount > 0) {
@@ -746,7 +762,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     // 只在海岛上的动作进不了队列（enqueue、migrate 都滤掉了），这里不会没有地点
     if (!cands.length) return 0;
     if (cands.some((n) => { const d = standOf(n); return d.x === s.loc.x && d.y === s.loc.y; })) return 0;
-    const node = cands.find((n) => n.id === s.travel?.to) ?? nodeOfAction(task.action, s.loc)!;
+    const node = cands.find((n) => n.id === s.travel?.to) ?? nodeOfAction(task.action, s.loc, s.waystones, moveSpeed(s))!;
     const dest = standOf(node);
     if (!s.travel || s.travel.to !== node.id) {
       const r = planRoute(s.waystones, s.loc, dest, moveSpeed(s));
@@ -819,7 +835,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   const bagFood = () => Object.entries(s.bag).reduce((n, [id, q]) => n + (healOf(id) && beltSlotOf(id) !== 'potion' ? q : 0), 0) + (s.belt?.food?.qty ?? 0);
   /** 背包里的食物不够设定数量，仓库里又有：要先回仓库拿 */
   const needSupply = () =>
-    beltNeeds() || (bagFood() < foodTarget() && Object.keys(s.bank).some((id) => healOf(id) > 0 && bagRoomFor(s.bag, id) > 0));
+    beltNeeds() || (bagFood() < foodTarget() && Object.keys(s.bank).some((id) => healOf(id) > 0 && bagRoomFor(s.bag, id, bagSlots(s)) > 0));
 
   /** 在仓库旁按设置把食物和药水补进背包，好的先拿 */
   const carryFood = () => {
@@ -863,7 +879,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
           if (o.chance !== undefined && rand() >= dropChance(s, o.chance)) continue;
           // 做出来的装备、工具随机品质（用户 10-25）
           const it = ITEMS[o.item];
-          if (it?.equip && !it.equip.move) for (let k = 0; k < o.qty; k++) addLoot(qid(o.item, rollQuality(it.tier, rand())), 1);
+          if (it?.equip && !it.equip.move && it.equip.slot !== 'pack') for (let k = 0; k < o.qty; k++) addLoot(qid(o.item, rollQuality(it.tier, rand())), 1);
           else addLoot(o.item, o.qty);
         }
         if (gatherer && rand() < bonus + gmPct(s, 'yield')) a.outputs.forEach((o) => o.chance === undefined && addLoot(o.item, o.qty));
@@ -1411,6 +1427,8 @@ export function equip(prev: GameState, item: string): GameState {
     delete s.equipment[off];
   }
   s.hp = Math.min(s.hp, maxHp(s));
+  // 换背包（10-26）：换下来以后背包装不下现有的东西就不换
+  if (e.slot === 'pack' && bagSlotsUsed(s.bag) > bagSlots(s)) return prev;
   return s;
 }
 
@@ -1421,17 +1439,10 @@ const BANKS = NODES.filter((n) => n.opens === 'bank');
 const MARKETS = NODES.filter((n) => n.sprite === 'market');
 const BANK_IDS = new Set(BANKS.map((n) => n.id));
 export const isBankId = (id: string | undefined) => !!id && BANK_IDS.has(id);
-const nearest = (list: MapNode[], loc: { x: number; y: number }) => {
-  let best = list[0];
-  let bestD = Infinity;
-  for (const n of list) {
-    const d = travelMs(loc, standOf(n));
-    if (d < bestD) { bestD = d; best = n; }
-  }
-  return best;
-};
-export const nearestBank = (loc: { x: number; y: number }) => nearest(BANKS, loc);
-export const nearestMarket = (loc: { x: number; y: number }) => nearest(MARKETS, loc);
+/** 过去最快的那个（给了石碑就把传送也算上） */
+const nearest = (list: MapNode[], loc: { x: number; y: number }, stones?: string[], speed?: number) => fastest(list, loc, stones, speed)?.node ?? list[0];
+export const nearestBank = (loc: { x: number; y: number }, stones?: string[], speed?: number) => nearest(BANKS, loc, stones, speed);
+export const nearestMarket = (loc: { x: number; y: number }, stones?: string[], speed?: number) => nearest(MARKETS, loc, stones, speed);
 const within = (s: GameState, list: MapNode[]) => !s.travel && !s.walk && !s.home?.inside && !s.dungeon && list.some((n) => {
   const st = standOf(n);
   return Math.hypot(s.loc.x - st.x, s.loc.y - st.y) <= BANK_REACH;
@@ -1455,11 +1466,13 @@ export function nearNode(s: GameState, node: MapNode): boolean {
 export function unequip(prev: GameState, slot: EquipSlot): GameState {
   const id = prev.equipment[slot];
   if (!id) return prev;
-  if (bagRoomFor(prev.bag, id) <= 0 && !atBank(prev)) return prev;
+  if (bagRoomFor(prev.bag, id, bagSlots(prev)) <= 0 && !atBank(prev)) return prev;
   const s = clone(prev);
   delete s.equipment[slot];
   if (slot === 'mount') s.mounted = false;
   stow(s, id);
+  // 卸下背包（10-26）：剩下的格子装不下背包里的东西就不让卸
+  if (slot === 'pack' && bagSlotsUsed(s.bag) > bagSlots(s)) return prev;
   s.hp = Math.min(s.hp, maxHp(s));
   return s;
 }
@@ -1470,7 +1483,7 @@ const cleanQty = (q: number) => (Number.isFinite(q) ? Math.floor(q) : 0);
 
 export function toBag(prev: GameState, item: string, qty: number): GameState {
   qty = cleanQty(qty);
-  const n = Math.min(prev.bank[item] ?? 0, qty, bagRoomFor(prev.bag, item));
+  const n = Math.min(prev.bank[item] ?? 0, qty, bagRoomFor(prev.bag, item, bagSlots(prev)));
   if (item === 'coins' || n <= 0 || !atBank(prev)) return prev;
   const s = clone(prev);
   s.bank[item] -= n;
@@ -1622,7 +1635,7 @@ export function openContainer(prev: GameState, id: string, from: 'bag' | 'bank',
       s.bank[item] = (s.bank[item] ?? 0) + q;
       continue;
     }
-    const fit = Math.min(q, bagRoomFor(s.bag, item));
+    const fit = Math.min(q, bagRoomFor(s.bag, item, bagSlots(s)));
     if (fit > 0) s.bag[item] = (s.bag[item] ?? 0) + fit;
     if (q > fit) s.bank[item] = (s.bank[item] ?? 0) + q - fit;
   }
@@ -1673,7 +1686,7 @@ export function collectHorse(prev: GameState, pen: number, now: number): [GameSt
   s.rng = next;
   const apt = APT_MIN + Math.floor(r * (APT_MAX - APT_MIN + 1));
   const id = horseItem(apt);
-  if (bagRoomFor(s.bag, id) > 0) s.bag[id] = (s.bag[id] ?? 0) + 1;
+  if (bagRoomFor(s.bag, id, bagSlots(s)) > 0) s.bag[id] = (s.bag[id] ?? 0) + 1;
   else s.bank[id] = (s.bank[id] ?? 0) + 1;
   s.seen[id] = 1;
   s.xp.husbandry = (s.xp.husbandry ?? 0) + HORSE_XP;
@@ -1853,7 +1866,7 @@ export function leaveDungeon(prev: GameState): GameState {
 }
 
 /** 打开最后的宝箱（要清完所有怪，也就是走到了宝箱旁）。开出来的先进背包，放不下进仓库 */
-export function openDungeonChest(prev: GameState): [GameState, Record<string, number>] {
+export function openDungeonChest(prev: GameState, now = Date.now()): [GameState, Record<string, number>] {
   const run = prev.dungeon;
   if (!run || run.phase !== 'chest') return [prev, {}];
   const s = clone(prev);
@@ -1879,7 +1892,7 @@ export function openDungeonChest(prev: GameState): [GameState, Record<string, nu
   for (const [item, n] of Object.entries(got)) {
     s.seen[item] = 1;
     if (item === 'coins') { s.bank.coins = (s.bank.coins ?? 0) + n; continue; }
-    const fit = Math.min(n, bagRoomFor(s.bag, item));
+    const fit = Math.min(n, bagRoomFor(s.bag, item, bagSlots(s)));
     if (fit > 0) s.bag[item] = (s.bag[item] ?? 0) + fit;
     if (n > fit) s.bank[item] = (s.bank[item] ?? 0) + n - fit;
   }
@@ -1887,6 +1900,10 @@ export function openDungeonChest(prev: GameState): [GameState, Record<string, nu
   r.loot = got;
   r.phase = 'open';
   s.gatesUsed = [...(s.gatesUsed ?? []), r.gate.id].slice(-50);
+  // 通关后洞口只再留 1 分钟（用户 10-26）：自己开的洞口直接缩短，队友那边跟着在线状态一起变
+  const end = now + GATE_AFTER_CLEAR;
+  if (s.gates?.some((g) => g.id === r.gate.id && g.expires > end)) s.gates = s.gates.map((g) => (g.id === r.gate.id ? { ...g, expires: end } : g));
+  if (r.gate.expires > end) r.gate = { ...r.gate, expires: end };
   return [s, got];
 }
 
@@ -1899,7 +1916,7 @@ export function buyKey(prev: GameState, key: string, qty = 1): GameState {
   if (!row || n <= 0 || !atShop(prev) || (prev.bank.coins ?? 0) < row[1] * n) return prev;
   const s = clone(prev);
   s.bank.coins -= row[1] * n;
-  const fit = Math.min(n, bagRoomFor(s.bag, key));
+  const fit = Math.min(n, bagRoomFor(s.bag, key, bagSlots(s)));
   if (fit > 0) s.bag[key] = (s.bag[key] ?? 0) + fit;
   if (n > fit) s.bank[key] = (s.bank[key] ?? 0) + n - fit;
   s.seen[key] = 1;
@@ -1917,7 +1934,7 @@ export function combineShards(prev: GameState, id: string, from: 'bag' | 'bank')
   const stone = `enhstone_${m[1]}`;
   box[id] -= n * SHARD_PER_STONE;
   if (box[id] <= 0) delete box[id];
-  const fit = from === 'bank' ? n : Math.min(n, bagRoomFor(s.bag, stone));
+  const fit = from === 'bank' ? n : Math.min(n, bagRoomFor(s.bag, stone, bagSlots(s)));
   if (fit > 0) box[stone] = (box[stone] ?? 0) + fit;
   if (n > fit) s.bank[stone] = (s.bank[stone] ?? 0) + n - fit;
   s.seen[stone] = 1;

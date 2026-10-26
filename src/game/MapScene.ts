@@ -33,6 +33,7 @@ import { animateTileset, liquidIndex, paintTileset, T, TILESET, tileIndex, VARIA
 import {
   BUILDINGS, CHUNK, FIELDS, findPath, GROUNDS, groundIndex, hash, isWalkable, LIQUIDS, propsInChunk, reachableNear, regionAt, SPAWN, standTile,
   WANDERERS, type PropKind,
+  warmNav,
 } from './world';
 import { tl } from '../i18n';
 
@@ -82,7 +83,8 @@ const exactTrack = (id: string) => MONSTERS[id].rank === 'boss' || store.state.b
 
 /** 追踪：Boss 给准确的刷新点，其他怪只给附近一个大概位置 */
 function trackSpot(monsterId: string, exact = exactTrack(monsterId)): { x: number; y: number } | null {
-  const n = nodeOfAction(`fight_${monsterId}`);
+  // 好几处都有这种怪：去正在走去的那处，否则去过去最快的那处（以前总是去列表里第一处）
+  const n = nodeForAction(`fight_${monsterId}`);
   if (!n) return null;
   const ids = n.actions.map((id) => ACTIONS[id]).filter((a) => a.kind === 'combat').map((a) => (a as { monster: string }).monster);
   const at = { ...spawnSpot(n, ids.indexOf(monsterId), ids.length) };
@@ -104,7 +106,7 @@ export const playerPos = { x: SPAWN.x, y: SPAWN.y };
 /** 任务现在对应的地点：正在走去的那个，否则离存档位置最近的那个（好几处都能做的动作，和存档算的是同一处） */
 export const nodeForAction = (id: string | undefined): MapNode | undefined => {
   const st = store.state;
-  return nodesOfAction(id).find((n) => n.id === st.travel?.to) ?? nodeOfAction(id, st.loc);
+  return nodesOfAction(id).find((n) => n.id === st.travel?.to) ?? nodeOfAction(id, st.loc, st.waystones, moveSpeed(st));
 };
 /** 能钓鱼的水面 */
 const FISH_WATER = new Set<string>(['water', 'ocean', 'swampwater', 'shallows']);
@@ -284,6 +286,8 @@ export class MapScene extends Phaser.Scene {
     this.game.events.on('waystone', onStone);
     this.unsub.push(() => this.game.events.off('waystone', onStone));
     this.time.addEvent({ delay: 300, loop: true, callback: () => this.checkStones() });
+    // 空闲时一点点建步行距离图，建好以后寻路估时、比较走路和石碑都按真实绕路距离算
+    const nav = this.time.addEvent({ delay: 50, loop: true, callback: () => { if (warmNav(10)) { nav.remove(); store.emit(); } } });
     const onTeleport = awake((id: string) => this.teleport(id));
     this.game.events.on('teleport', onTeleport);
     this.unsub.push(() => this.game.events.off('teleport', onTeleport));

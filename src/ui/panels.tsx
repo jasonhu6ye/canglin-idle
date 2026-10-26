@@ -3,7 +3,7 @@ import { useSticky } from './sticky';
 import { useEffect, useState, type ReactNode } from 'react';
 import { standOf, ACTIONS, BUFF_NAME, buffText, cropsOfField, nodesOfAction, WAYSTONES, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, keyOf, SCROLL_TOWN, SHARD_PER_STONE, type MapNode } from '../core/data';
 import {
-  atBank, atMarket, nearestBank, nearestMarket, BAG_SLOTS, BELT_CAP, beltSlotOf, eat, fromBelt, POTION_AT, toBelt, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, armorPerks, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip, openContainer,
+  atBank, atMarket, nearestBank, nearestMarket, bagSlots, BELT_CAP, beltSlotOf, eat, fromBelt, POTION_AT, toBelt, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, armorPerks, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip, openContainer,
   weaponStyle, walkPos, buffPct, levelSpeed, maxHp, moveSpeed, playerAttackMs,
   redeemCode, toggleMount,
   sortBank, toolSkillNames, TOOL_FOR, playerHaste, combineShards, gearSum,
@@ -17,6 +17,8 @@ import { store } from '../store';
 import { RAIN_FISH } from '../core/weather';
 import { THREAT_BASE, threatOf } from '../core/aggro';
 import { fmtDuration, fmtNum, gearLine, hitPct } from './format';
+import { etaText, nearestNode, routeFromHere } from './eta';
+import { MonsterIcon } from './Bestiary';
 import { Codex } from './Codex';
 import { Handbook } from './Handbook';
 import { GmPanel } from './GmPanel';
@@ -58,7 +60,7 @@ function FarFromBank() {
   return (
     <div className="go far-bank">
       <span className="muted">{tl('要走到城镇的仓库旁边才能存取')}</span>
-      <button onClick={() => store.requestWalk(nearestBank(store.state.loc).id)}>{tl('寻路去仓库')}</button>
+      <button onClick={() => store.requestWalk(nearestBank(store.state.loc, store.state.waystones, moveSpeed(store.state)).id)}>{tl('寻路去仓库')}</button>
     </div>
   );
 }
@@ -108,8 +110,8 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
           <button onClick={() => store.dispatch((g) => toBelt(g, id))}>{tl`放进${beltSlotOf(id) === 'food' ? tl('食物栏') : tl('药水栏')}`}</button>
         )}
         {from === 'bank' && id !== 'coins' && (
-          <button disabled={!near || bagRoomFor(s.bag, id) <= 0} onClick={() => store.dispatch((g) => toBag(g, id, qty))}>
-            {bagRoomFor(s.bag, id) > 0 ? tl('放入背包') : tl('背包已满')}
+          <button disabled={!near || bagRoomFor(s.bag, id, bagSlots(s)) <= 0} onClick={() => store.dispatch((g) => toBag(g, id, qty))}>
+            {bagRoomFor(s.bag, id, bagSlots(s)) > 0 ? tl('放入背包') : tl('背包已满')}
           </button>
         )}
         {from === 'bank' && id !== 'coins' && (
@@ -122,7 +124,7 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
       {from === 'bank' && id !== 'coins' && !atMarket(s) && (
         <div className="go far-bank">
           <span className="muted">{tl('卖东西要走到城镇的集市')}</span>
-          <button onClick={() => store.requestWalk(nearestMarket(s.loc).id)}>{tl('寻路去集市')}</button>
+          <button onClick={() => store.requestWalk(nearestMarket(s.loc, s.waystones, moveSpeed(s)).id)}>{tl('寻路去集市')}</button>
         </div>
       )}
       <div className="go">
@@ -218,6 +220,8 @@ export function gearStats(id: string) {
   if (e.move) out.push(tl`移速 +${Math.round(e.move * 100)}%`);
   if (e.haste) out.push(tl`攻速 +${Math.round(e.haste * 100)}%`);
   if (e.hp) out.push(tl`生命 +${e.hp}`);
+  if (e.bag) out.push(tl`背包 +${e.bag} 格`);
+  if (e.sage) out.push(tl`经验 +${Math.round(e.sage * 100)}%（烧金币）`);
   if (e.xp) out.push(tl`经验 +${Math.round(e.xp * 1000) / 10}%`);
   if (e.luck) out.push(tl`掉率 +${Math.round(e.luck * 1000) / 10}%`);
   if (e.crit) out.push(tl`暴击 +${Math.round(e.crit * 1000) / 10}%`);
@@ -299,9 +303,10 @@ export function CharacterPanel({ s }: { s: GameState }) {
       <h2>{tl('装备 ')}<small className="muted">{tl`战斗等级 ${combatLevel(s)} · ${STYLE_NAME[style]}`}</small></h2>
       <div className="equip">{GEAR_SLOTS.map(([id, name]) => slot(id, name))}</div>
       <Attributes s={s} />
-      <h2>{tl('坐骑 ')}<small className="muted">{tl('骑上坐骑走路更快')}</small></h2>
+      <h2>{tl('坐骑与背包 ')}<small className="muted">{tl('骑上坐骑走路更快；背上背包多几格，或者用洞察者背包烧金币多拿经验')}</small></h2>
       <div className="equip tools">
         {slot('mount', tl('暂无坐骑'))}
+        {slot('pack', tl('暂无背包'))}
       </div>
       {!s.equipment.mount && <p className="muted">{tl('还没有坐骑。得到坐骑后从背包装备到这一栏（测试服可在「更多」页输入兑换码领取）。')}</p>}
       {s.equipment.mount && (
@@ -431,9 +436,9 @@ export function BagPanel({ s }: { s: GameState }) {
   const used = bagSlotsUsed(s.bag);
   return (
     <div className="page">
-      <h2>{tl('背包 ')}<small className="muted">{tl`${used}/${BAG_SLOTS} 格 · 物品每格 ${BAG_STACK} 个，装备每件一格`}</small></h2>
-      <div className="bag-meter"><i style={{ width: `${(used / BAG_SLOTS) * 100}%` }} /></div>
-      <ItemGrid items={items} sel={sel} onSel={setSel} onAct={(id) => store.dispatch((g) => quickUse(g, id))} empty={Math.max(0, BAG_SLOTS - used)} split />
+      <h2>{tl('背包 ')}<small className="muted">{tl`${used}/${bagSlots(s)} 格 · 物品每格 ${BAG_STACK} 个，装备每件一格`}</small></h2>
+      <div className="bag-meter"><i style={{ width: `${(used / bagSlots(s)) * 100}%` }} /></div>
+      <ItemGrid items={items} sel={sel} onSel={setSel} onAct={(id) => store.dispatch((g) => quickUse(g, id))} empty={Math.max(0, bagSlots(s) - used)} split />
       {sel && <ItemDetail s={s} id={sel} from="bag" />}
       {items.length > 0 && <button className="primary" disabled={!atBank(s)} onClick={() => store.dispatch(depositLoot)}>{tl('全部存入仓库')}</button>}
       {items.length > 0 && !atBank(s) && <FarFromBank />}
@@ -500,8 +505,8 @@ function SkillDetail({ s, skill, onPick }: { s: GameState; skill: SkillId; onPic
   const lvl = level(s, skill);
   // 离角色最近、且当前等级能做的地点；制作技能就是城里对应的建筑
   const usable = places.filter((p) => p.min <= Math.max(1, lvl));
-  const nearest = (info.group === 'produce' ? (usable.length ? usable : places) : [])
-    .slice().sort((a, b) => Math.hypot(a.node.x - s.loc.x, a.node.y - s.loc.y) - Math.hypot(b.node.x - s.loc.x, b.node.y - s.loc.y))[0];
+  const here = routeFromHere(s);
+  const nearest = nearestNode(s, (info.group === 'produce' ? (usable.length ? usable : places) : []).map((p) => p.node));
   return (
     <div className="skill-detail frame">
       <p>{info.desc}</p>
@@ -521,13 +526,13 @@ function SkillDetail({ s, skill, onPick }: { s: GameState; skill: SkillId; onPic
       )}
       {nearest && (
         // 制作类技能：直接寻路去最近的那座建筑（用户 10-23）
-        <button className="primary walk-to" onClick={() => store.requestWalk(nearest.node.id)}>{tl`寻路去${nearest.node.name}${nearest.node.town ? '' : tl`（${REGIONS[nearest.node.region].name}）`}`}
+        <button className="primary walk-to" onClick={() => store.requestWalk(nearest.node.id)}>{tl`寻路去${nearest.node.name}${nearest.node.town ? '' : tl`（${REGIONS[nearest.node.region].name}）`}`} <small>{etaText(nearest.route)}</small>
         </button>
       )}
       {places.map(({ node, min, max }) => (
         <div key={node.id} className="place-row">
           <button className="place" onClick={() => onPick(node.id)}>
-            <span>{node.name} <small className="muted">{REGIONS[node.region].name}</small></span>
+            <span>{node.name} <small className="muted">{REGIONS[node.region].name}</small> <small className="eta">{etaText(here(standOf(node)))}</small></span>
             <small>{min === max ? tl`${min} 级` : tl`${min}-${max} 级`} ›</small>
           </button>
           <button className="place walk" title={tl("寻路过去")} onClick={() => store.requestWalk(node.id)}>{tl('寻路')}</button>
@@ -853,9 +858,11 @@ const NODE_TABS: NodeTab[] = [
   { id: 'mining', name: tl('采矿'), skill: 'mining' }, { id: 'woodcutting', name: tl('伐木'), skill: 'woodcutting' },
   { id: 'fishing', name: tl('钓鱼'), skill: 'fishing' }, { id: 'gathering', name: tl('采集'), skill: 'gathering' },
   { id: 'hunting', name: tl('狩猎'), skill: 'hunting' }, { id: 'farming', name: tl('种植'), skill: 'farming' },
-  { id: 'thieving', name: tl('偷窃'), skill: 'thieving' }, { id: 'boss', name: tl('首领') }, { id: 'cave', name: tl('洞窟') },
+  { id: 'thieving', name: tl('偷窃'), skill: 'thieving' }, { id: 'monster', name: tl('怪物') }, { id: 'boss', name: tl('首领') }, { id: 'cave', name: tl('洞窟') },
 ];
 const BOSSES = Object.values(MONSTERS).filter((m) => m.rank === 'boss').sort((a, b) => a.level - b.level);
+/** 怪物快捷寻路页（用户 10-26）：所有能打的怪，按等级排 */
+const ALL_MONSTERS = Object.values(MONSTERS).filter((m) => nodesOfAction(`fight_${m.id}`).some((n) => !n.closed)).sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
 /** 设施属于哪座城：主城的设施名字不带前缀，其他城镇是「城名·设施」 */
 // 设施名是「城名·设施」；英文里没有「·」，按城名前缀拆
 const TOWN_NAMES = [tl('落霞城'), ...TOWNS.map((t) => t.name)].sort((a, b) => b.length - a.length);
@@ -887,7 +894,8 @@ export function NodeList({ s, onPick }: { s: GameState; onPick: (id: string) => 
   const [tabId, setTabId] = useSticky('nodes.tab', 'town');
   const tab = NODE_TABS.find((t) => t.id === tabId)!;
   const [townPick, setTownPick] = useSticky<string>('nodes.town', 'auto');
-  let rows: { key: string; id: string; name: string; sub: string; lv?: string; dim?: boolean }[] = [];
+  let rows: { key: string; id: string; name: string; sub: string; lv?: string; dim?: boolean; at?: MapNode[] }[] = [];
+  const here0 = routeFromHere(s);
   // 城镇设施只列一座城（用户 10-26）：在哪座城就列哪座，在野外列最近的那座；也能手动换
   const here = tab.id === 'town' ? nearestTown(s) : '';
   const shownTown = townPick !== 'auto' && TOWN_GROUPS.has(townPick) ? townPick : here;
@@ -895,14 +903,14 @@ export function NodeList({ s, onPick }: { s: GameState; onPick: (id: string) => 
     rows = (TOWN_GROUPS.get(shownTown) ?? []).map((n) => {
       const kinds = n.portal ? [tl('进家园岛屿')] : n.waystone ? [tl('传送')] : n.farm ? [tl('种植')] : n.id === RANCH ? [tl('养马')] : n.salvage ? [tl('分解装备')] : [...new Set(n.actions.map((id) => { const a = ACTIONS[id]; return a.kind === 'skill' ? SKILLS[a.skill].name : tl('战斗'); }))];
       if (n.id.includes('market')) kinds.unshift(tl('买卖'));
-      return { key: n.id, id: n.id, name: n.waystone ? tl('传说石碑') : splitTown(n.name)?.[1] ?? n.name, sub: n.closed ? tl('暂未开放') : n.opens === 'bank' ? tl('存取物品') : kinds.join(tl('、')), dim: n.closed };
+      return { key: n.id, id: n.id, at: [n], name: n.waystone ? tl('传说石碑') : splitTown(n.name)?.[1] ?? n.name, sub: n.closed ? tl('暂未开放') : n.opens === 'bank' ? tl('存取物品') : kinds.join(tl('、')), dim: n.closed };
     });
   } else if (tab.id === 'boss') {
-    rows = BOSSES.map((m) => ({ key: m.id, id: `fight_${m.id}`, name: m.name, sub: `${REGIONS[m.region].name} · ${s.bestiary?.[m.id] ? tl`已击败 ${s.bestiary[m.id]} 次` : tl('未击败')}`, lv: `Lv${m.level}` }));
+    rows = BOSSES.map((m) => ({ key: m.id, id: `fight_${m.id}`, at: nodesOfAction(`fight_${m.id}`), name: m.name, sub: `${REGIONS[m.region].name} · ${s.bestiary?.[m.id] ? tl`已击败 ${s.bestiary[m.id]} 次` : tl('未击败')}`, lv: `Lv${m.level}` }));
   } else if (tab.id === 'stone') {
     rows = WAYSTONES.map((n) => {
       const on = s.waystones?.includes(n.id);
-      return { key: n.id, id: n.id, name: n.name.replace(tl('传说石碑·'), ''), sub: `${REGIONS[n.region].name} · ${on ? tl('已激活') : tl('未激活')}`, dim: !on };
+      return { key: n.id, id: n.id, at: [n], name: n.name.replace(tl('传说石碑·'), ''), sub: `${REGIONS[n.region].name} · ${on ? tl('已激活') : tl('未激活')}`, dim: !on };
     });
   } else if (tab.id === 'cave') {
     rows = NODES.filter((n) => n.cave).map((n) => ({ key: n.id, id: n.id, name: n.name, sub: tl`${REGIONS[n.region].name} · 未开放`, dim: true }));
@@ -913,7 +921,7 @@ export function NodeList({ s, onPick }: { s: GameState; onPick: (id: string) => 
       const lo = Math.min(...lv);
       const hi = Math.max(...lv);
       const lock = level(s, tab.skill!) < lo;
-      return [{ key: n.id, id: n.id, name: n.name, sub: `${n.town ? townName(n) : REGIONS[n.region].name} · ${n.farm ? cropsOfField(n.id).map((c) => c.name).join(tl('、')) : tl`${lv.length} 项`}`, lv: lo === hi ? tl`${lo} 级` : tl`${lo}-${hi} 级`, dim: lock, lo }];
+      return [{ key: n.id, id: n.id, at: [n], name: n.name, sub: `${n.town ? townName(n) : REGIONS[n.region].name} · ${n.farm ? cropsOfField(n.id).map((c) => c.name).join(tl('、')) : tl`${lv.length} 项`}`, lv: lo === hi ? tl`${lo} 级` : tl`${lo}-${hi} 级`, dim: lock, lo }];
     }).sort((a, b) => a.lo - b.lo);
   }
   // 采矿、伐木、钓鱼、采集、狩猎、偷窃：按资源列出来，下面写它在哪些地点（用户 10-25：不用一个个点进地点找）
@@ -971,9 +979,10 @@ export function NodeList({ s, onPick }: { s: GameState; onPick: (id: string) => 
                   <small className="muted">{tl`${a.level} 级`}{tl` · ${a.spots.length} 处`}</small>
                 </div>
                 <div className="res-spots">
-                  {a.spots.map(({ action, node: n }) => (
-                    <button key={n.id} onClick={() => goRes(action, n.id)}>
-                      {n.name}<small className="muted"> · {n.town ? townName(n) : REGIONS[n.region].name}</small>
+                  {a.spots.map((x) => ({ ...x, r: here0(standOf(x.node)) })).sort((p, q) => p.r.ms - q.r.ms).map(({ action, node: n, r }, i) => (
+                    <button key={n.id} className={i === 0 && a.spots.length > 1 ? 'near' : ''} onClick={() => goRes(action, n.id)}>
+                      {i === 0 && a.spots.length > 1 && <b className="near-tag">{tl('最近')}</b>}
+                      {n.name}<small className="muted"> · {n.town ? townName(n) : REGIONS[n.region].name} · {etaText(r)}</small>
                     </button>
                   ))}
                 </div>
@@ -982,16 +991,64 @@ export function NodeList({ s, onPick }: { s: GameState; onPick: (id: string) => 
           })}
         </ul>
       )}
+      {tab.id === 'monster' && <MonsterFinder s={s} onPick={goRes} />}
       <ul className="node-list grid2">
         {!byRes && rows.map((r) => (
           <li key={r.key}>
             <button onClick={() => onPick(r.id)} className={r.dim ? 'cave' : ''}>
               <span className="row1"><b>{r.name}</b>{r.lv && <small className="muted">{r.lv}</small>}</span>
               <small className="muted">{r.sub}</small>
+              {r.at && r.at.length > 0 && tab.id !== 'cave' && <small className="eta">{etaText(nearestNode(s, r.at)!.route)}</small>}
             </button>
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/** 怪物快捷寻路（用户 10-26：想刷某种怪不用开地图慢慢找）：搜名字、按等级或距离排，点一下打开那里的任务页，「寻路」直接走过去 */
+function MonsterFinder({ s, onPick }: { s: GameState; onPick: (action: string, nodeId: string) => void }) {
+  const [q, setQ] = useState('');
+  const [rank, setRank] = useSticky<'all' | 'normal' | 'elite' | 'boss'>('nodes.monRank', 'all');
+  const [sort, setSort] = useSticky<'lv' | 'near'>('nodes.monSort', 'lv');
+  const [fit, setFit] = useSticky('nodes.monFit', false);
+  const cl = combatLevel(s);
+  const key = q.trim().toLowerCase();
+  let list = ALL_MONSTERS.filter((m) => (rank === 'all' || m.rank === rank) && (!key || m.name.toLowerCase().includes(key) || REGIONS[m.region].name.includes(key))
+    && (!fit || Math.abs(m.level - cl) <= 10)).map((m) => ({ m, near: nearestNode(s, nodesOfAction(`fight_${m.id}`).filter((n) => !n.closed))! }));
+  if (sort === 'near') list = list.sort((a, b) => a.near.route.ms - b.near.route.ms);
+  const shown = list.slice(0, 120);
+  return (
+    <div className="mon-finder">
+      <div className="mon-filter">
+        <input type="search" placeholder={tl('搜索怪物或区域')} value={q} onChange={(e) => setQ(e.target.value)} />
+        <select value={rank} onChange={(e) => setRank(e.target.value as typeof rank)}>
+          <option value="all">{tl('全部')}</option>
+          <option value="normal">{tl('普通')}</option>
+          <option value="elite">{tl('精英')}</option>
+          <option value="boss">{tl('首领')}</option>
+        </select>
+        <button className={`pill ${sort === 'near' ? 'on' : ''}`} onClick={() => setSort(sort === 'near' ? 'lv' : 'near')}>{sort === 'near' ? tl('按距离') : tl('按等级')}</button>
+        <button className={`pill ${fit ? 'on' : ''}`} onClick={() => setFit(!fit)}>{tl`适合我（${cl}±10 级）`}</button>
+      </div>
+      <p className="muted">{tl`共 ${list.length} 种。点一下打开那里的战斗页，点「寻路」直接走过去（远路自动用已激活的石碑）。`}</p>
+      <ul className="mon-rows">
+        {shown.map(({ m, near }) => (
+          <li key={m.id}>
+            <button className="mon-main" onClick={() => onPick(`fight_${m.id}`, near.node.id)}>
+              <MonsterIcon m={m} size={30} />
+              <span className="mon-text">
+                <span className="row1"><b>{m.name}</b><small className={`rank-${m.rank}`}>{tl`Lv${m.level}`}{m.world ? tl(' 世界首领') : m.rank === 'boss' ? tl(' 首领') : m.rank === 'elite' ? tl(' 精英') : ''}</small></span>
+                <small className="muted">{tl`${near.node.name}（${REGIONS[near.node.region].name}）离你最近`}{s.bestiary?.[m.id] ? tl` · 已击败 ${fmtNum(s.bestiary[m.id])}` : ''}</small>
+                <small className="eta">{etaText(near.route)}</small>
+              </span>
+            </button>
+            <button className="mon-go" onClick={() => store.track(m.id)}>{tl('寻路')}</button>
+          </li>
+        ))}
+      </ul>
+      {list.length > shown.length && <p className="muted">{tl`还有 ${list.length - shown.length} 种，搜索名字或筛选缩小范围。`}</p>}
     </div>
   );
 }
