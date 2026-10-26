@@ -93,6 +93,8 @@ export interface Presence {
   /** 在副本里（10-25 同步）：哪个洞口、第几层、进度、在副本里的像素位置和动作 */
   dg?: DungeonPresence;
   at: number;
+  /** 发送序号（发送方的毫秒时钟，单调递增）：在线状态和移动广播谁新用谁，见 presenceSync.ts */
+  s?: number;
 }
 
 export interface DungeonPresence {

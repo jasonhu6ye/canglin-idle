@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { levelSnapshot, online, type DungeonPresence, type Presence } from '../net';
+import { moveCadence } from '../net/presenceSync';
 import { rallyTime, updateAggro } from '../net/social';
 import { maxHp } from '../core/sim';
 import type { GameState } from '../core/types';
@@ -18,15 +19,31 @@ const VIEW_TILES = 80;
 /** 自己的位置多久发一次（没变化时） */
 const KEEPALIVE_MS = 15_000;
 
-/** 把自己的位置、装备和等级发出去：格子变了、换了东西或隔了一阵才发；每半秒最多看一次。副本里带上 dg（大地图和副本场景都调） */
+/** 别的在线玩家（看附近有没有人，决定发位置发多勤） */
+let everyone: Presence[] = [];
+let listening = false;
+/** 有几个人看得到我：副本里是同一个洞口的人，大地图上是视野范围里的人 */
+function watchers(x: number, y: number, dg?: DungeonPresence) {
+  let n = 0;
+  for (const p of everyone) {
+    if (dg ? p.dg?.gate === dg.gate : !p.dg && Math.abs(p.x - x) <= VIEW_TILES + 10 && Math.abs(p.y - y) <= VIEW_TILES + 10) n++;
+  }
+  return n;
+}
+
+/**
+ * 把自己的位置、装备和等级发出去：格子变了、换了东西或隔了一阵才发。副本里带上 dg（大地图和副本场景都调）。
+ * 附近有人看时发得勤（大地图每 0.25 秒、副本每 0.15 秒，人多了稍慢），没人看时 1.5 秒一次（10-26 优化延迟）
+ */
 let sent = { x: -1, y: -1, key: '', at: 0 };
 let checked = 0;
 export function publishSelf(st: GameState, x: number, y: number, work?: { anim: string; flip: boolean }, dg?: DungeonPresence) {
   if (!online.me()) return;
+  if (!listening) { listening = true; online.onPresence((all) => { everyone = all; }); }
   updateAggro(st, x, y, !!work?.anim.startsWith('fight-'), dg);
   const now = Date.now();
-  // 副本里位置变得快，队友要看得跟手一些
-  if (now - checked < (dg ? 150 : 500)) return;
+  const [gap, step] = moveCadence(watchers(x, y, dg), !!dg);
+  if (now - checked < Math.min(gap, 150)) return;
   checked = now;
   const action = st.paused ? undefined : st.queue[0]?.action;
   const mounted = st.mounted ? st.equipment.mount : undefined;
@@ -38,7 +55,8 @@ export function publishSelf(st: GameState, x: number, y: number, work?: { anim: 
     dg && [dg.gate, dg.floor, dg.idx, dg.phase, dg.kills, dg.anim, dg.flip, dg.dmg]]);
   const px = dg ? dg.x / T : x;
   const py = dg ? dg.y / T : y;
-  const moved = Math.abs(px - sent.x) + Math.abs(py - sent.y) >= (dg ? 1 : 2);
+  const moved = Math.abs(px - sent.x) + Math.abs(py - sent.y) >= step && now - sent.at >= gap;
+  // 打怪、换装备这类变化马上发（副本里队友要立刻看到伤害），只是走路才按节奏
   if (!moved && key === sent.key && now - sent.at < KEEPALIVE_MS) return;
   sent = { x: px, y: py, key, at: now };
   online.publishPresence({ x, y, outfit: st.settings.skin, action, mounted, equip: { ...st.equipment }, total: snap.total, combat: snap.combat, hp, maxHp: max, rally: rallyTime() || undefined, anim: work?.anim, flip: work?.flip, gates: st.gates?.length ? st.gates : undefined,
@@ -62,6 +80,10 @@ interface Other {
   front?: Phaser.GameObjects.Sprite;
   anim?: string;
   flip: boolean;
+  /** 副本里队友头顶的小血条（10-26） */
+  bar?: Phaser.GameObjects.Graphics;
+  hp?: number;
+  maxHp?: number;
 }
 
 export class OtherPlayers {
@@ -150,6 +172,18 @@ export class OtherPlayers {
     play(moving ? `walk-${o.dir}` : `idle-${o.dir}`);
   }
 
+  /** 副本里队友头顶画一条小血条，一眼看出谁快不行了 */
+  private drawBar(o: Other) {
+    if (!o.maxHp || o.hp == null) { o.bar?.setVisible(false); return; }
+    if (!o.bar) { o.bar = this.scene.add.graphics(); o.box.add(o.bar); }
+    const k = Math.max(0, Math.min(1, o.hp / o.maxHp));
+    const w = 16, y = o.name.y - 7;
+    o.bar.clear().setVisible(true)
+      .fillStyle(0x000000, 0.7).fillRect(-w / 2 - 1, y - 1, w + 2, 4)
+      .fillStyle(k < 0.3 ? 0xe04040 : k < 0.6 ? 0xe0b040 : 0x50d060, 1).fillRect(-w / 2, y, Math.max(k > 0 ? 1 : 0, Math.round(w * k)), 2);
+    o.box.bringToTop(o.bar);
+  }
+
   step(delta: number, near: { x: number; y: number }) {
     const seen = new Set<string>();
     // 同一格上一起干活、打怪的人各站各的位置（自己占第 0 个位置），远程往后站（用户 10-25）
@@ -190,6 +224,7 @@ export class OtherPlayers {
       }
       o.name.setText(p.guildTag ? `[${p.guildTag}] ${p.name}` : p.name);
       o.tx = tx; o.ty = ty;
+      o.hp = p.hp; o.maxHp = p.maxHp;
       this.setMount(o, p.mounted ? mountKindOf(p.mounted) : undefined);
       o.anim = at.anim && this.scene.anims.exists(`${key}:${at.anim}`) ? at.anim : undefined;
       if (o.anim) o.flip = !!at.flip;
@@ -213,6 +248,7 @@ export class OtherPlayers {
         moving = true;
       }
       this.pose(o, moving);
+      if (this.place) this.drawBar(o);
       o.box.setDepth(o.box.y + 999);
     }
   }

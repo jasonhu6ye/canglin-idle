@@ -2,6 +2,7 @@ import { createClient, type RealtimeChannel, type SupabaseClient } from '@supaba
 import type { GameState, GmBuff } from '../core/types';
 import type { GmInput, GmMail, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildMember, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { levelSnapshot } from './api';
+import { fastOf, readFast, slowKey, withMove, type Fast } from './presenceSync';
 import { tl } from '../i18n';
 
 /** Supabase 实现（10-25 用户选定）。表和权限见 supabase/schema.sql */
@@ -24,9 +25,16 @@ function ok(r: { data: any; error: { message: string } | null }): any {
   return r.data;
 }
 
-/** 轮询别人位置的间隔、自己写位置的最短间隔（45 秒没更新算下线，在 SQL 里） */
+/**
+ * 轮询别人位置的间隔、自己写位置的最短间隔（45 秒没更新算下线，在 SQL 里）。
+ * 实时连得上时位置走广播，数据库只是兜底：慢慢拉、慢慢写，给数据库减负（10-26）
+ */
 const POLL_MS = 4000;
+const POLL_RT_MS = 20_000;
 const WRITE_MS = 3000;
+const WRITE_RT_MS = 15_000;
+/** 两次 presence track 至少隔多久（免费版全服每秒 20 条 presence），中间的变化攒着最后一次发 */
+const TRACK_MS = 4000;
 
 export class SupabaseApi implements OnlineApi {
   readonly kind = 'supabase';
@@ -42,6 +50,13 @@ export class SupabaseApi implements OnlineApi {
   private poller: ReturnType<typeof setInterval> | null = null;
   private wroteAt = 0;
   private writeTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 收到的移动广播（按玩家），比在线状态新就叠上去 */
+  private moves = new Map<string, Fast>();
+  private seq = 0;
+  private tracked = { key: '', at: 0 };
+  private trackTimer: ReturnType<typeof setTimeout> | null = null;
+  private mergeTimer: ReturnType<typeof setTimeout> | null = null;
+  private pingCh: RealtimeChannel | null = null;
 
   constructor(url: string, key: string) {
     this.sb = createClient(url, key, { auth: { persistSession: true, storageKey: 'canglin-auth' } });
@@ -97,9 +112,15 @@ export class SupabaseApi implements OnlineApi {
     this.count_ = null;
     if (this.poller) clearInterval(this.poller);
     if (this.writeTimer) clearTimeout(this.writeTimer);
-    this.poller = this.writeTimer = null;
-    this.rtSeen.clear(); this.dbSeen.clear(); this.byId.clear(); this.ids_ = new Set();
+    if (this.trackTimer) clearTimeout(this.trackTimer);
+    if (this.mergeTimer) clearTimeout(this.mergeTimer);
+    this.poller = this.writeTimer = this.trackTimer = this.mergeTimer = null;
+    if (this.pingCh) void this.sb.removeChannel(this.pingCh);
+    this.pingCh = null;
+    this.rtSeen.clear(); this.dbSeen.clear(); this.byId.clear(); this.moves.clear(); this.ids_ = new Set();
     this.lastPresence = null;
+    this.tracked = { key: '', at: 0 };
+    this.rt_ = 'connecting';
   }
   private need() {
     if (!this.profile) throw new Error(tl('请先登录'));
@@ -215,7 +236,24 @@ export class SupabaseApi implements OnlineApi {
   async cancelTrade(tradeId: string) { ok(await this.sb.rpc('cancel_trade', { p_trade: tradeId })); }
   async claimTrade(tradeId: string) { return ok(await this.sb.rpc('claim_trade', { p_trade: tradeId })) as boolean; }
   onlineCount() { if (this.profile) this.channel(); return this.count_; }
+  /**
+   * 延迟：实时连得上就测实时通道一个来回（别的玩家的位置、副本队友的伤害都走这条，最能说明手感）；
+   * 连不上再测一次数据库请求
+   */
   async ping() {
+    if (this.rt_ === 'ok') {
+      if (!this.pingCh) {
+        this.pingCh = this.sb.channel(`ping-${this.need().id}`, { config: { broadcast: { ack: true, self: false } } });
+        const ch = this.pingCh;
+        await Promise.race([
+          new Promise<void>((res) => ch.subscribe((st) => { if (st === 'SUBSCRIBED') res(); })),
+          new Promise<void>((res) => setTimeout(res, 3000)),
+        ]);
+      }
+      const t = performance.now();
+      const r = await this.pingCh.send({ type: 'broadcast', event: 'p', payload: {} });
+      if (r === 'ok') return Math.round(performance.now() - t);
+    }
     const t = performance.now();
     ok(await this.sb.from('guilds').select('id').limit(1));
     return Math.round(performance.now() - t);
@@ -228,18 +266,28 @@ export class SupabaseApi implements OnlineApi {
   private channel() {
     const me = this.need();
     if (!this.poller) {
-      this.poller = setInterval(() => void this.pollPositions(), POLL_MS);
+      // 实时正常时数据库只是兜底，20 秒拉一次；连不上才 4 秒一次
+      let n = 0;
+      this.poller = setInterval(() => { n++; if (this.rt_ !== 'ok' || n % (POLL_RT_MS / POLL_MS) === 0) void this.pollPositions(); }, POLL_MS);
       void this.pollPositions();
     }
     if (this.world) return this.world;
-    const ch = this.sb.channel('world', { config: { presence: { key: me.id } } });
+    const ch = this.sb.channel('world', { config: { presence: { key: me.id }, broadcast: { self: false, ack: false } } });
     ch.on('presence', { event: 'sync' }, () => {
       this.rtSeen = new Map();
       for (const [, metas] of Object.entries(ch.presenceState<Presence>())) if (metas[0]) this.rtSeen.set(metas[0].playerId, metas[0]);
       this.mergePresence();
+    }).on('broadcast', { event: 'mv' }, ({ payload }) => {
+      const m = readFast(payload);
+      if (!m || m.id === me.id) return;
+      const old = this.moves.get(m.id);
+      if (old && old.s >= m.s) return;
+      this.moves.set(m.id, m);
+      this.scheduleMerge();
     }).subscribe((status, err) => {
       if (status === 'SUBSCRIBED') {
         this.rt_ = 'ok';
+        this.tracked = { key: '', at: 0 };
         if (this.lastPresence) this.publishPresence(this.lastPresence);
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
         this.rt_ = 'failed';
@@ -249,11 +297,19 @@ export class SupabaseApi implements OnlineApi {
     return (this.world = ch);
   }
   /** 两路合起来，同一个人取更新的那条 */
+  /** 移动广播一秒能来好几十条：攒 50 毫秒合一次，界面不用跟着每条都重画 */
+  private scheduleMerge() {
+    if (this.mergeTimer) return;
+    this.mergeTimer = setTimeout(() => { this.mergeTimer = null; this.mergePresence(); }, 50);
+  }
   private mergePresence() {
     const me = this.profile;
     if (!me) return;
     const all = new Map(this.dbSeen);
     for (const [id, p] of this.rtSeen) { const d = all.get(id); if (!d || (p.at ?? 0) >= (d.at ?? 0)) all.set(id, p); }
+    for (const [id, p] of all) all.set(id, withMove(p, this.moves.get(id)));
+    // 下线的人的移动记录也清掉
+    for (const id of this.moves.keys()) if (!all.has(id)) this.moves.delete(id);
     if (this.lastPresence) all.set(me.id, this.mine(this.lastPresence));
     this.count_ = Math.max(1, all.size);
     this.ids_ = new Set([...all.keys(), me.id]);
@@ -276,16 +332,35 @@ export class SupabaseApi implements OnlineApi {
   }
   private mine(p: Omit<Presence, 'playerId' | 'name' | 'at'>): Presence {
     const me = this.need();
-    return { ...p, playerId: me.id, pid: me.pid, name: me.name, guildTag: me.guildTag, at: Date.now() };
+    return { ...p, playerId: me.id, pid: me.pid, name: me.name, guildTag: me.guildTag, at: Date.now(), s: this.seq };
   }
   publishPresence(p: Omit<Presence, 'playerId' | 'name' | 'at'>) {
     if (!this.profile) return;
     this.lastPresence = p;
-    void this.channel().track(this.mine(p));
-    // 写数据库不用那么勤：最多每 WRITE_MS 一次，最后一次一定写上
-    const wait = this.wroteAt + WRITE_MS - Date.now();
+    this.seq = Math.max(Date.now(), this.seq + 1);
+    const ch = this.channel();
+    if (this.rt_ === 'ok') {
+      // 慢变的东西变了才 track（最多每 TRACK_MS 一次，攒着发最后的）；位置和动作每次都走广播
+      const key = slowKey(p);
+      if (key !== this.tracked.key) this.trackSoon();
+      void ch.send({ type: 'broadcast', event: 'mv', payload: { id: this.need().id, ...fastOf(p, this.seq) } });
+    }
+    // 写数据库不用那么勤：最多每 WRITE_MS 一次（实时正常时 15 秒），最后一次一定写上
+    const wait = this.wroteAt + (this.rt_ === 'ok' ? WRITE_RT_MS : WRITE_MS) - Date.now();
     if (wait <= 0) void this.writePosition();
     else if (!this.writeTimer) this.writeTimer = setTimeout(() => { this.writeTimer = null; void this.writePosition(); }, wait);
+  }
+  private trackSoon() {
+    if (this.trackTimer) return;
+    const go = () => {
+      this.trackTimer = null;
+      if (!this.profile || !this.lastPresence || !this.world || this.rt_ !== 'ok') return;
+      this.tracked = { key: slowKey(this.lastPresence), at: Date.now() };
+      void this.world.track(this.mine(this.lastPresence));
+    };
+    const wait = this.tracked.at + TRACK_MS - Date.now();
+    if (wait <= 0) go();
+    else this.trackTimer = setTimeout(go, wait);
   }
   private async writePosition() {
     if (!this.profile || !this.lastPresence) return;
