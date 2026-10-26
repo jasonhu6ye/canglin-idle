@@ -57,7 +57,7 @@ describe('数据闭环', () => {
       expect(made.has(it.id), `${it.name} 没有来源`).toBe(true);
       const usable = used.has(it.id) || !!it.equip || !!it.heals || !!it.ammo || !!it.opens || it.category === 'loot' || it.category === 'deco';
       // 南瓜积分留给以后的兑换商店（用户 10-24）
-      if (!['coins', 'bones', 'burnt_food', 'pumpkin_pt'].includes(it.id) && !it.id.startsWith('enhstone_') && !/^(crystal|resin|feather)_\d$/.test(it.id)) expect(usable, `${it.name} 没有用途`).toBe(true);
+      if (!['coins', 'bones', 'burnt_food', 'pumpkin_pt'].includes(it.id) && !it.id.startsWith('enhstone_') && !/^feather_\d$/.test(it.id)) expect(usable, `${it.name} 没有用途`).toBe(true);
     }
   });
 });

@@ -238,11 +238,21 @@ export function emptySummary(): Summary {
 }
 
 export const level = (s: GameState, skill: SkillId) => levelForXp(s.xp[skill]);
-/** 身上所有装备某项加成之和（饰品的生命、经验、掉率、暴击、闪避、干活速度，火把和项链的攻速） */
-export function gearSum(s: GameState, k: 'hp' | 'xp' | 'luck' | 'crit' | 'dodge' | 'work' | 'haste') {
+/** 身上所有装备某项加成之和（饰品的生命、经验、掉率、暴击、闪避、干活速度，火把和项链的攻速，灯笼的吸血） */
+export function gearSum(s: GameState, k: 'hp' | 'xp' | 'luck' | 'crit' | 'dodge' | 'work' | 'haste' | 'leech') {
   let n = 0;
   for (const id of Object.values(s.equipment)) n += (id && ITEMS[id]?.equip?.[k]) || 0;
   return n;
+}
+/** 灯笼吸血（10-26）：打出 dmg 伤害后回血；不足 1 点的部分按几率补 1 点，长期期望正好是 dmg×吸血比例 */
+function leechHeal(s: GameState, dmg: number, rand: () => number) {
+  const ls = gearSum(s, 'leech');
+  if (!ls || s.hp <= 0) return 0;
+  const x = dmg * ls;
+  const heal = Math.floor(x) + (rand() < x - Math.floor(x) ? 1 : 0);
+  const before = s.hp;
+  s.hp = Math.min(maxHp(s), s.hp + heal);
+  return s.hp - before;
 }
 export const maxHp = (s: GameState) => Math.round((level(s, 'hitpoints') * 10 + gearSum(s, 'hp')) * (1 + gmPct(s, 'hp')));
 
@@ -534,7 +544,9 @@ export function combatEstimate(s: GameState, m: MonsterDef) {
   const heal = ((m.traits.includes('regen') ? Math.ceil(m.hp * regenPct(m)) : 0) + (m.traits.includes('lifesteal') ? mAvg / 2 : 0)) / m.attackMs;
   const dps = avg / swing - heal;
   const killMs = dps > 1e-6 ? m.hp / dps : Infinity;
-  const taken = killMs === Infinity ? Infinity : (mAvg / m.attackMs) * killMs;
+  // 灯笼吸血抵掉一部分掉血
+  const leech = gearSum(s, 'leech') * avg / swing;
+  const taken = killMs === Infinity ? Infinity : Math.max(0, mAvg / m.attackMs - leech) * killMs;
   const hp = maxHp(s);
   const ratio = taken / hp;
   const rating = killMs === Infinity ? tl('打不动') : ratio < 0.2 ? tl('轻松') : ratio < 0.5 ? tl('适中') : ratio < 1 ? tl('危险') : tl('很难');
@@ -898,12 +910,14 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       c.pSwings = (c.pSwings ?? 0) + 1;
       c.pDmg = -1;
       c.pCrit = false;
+      c.pLeech = undefined;
       if (rand() < st.playerHit) {
         let raw = 1 + Math.floor(rand() * st.playerMaxHit);
         if (rand() < st.crit) { raw *= st.critMult; c.pCrit = true; }
         const dmg = Math.max(1, Math.min(c.monsterHp, Math.round(raw)));
         c.monsterHp -= dmg;
         c.pDmg = dmg;
+        c.pLeech = leechHeal(s, dmg, rand) || undefined;
         addXp(st.style, dmg);
         addXp('defence', dmg / 3);
         addXp('hitpoints', dmg / 3);
@@ -1023,12 +1037,14 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       c.pSwings = (c.pSwings ?? 0) + 1;
       c.pDmg = -1;
       c.pCrit = false;
+      c.pLeech = undefined;
       if (rand() < st.playerHit) {
         let raw = 1 + Math.floor(rand() * st.playerMaxHit);
         if (rand() < st.crit) { raw *= st.critMult; c.pCrit = true; }
         const dmg = Math.max(1, Math.min(c.monsterHp, Math.round(raw)));
         c.monsterHp -= dmg;
         c.pDmg = dmg;
+        c.pLeech = leechHeal(s, dmg, rand) || undefined;
         addXp(st.style, dmg);
         addXp('defence', dmg / 3);
         addXp('hitpoints', dmg / 3);

@@ -96,6 +96,8 @@ export interface ItemDef {
     crit?: number;
     dodge?: number;
     work?: number;
+    /** 灯笼（10-26）：吸血，打出伤害的这个比例回成自己的血（0.05 = 5%） */
+    leech?: number;
   };
 }
 
@@ -223,6 +225,8 @@ export interface CombatState {
   mDmg?: number;
   /** 最近一次出手是不是暴击（飘字用） */
   pCrit?: boolean;
+  /** 这一下灯笼吸回了多少血 */
+  pLeech?: number;
   /** 怪物最近一次出手：elite / boss 大招，enrage 刚进入狂怒 */
   mArt?: string;
   /** 首领已经狂怒了 */

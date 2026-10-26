@@ -822,4 +822,7 @@ export const EN_UI: Record<string, string> = {
   "闪避 +{0}%": "Dodge +{0}%",
   "干活速度 +{0}%": "Work speed +{0}%",
   " · 火把、项链攻速 +{0}": " · torch & necklace attack speed +{0}",
+  " · 吸血 {0}%（打出伤害的 {1}% 回成生命）": " · Lifesteal {0}% ({1}% of damage dealt heals you)",
+  "吸血 {0}%": "Lifesteal {0}%",
+  "灯笼：打出伤害的这部分回成生命": "Lantern: this share of damage dealt heals you",
 };

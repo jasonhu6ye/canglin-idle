@@ -6,7 +6,7 @@ import {
   atBank, atMarket, nearestBank, nearestMarket, BAG_SLOTS, BELT_CAP, beltSlotOf, eat, fromBelt, POTION_AT, toBelt, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, armorPerks, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip, openContainer,
   weaponStyle, walkPos, buffPct, levelSpeed, maxHp, moveSpeed, playerAttackMs,
   redeemCode, toggleMount,
-  sortBank, toolSkillNames, TOOL_FOR, playerHaste, combineShards,
+  sortBank, toolSkillNames, TOOL_FOR, playerHaste, combineShards, gearSum,
 } from '../core/sim';
 import { USE_KEY } from '../game/MapScene';
 import { TownScrollPicker } from './Dungeon';
@@ -83,7 +83,7 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
         <span className={canEquip ? '' : 'warn'}>
           {e.move ? tl`坐骑 · 骑乘时移动速度 +${Math.round(e.move * 100)}%` : tl`需要${SKILLS[e.skill].name} ${e.level} 级`}
           {e.slot === 'ring' || e.slot === 'neck' ? ` · ${jewelLine(e)}` : e.move ? '' : e.speed ? tl` · ${toolSkillNames(e.slot) || SKILLS[e.skill].name}速度 +${Math.round(e.speed * 100)}%` : tl` · 攻 +${e.attack} 力 +${e.strength} 防 +${e.defence}${e.attackMs ? tl` · 攻速 ${(e.attackMs / 1000).toFixed(1)} 秒` : ''}`}
-          {!e.move && !e.speed && e.haste && e.slot !== 'neck' ? tl` · 攻速 +${Math.round(e.haste * 100)}%` : ''}{e.twoHanded ? tl(' · 双手持握，不能用副手') : ''}
+          {!e.move && !e.speed && e.haste && e.slot !== 'neck' ? tl` · 攻速 +${Math.round(e.haste * 100)}%` : ''}{e.twoHanded ? tl(' · 双手持握，不能用副手') : ''}{e.leech ? tl` · 吸血 ${Math.round(e.leech * 100)}%（打出伤害的 ${Math.round(e.leech * 100)}% 回成生命）` : ''}
           {e.style && e.slot !== 'weapon' && tl`（攻、力只对${STYLE_NAME[e.style]}生效）`}
         </span>
       )}
@@ -222,6 +222,7 @@ export function gearStats(id: string) {
   if (e.crit) out.push(tl`暴击 +${Math.round(e.crit * 1000) / 10}%`);
   if (e.dodge) out.push(tl`闪避 +${Math.round(e.dodge * 1000) / 10}%`);
   if (e.work) out.push(tl`干活速度 +${Math.round(e.work * 1000) / 10}%`);
+  if (e.leech) out.push(tl`吸血 ${Math.round(e.leech * 100)}%`);
   if (e.twoHanded) out.push(tl('双手'));
   return out.join(' · ');
 }
@@ -385,6 +386,7 @@ function Attributes({ s }: { s: GameState }) {
             {row(tl('暴击'), `${pct(0.05 + perks.crit)} · ×1.5`, <>{tl('基础 5%')}{perks.crit > 0 && <>{tl` · 布甲 +${pct(perks.crit)}`}</>}</>)}
             {row(tl('闪避'), pct(perks.dodge), <>{tl('基础 3%')}{perks.dodge > 0.03 && <>{tl` · 皮甲 +${pct(perks.dodge - 0.03)}`}</>}</>)}
             {row(tl('减伤'), pct(perks.reduce), perks.reduce > 0 ? tl('板甲每件 3%') : tl('穿板甲每件减 3%'))}
+            {gearSum(s, 'leech') > 0 && row(tl('吸血'), pct(gearSum(s, 'leech')), tl('灯笼：打出伤害的这部分回成生命'))}
           </>;
         })()}
         {row(tl('防御加成'), `+${b.defence}`, <>{tl`全身装备 · 防御等级 ${level(s, 'defence')}`}{defBuff > 0 && <>{tl` · 料理防御 +${pct(defBuff)}`}</>}</>)}

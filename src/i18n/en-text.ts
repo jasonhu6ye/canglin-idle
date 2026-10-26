@@ -725,4 +725,8 @@ export const EN_TEXT: Record<string, string> = {
   "项链 5 种：力量项链（力量）、守护项链（防御）、迅捷项链（攻速）、学者项链（经验）、幸运项链（稀有掉落）。": "5 necklaces: Might (strength), Guard (defence), Swift (attack speed), Sage (XP) and Fortune (rare drops).",
   "戒指 5 种：精准戒指（攻击）、暴怒戒指（暴击）、生命戒指（生命上限）、灵影戒指（闪避）、匠心戒指（采集制作速度）。": "5 rings: Aim (attack), Fury (crit), Life (max HP), Shadow (dodge) and Artisan (gathering and crafting speed).",
   "T1-T8 每阶 10 件都有不同造型，在工坊制作：锭 + 晶石（项链再加布料），T5 起要宝石。制作也会出品质。": "All 10 pieces have a unique look at every tier from T1 to T8. Craft them at the Workshop from bars + crystals (necklaces also need cloth), with gems from T5 on. Crafted jewelry rolls quality too.",
+  "护甲分工、新副手灯笼、交易可放背包物品": "Armor roles, new Lantern off-hand, trading from your bag",
+  "护甲重新分工：板甲给大量防御和少量攻击、力量；皮甲攻防均衡；布甲给大量攻击、力量和少量防御。攻击和力量仍只对对应战斗方式生效（板甲近战、皮甲远程、布甲魔法）。": "Armor roles reworked: plate gives lots of defence plus a little attack and strength, leather is balanced, and cloth gives lots of attack and strength plus a little defence. Attack and strength still only apply to the matching style (plate melee, leather ranged, cloth magic).",
+  "新副手「灯笼」：任何战斗方式都加力量（伤害），还有固定 5% 吸血，打出伤害的 5% 回成自己的生命，打中时头顶会飘红色的回血数字。锻造制作：锭 ×1 + 树脂 ×2，T1-T8 每阶造型都不一样。": "New off-hand: the Lantern. It adds strength (damage) for every combat style and has a fixed 5% lifesteal, so 5% of the damage you deal heals you, shown as a red number over your head. Smithed from 1 bar + 2 resin, with a unique look at every tier from T1 to T8.",
+  "交易可以从背包放东西了：放出去的东西先从仓库扣，不够再从背包扣。": "Trades can now include items from your bag. What you give is taken from your bank first, then your bag.",
 };

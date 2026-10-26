@@ -815,6 +815,7 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .trade { padding: 8px; margin: 8px 0; }
 .trade h4 { margin: 0 0 4px; font-size: 13px; }
 .trade-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.trade-add { display: flex; flex-wrap: wrap; gap: 4px; }
 .trade-items { list-style: none; margin: 0 0 6px; padding: 0; display: flex; flex-direction: column; gap: 3px; }
 .trade-items li { display: flex; align-items: center; gap: 6px; padding: 3px 6px; background: #120b07; box-shadow: 0 0 0 1px var(--edge); font-size: 12px; }
 .trade-items li .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

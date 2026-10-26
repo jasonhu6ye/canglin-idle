@@ -888,4 +888,5 @@ export const EN_CORE: Record<string, string> = {
   "灵影戒指": "Shadow Ring",
   "闪避几率": "Dodge chance",
   "匠心戒指": "Artisan Ring",
+  "灯笼": "Lantern",
 };

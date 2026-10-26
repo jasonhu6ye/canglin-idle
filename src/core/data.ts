@@ -325,7 +325,7 @@ item(SCROLL_TOWN, tl('回城卷轴'), 'misc', 200, {
  * mat 是材料：bar 精炼锭、plank 加工木材、leather 皮革、cloth 布料。
  * plus 是在本阶解锁等级上再加几级才能做。
  */
-type Mat = 'bar' | 'plank' | 'leather' | 'cloth';
+type Mat = 'bar' | 'plank' | 'leather' | 'cloth' | 'resin';
 export interface EquipType {
   key: string;
   name: string;
@@ -336,7 +336,7 @@ export interface EquipType {
   maker: SkillId;
   mats: [Mat, number][];
   plus: number;
-  stats: { attack?: number; strength?: number; defence?: number; style?: CombatStyle; speed?: boolean; attackMs?: number; haste?: boolean; twoHanded?: boolean };
+  stats: { attack?: number; strength?: number; defence?: number; style?: CombatStyle; speed?: boolean; attackMs?: number; haste?: boolean; twoHanded?: boolean; leech?: number };
   group: string;
 }
 const W = (key: string, name: string, skill: SkillId, maker: SkillId, mats: [Mat, number][], plus: number, attack: number, strength: number, attackMs: number, style: CombatStyle): EquipType =>
@@ -375,14 +375,19 @@ export const EQUIP_TYPES: EquipType[] = [
   // 魔法：加工木材 + 布料
   W('staff', tl('法杖'), 'magic', 'crafting', [['plank', 2], ['cloth', 1]], 4, 1.0, 1.1, 2400, 'magic'),
   // 护甲：头、身、脚、手
-  ...A('plate', [tl('板甲头盔'), tl('板甲胸甲'), tl('板甲战靴'), tl('板甲护手')], 'bar', 'smithing', 2.0, 0, 0.25, 'melee'),
-  ...A('leather', [tl('皮帽'), tl('皮甲'), tl('皮靴'), tl('皮手套')], 'leather', 'crafting', 1.4, 0.5, 0, 'ranged'),
-  ...A('cloth', [tl('布帽'), tl('布袍'), tl('布鞋'), tl('布手套')], 'cloth', 'crafting', 1.0, 0.3, 0.4, 'magic'),
+  // 护甲分工（用户 10-26）：板甲大量防御 + 少量攻击力量；皮甲攻防均衡；布甲大量攻击力量 + 少量防御。
+  // 攻击和力量只对对应战斗方式生效（板甲近战、皮甲远程、布甲魔法），防御对谁都算
+  ...A('plate', [tl('板甲头盔'), tl('板甲胸甲'), tl('板甲战靴'), tl('板甲护手')], 'bar', 'smithing', 2.6, 0.2, 0.3, 'melee'),
+  ...A('leather', [tl('皮帽'), tl('皮甲'), tl('皮靴'), tl('皮手套')], 'leather', 'crafting', 1.5, 0.55, 0.6, 'ranged'),
+  ...A('cloth', [tl('布帽'), tl('布袍'), tl('布鞋'), tl('布手套')], 'cloth', 'crafting', 0.6, 0.85, 1.0, 'magic'),
   // 副手（用户 10-25）：火把加攻速（任何战斗方式），副手盾加防御，箭袋只加远程，魔法书只加魔法
   OH('torch', tl('火把'), 'defence', 'fletching', [['plank', 1], ['cloth', 1]], 1, { haste: true }),
   OH('buckler', tl('副手盾'), 'defence', 'smithing', [['bar', 2]], 3, { defence: 0.6 }),
   OH('quiver', tl('箭袋'), 'ranged', 'crafting', [['leather', 2]], 2, { attack: 0.3, strength: 0.35, style: 'ranged' }),
   OH('tome', tl('魔法书'), 'magic', 'crafting', [['cloth', 2]], 2, { attack: 0.3, strength: 0.35, style: 'magic' }),
+  // 灯笼（用户 10-26）：任何战斗方式都加力量（伤害），外加固定 5% 吸血（打出伤害的 5% 回成自己的血，不随阶级和品质变）。
+  // 锭做灯架、树脂当灯油（树脂线终于有用途了）
+  OH('lantern', tl('灯笼'), 'defence', 'smithing', [['bar', 1], ['resin', 2]], 3, { strength: 0.4, leech: 0.05 }),
   // 工具
   TL('axe', tl('斧头'), 'axe', 'woodcutting', 'smithing', [['bar', 1], ['plank', 1]], 1),
   TL('pickaxe', tl('镐子'), 'pickaxe', 'mining', 'smithing', [['bar', 1], ['plank', 1]], 1),
@@ -410,7 +415,7 @@ TIERS.forEach((t, i) => {
         slot: e.slot, skill: e.skill, level: t.level,
         attack: Math.round(p * (st.attack ?? 0)), strength: Math.round(p * (st.strength ?? 0)), defence: Math.round(p * (st.defence ?? 0)),
         style: st.style, speed: st.speed ? TOOL_SPEED[i] : undefined, attackMs: st.attackMs,
-        ...(st.haste ? { haste: TORCH_HASTE[i] } : {}), ...(st.twoHanded ? { twoHanded: true } : {}),
+        ...(st.haste ? { haste: TORCH_HASTE[i] } : {}), ...(st.twoHanded ? { twoHanded: true } : {}), ...(st.leech ? { leech: st.leech } : {}),
       },
     });
   }

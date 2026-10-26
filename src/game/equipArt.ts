@@ -738,6 +738,96 @@ function torch(p: Pix, t: number) {
   axis(p, parts, 3.5, 20.5);
 }
 
+function lantern(p: Pix, t: number) {
+  // 灯笼（用户 10-26，副手）：正面挂着的一盏灯，顶上提环、灯帽、灯身、底座；灯里是吸魂的火。
+  // 造型逐阶不同：纸灯笼、铜六角灯、鸟笼灯、铁方灯带角、冰晶菱灯、符文八角灯、陨铁刺灯、金顶宝塔灯
+  const M = ramp(METAL[t]);
+  const A = ramp(ACCENT[t]);
+  const fire = [['#ff6a1a', '#ffb43a', '#fff0a0'], ['#e8a020', '#ffd84a', '#fffad0'], ['#3ac06a', '#8af0a0', '#eaffea'], ['#c8202a', '#ff5a4a', '#ffd0c0'],
+    ['#3aa8ff', '#8ae0ff', '#f0ffff'], ['#8a3aff', '#c08aff', '#f4e8ff'], ['#a80a2a', '#ff2a4a', '#ffb0c0'], ['#e8b020', '#fff060', '#ffffff']][t];
+  const glass = mix(fire[0], '#140c18', 0.55);
+  const cx = 12;
+  const y0 = 7, y1 = 18;
+  // 灯身半宽：k = 0（顶）… 1（底）
+  const half = (k: number, y: number) => {
+    switch (t) {
+      case 0: return 1.5 + 6 * Math.pow(Math.sin(Math.PI * k), 0.55);
+      case 1: return k < 0.25 ? 3.5 + k * 10 : k > 0.75 ? 3.5 + (1 - k) * 10 : 6;
+      case 2: return 3.5 + 2.5 * Math.sin(Math.PI * k);
+      case 3: return 5.5;
+      case 4: return 1 + 7 * (1 - Math.abs(2 * k - 1));
+      case 5: return k < 0.2 ? 4 + k * 10 : k > 0.8 ? 4 + (1 - k) * 10 : 6;
+      case 6: return 5.5 + (y % 4 === 1 ? 1.6 : 0);
+      default: return 4.5 + 1.5 * Math.sin(Math.PI * k);
+    }
+  };
+  // 提环和吊链
+  for (let y = 0; y <= 2; y++) for (let x = 10; x <= 14; x++) {
+    const d = Math.hypot(x + 0.5 - cx, y + 0.5 - 2.2);
+    if (Math.abs(d - 1.8) < 0.6 && y < 3) p.set(x, y, M[3]);
+  }
+  p.set(cx, 3, M[2]); p.set(cx - 1, 3, M[1]);
+  // 灯帽：纸灯是一圈木箍，宝塔灯是翘角大屋顶，其余是金属帽
+  if (t === 7) {
+    for (let y = 3; y <= 6; y++) {
+      const w = 3 + (y - 3) * 2.4;
+      for (let x = Math.floor(cx - w); x < Math.ceil(cx + w); x++) p.set(x, y, y === 6 ? GOLDS[1] : x < cx ? GOLDS[3] : GOLDS[2]);
+    }
+    p.set(Math.floor(cx - 10.6), 5, GOLDS[3]); p.set(Math.ceil(cx + 10.6) - 1, 5, GOLDS[3]);
+  } else {
+    const w = t === 0 ? 3 : t === 4 ? 2 : 4;
+    for (let y = 4; y <= 6; y++) for (let x = cx - w - (y === 6 ? 1 : 0); x < cx + w + (y === 6 ? 1 : 0); x++)
+      p.set(x, y, t === 0 ? ramp(WOODS[0])[y === 6 ? 1 : 2] : y === 6 ? M[1] : x < cx ? M[3] : M[2]);
+    if (t === 3) for (const sg of [-1, 1]) { p.set(cx + sg * 5 - (sg < 0 ? 0 : 1), 4, M[3]); p.set(cx + sg * 6 - (sg < 0 ? 0 : 1), 3, M[4]); } // 铁方灯两只角
+  }
+  // 灯身
+  for (let y = y0; y <= y1; y++) {
+    const k = (y + 0.5 - y0) / (y1 + 1 - y0);
+    const w = half(k, y);
+    for (let x = 0; x < N; x++) {
+      const dx = x + 0.5 - cx;
+      if (Math.abs(dx) > w) continue;
+      const edge = Math.abs(dx) > w - 1;
+      let c: string;
+      if (t === 0) {
+        // 红纸：横向竹篾，左亮右暗
+        c = y % 3 === 0 ? '#8a3020' : dx < -2 ? '#f0604a' : dx > 2 ? '#a82a22' : '#e0402e';
+      } else if (edge) c = M[dx < 0 ? 3 : 1];
+      else {
+        const bar = t === 2 ? Math.floor(x) % 2 === 0
+          : t === 1 || t === 5 ? Math.abs(dx) < 0.6 || Math.abs(Math.abs(dx) - w * 0.55) < 0.5
+          : t === 3 ? Math.abs(dx) < 0.6 || y === 12
+          : t === 6 ? y % 4 === 3
+          : t === 7 ? Math.abs(Math.abs(dx) - 2.5) < 0.5
+          : false;
+        c = bar ? M[2] : t === 4 ? (dx < 0 ? A[3] : A[2]) : glass;
+      }
+      p.set(x, y, c);
+    }
+  }
+  // 灯芯的火：在灯身中间往上收尖
+  const fy0 = y1 - 2, fy1 = y0 + 2;
+  for (let y = fy1; y <= fy0; y++) {
+    const k = (fy0 - y) / (fy0 - fy1);
+    const w = (t === 0 ? 3 : 2.6) * Math.sin(Math.PI * Math.min(1, k * 1.1 + 0.12)) * (1 - k * 0.45);
+    for (let x = 0; x < N; x++) {
+      const d = Math.abs(x + 0.5 - cx + Math.sin(k * 4 + t) * 0.5);
+      if (d > w) continue;
+      p.set(x, y, d < w * 0.35 && k < 0.7 ? fire[2] : d < w * 0.7 ? fire[1] : fire[0]);
+    }
+  }
+  // 符文八角灯：灯身两侧的符文光点；冰晶灯：上下两个尖
+  if (t === 5) for (const yy of [9, 15]) { p.set(cx - 5, yy, A[3]); p.set(cx + 4, yy, A[3]); }
+  if (t === 4) { p.set(cx - 1, y0 - 1, A[4]); p.set(cx, y0 - 1, A[3]); }
+  // 底座
+  const bw = t === 4 ? 1 : t === 0 ? 3 : 4;
+  for (let y = y1 + 1; y <= y1 + 2; y++) for (let x = cx - bw; x < cx + bw; x++) p.set(x, y, t === 0 ? ramp(WOODS[0])[1] : y === y1 + 2 ? M[1] : M[2]);
+  // 穗子：纸灯笼红穗，宝塔灯金穗，其余吊一颗本阶宝石
+  if (t === 0 || t === 7) {
+    for (let y = y1 + 3; y <= 23; y++) for (let x = cx - 1; x <= cx; x++) p.set(x, y, t === 0 ? (y % 2 ? '#c83a2a' : '#e8604a') : GOLDS[y % 2 ? 2 : 3]);
+  } else if (t >= 2) gem(p, cx, y1 + 4.2, 1.3, 1.5, ACCENT[t]);
+}
+
 function quiver(p: Pix, t: number) {
   // 箭袋：皮筒斜挎，顶上露出三支箭的羽毛；箍和羽毛颜色、袋口样式逐阶不同
   const H = ramp(HIDE[t]);
@@ -1333,6 +1423,7 @@ export function equipIconUrl(key: string, tier: number): string | null {
   else if (key === 'greatshield') greatshield(p, tier);
   else if (key === 'buckler') buckler(p, tier);
   else if (key === 'torch') torch(p, tier);
+  else if (key === 'lantern') lantern(p, tier);
   else if (key === 'quiver') quiver(p, tier);
   else if (key === 'tome') tome(p, tier);
   else if (['axe', 'pickaxe', 'sickle', 'knife', 'rod', 'hoe', 'hammer', 'needle', 'pan'].includes(key)) tool(p, key, tier);

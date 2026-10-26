@@ -124,16 +124,26 @@ async function claim(t: Trade) {
   t.claimed = true;
   store.dispatch((g) => {
     const bank = { ...g.bank };
-    for (const [id, n] of Object.entries(t.mine)) if (ITEMS[id]) bank[id] = Math.max(0, (bank[id] ?? 0) - n);
+    const bag = { ...g.bag };
+    // 放出去的东西先从仓库扣，不够的从背包扣（10-26 交易也能放背包里的东西）
+    for (const [id, n] of Object.entries(t.mine)) {
+      if (!ITEMS[id]) continue;
+      const fromBank = Math.min(n, bank[id] ?? 0);
+      bank[id] = (bank[id] ?? 0) - fromBank;
+      bag[id] = Math.max(0, (bag[id] ?? 0) - (n - fromBank));
+    }
     for (const [id, n] of Object.entries(t.theirs)) if (ITEMS[id]) bank[id] = (bank[id] ?? 0) + n;
     for (const id of Object.keys(bank)) if (!bank[id]) delete bank[id];
-    return { ...g, bank, seen: { ...g.seen, ...Object.fromEntries(Object.keys(t.theirs).filter((id) => ITEMS[id]).map((id) => [id, 1 as const])) } };
+    for (const id of Object.keys(bag)) if (!bag[id]) delete bag[id];
+    return { ...g, bank, bag, seen: { ...g.seen, ...Object.fromEntries(Object.keys(t.theirs).filter((id) => ITEMS[id]).map((id) => [id, 1 as const])) } };
   });
   emit();
 }
 
-/** 仓库里够不够放上交易台 */
+/** 自己有多少（仓库 + 背包），交易能放的上限 */
+export const ownCount = (id: string) => (store.state.bank[id] ?? 0) + (store.state.bag[id] ?? 0);
+
+/** 仓库加背包够不够放上交易台 */
 export function lacking(items: Record<string, number>) {
-  const bank = store.state.bank;
-  return Object.entries(items).filter(([id, n]) => (bank[id] ?? 0) < n).map(([id]) => ITEMS[id]?.name ?? id);
+  return Object.entries(items).filter(([id, n]) => ownCount(id) < n).map(([id]) => ITEMS[id]?.name ?? id);
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ITEMS } from '../core/data';
 import type { GameState } from '../core/types';
 import { online, type Friend, type Trade } from '../net';
-import { lacking, refreshSocial, sendRally, useSocial } from '../net/social';
+import { lacking, ownCount, refreshSocial, sendRally, useSocial } from '../net/social';
 import { pushNow, useOnline } from '../net/sync';
 import { openChatPage } from './ChatDock';
 import { fmtNum, joinedText } from './format';
@@ -13,7 +13,7 @@ import { tl } from '../i18n';
 
 /**
  * 好友页（10-25 用户要求）：按 ID 加好友、看好友信息、邀请组队、和好友交易。
- * 交易：双方各从仓库放东西，都点确认才成交，改了东西要重新确认。
+ * 交易：双方各从仓库或背包放东西，都点确认才成交，改了东西要重新确认。
  */
 
 function useAct() {
@@ -235,7 +235,7 @@ function Items({ items, onRemove }: { items: Record<string, number>; onRemove?: 
 
 export function TradeView({ s, t, name }: { s: GameState; t: Trade; name: string }) {
   const act = useAct();
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState<'bank' | 'bag' | null>(null);
   const setOffer = (items: Record<string, number>) => act.run(() => online.setOffer(t.id, items));
   if (t.status === 'done') {
     return (
@@ -253,15 +253,18 @@ export function TradeView({ s, t, name }: { s: GameState; t: Trade; name: string
         <div>
           <h4>{tl('我放的 ')}{t.myOk && <small className="good">{tl('✓ 已确认')}</small>}</h4>
           <Items items={t.mine} onRemove={t.myOk ? undefined : (id) => { const m = { ...t.mine }; delete m[id]; void setOffer(m); }} />
-          {!t.myOk && <button className="small" onClick={() => setAdding(true)}>{tl('＋ 从仓库放东西')}</button>}
+          {!t.myOk && <span className="trade-add">
+            <button className="small" onClick={() => setAdding('bank')}>{tl('＋ 从仓库放东西')}</button>
+            <button className="small" onClick={() => setAdding('bag')}>{tl('＋ 从背包放东西')}</button>
+          </span>}
         </div>
         <div>
           <h4>{tl`${name} 放的 `}{t.theirOk && <small className="good">{tl('✓ 已确认')}</small>}</h4>
           <Items items={t.theirs} />
         </div>
       </div>
-      {short.length > 0 && <p className="err">{tl`仓库里不够：${short.join(tl('、'))}`}</p>}
-      <p className="muted small-note">{tl('东西从仓库出、进仓库。任何一方改了东西，双方都要重新确认。')}</p>
+      {short.length > 0 && <p className="err">{tl`仓库和背包里不够：${short.join(tl('、'))}`}</p>}
+      <p className="muted small-note">{tl('放出去的东西先从仓库扣、不够再从背包扣；收到的东西进仓库。任何一方改了东西，双方都要重新确认。')}</p>
       <div className="go">
         {t.myOk
           ? <button disabled={act.busy} onClick={() => act.run(() => online.confirmTrade(t.id, false))}>{tl('取消确认')}</button>
@@ -269,33 +272,34 @@ export function TradeView({ s, t, name }: { s: GameState; t: Trade; name: string
         <button disabled={act.busy} onClick={() => confirm(tl('取消这笔交易？')) && void act.run(() => online.cancelTrade(t.id))}>{tl('取消交易')}</button>
       </div>
       {act.err && <p className="err">{act.err}</p>}
-      {adding && <BankPicker s={s} have={t.mine} onClose={() => setAdding(false)} onPick={(id, n) => { setAdding(false); void setOffer({ ...t.mine, [id]: n }); }} />}
+      {adding && <BankPicker s={s} from={adding} have={t.mine} onClose={() => setAdding(null)} onPick={(id, n) => { setAdding(null); void setOffer({ ...t.mine, [id]: n }); }} />}
     </div>
   );
 }
 
-/** 从仓库挑东西放上交易台 */
-function BankPicker({ s, have, onPick, onClose }: { s: GameState; have: Record<string, number>; onPick: (id: string, n: number) => void; onClose: () => void }) {
+/** 从仓库或背包挑东西放上交易台；数量上限是仓库加背包一共有多少 */
+function BankPicker({ s, from, have, onPick, onClose }: { s: GameState; from: 'bank' | 'bag'; have: Record<string, number>; onPick: (id: string, n: number) => void; onClose: () => void }) {
   const [q, setQ] = useState('');
   const [sel, setSel] = useState<string | null>(null);
   const [n, setN] = useState('1');
-  const list = useMemo(() => Object.entries(s.bank)
+  const src = from === 'bag' ? s.bag : s.bank;
+  const list = useMemo(() => Object.entries(src)
     .filter(([id, c]) => c > 0 && ITEMS[id] && (!q || ITEMS[id].name.includes(q)))
-    .sort((a, b) => (a[0] === 'coins' ? -1 : b[0] === 'coins' ? 1 : ITEMS[a[0]].name.localeCompare(ITEMS[b[0]].name))), [s.bank, q]);
-  const max = sel ? s.bank[sel] ?? 0 : 0;
+    .sort((a, b) => (a[0] === 'coins' ? -1 : b[0] === 'coins' ? 1 : ITEMS[a[0]].name.localeCompare(ITEMS[b[0]].name))), [src, q]);
+  const max = sel ? ownCount(sel) : 0;
   return (
     <div className="bank-picker frame">
       <div className="search-row">
-        <input placeholder={tl("搜索仓库里的物品")} value={q} onChange={(e) => setQ(e.target.value)} />
+        <input placeholder={from === 'bag' ? tl('搜索背包里的物品') : tl('搜索仓库里的物品')} value={q} onChange={(e) => setQ(e.target.value)} />
         <button onClick={onClose}>{tl('关闭')}</button>
       </div>
       <ul className="trade-items pick">
-        {list.length === 0 && <li className="muted">{tl('仓库里没有')}</li>}
+        {list.length === 0 && <li className="muted">{from === 'bag' ? tl('背包里没有') : tl('仓库里没有')}</li>}
         {list.map(([id, c]) => (
           <li key={id} className={sel === id ? 'on' : ''} onClick={() => { setSel(id); setN(String(have[id] ?? Math.min(c, 1))); }}>
             <Icon item={id} size={24} info={false} />
             <span className="nm">{ITEMS[id].name}</span>
-            <small className="muted">{tl`仓库 ${fmtNum(c)}`}</small>
+            <small className="muted">{from === 'bag' ? tl`背包 ${fmtNum(c)}` : tl`仓库 ${fmtNum(c)}`}</small>
           </li>
         ))}
       </ul>
