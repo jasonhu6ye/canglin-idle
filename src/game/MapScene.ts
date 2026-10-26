@@ -2199,7 +2199,7 @@ export class MapScene extends Phaser.Scene {
       if (big) this.playMon(foe, m, 'skill', true);
       else if (c.monsterTimerMs > prev.timer + 200) {
         this.playMon(foe, m, 'attack', true);
-        this.lunge(foe);
+        if (c.mDmg !== -2) this.lunge(foe);
       }
       else if (c.monsterHp < prev.hp) this.playMon(foe, m, 'hurt', true);
     }
@@ -2321,6 +2321,8 @@ export class MapScene extends Phaser.Scene {
       this.popText(foe.x, foe.y - (world ? 72 : 30), shout, world ? '#ff5a3a' : art === 'enrage' ? '#ff3a3a' : '#ff8a5a', world ? 13 : art === 'elite' ? 8 : 10);
       if (art !== 'elite' && dmg > 0) this.cameras.main.shake(160, 0.004);
     }
+    // -2：这一下打的是队友（嘲讽，10-26），自己头上不飘字
+    if (dmg === -2) return;
     if (dmg < 0) return this.popText(x - 4, y, tl('闪避'), '#9ad8ff', 7);
     if (dmg === 0) return;
     this.hitFlash(this.playerBody, -1, 0xff5040);

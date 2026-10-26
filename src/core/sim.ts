@@ -7,6 +7,7 @@ import { OLD_JEWELS, BAR_VALUE, inTownArea, KEY_SHOP, keyOf, OLD_ENH, SCROLL_TOW
 import { nextRandom } from './rng';
 import { buffMob, coopMates, COOP_DEF, COOP_DMG, dungeonFloor, GATE_CD, GATE_MAX, GATE_MS, GATE_REACH, legMs, rollChest, rollChestQuality, rollFloors, teamChest, teamChestQuality, type TeamMember } from './dungeon';
 import { partySize } from './party';
+import { aggroMates, targetChance, threatOf } from './aggro';
 import { stepQuests } from './quests';
 import { migrateMail, sendMail } from './mail';
 import { stepAutoFarm, stepRain } from './farm';
@@ -243,6 +244,11 @@ export function gearSum(s: GameState, k: 'hp' | 'xp' | 'luck' | 'crit' | 'dodge'
   let n = 0;
   for (const id of Object.values(s.equipment)) n += (id && ITEMS[id]?.equip?.[k]) || 0;
   return n;
+}
+/** 怪物这一下普通攻击是不是打向了队友（没有队友一起打时不掷骰，离线补算不受影响） */
+function aimsAtMate(s: GameState, rand: () => number) {
+  const mates = aggroMates();
+  return mates.length > 0 && rand() >= targetChance(threatOf(s.equipment), mates);
 }
 /** 灯笼吸血（10-26）：打出 dmg 伤害后回血；不足 1 点的部分按几率补 1 点，长期期望正好是 dmg×吸血比例 */
 function leechHeal(s: GameState, dmg: number, rand: () => number) {
@@ -536,7 +542,10 @@ export function combatEstimate(s: GameState, m: MonsterDef) {
   const venom = m.traits.includes('venom') ? Math.ceil(m.level / 8) : 0;
   const mv = moveOf(m);
   const move = mv ? 1 + (mv.mult - 1) / mv.every : 1;
-  const mAvg = st.monsterMaxHit > 0 ? move * (m.rank === 'boss' ? 1.1 : 1) * st.monsterHit * (1 - st.dodge) * (((1 + st.monsterMaxHit * rage) / 2) * (1 - st.reduce) + venom) : 0;
+  // 组队时普通攻击只有一部分打到自己，大招照样打全体
+  const mates = aggroMates();
+  const share = mates.length ? (mv ? (mv.mult + (mv.every - 1) * targetChance(threatOf(s.equipment), mates)) / (mv.mult + mv.every - 1) : targetChance(threatOf(s.equipment), mates)) : 1;
+  const mAvg = st.monsterMaxHit > 0 ? share * move * (m.rank === 'boss' ? 1.1 : 1) * st.monsterHit * (1 - st.dodge) * (((1 + st.monsterMaxHit * rage) / 2) * (1 - st.reduce) + venom) : 0;
   // 怪物的再生和吸血抵掉一部分输出；抵光了就打不死
   const heal = ((m.traits.includes('regen') ? Math.ceil(m.hp * regenPct(m)) : 0) + (m.traits.includes('lifesteal') ? mAvg / 2 : 0)) / m.attackMs;
   const dps = avg / swing - heal;
@@ -954,7 +963,9 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       if (has('regen')) c.monsterHp = Math.min(m.hp, c.monsterHp + Math.ceil(m.hp * regenPct(m)));
       c.mSwings = (c.mSwings ?? 0) + 1;
       c.mDmg = -1;
-      if (st.monsterMaxHit > 0 && rand() < st.monsterHit && rand() >= st.dodge) {
+      // 组队打同一个目标：普通攻击按嘲讽挑一个人，没挑中自己就是去打队友了（-2）；大招打全体
+      if (!big && aimsAtMate(s, rand)) c.mDmg = -2;
+      else if (st.monsterMaxHit > 0 && rand() < st.monsterHit && rand() >= st.dodge) {
         const rage = has('berserk') && c.monsterHp < m.hp / 2 ? 1.5 : 1;
         let dmg = Math.max(1, Math.round((1 + Math.floor(rand() * st.monsterMaxHit * rage)) * (1 - st.reduce) * (big && move ? move.mult : 1)));
         if (has('venom')) dmg += Math.ceil(m.level / 8);
@@ -1081,7 +1092,9 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       if (has('regen')) c.monsterHp = Math.min(m.hp, c.monsterHp + Math.ceil(m.hp * regenPct(m)));
       c.mSwings = (c.mSwings ?? 0) + 1;
       c.mDmg = -1;
-      if (st.monsterMaxHit > 0 && rand() < st.monsterHit && rand() >= st.dodge) {
+      // 组队打同一个目标：普通攻击按嘲讽挑一个人，没挑中自己就是去打队友了（-2）；大招打全体
+      if (!big && aimsAtMate(s, rand)) c.mDmg = -2;
+      else if (st.monsterMaxHit > 0 && rand() < st.monsterHit && rand() >= st.dodge) {
         const rage = has('berserk') && c.monsterHp < m.hp / 2 ? 1.5 : 1;
         let dmg = Math.max(1, Math.round((1 + Math.floor(rand() * st.monsterMaxHit * rage)) * (1 - st.reduce) * (big && move ? move.mult : 1)));
         if (has('venom')) dmg += Math.ceil(m.level / 8);

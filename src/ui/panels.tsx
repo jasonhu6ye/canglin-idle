@@ -15,6 +15,7 @@ import { openCombatLog } from './CombatLog';
 import { XP_TABLE, levelProgress, speedForLevel, SPEED_CAP, BONUS_PER_LEVEL } from '../core/xp';
 import { store } from '../store';
 import { RAIN_FISH } from '../core/weather';
+import { THREAT_BASE, threatOf } from '../core/aggro';
 import { fmtDuration, fmtNum, gearLine, hitPct } from './format';
 import { Codex } from './Codex';
 import { Handbook } from './Handbook';
@@ -223,6 +224,7 @@ export function gearStats(id: string) {
   if (e.dodge) out.push(tl`闪避 +${Math.round(e.dodge * 1000) / 10}%`);
   if (e.work) out.push(tl`干活速度 +${Math.round(e.work * 1000) / 10}%`);
   if (e.leech) out.push(tl`吸血 ${Math.round(e.leech * 100)}%`);
+  if (e.threat) out.push(tl`嘲讽 +${e.threat}`);
   if (e.twoHanded) out.push(tl('双手'));
   return out.join(' · ');
 }
@@ -394,6 +396,7 @@ function Attributes({ s }: { s: GameState }) {
         })()}
         {row(tl('基础防御'), `+${b.defence}`, tl`全身装备 · 防御等级 ${level(s, 'defence')}`)}
         {row(tl('防御加成'), `+${pct(defPct + defBuff)}`, <>{tl`护甲 +${pct(defPct)}`}{defBuff > 0 && <>{tl` · 料理防御 +${pct(defBuff)}`}</>}</>)}
+        {row(tl('嘲讽值'), threatOf(s.equipment), tl`基础 ${THREAT_BASE}${threatOf(s.equipment) > THREAT_BASE ? tl` · 板甲、双手大盾 +${threatOf(s.equipment) - THREAT_BASE}` : ''} · 组队时怪物更爱打嘲讽高的人`)}
         {row(tl('移动速度'), tl`${moveSpeed(s).toFixed(1)} 格/秒`, mountMove ? tl`步行 4 格/秒 · 坐骑 +${pct(mountMove)}` : tl('步行 4 格/秒'))}
       </ul>
       <h2>{tl('干活加速 ')}<small className="muted">{tl('动作时间 ÷（1 + 等级 + 工具 + 料理）')}</small></h2>

@@ -735,4 +735,7 @@ export const EN_TEXT: Record<string, string> = {
   "护甲词条改为「基础防御」「防御加成」「伤害加成」：板甲防御最高，布甲伤害加成最高，皮甲居中。衣服每项都是最高的。": "Armor stats are now Base defence, Defence bonus and Damage bonus: plate has the most defence, cloth the most damage bonus, leather sits in between. The body piece is highest in every stat.",
   "鞋子和手套多一条词条：皮甲和布甲是攻击速度，板甲是闪避。": "Boots and gloves get one extra stat: attack speed on leather and cloth, dodge on plate.",
   "灯笼吸血的回血数字改成绿色。": "Lantern lifesteal numbers are now green.",
+  "组队嘲讽：怪物只打一个人": "Party threat: monsters hit one target",
+  "组队打同一个目标时（野外一起打同一种怪，或副本里同一个怪），怪物的普通攻击每次只打一个人：嘲讽值高的人大概率挨打，低的也有小概率被打，大家一样就随机。精英和首领的大招照样打全体。": "When party members fight the same target (in the field or in a dungeon), each normal monster attack now hits only one person: the highest-threat player usually takes it, lower-threat players still have a small chance, and equal threat means random. Elite and boss special moves still hit everyone.",
+  "每人基础嘲讽值 100，板甲一整套 +138（衣 60、头 36、鞋 24、手 18），双手大盾 +150。角色页属性里能看到自己的嘲讽值。": "Everyone has 100 base threat. A full plate set adds 138 (chest 60, head 36, boots 24, gloves 18) and a greatshield adds 150. You can see your threat in the character stats.",
 };

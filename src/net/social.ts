@@ -1,7 +1,9 @@
 import { setPartySize } from '../core/party';
+import { setAggroMates, threatOf } from '../core/aggro';
+import type { GameState } from '../core/types';
 import { useEffect, useState } from 'react';
-import { online, type ChatChannel, type ChatMsg, type Friend, type Party, type PartyInvite, type Trade } from './index';
-import { ITEMS } from '../core/data';
+import { online, type DungeonPresence, type ChatChannel, type ChatMsg, type Friend, type Party, type PartyInvite, type Trade } from './index';
+import { ACTIONS, ITEMS } from '../core/data';
 import { store } from '../store';
 import { setGmBuffs } from '../core/gm';
 
@@ -146,4 +148,31 @@ export const ownCount = (id: string) => (store.state.bank[id] ?? 0) + (store.sta
 /** 仓库加背包够不够放上交易台 */
 export function lacking(items: Record<string, number>) {
   return Object.entries(items).filter(([id, n]) => ownCount(id) < n).map(([id]) => ITEMS[id]?.name ?? id);
+}
+
+let aggroAt = 0;
+/**
+ * 嘲讽（用户 10-26）：找出正和我打同一个目标的队友，把他们的嘲讽值交给 sim。
+ * 副本里看同一个洞口、同一层、同一个停靠点都在打；野外看同一个战斗动作、都在出手、离得近（10 格内）。
+ * 地图和副本场景每帧发位置时顺便调用，半秒算一次。
+ */
+export function updateAggro(s: GameState, x: number, y: number, fighting: boolean, dg?: DungeonPresence) {
+  const now = Date.now();
+  if (now - aggroAt < 500) return;
+  aggroAt = now;
+  const me = online.me();
+  const action = s.paused ? undefined : s.queue[0]?.action;
+  const inFight = dg ? dg.phase === 'fight' : fighting && !!action && ACTIONS[action]?.kind === 'combat';
+  if (!me || !st.party || !inFight) return setAggroMates([]);
+  const out: number[] = [];
+  for (const m of st.party.members) {
+    if (m.playerId === me.id) continue;
+    const p = online.presenceOf(m.playerId);
+    if (!p || now - p.at > 60_000) continue;
+    const same = dg
+      ? p.dg && p.dg.gate === dg.gate && p.dg.floor === dg.floor && p.dg.idx === dg.idx && p.dg.phase === 'fight'
+      : !p.dg && p.action === action && !!p.anim?.startsWith('fight-') && Math.abs(p.x - x) + Math.abs(p.y - y) <= 10;
+    if (same) out.push(threatOf(p.equip ?? {}));
+  }
+  setAggroMates(out);
 }

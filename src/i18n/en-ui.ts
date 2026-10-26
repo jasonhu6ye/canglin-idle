@@ -853,4 +853,10 @@ export const EN_UI: Record<string, string> = {
   " · 装备攻速 +{0}（火把、项链、皮甲布甲的鞋子手套）": " · Gear attack speed +{0} (torch, necklace, leather and cloth boots and gloves)",
   "基础防御": "Base defence",
   " · 装备 +{0}": " · Gear +{0}",
+  "嘲讽：组队打同一个目标时（野外一起打同一种怪，或副本里同一个怪），怪物的普通攻击每次只打一个人，嘲讽值高的人大概率挨打，低的也有小概率；大家一样就随机。精英、首领的大招照样打全体。每人基础嘲讽 100，板甲一整套 +138，双手大盾 +150，想当坦克就穿板甲拿大盾。": "Threat: when party members fight the same target (the same monster in the field, or the same one in a dungeon), each normal monster attack hits only one person. Whoever has the highest threat usually gets hit, but lower-threat players still have a small chance; if everyone is equal it is random. Elite and boss special moves still hit everyone. Everyone starts at 100 threat, a full plate set adds 138 and a greatshield adds 150, so wear plate and a greatshield to tank.",
+  "嘲讽值 +{0}": "Threat +{0}",
+  "嘲讽 +{0}": "Threat +{0}",
+  "嘲讽值": "Threat",
+  "基础 {0}{1} · 组队时怪物更爱打嘲讽高的人": "Base {0}{1} · in a party, monsters prefer the highest-threat player",
+  " · 板甲、双手大盾 +{0}": " · Plate and greatshield +{0}",
 };

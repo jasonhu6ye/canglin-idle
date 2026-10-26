@@ -461,9 +461,10 @@ export class DungeonScene extends Phaser.Scene {
         spr.play(`mon-${look}-attack`, true);
         spr.once('animationcomplete', () => spr.active && spr.play(`mon-${look}-idle`));
       }
-      // 主角站远了：怪扑过去打一下再退回原位
-      const gx = this.player.x - spr.x;
-      const gy = this.player.y - spr.y;
+      const d = c.mDmg ?? -1;
+      // 主角站远了：怪扑过去打一下再退回原位（这一下打的是队友就不扑向自己，10-26 嘲讽）
+      const gx = d === -2 ? 0 : this.player.x - spr.x;
+      const gy = d === -2 ? 0 : this.player.y - spr.y;
       const gap = Math.hypot(gx, gy);
       if (gap > T * 1.5 && !this.tweens.isTweening(spr)) {
         const x0 = spr.x;
@@ -471,8 +472,7 @@ export class DungeonScene extends Phaser.Scene {
         const k = (gap - T) / gap;
         this.tweens.add({ targets: spr, x: x0 + gx * k, y: y0 + gy * k, duration: 160, ease: 'Quad.easeOut', yoyo: true, hold: 120, onComplete: () => spr.setPosition(x0, y0) });
       }
-      const d = c.mDmg ?? -1;
-      this.popText(this.player.x - 6, this.player.y - 30, d < 0 ? tl('闪避') : `-${d}`, d < 0 ? '#a8d8ff' : '#ff5a4a', 8);
+      if (d !== -2) this.popText(this.player.x - 6, this.player.y - 30, d < 0 ? tl('闪避') : `-${d}`, d < 0 ? '#a8d8ff' : '#ff5a4a', 8);
       if (d > 0) {
         this.body.setTintFill(0xff4a4a);
         this.time.delayedCall(80, () => this.body.clearTint());

@@ -101,6 +101,8 @@ export interface ItemDef {
     armor?: ArmorKind;
     defPct?: number;
     dmgPct?: number;
+    /** 嘲讽值（10-26）：板甲、双手大盾有，组队时怪物更爱打嘲讽高的人 */
+    threat?: number;
     /** 灯笼（10-26）：吸血，打出伤害的这个比例回成自己的血（0.05 = 5%） */
     leech?: number;
   };

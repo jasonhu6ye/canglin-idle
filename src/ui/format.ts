@@ -75,6 +75,7 @@ export function gearLine(e: NonNullable<import('../core/types').ItemDef['equip']
   if (e.dodge) out.push(tl`闪避几率 +${pc(e.dodge)}`);
   if (e.work) out.push(tl`采集和制作速度 +${pc(e.work)}`);
   if (e.leech) out.push(tl`吸血 ${Math.round(e.leech * 100)}%（打出伤害的 ${Math.round(e.leech * 100)}% 回成生命）`);
+  if (e.threat) out.push(tl`嘲讽值 +${e.threat}`);
   if (e.twoHanded) out.push(tl('双手持握，不能用副手'));
   if (e.style && e.slot !== 'weapon') out.push(tl`（只对${STYLE_WORD[e.style]}生效）`);
   return out.join(' · ');

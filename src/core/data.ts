@@ -338,7 +338,9 @@ export interface EquipType {
   plus: number;
   stats: { attack?: number; strength?: number; defence?: number; style?: CombatStyle; speed?: boolean; attackMs?: number; haste?: boolean; twoHanded?: boolean; leech?: number;
     /** 护甲（10-26）：防御加成、伤害加成、攻速加成的系数，乘每阶的 ARMOR_PCT */
-    armor?: ArmorKind; defPct?: number; dmgPct?: number; hastePct?: number; dodgePct?: number };
+    armor?: ArmorKind; defPct?: number; dmgPct?: number; hastePct?: number; dodgePct?: number;
+    /** 嘲讽值（10-26，固定点数，不随阶级品质变） */
+    threat?: number };
   group: string;
 }
 const W = (key: string, name: string, skill: SkillId, maker: SkillId, mats: [Mat, number][], plus: number, attack: number, strength: number, attackMs: number, style: CombatStyle): EquipType =>
@@ -354,7 +356,9 @@ const ARMOR_SLOTS: [EquipSlot, number, number][] = [
 const A = (type: ArmorKind, names: string[], mat: Mat, maker: SkillId, def: number, defPct: number, dmgPct: number): EquipType[] =>
   ARMOR_SLOTS.map(([slot, k, plus], j) => ({
     key: `${type}_${slot}`, name: names[j], slot, skill: 'defence' as SkillId, maker, mats: [[mat, [2, 4, 2, 1][j]]] as [Mat, number][], plus,
-    stats: { defence: def * k, armor: type, defPct: defPct * k, dmgPct: dmgPct * k, ...(slot === 'feet' || slot === 'hands' ? (type === 'plate' ? { dodgePct: 0.5 } : { hastePct: 0.5 }) : {}) },
+    stats: { defence: def * k, armor: type, defPct: defPct * k, dmgPct: dmgPct * k, ...(slot === 'feet' || slot === 'hands' ? (type === 'plate' ? { dodgePct: 0.5 } : { hastePct: 0.5 }) : {}),
+      // 嘲讽（用户 10-26）：只有板甲有，一整套 +138（衣 60、头 36、鞋 24、手 18）
+      ...(type === 'plate' ? { threat: Math.round(k * 120) } : {}) },
     group: { plate: tl('板甲'), leather: tl('皮甲'), cloth: tl('布甲') }[type]!,
   }));
 /** 护甲百分比词条每阶的基数：T1 4% … T8 12% */
@@ -373,7 +377,7 @@ export const EQUIP_TYPES: EquipType[] = [
   // 单手斧（用户 10-25）：伤害偏高、稍慢，单手，能配副手
   W('handaxe', tl('单手斧'), 'melee', 'smithing', [['bar', 2], ['plank', 1]], 2, 0.85, 1.2, 2600, 'melee'),
   // 双手大盾（用户 10-25）：攻击低、防御很高，双手持握，装上就不能用副手
-  { ...W('greatshield', tl('双手大盾'), 'melee', 'smithing', [['bar', 4], ['plank', 1]], 5, 0.55, 0.6, 2800, 'melee'), stats: { attack: 0.55, strength: 0.6, defence: 1.5, attackMs: 2800, style: 'melee', twoHanded: true } },
+  { ...W('greatshield', tl('双手大盾'), 'melee', 'smithing', [['bar', 4], ['plank', 1]], 5, 0.55, 0.6, 2800, 'melee'), stats: { attack: 0.55, strength: 0.6, defence: 1.5, attackMs: 2800, style: 'melee', twoHanded: true, threat: 150 } },
   // 远程：皮革 + 加工木材
   W('shortbow', tl('短弓'), 'ranged', 'fletching', [['plank', 2], ['leather', 1]], 1, 1.0, 1.1, 2200, 'ranged'),
   W('longbow', tl('长弓'), 'ranged', 'fletching', [['plank', 3], ['leather', 1]], 4, 1.25, 1.3, 2800, 'ranged'),
@@ -424,7 +428,7 @@ TIERS.forEach((t, i) => {
         slot: e.slot, skill: e.skill, level: t.level,
         attack: Math.round(p * (st.attack ?? 0)), strength: Math.round(p * (st.strength ?? 0)), defence: Math.round(p * (st.defence ?? 0)),
         style: st.style, speed: st.speed ? TOOL_SPEED[i] : undefined, attackMs: st.attackMs,
-        ...(st.haste ? { haste: TORCH_HASTE[i] } : {}), ...(st.twoHanded ? { twoHanded: true } : {}), ...(st.leech ? { leech: st.leech } : {}),
+        ...(st.haste ? { haste: TORCH_HASTE[i] } : {}), ...(st.twoHanded ? { twoHanded: true } : {}), ...(st.leech ? { leech: st.leech } : {}), ...(st.threat ? { threat: st.threat } : {}),
         ...(st.armor ? { armor: st.armor, defPct: pct3(ARMOR_PCT[i] * st.defPct!), dmgPct: pct3(ARMOR_PCT[i] * st.dmgPct!) } : {}),
         ...(st.hastePct ? { haste: pct3(ARMOR_PCT[i] * st.hastePct) } : {}),
         ...(st.dodgePct ? { dodge: pct3(ARMOR_PCT[i] * st.dodgePct) } : {}),

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { levelSnapshot, online, type DungeonPresence, type Presence } from '../net';
-import { rallyTime } from '../net/social';
+import { rallyTime, updateAggro } from '../net/social';
 import { maxHp } from '../core/sim';
 import type { GameState } from '../core/types';
 import { FIGHT_RANGE, FRAME_H, FRAME_W, HERO_ANIMS, type FightWeapon, HERO_FEET, HERO_PAD, outfitOf, paintHeroSheet } from './hero';
@@ -23,6 +23,7 @@ let sent = { x: -1, y: -1, key: '', at: 0 };
 let checked = 0;
 export function publishSelf(st: GameState, x: number, y: number, work?: { anim: string; flip: boolean }, dg?: DungeonPresence) {
   if (!online.me()) return;
+  updateAggro(st, x, y, !!work?.anim.startsWith('fight-'), dg);
   const now = Date.now();
   // 副本里位置变得快，队友要看得跟手一些
   if (now - checked < (dg ? 300 : 500)) return;
