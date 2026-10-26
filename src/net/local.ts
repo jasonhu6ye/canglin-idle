@@ -1,5 +1,5 @@
 import type { GameState } from '../core/types';
-import type { Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildMember, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
+import type { GmInput, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildMember, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { GUILD_MAX, levelSnapshot } from './api';
 import { tl } from '../i18n';
 
@@ -18,6 +18,7 @@ interface Db {
   members: Record<string, GuildMember[]>;
   tasks: GuildTask[];
   chat: ChatMsg[];
+  gm?: GmRow[];
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -171,4 +172,20 @@ export class LocalApi implements OnlineApi {
   async cancelTrade() {}
   async claimTrade() { return false; }
   async ping() { return 0; }
+  // GM 增益：本地假后端里自己就是管理员（测试用）
+  async myGmBuffs() { return (this.db.gm ?? []).filter((b) => b.targetPid == null || b.targetPid === this.db.me?.pid).map(({ targetPid, targetName: _n, ...b }) => ({ ...b, all: targetPid == null })); }
+  async gmList() { return [...(this.db.gm ?? [])]; }
+  async gmAdd(b: GmInput) {
+    this.db.gm = [{ ...b, id: uid(), all: b.targetPid == null }, ...(this.db.gm ?? [])];
+    this.flush();
+  }
+  async gmUpdate(id: string, b: Partial<GmInput>) {
+    this.db.gm = (this.db.gm ?? []).map((x) => (x.id === id ? { ...x, ...b, all: (b.targetPid !== undefined ? b.targetPid : x.targetPid) == null } : x));
+    this.flush();
+  }
+  async gmDelete(id: string) {
+    this.db.gm = (this.db.gm ?? []).filter((x) => x.id !== id);
+    this.flush();
+  }
 }
+

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { online, type ChatChannel, type ChatMsg, type Friend, type Party, type PartyInvite, type Trade } from './index';
 import { ITEMS } from '../core/data';
 import { store } from '../store';
+import { setGmBuffs } from '../core/gm';
 
 /**
  * 聊天和好友（10-25 用户要求：世界 / 公会 / 队伍 / 私聊，玩家数字 ID 加好友）。
@@ -77,6 +78,19 @@ export function syncSocial() {
   }));
   offs.push(online.onSocial(() => void refreshSocial()));
   void refreshSocial();
+  // GM 增益（10-26）：登录后马上拉一次，之后每分钟一次
+  void pullGm();
+  const t = setInterval(() => void pullGm(), GM_POLL_MS);
+  offs.push(() => clearInterval(t));
+}
+
+const GM_POLL_MS = 60_000;
+export async function pullGm() {
+  if (!online.me()) return;
+  try {
+    const list = await online.myGmBuffs();
+    store.dispatch((s) => setGmBuffs(s, list));
+  } catch { /* 连不上就下次再拉，存档里的照旧生效 */ }
 }
 
 export function openChat(channel?: ChatChannel, to?: string | null) {

@@ -1,4 +1,4 @@
-import type { GameState, SkillId } from '../core/types';
+import type { GameState, GmBuff, SkillId } from '../core/types';
 import { combatLevel, level } from '../core/sim';
 
 /**
@@ -233,7 +233,19 @@ export interface OnlineApi {
   ping(): Promise<number>;
   /** 好友申请、组队邀请、队伍成员有变化 */
   onSocial(f: () => void): () => void;
+
+  /** GM 增益（10-26）：自己身上的（全服的 + 单独给自己的），登录后定时拉 */
+  myGmBuffs(): Promise<GmBuff[]>;
+  /** 管理员：所有 GM 增益（含已过期的最近 100 条）、加、改、删。权限在服务器上检查 */
+  gmList(): Promise<GmRow[]>;
+  gmAdd(b: GmInput): Promise<void>;
+  gmUpdate(id: string, b: Partial<GmInput>): Promise<void>;
+  gmDelete(id: string): Promise<void>;
 }
+
+/** 管理员面板里的一行：多了给谁（null = 全服） */
+export interface GmRow extends GmBuff { targetPid: number | null; targetName?: string }
+export type GmInput = Omit<GmBuff, 'id' | 'all'> & { targetPid: number | null };
 
 /** 上传排行榜用的等级快照 */
 export function levelSnapshot(s: GameState) {

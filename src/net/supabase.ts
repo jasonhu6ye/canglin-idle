@@ -1,6 +1,6 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js';
-import type { GameState } from '../core/types';
-import type { Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildMember, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
+import type { GameState, GmBuff } from '../core/types';
+import type { GmInput, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildMember, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { levelSnapshot } from './api';
 import { tl } from '../i18n';
 
@@ -374,4 +374,41 @@ export class SupabaseApi implements OnlineApi {
     const t = setInterval(() => { n++; if (this.rt_ !== 'ok' || n % 4 === 0) f(); }, 15_000);
     return () => { clearInterval(t); void this.sb.removeChannel(ch); };
   }
+  // ---- GM 增益（10-26）----
+  async myGmBuffs(): Promise<GmBuff[]> {
+    if (!this.profile) return [];
+    const rows: Row[] = ok(await this.sb.from('gm_buffs').select('id,target_pid,name,tag,kind,pct,starts_at,ends_at')
+      .gt('ends_at', new Date(Date.now() - 3600_000).toISOString())
+      .or(`target_pid.is.null,target_pid.eq.${Number(this.profile.pid) || 0}`).limit(50));
+    return rows.map(toGm);
+  }
+  async gmList(): Promise<GmRow[]> {
+    const rows: Row[] = ok(await this.sb.from('gm_buffs').select('id,target_pid,name,tag,kind,pct,starts_at,ends_at').order('created_at', { ascending: false }).limit(100));
+    const pids = [...new Set(rows.map((r) => r.target_pid).filter((x) => x != null))];
+    const names = new Map<number, string>();
+    if (pids.length) for (const p of ok(await this.sb.from('profiles').select('pid,name').in('pid', pids)) as Row[]) names.set(Number(p.pid), p.name);
+    return rows.map((r) => ({ ...toGm(r), targetPid: r.target_pid == null ? null : Number(r.target_pid), targetName: names.get(Number(r.target_pid)) }));
+  }
+  async gmAdd(b: GmInput) { ok(await this.sb.from('gm_buffs').insert(fromGm(b))); }
+  async gmUpdate(id: string, b: Partial<GmInput>) { ok(await this.sb.from('gm_buffs').update(fromGm(b)).eq('id', id)); }
+  async gmDelete(id: string) {
+    const r = ok(await this.sb.from('gm_buffs').delete().eq('id', id).select('id'));
+    if (!r?.length) throw new Error(tl('没有权限，或者这条已经删掉了'));
+  }
 }
+const toGm = (r: Row): GmBuff => ({
+  id: r.id, name: r.name, tag: r.tag ?? '', kind: r.kind, pct: Number(r.pct),
+  from: Date.parse(r.starts_at), to: Date.parse(r.ends_at), all: r.target_pid == null,
+});
+function fromGm(b: Partial<GmInput>) {
+  const o: Row = {};
+  if (b.targetPid !== undefined) o.target_pid = b.targetPid;
+  if (b.name !== undefined) o.name = b.name;
+  if (b.tag !== undefined) o.tag = b.tag;
+  if (b.kind !== undefined) o.kind = b.kind;
+  if (b.pct !== undefined) o.pct = b.pct;
+  if (b.from !== undefined) o.starts_at = new Date(b.from).toISOString();
+  if (b.to !== undefined) o.ends_at = new Date(b.to).toISOString();
+  return o;
+}
+

@@ -18,6 +18,8 @@ import { RAIN_FISH } from '../core/weather';
 import { fmtDuration, fmtNum } from './format';
 import { Codex } from './Codex';
 import { Handbook } from './Handbook';
+import { GmPanel } from './GmPanel';
+import { isGmPid } from '../core/gm';
 import { TOWNS } from '../core/towns';
 import { RANCH } from '../core/ranch';
 import { Wardrobe } from './Wardrobe';
@@ -529,18 +531,24 @@ const MONSTER_COUNT = (() => {
 const LANG_TITLE = '语言 · Language'; // i18n-ignore
 
 export function MorePanel({ s }: { s: GameState }) {
-  const [page, setPage] = useSticky<'codex' | 'wardrobe' | 'book' | 'rank' | 'settings' | null>('more.page', null);
+  const [page, setPage] = useSticky<'codex' | 'wardrobe' | 'book' | 'rank' | 'settings' | 'gm' | null>('more.page', null);
   const close = () => setPage(null);
   if (page === 'codex') return <Codex s={s} onClose={close} />;
   if (page === 'book') return <Handbook onClose={close} />;
   if (page === 'wardrobe') return <Wardrobe s={s} onClose={close} />;
   if (page === 'rank') return <LeaderboardPage onClose={close} />;
   if (page === 'settings') return <SettingsPage s={s} onClose={close} />;
+  const gm = isGmPid(online.me()?.pid);
+  if (page === 'gm' && gm) return <GmPanel onClose={close} />;
   const total = Object.keys(ITEMS).length - 1;
   const got = Object.keys(s.seen).filter((id) => id !== 'coins' && ITEMS[id]).length;
   return (
     <div className="page">
       <ServerStatus />
+      {gm && <>
+        <h2>{tl('GM 面板 ')}<small className="muted">{tl('管理员专用：给全服或指定玩家发增益')}</small></h2>
+        <button className="primary" onClick={() => setPage('gm')}>{tl('打开 GM 面板')}</button>
+      </>}
       <h2>{tl('设置 ')}<small className="muted">{tl('账号、存档')}</small></h2>
       <button className="primary" onClick={() => setPage('settings')}>{tl('打开设置')}</button>
       <h2>{tl('排行榜 ')}<small className="muted">{tl('总等级、战斗等级、各技能')}</small></h2>

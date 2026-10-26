@@ -553,3 +553,49 @@ language sql stable security definer set search_path = public as $$
 $$;
 grant execute on function public.put_position(jsonb) to authenticated;
 grant execute on function public.online_positions() to authenticated;
+
+
+-- ============ GM 管理员和 GM 增益（10-26）============
+-- 管理员按玩家数字 ID（pid）登记；只有管理员能加、删增益，权限在服务器上检查
+create table if not exists public.gm_admins (
+  pid bigint primary key
+);
+insert into public.gm_admins (pid) values (10000001) on conflict do nothing;
+alter table public.gm_admins enable row level security;
+drop policy if exists "gm_admins 所有人可看" on public.gm_admins;
+create policy "gm_admins 所有人可看" on public.gm_admins for select using (true);
+
+create or replace function public.is_gm() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from profiles p join gm_admins a on a.pid = p.pid where p.id = auth.uid());
+$$;
+grant execute on function public.is_gm() to authenticated;
+
+-- target_pid 为空 = 全服
+create table if not exists public.gm_buffs (
+  id uuid primary key default gen_random_uuid(),
+  target_pid bigint,
+  name text not null check (char_length(name) between 1 and 20),
+  tag text not null default '' check (char_length(tag) <= 4),
+  kind text not null check (kind in ('xp', 'drop', 'coins', 'yield', 'speed', 'atk', 'str', 'def', 'hp')),
+  pct numeric not null check (pct > 0 and pct <= 1000),
+  starts_at timestamptz not null default now(),
+  ends_at timestamptz not null,
+  created_by uuid default auth.uid(),
+  created_at timestamptz not null default now(),
+  check (ends_at > starts_at)
+);
+create index if not exists gm_buffs_ends on public.gm_buffs (ends_at desc);
+alter table public.gm_buffs enable row level security;
+drop policy if exists "gm_buffs 看自己的和全服的" on public.gm_buffs;
+create policy "gm_buffs 看自己的和全服的" on public.gm_buffs for select using (
+  target_pid is null
+  or target_pid = (select pid from profiles where id = auth.uid())
+  or public.is_gm()
+);
+drop policy if exists "gm_buffs 管理员加" on public.gm_buffs;
+create policy "gm_buffs 管理员加" on public.gm_buffs for insert with check (public.is_gm());
+drop policy if exists "gm_buffs 管理员改" on public.gm_buffs;
+create policy "gm_buffs 管理员改" on public.gm_buffs for update using (public.is_gm()) with check (public.is_gm());
+drop policy if exists "gm_buffs 管理员删" on public.gm_buffs;
+create policy "gm_buffs 管理员删" on public.gm_buffs for delete using (public.is_gm());

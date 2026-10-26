@@ -19,6 +19,22 @@ export type EquipSlot = GearSlot | ToolSlot;
 export type BeltSlot = 'food' | 'potion';
 export type BuffKind = 'atk' | 'str' | 'def' | 'speed' | 'xp';
 export interface Buff { kind: BuffKind; pct: number; ms: number }
+/** GM 增益（用户 10-26）：管理员加的，全服或指定玩家 */
+export type GmKind = 'xp' | 'drop' | 'coins' | 'yield' | 'speed' | 'atk' | 'str' | 'def' | 'hp';
+export interface GmBuff {
+  id: string;
+  name: string;
+  /** 1-4 个字的小标签，显示在增益栏图标下面 */
+  tag: string;
+  kind: GmKind;
+  /** 百分比，50 = +50% */
+  pct: number;
+  /** 生效时间段（毫秒时间戳） */
+  from: number;
+  to: number;
+  /** 全服的（否则是单独给这个玩家的） */
+  all?: boolean;
+}
 
 export type ItemCategory = 'resource' | 'material' | 'food' | 'potion' | 'ammo' | 'gear' | 'tool' | 'seed' | 'loot' | 'deco' | 'misc';
 
@@ -278,6 +294,8 @@ export interface GameState {
   belt?: Partial<Record<BeltSlot, { id: string; qty: number }>>;
   /** 料理增益：每种只保留一个，剩余毫秒 */
   buffs?: Partial<Record<BuffKind, { pct: number; ms: number }>>;
+  /** GM 增益（服务器下发） */
+  gmBuffs?: GmBuff[];
   /** 新手任务：第几个、当前进度 */
   quest?: { i: number; n: number };
   bestiary?: Record<string, number>;

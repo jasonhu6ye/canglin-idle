@@ -1,4 +1,5 @@
 import { partyXpPct } from './party';
+import { cleanGm, gmPct, setGmClock } from './gm';
 import { APT_MAX, APT_MIN, FOAL, growMs, HORSE_XP, horseItem, RANCH, RANCH_PENS } from './ranch';
 import { baseOf, qid, rollQuality } from './quality';
 import { HW_POINT, HW_TIERS, hwFight, hwOpen, hwTierOf, hwWait } from './halloween';
@@ -164,6 +165,7 @@ export function migrate(raw: unknown): GameState | null {
     bestiary: Object.fromEntries(Object.entries(obj<Record<string, number>>(s.bestiary) ?? {}).filter(([, n]) => Number.isFinite(n) && n >= 0)),
     lastStop: obj<NonNullable<GameState['lastStop']>>(s.lastStop) && ACTIONS[s.lastStop!.action] && okMode(s.lastStop!.mode) ? s.lastStop : null,
     quest: obj<GameState['quest']>(s.quest) && Number.isInteger(s.quest!.i) && s.quest!.i >= 0 ? { i: s.quest!.i, n: Math.max(0, num(s.quest!.n, 0)) } : { i: 0, n: 0 },
+    gmBuffs: cleanGm(s.gmBuffs),
     buffs: Object.fromEntries(Object.entries(obj<GameState['buffs']>(s.buffs) ?? {}).filter(([, b]) => b && Number.isFinite(b.pct) && Number.isFinite(b.ms) && b.ms > 0)),
     mounted: !!s.mounted && !!equipment.mount,
     redeemed: arr<string>(s.redeemed).filter((c) => typeof c === 'string'),
@@ -227,7 +229,7 @@ export function emptySummary(): Summary {
 }
 
 export const level = (s: GameState, skill: SkillId) => levelForXp(s.xp[skill]);
-export const maxHp = (s: GameState) => level(s, 'hitpoints') * 10;
+export const maxHp = (s: GameState) => Math.round(level(s, 'hitpoints') * 10 * (1 + gmPct(s, 'hp')));
 
 export function combatLevel(s: GameState) {
   const atk = Math.max(level(s, 'melee'), level(s, 'ranged'), level(s, 'magic'));
@@ -323,6 +325,11 @@ export const levelBonus = (s: GameState, a: SkillAction) => Math.max(0, level(s,
 
 /** 当前生效的料理增益比例 */
 export const buffPct = (s: GameState, k: BuffKind) => s.buffs?.[k]?.pct ?? 0;
+/** 料理增益 + GM 增益：结算都用这个 */
+export const boostPct = (s: GameState, k: BuffKind) => buffPct(s, k) + gmPct(s, k);
+/** GM 稀有掉落：几率掉落的掉率按比例提高，最多到必掉 */
+const dropChance = (s: GameState, c: number) => Math.min(1, c * (1 + gmPct(s, 'drop')));
+const coinQty = (s: GameState, item: string, n: number) => (item === 'coins' ? Math.round(n * (1 + gmPct(s, 'coins'))) : n);
 
 /** 吃下一份食物：回血，有增益就挂上（同类只留一个，新的覆盖旧的） */
 export function applyFood(s: GameState, id: string) {
@@ -389,7 +396,7 @@ export function eat(prev: GameState, id: string): GameState {
 }
 
 export const actionDuration = (s: GameState, a: SkillAction, t = Date.now()) =>
-  Math.round(a.durationMs / (1 + toolSpeed(s, a.skill, a.tool) + levelSpeed(s, a.skill) + buffPct(s, 'speed') + rainBonus(s, a, t)));
+  Math.round(a.durationMs / (1 + toolSpeed(s, a.skill, a.tool) + levelSpeed(s, a.skill) + boostPct(s, 'speed') + rainBonus(s, a, t)));
 
 /** 雨天钓鱼增益：钓点所在区域正在下雨时，钓鱼更快（用户 10-23） */
 export function rainBonus(s: GameState, a: SkillAction, t = Date.now()) {
@@ -485,9 +492,9 @@ export function combatStats(s: GameState, m: MonsterDef) {
     critMult: 1.5,
     dodge: perks.dodge,
     reduce: 1 - (1 - perks.reduce) * (1 - COOP_DEF * mates),
-    playerHit: hitChance((lvl + 8) * (b.attack + 64) * (1 + buffPct(s, 'atk')), (m.defence + 8) * 64) * (has('evasive') ? 0.8 : 1),
-    playerMaxHit: Math.max(1, Math.round((((lvl + 8) * (strength + 64)) / 64) * dmgMult * (1 + buffPct(s, 'str')) * (1 + COOP_DMG * mates))),
-    monsterHit: m.maxHit > 0 ? hitChance((m.attack + 8) * 64, (level(s, 'defence') + 8) * (b.defence + 64) * (1 + buffPct(s, 'def'))) : 0,
+    playerHit: hitChance((lvl + 8) * (b.attack + 64) * (1 + boostPct(s, 'atk')), (m.defence + 8) * 64) * (has('evasive') ? 0.8 : 1),
+    playerMaxHit: Math.max(1, Math.round((((lvl + 8) * (strength + 64)) / 64) * dmgMult * (1 + boostPct(s, 'str')) * (1 + COOP_DMG * mates))),
+    monsterHit: m.maxHit > 0 ? hitChance((m.attack + 8) * 64, (level(s, 'defence') + 8) * (b.defence + 64) * (1 + boostPct(s, 'def'))) : 0,
     monsterMaxHit: m.maxHit * MONSTER_DAMAGE_SCALE,
   };
 }
@@ -664,7 +671,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   };
 
   const addXp = (skill: SkillId, amount: number) => {
-    amount = Math.round(amount * (1 + buffPct(s, 'xp') + partyXpPct()));
+    amount = Math.round(amount * (1 + boostPct(s, 'xp') + partyXpPct()));
     if (tally) tally.xp[skill] = (tally.xp[skill] ?? 0) + amount;
     // 打怪的经验记在这只怪头上，打死时一起写进战斗日志
     if (s.combat && amount > 0) {
@@ -811,13 +818,13 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         if (a.fail!.stunMs) s.progressMs = -a.fail!.stunMs;
       } else {
         for (const o of a.outputs) {
-          if (o.chance !== undefined && rand() >= o.chance) continue;
+          if (o.chance !== undefined && rand() >= dropChance(s, o.chance)) continue;
           // 做出来的装备、工具随机品质（用户 10-25）
           const it = ITEMS[o.item];
           if (it?.equip && !it.equip.move) for (let k = 0; k < o.qty; k++) addLoot(qid(o.item, rollQuality(it.tier, rand())), 1);
           else addLoot(o.item, o.qty);
         }
-        if (gatherer && rand() < bonus) a.outputs.forEach((o) => o.chance === undefined && addLoot(o.item, o.qty));
+        if (gatherer && rand() < bonus + gmPct(s, 'yield')) a.outputs.forEach((o) => o.chance === undefined && addLoot(o.item, o.qty));
         addXp(a.skill, a.xp);
       }
       log({ t: now - dt, kind: failed ? 'fail' : 'skill', action: a.id, xp: tally.xp, items: tally.items });
@@ -891,9 +898,10 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       if (c.monsterHp <= 0) {
         const got: Record<string, number> = {};
         for (const d of m.drops) {
-          if (d.chance === undefined || rand() < d.chance) {
-            addLoot(d.item, d.qty);
-            got[d.item] = (got[d.item] ?? 0) + d.qty;
+          if (d.chance === undefined || rand() < dropChance(s, d.chance)) {
+            const q = coinQty(s, d.item, d.qty);
+            addLoot(d.item, q);
+            got[d.item] = (got[d.item] ?? 0) + q;
           }
         }
         log({ t: now - dt, kind: 'kill', monster: m.id, xp: c.gain ?? {}, items: got });
@@ -1014,10 +1022,11 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       if (c.monsterHp <= 0) {
         const got: Record<string, number> = {};
         for (const d of m.drops) {
-          if (d.chance === undefined || rand() < d.chance) {
-            addLoot(d.item, d.qty);
-            got[d.item] = (got[d.item] ?? 0) + d.qty;
-            run.got = { ...run.got, [d.item]: (run.got?.[d.item] ?? 0) + d.qty };
+          if (d.chance === undefined || rand() < dropChance(s, d.chance)) {
+            const q = coinQty(s, d.item, d.qty);
+            addLoot(d.item, q);
+            got[d.item] = (got[d.item] ?? 0) + q;
+            run.got = { ...run.got, [d.item]: (run.got?.[d.item] ?? 0) + q };
           }
         }
         log({ t: now - dt, kind: 'kill', monster: m.id, xp: c.gain ?? {}, items: got });
@@ -1059,6 +1068,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   // 洞口 30 分钟后消失（已经在里面的人不受影响）
   if (s.gates?.length) s.gates = s.gates.filter((g) => g.expires > now);
   while (dt > 0) {
+    setGmClock(now - dt);
     // 在副本里：队列不动，只推进副本
     if (s.dungeon) {
       const used = stepDungeon(dt);
@@ -1137,6 +1147,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       if (isFinished(task)) endTask('complete');
     }
   }
+  setGmClock(null);
   stepRain(s, from, now);
   stepAutoFarm(s, sum, from, now);
   // 走到（或寻路到）石碑旁边就激活
