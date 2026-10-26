@@ -42,16 +42,30 @@ export interface Guild {
   maxMembers: number;
   /** 申请制还是直接加入 */
   open: boolean;
+  /** 成员从公会仓库取东西要多少累计贡献（-1 = 只有会长和副会长能取） */
+  takeMin: number;
+  /** 公会贡献值：成员兑换、交任务时和公会经验一起涨，会长和副会长花（开私人仓库） */
+  points: number;
 }
+/** 私人仓库（vault 1-3）：allow 是能进的成员，officers = 副会长都能进；会长总能进 */
+export interface GuildVault { idx: number; name: string; allow: string[]; officers: boolean }
 export interface GuildMember {
   playerId: string;
   name: string;
   role: GuildRole;
   totalLevel: number;
-  /** 本周给公会贡献的经验 */
+  /** 本周贡献（week 是这周一的 UTC 日期，不是这周的话就当 0） */
   weekly: number;
+  week?: string;
+  /** 累计贡献 */
+  contrib: number;
+  /** 今天（UTC）兑换了多少贡献、是哪天 */
+  donated?: number;
+  donatedDay?: string;
   lastSeen: number;
 }
+/** 公会仓库流水：qty 正数存入、负数取出 */
+export interface GuildBankLog { vault: number; name: string; item: string; qty: number; at: number }
 export interface GuildTask {
   id: string;
   /** 上交物品或做到某个计数 */
@@ -59,7 +73,9 @@ export interface GuildTask {
   target: string;
   need: number;
   have: number;
-  /** 完成后公会经验 */
+  /** 每交一个得几点贡献（同时给公会同样多的经验） */
+  per: number;
+  /** 交满后公会额外拿的经验 */
   reward: number;
   endsAt: number;
 }
@@ -196,8 +212,27 @@ export interface OnlineApi {
   kick(playerId: string): Promise<void>;
   setNotice(text: string): Promise<void>;
   guildTasks(): Promise<GuildTask[]>;
-  /** 上交物品：本地先扣，服务器记账 */
-  contribute(taskId: string, qty: number): Promise<void>;
+  /** 今天还没有任务就写进去（客户端按 core/guild.ts dailyTasks 算好） */
+  ensureGuildTasks(tasks: import('../core/guild').TaskSpec[]): Promise<void>;
+  /** 上交物品：本地先扣，服务器记账，返回实际收下的数量（多的退回） */
+  contribute(taskId: string, qty: number): Promise<number>;
+  /** 物品兑换贡献：value 是单价（物品价值），本地先扣，返回实际收下的数量（每天有上限） */
+  exchangeItems(item: string, qty: number, value: number): Promise<number>;
+  /**
+   * 公会仓库（10-26）：vault 0 = 公共仓库，1-3 = 私人仓库。返回按显示顺序排好的 [物品 id, 数量]；
+   * 存取记录（自己能进的仓库的）、存（本地先扣）、取（返回实际取到的）、整理（按给的顺序重排）
+   */
+  guildBank(vault: number): Promise<[string, number][]>;
+  guildBankLog(): Promise<GuildBankLog[]>;
+  guildDeposit(item: string, qty: number, vault: number): Promise<void>;
+  guildWithdraw(item: string, qty: number, vault: number): Promise<number>;
+  sortGuildBank(vault: number, items: string[]): Promise<void>;
+  /** 私人仓库列表（本会所有人都看得到名字）、开一个（返回编号）、改名字和名单 */
+  guildVaults(): Promise<GuildVault[]>;
+  openVault(name: string): Promise<number>;
+  setVault(idx: number, name: string, allow: string[], officers: boolean): Promise<void>;
+  /** 会长：成员从公共仓库取东西的贡献门槛 */
+  setTakeMin(min: number): Promise<void>;
 
   /** 实时：返回取消订阅函数 */
   publishPresence(p: Omit<Presence, 'playerId' | 'name' | 'at'>): void;

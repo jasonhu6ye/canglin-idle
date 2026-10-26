@@ -1014,3 +1014,17 @@ h2.dg-blue { color: #6ab4ff; }
 .gm-row-tools .pill { font-size: 12px; padding: 3px 8px; }
 .town-pick { display: flex; align-items: center; gap: 8px; margin: 4px 0 8px; flex-wrap: wrap; }
 .town-pick select { background: #120b07; color: var(--gold); border: 1px solid var(--edge); border-radius: 2px; padding: 4px 8px; font: inherit; }
+/* 公会等级、任务、仓库（10-26） */
+.guild .guild-lv { padding: 8px 10px; margin: 6px 0; display: flex; flex-direction: column; gap: 4px; }
+.guild .guild-lv .row-tools { justify-content: space-between; }
+.guild .guild-perk-now { padding: 8px 10px; margin: 6px 0; font-size: 13px; line-height: 1.6; }
+.guild .guild-search { width: 100%; margin: 4px 0 6px; box-sizing: border-box; }
+.guild .guild-list li { align-items: center; gap: 8px; }
+.guild .guild-list .with-icon { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; }
+.guild .guild-tasks .task-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.guild .gain { color: #8ad07a; }
+.guild .loss { color: #e8a05a; }
+.guild .guild-check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; margin: 4px 0; }
+.guild .guild-check input { min-width: auto; }
+.guild .chips-row .pill:disabled { opacity: 0.5; }
+.guild .guild-scroll { max-height: 46dvh; overflow-y: auto; }

@@ -1,7 +1,8 @@
 import type { GameState } from '../core/types';
-import type { GmInput, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildMember, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
+import type { GmInput, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { GUILD_MAX, levelSnapshot } from './api';
 import { tl } from '../i18n';
+import { EXCHANGE_DAY_MAX, VAULT_COST, VAULT_SLOTS, exchangeGain, guildLevelOf, guildMembersCap, guildSlots, utcDay, utcWeek, type TaskSpec } from '../core/guild';
 
 /**
  * 本地假后端：数据放 localStorage，只有你自己。用来在后端接好前把排行榜和公会界面做出来、跑测试。
@@ -17,6 +18,10 @@ interface Db {
   guilds: Guild[];
   members: Record<string, GuildMember[]>;
   tasks: GuildTask[];
+  /** 公会仓库（键「公会 id:仓库编号」，键的顺序就是显示顺序）、私人仓库、流水（按公会 id） */
+  bank?: Record<string, Record<string, number>>;
+  vaults?: Record<string, GuildVault[]>;
+  bankLog?: Record<string, GuildBankLog[]>;
   chat: ChatMsg[];
   gm?: GmRow[];
   gmMail?: GmMailRow[];
@@ -89,9 +94,9 @@ export class LocalApi implements OnlineApi {
   async createGuild(name: string, tag: string) {
     const me = this.need();
     if (me.guildId) throw new Error(tl('已经在公会里了'));
-    const g: Guild = { id: uid(), name, tag, notice: '', level: 1, xp: 0, members: 1, maxMembers: GUILD_MAX, open: true };
+    const g: Guild = { id: uid(), name, tag, notice: '', level: 1, xp: 0, members: 1, maxMembers: GUILD_MAX, open: true, takeMin: 0, points: 0 };
     this.db.guilds.push(g);
-    this.db.members[g.id] = [{ playerId: me.id, name: me.name, role: 'leader', totalLevel: this.db.snap?.total ?? 0, weekly: 0, lastSeen: Date.now() }];
+    this.db.members[g.id] = [{ playerId: me.id, name: me.name, role: 'leader', totalLevel: this.db.snap?.total ?? 0, weekly: 0, contrib: 0, lastSeen: Date.now() }];
     me.guildId = g.id;
     me.guildTag = tag;
     this.flush();
@@ -102,7 +107,7 @@ export class LocalApi implements OnlineApi {
     const g = this.db.guilds.find((x) => x.id === id);
     if (!g) throw new Error(tl('公会不存在'));
     if (g.members >= g.maxMembers) throw new Error(tl('公会满员了'));
-    (this.db.members[id] ??= []).push({ playerId: me.id, name: me.name, role: 'member', totalLevel: this.db.snap?.total ?? 0, weekly: 0, lastSeen: Date.now() });
+    (this.db.members[id] ??= []).push({ playerId: me.id, name: me.name, role: 'member', totalLevel: this.db.snap?.total ?? 0, weekly: 0, contrib: 0, lastSeen: Date.now() });
     g.members++;
     me.guildId = id;
     me.guildTag = g.tag;
@@ -130,12 +135,132 @@ export class LocalApi implements OnlineApi {
     this.flush();
   }
   async setNotice(text: string) { this.myGuild().notice = text.slice(0, 200); this.flush(); }
-  async guildTasks() { return this.db.tasks; }
-  async contribute(taskId: string, qty: number) {
-    const t = this.db.tasks.find((x) => x.id === taskId);
-    if (t) t.have = Math.min(t.need, t.have + qty);
+  async guildTasks() { return this.db.tasks.filter((t) => t.endsAt > Date.now() - 86_400_000); }
+  async ensureGuildTasks(list: TaskSpec[]) {
+    this.myGuild();
+    const end = Date.parse(utcDay()) + 86_400_000;
+    if (this.db.tasks.some((t) => t.endsAt === end)) return;
+    this.db.tasks = [...this.db.tasks.filter((t) => t.endsAt > Date.now() - 86_400_000),
+      ...list.slice(0, 5).map((t): GuildTask => ({ id: uid(), kind: 'donate', target: t.target, need: t.need, have: 0, per: t.per, reward: t.reward, endsAt: end }))];
     this.flush();
   }
+  private meMember() {
+    const g = this.myGuild();
+    const m = (this.db.members[g.id] ?? []).find((x) => x.playerId === this.need().id);
+    if (!m) throw new Error(tl('还没加入公会'));
+    return { g, m };
+  }
+  private addContrib(n: number) {
+    const { g, m } = this.meMember();
+    const wk = utcWeek();
+    m.weekly = (m.week === wk ? m.weekly : 0) + n;
+    m.week = wk;
+    m.contrib += n;
+    g.xp += n;
+    g.points += n;
+    this.levelUp(g);
+  }
+  private levelUp(g: Guild) {
+    g.level = guildLevelOf(g.xp);
+    g.maxMembers = guildMembersCap(g.level);
+  }
+  async contribute(taskId: string, qty: number) {
+    const t = this.db.tasks.find((x) => x.id === taskId);
+    if (!t) throw new Error(tl('任务不存在'));
+    if (t.endsAt < Date.now()) throw new Error(tl('任务已结束'));
+    const add = Math.max(0, Math.min(qty, t.need - t.have));
+    if (!add) return 0;
+    t.have += add;
+    this.addContrib(add * t.per);
+    if (t.have >= t.need) { const g = this.myGuild(); g.xp += t.reward; g.points += t.reward; this.levelUp(g); }
+    this.flush();
+    return add;
+  }
+  async exchangeItems(item: string, qty: number, value: number) {
+    if (item === 'coins') throw new Error(tl('金币不能兑换贡献'));
+    const { m } = this.meMember();
+    const today = utcDay();
+    const left = EXCHANGE_DAY_MAX - (m.donatedDay === today ? m.donated ?? 0 : 0);
+    if (left <= 0) throw new Error(tl('今天的兑换已经满了'));
+    const v = Math.max(1, Math.min(100000, Math.floor(value)));
+    const q = Math.max(0, Math.min(qty, Math.floor((left * 10) / v)));
+    const n = exchangeGain(v, q);
+    if (q <= 0 || n <= 0) throw new Error(tl('数量太少，换不到 1 点贡献'));
+    m.donated = EXCHANGE_DAY_MAX - left + n;
+    m.donatedDay = today;
+    this.addContrib(n);
+    this.flush();
+    return q;
+  }
+  private canVault(vault: number) {
+    const { g, m } = this.meMember();
+    if (vault === 0) return true;
+    const v = this.db.vaults?.[g.id]?.find((x) => x.idx === vault);
+    return !!v && (m.role === 'leader' || v.allow.includes(m.playerId) || (v.officers && m.role === 'officer'));
+  }
+  private box(vault: number) {
+    if (!this.canVault(vault)) throw new Error(tl('没有这个仓库的权限'));
+    return ((this.db.bank ??= {})[`${this.myGuild().id}:${vault}`] ??= {});
+  }
+  async guildBank(vault: number) { return Object.entries(this.box(vault)); }
+  async guildBankLog() {
+    return (this.db.bankLog?.[this.myGuild().id] ?? []).filter((l) => this.canVault(l.vault)).slice(0, 300);
+  }
+  private log(vault: number, item: string, qty: number) {
+    const g = this.myGuild();
+    ((this.db.bankLog ??= {})[g.id] ??= []).unshift({ vault, name: this.need().name, item, qty, at: Date.now() });
+  }
+  async guildDeposit(item: string, qty: number, vault: number) {
+    const g = this.myGuild();
+    if (qty <= 0) throw new Error(tl('数量不对'));
+    const bank = this.box(vault);
+    if (!bank[item] && Object.keys(bank).length >= (vault ? VAULT_SLOTS : guildSlots(g.level))) throw new Error(tl('公会仓库满了'));
+    bank[item] = (bank[item] ?? 0) + qty;
+    this.log(vault, item, qty);
+    this.flush();
+  }
+  async guildWithdraw(item: string, qty: number, vault: number) {
+    const { g, m } = this.meMember();
+    const bank = this.box(vault);
+    if (!vault && m.role === 'member' && (g.takeMin < 0 || m.contrib < g.takeMin)) throw new Error(tl('贡献不够，不能从公会仓库取东西'));
+    const n = Math.max(0, Math.min(qty, bank[item] ?? 0));
+    if (!n) return 0;
+    bank[item] -= n;
+    if (!bank[item]) delete bank[item];
+    this.log(vault, item, -n);
+    this.flush();
+    return n;
+  }
+  async sortGuildBank(vault: number, items: string[]) {
+    const bank = this.box(vault);
+    const next: Record<string, number> = {};
+    for (const id of [...items, ...Object.keys(bank)]) if (bank[id] && !next[id]) next[id] = bank[id];
+    this.db.bank![`${this.myGuild().id}:${vault}`] = next;
+    this.flush();
+  }
+  async guildVaults() { return [...(this.db.vaults?.[this.myGuild().id] ?? [])]; }
+  async openVault(name: string) {
+    const { g, m } = this.meMember();
+    if (m.role === 'member') throw new Error(tl('只有会长和副会长能开私人仓库'));
+    const list = ((this.db.vaults ??= {})[g.id] ??= []);
+    if (list.length >= VAULT_COST.length) throw new Error(tl('私人仓库最多 3 个'));
+    const cost = VAULT_COST[list.length];
+    if (g.points < cost) throw new Error(tl('公会贡献值不够'));
+    g.points -= cost;
+    list.push({ idx: list.length + 1, name: name.trim().slice(0, 12) || tl('私人仓库'), allow: [m.playerId], officers: false });
+    this.flush();
+    return list.length;
+  }
+  async setVault(idx: number, name: string, allow: string[], officers: boolean) {
+    const { g, m } = this.meMember();
+    if (!(m.role === 'leader' || (m.role === 'officer' && this.canVault(idx)))) throw new Error(tl('没有权限'));
+    const v = this.db.vaults?.[g.id]?.find((x) => x.idx === idx);
+    if (!v) return;
+    const ids = new Set((this.db.members[g.id] ?? []).map((x) => x.playerId));
+    Object.assign(v, { name: name.trim().slice(0, 12) || v.name, allow: [...new Set(allow)].filter((a) => ids.has(a)), officers });
+    this.flush();
+  }
+  async setTakeMin(min: number) { this.myGuild().takeMin = Math.max(-1, Math.floor(min)); this.flush(); }
 
   publishPresence() { /* 只有自己，不用发 */ }
   onPresence(f: (all: Presence[]) => void) { f([]); return () => {}; }
