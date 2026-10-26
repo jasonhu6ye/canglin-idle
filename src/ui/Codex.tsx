@@ -3,7 +3,7 @@ import { QualityTable } from './Quality';
 import { useSticky } from './sticky';
 import { useMemo, useState } from 'react';
 import { ACTIONS, buffText, CROP_DEFS, fieldOfCrop, ITEMS, MONSTERS, nodeOfAction, nodesOfAction, SKILLS, TIERS, tierName } from '../core/data';
-import { maxHp, POTION_AT, toolSkillNames } from '../core/sim';
+import { maxHp, POTION_AT, startAt, toolSkillNames } from '../core/sim';
 import type { GameState, ItemDef } from '../core/types';
 import { Icon } from './icons';
 import { Bestiary } from './Bestiary';
@@ -69,13 +69,13 @@ function sourcesOf(id: string) {
   return { make: make.filter((x) => !seen.has(x.text) && !!seen.add(x.text)), drops, use: [...new Set(use)] };
 }
 
-/** 点来源：走过去，到了自动打开地点并选好这一项；怪物就追踪过去 */
+/** 点来源：资源点直接开工（自己走过去），种田等只走过去打开页面；怪物就追踪过去 */
 function goSource(x: Src) {
   if (x.monster) store.track(x.monster);
-  else if (x.node) {
-    store.focusAction = x.action ?? null;
-    store.requestWalk(x.node);
-  } else return;
+  // 用户 10-26：以前只走过去打开页面，角色站着发呆；现在直接开工（会自己走过去）
+  else if (x.node && x.action) store.dispatch((s) => startAt(s, x.action!, x.node!));
+  else if (x.node) store.requestWalk(x.node);
+  else return;
   openItem(null);
 }
 

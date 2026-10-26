@@ -8,6 +8,12 @@ import { tl } from '../i18n';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-10-26-a', date: tl('10 月 26 日'), title: tl('物品来源一键开工'),
+    lines: [
+      tl('物品详情的来源里点「寻路」，现在会直接开始这项工作：角色自己走到你选的那个地点，到了就开挖，不再走过去站着发呆。离线也照常算。'),
+    ],
+  },
+  {
     id: '2026-10-25-w', date: tl('10 月 25 日'), title: tl('副本可以重新进入'),
     lines: [
       tl('副本阵亡、点了离开或用了回城卷轴后，只要洞口还没消失、副本还没通关，就能再进去，接着上次的进度打，打死的怪不会复活。'),

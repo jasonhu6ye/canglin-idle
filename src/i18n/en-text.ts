@@ -370,6 +370,7 @@ export const EN_TEXT: Record<string, string> = {
   '更新公告': 'Patch Notes',
   '往期公告': 'Earlier notes',
   '10 月 25 日': 'Oct 25',
+  '10 月 26 日': 'Oct 26',
   '新增英文语言包 · English is here': 'English is here · 新增英文语言包',
   '「更多」页最上面可以切换 中文 / English，选择会记住，切换后页面自动刷新，存档不受影响。': 'Switch between 中文 and English at the top of the More page. Your choice is remembered, the page reloads to apply it, and your save is untouched.',
   '英文版翻译了全部界面、物品、怪物、地点、任务、新手指引、攻略手册和更新公告，按游戏里的说法写，不是逐字直译。': 'The English version covers the whole interface plus every item, monster, location, quest, the beginner\'s guide, the Handbook and these patch notes, written to read like a game rather than a word-for-word translation.',
@@ -708,4 +709,6 @@ export const EN_TEXT: Record<string, string> = {
   "副本可以重新进入": "Dungeons can be re-entered",
   "副本阵亡、点了离开或用了回城卷轴后，只要洞口还没消失、副本还没通关，就能再进去，接着上次的进度打，打死的怪不会复活。": "If you die in a dungeon, leave, or use a Town Scroll, you can go back in as long as the gate is still open and the dungeon isn't cleared. You pick up where you left off, and slain monsters stay dead.",
   "开了最后的宝箱才算通关，通关后这个洞口就不能再进了。": "A dungeon counts as cleared once you open the final chest; after that the gate can't be entered again.",
+  "物品来源一键开工": "One-tap gathering from item sources",
+  "物品详情的来源里点「寻路」，现在会直接开始这项工作：角色自己走到你选的那个地点，到了就开挖，不再走过去站着发呆。离线也照常算。": "Tapping \"Go\" on a source in item details now starts that job right away: your character walks to the spot you picked and gets to work on arrival instead of standing around. Works offline too.",
 };

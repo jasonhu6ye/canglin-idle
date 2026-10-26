@@ -1,4 +1,4 @@
-import { actionDuration, advance, buySeed, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour, openContainer, redeemCode, toggleMount, moveSpeed, rainBonus, summonPumpkin, placeFoal, collectHorse, RANCH_NODE, bagRoomFor, playerAttackMs, playerBonuses, salvage, salvageValue, sortBank, SALVAGE_NODES, SALVAGE_BONUS } from './sim';
+import { actionDuration, advance, buySeed, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour, openContainer, redeemCode, toggleMount, moveSpeed, rainBonus, summonPumpkin, placeFoal, collectHorse, RANCH_NODE, bagRoomFor, playerAttackMs, playerBonuses, salvage, salvageValue, sortBank, SALVAGE_NODES, SALVAGE_BONUS, startAt } from './sim';
 import { baseOf, qid, qualityOdds, rollQuality } from './quality';
 import { claimMail, clearMail, GIFTS, HW_DAILY_BOXES, stepMail, unreadMail } from './mail';
 import { HW_BOX, HW_END, HW_POINT, HW_TIERS, hwFight } from './halloween';
@@ -6,7 +6,7 @@ import { APT_MAX, APT_MIN, aptOf, FOAL, FOAL_MS, growMs, HORSE_XP } from './ranc
 import { SPECIES } from './bestiary';
 import { levelForXp, speedForLevel, XP_TABLE } from './xp';
 import type { GameState, SkillAction, TaskMode } from './types';
-import { MONSTERS, ACTIONS, ITEMS, CROP_DEFS, FARM_NODES, nodeOfAction, plotsOf, standOf, travelMs, WATER_SPEEDUP } from './data';
+import { MONSTERS, ACTIONS, ITEMS, CROP_DEFS, FARM_NODES, nodeOfAction, nodesOfAction, plotsOf, standOf, travelMs, WATER_SPEEDUP } from './data';
 import { fieldCounts, harvestAll, installSprinkler, plantAll, stepRain, tendPlot, waterAll } from './farm';
 import { isRaining } from './weather';
 
@@ -37,6 +37,17 @@ describe('经验曲线', () => {
 });
 
 describe('采集', () => {
+  it('物品来源点寻路：去指定的那个点位并直接开工（不是只走过去发呆）', () => {
+    const s = newGame(0, 1);
+    const ns = nodesOfAction('mine_stone');
+    const far = ns[ns.length - 1];
+    const s1 = startAt(s, 'mine_stone', far.id);
+    expect(s1.queue[0].action).toBe('mine_stone');
+    expect(s1.travel?.to).toBe(far.id);
+    const r = advance(s1, s1.travel!.ms + 60_000);
+    expect(r.state.loc).toEqual(standOf(far));
+    expect(r.state.xp.mining).toBeGreaterThan(0);
+  });
   it('挖石头 1 小时 = 1200 次', () => {
     const s = startHere(newGame(T0, 1), 'mine_stone', { type: 'infinite' });
     const { state, summary } = advance(s, T0 + HOUR);

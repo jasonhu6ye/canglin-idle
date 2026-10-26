@@ -1177,6 +1177,20 @@ export function startNow(prev: GameState, action: string, mode: TaskMode): GameS
   return s;
 }
 
+/** 立即开始，并指定去哪个地点做（物品来源里点「寻路」，用户 10-26：以前只走过去不开工，站着发呆） */
+export function startAt(prev: GameState, action: string, nodeId: string, mode: TaskMode = { type: 'infinite' }): GameState {
+  const n = nodesOfAction(action).find((x) => x.id === nodeId);
+  if (!n || prev.home?.inside) return prev;
+  const s = startNow(prev, action, mode);
+  s.walk = null;
+  const dest = standOf(n);
+  if (dest.x !== s.loc.x || dest.y !== s.loc.y) {
+    const r = planRoute(s.waystones, s.loc, dest, moveSpeed(s));
+    s.travel = { to: n.id, ms: r.ms, total: r.ms, ...(r.via && { via: r.via }) };
+  }
+  return s;
+}
+
 /** 传送：直接站到地点上，取消正在走的路 */
 export function teleport(prev: GameState, nodeId: string): GameState {
   const n = NODES.find((x) => x.id === nodeId);
