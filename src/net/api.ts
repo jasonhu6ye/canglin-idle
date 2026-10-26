@@ -1,4 +1,4 @@
-import type { GameState, GmBuff, SkillId } from '../core/types';
+import type { GameState, GmBuff, ItemStack, SkillId } from '../core/types';
 import { combatLevel, level } from '../core/sim';
 
 /**
@@ -245,7 +245,19 @@ export interface OnlineApi {
   gmAdd(b: GmInput): Promise<void>;
   gmUpdate(id: string, b: Partial<GmInput>): Promise<void>;
   gmDelete(id: string): Promise<void>;
+
+  /** GM 赠送物品（10-26）：发给自己、还没领的；领取（服务器上只成功一次） */
+  myGmMail(): Promise<GmMail[]>;
+  claimGmMail(id: string): Promise<boolean>;
+  /** 管理员：发过的最近 100 封、发、删（删只对没领的有意义） */
+  gmMailList(): Promise<GmMailRow[]>;
+  gmMailSend(m: GmMailInput): Promise<void>;
+  gmMailDelete(id: string): Promise<void>;
 }
+
+export interface GmMail { id: string; title: string; body: string; items: ItemStack[]; at: number }
+export interface GmMailRow extends GmMail { targetPid: number; targetName?: string; claimedAt: number | null }
+export interface GmMailInput { targetPid: number; title: string; body: string; items: ItemStack[] }
 
 /** 管理员面板里的一行：多了给谁（null = 全服） */
 export interface GmRow extends GmBuff { targetPid: number | null; targetName?: string }

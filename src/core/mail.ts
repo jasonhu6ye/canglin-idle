@@ -23,7 +23,7 @@ export const dayKey = (now: number) => {
 };
 
 /** 往存档里塞一封邮件（直接改 s） */
-export function sendMail(s: GameState, kind: MailKind, items: ItemStack[], at: number, extra: Partial<Pick<Mail, 'arg' | 'expires'>> = {}) {
+export function sendMail(s: GameState, kind: MailKind, items: ItemStack[], at: number, extra: Partial<Pick<Mail, 'arg' | 'expires' | 'title' | 'body'>> = {}) {
   s.mailSeq = (s.mailSeq ?? 0) + 1;
   s.mail = [{ id: s.mailSeq, kind, at, items: items.filter((i) => i.qty > 0), ...extra }, ...(s.mail ?? [])];
   // 太多了先删最旧的已领取邮件，再删最旧的

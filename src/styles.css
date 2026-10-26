@@ -999,6 +999,13 @@ h2.dg-blue { color: #6ab4ff; }
 .gm-form .warn { margin: 0; }
 .gm-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
 .gm-list li { padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
+.gm-tabs { margin: 0 0 8px; flex: none; }
+.gm-form .gm-body { align-items: flex-start; }
+.gm-form textarea { flex: 1; min-width: 0; resize: vertical; font: inherit; background: #120b07; color: inherit; border: 1px solid var(--edge); padding: 4px 6px; }
+.gm-pick { max-height: 220px; overflow-y: auto; }
+.gm-pick li { cursor: pointer; }
+.gm-attach input { width: 80px; }
+.gm-mail-body { white-space: pre-wrap; color: #d8ccb0; }
 .gm-list li.off { opacity: 0.55; }
 .gm-list li.on { box-shadow: inset 3px 0 0 #7ad860; }
 .gm-tag { font-style: normal; font-size: 11px; margin-left: 6px; padding: 0 4px; border: 1px solid var(--gold); color: var(--gold); border-radius: 2px; }

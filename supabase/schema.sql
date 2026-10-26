@@ -599,3 +599,37 @@ drop policy if exists "gm_buffs 管理员改" on public.gm_buffs;
 create policy "gm_buffs 管理员改" on public.gm_buffs for update using (public.is_gm()) with check (public.is_gm());
 drop policy if exists "gm_buffs 管理员删" on public.gm_buffs;
 create policy "gm_buffs 管理员删" on public.gm_buffs for delete using (public.is_gm());
+
+-- ============ GM 赠送物品（10-26）============
+-- 管理员给指定玩家发邮件附带物品；玩家拉到后 claim_gm_mail 只成功一次，再放进自己的邮箱
+create table if not exists public.gm_mail (
+  id uuid primary key default gen_random_uuid(),
+  target_pid bigint not null,
+  title text not null check (char_length(title) between 1 and 30),
+  body text not null default '' check (char_length(body) <= 500),
+  items jsonb not null default '[]'::jsonb,
+  created_by uuid default auth.uid(),
+  created_at timestamptz not null default now(),
+  claimed_at timestamptz
+);
+create index if not exists gm_mail_target on public.gm_mail (target_pid, claimed_at);
+alter table public.gm_mail enable row level security;
+drop policy if exists "gm_mail 看自己的" on public.gm_mail;
+create policy "gm_mail 看自己的" on public.gm_mail for select using (
+  target_pid = (select pid from profiles where id = auth.uid()) or public.is_gm()
+);
+drop policy if exists "gm_mail 管理员发" on public.gm_mail;
+create policy "gm_mail 管理员发" on public.gm_mail for insert with check (public.is_gm());
+drop policy if exists "gm_mail 管理员删" on public.gm_mail;
+create policy "gm_mail 管理员删" on public.gm_mail for delete using (public.is_gm());
+
+create or replace function public.claim_gm_mail(p_mail uuid) returns boolean
+language plpgsql security definer set search_path = public as $$
+declare n int;
+begin
+  update gm_mail set claimed_at = now()
+    where id = p_mail and claimed_at is null and target_pid = (select pid from profiles where id = auth.uid());
+  get diagnostics n = row_count;
+  return n > 0;
+end $$;
+grant execute on function public.claim_gm_mail(uuid) to authenticated;

@@ -1,7 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { GM_KINDS, GM_KIND_NAME, GM_PCT_MAX } from '../core/gm';
 import type { GmKind } from '../core/types';
-import { online, type GmInput, type GmRow } from '../net';
+import { online, type GmInput, type GmMailRow, type GmRow } from '../net';
+import { ITEMS } from '../core/data';
+import type { ItemStack } from '../core/types';
+import { fmtNum } from './format';
+import { Icon } from './icons';
 import { pullGm } from '../net/social';
 import { tl } from '../i18n';
 
@@ -37,6 +41,24 @@ const left = (ms: number) => {
 };
 
 export function GmPanel({ onClose }: { onClose: () => void }) {
+  const [tab, setTab] = useState<'buff' | 'mail'>('buff');
+  return (
+    <div className="page guild gm-panel">
+      <div className="sheet-head">
+        <button className="back" onClick={onClose}>{tl('‹ 返回')}</button>
+        <h2>{tl('GM 面板')}</h2>
+        <small className="muted">{tl('管理员专用')}</small>
+      </div>
+      <div className="gm-seg gm-tabs">
+        <button className={`pill ${tab === 'buff' ? 'on' : ''}`} onClick={() => setTab('buff')}>{tl('增益')}</button>
+        <button className={`pill ${tab === 'mail' ? 'on' : ''}`} onClick={() => setTab('mail')}>{tl('赠送物品')}</button>
+      </div>
+      {tab === 'buff' ? <BuffTab /> : <MailTab />}
+    </div>
+  );
+}
+
+function BuffTab() {
   const [rows, setRows] = useState<GmRow[] | null>(null);
   const [form, setForm] = useState<Form>(EMPTY);
   const [editing, setEditing] = useState<string | null>(null);
@@ -110,13 +132,7 @@ export function GmPanel({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="page guild gm-panel">
-      <div className="sheet-head">
-        <button className="back" onClick={onClose}>{tl('‹ 返回')}</button>
-        <h2>{tl('GM 面板')}</h2>
-        <small className="muted">{tl('管理员专用')}</small>
-      </div>
-
+    <>
       <h3>{editing ? tl('修改增益') : tl('发放增益')}</h3>
       <div className="gm-form frame">
         <label><span>{tl('对象')}</span>
@@ -174,6 +190,134 @@ export function GmPanel({ onClose }: { onClose: () => void }) {
           );
         })}
       </ul>
-    </div>
+    </>
+  );
+}
+
+/** 能送的东西：材料、食物、钥匙、宝箱之类，装备和工具除外；金币也能送 */
+const GIFTABLE = Object.values(ITEMS).filter((it) => !it.equip && it.category !== 'gear' && it.category !== 'tool');
+const MAX_ATTACH = 10;
+
+/** 赠送物品（10-26）：给指定 UID 发一封带附件的邮件，标题正文自定义 */
+function MailTab() {
+  const [rows, setRows] = useState<GmMailRow[] | null>(null);
+  const [pid, setPid] = useState('');
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [items, setItems] = useState<ItemStack[]>([]);
+  const [q, setQ] = useState('');
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = async () => {
+    try {
+      setRows(await online.gmMailList());
+    } catch (e) {
+      setMsg({ text: (e as Error).message, ok: false });
+      setRows([]);
+    }
+  };
+  useEffect(() => { void load(); }, []);
+  const run = async (f: () => Promise<void>, ok: string) => {
+    setBusy(true);
+    try {
+      await f();
+      setMsg({ text: ok, ok: true });
+      await load();
+    } catch (e) {
+      setMsg({ text: (e as Error).message, ok: false });
+    }
+    setBusy(false);
+  };
+
+  const found = useMemo(() => {
+    const k = q.trim();
+    if (!k) return [];
+    return GIFTABLE.filter((it) => it.name.includes(k) || it.id.includes(k)).slice(0, 30);
+  }, [q]);
+  const add = (id: string) => {
+    setMsg(null);
+    if (items.some((i) => i.item === id)) return;
+    if (items.length >= MAX_ATTACH) return setMsg({ text: tl`一封最多 ${MAX_ATTACH} 种物品`, ok: false });
+    setItems([...items, { item: id, qty: 1 }]);
+  };
+  const setQty = (id: string, v: string) => setItems(items.map((i) => (i.item === id ? { ...i, qty: Math.min(1e9, Math.floor(Number(v.replace(/\D/g, '')) || 0)) } : i)));
+
+  const n = Number(pid);
+  const bad =
+    !(Number.isInteger(n) && n > 0) ? tl('填玩家的数字 UID') :
+    !title.trim() ? tl('写个邮件标题') :
+    !items.length ? tl('至少放一种物品') :
+    items.some((i) => !(i.qty > 0)) ? tl('数量要大于 0') : null;
+
+  const send = () => {
+    if (bad) return;
+    void run(async () => {
+      await online.gmMailSend({ targetPid: n, title: title.trim(), body: body.trim(), items });
+      setItems([]);
+      setTitle('');
+      setBody('');
+    }, tl`已发送给 UID ${n}，对方上线一分钟内收到`);
+  };
+
+  return (
+    <>
+      <h3>{tl('赠送物品')} <small className="muted">{tl('通过邮件发给指定玩家，装备和工具不能送')}</small></h3>
+      <div className="gm-form frame">
+        <label><span>{tl('玩家')}</span><input inputMode="numeric" placeholder={tl('玩家 UID，如 10000002')} value={pid} onChange={(e) => { setPid(e.target.value.replace(/\D/g, '')); setMsg(null); }} /></label>
+        <label><span>{tl('标题')}</span><input maxLength={30} placeholder={tl('如：活动补偿')} value={title} onChange={(e) => { setTitle(e.target.value); setMsg(null); }} /></label>
+        <label className="gm-body"><span>{tl('正文')}</span><textarea maxLength={500} rows={4} placeholder={tl('邮件内容（可不写）')} value={body} onChange={(e) => setBody(e.target.value)} /></label>
+        <label><span>{tl('物品')}</span><input placeholder={tl('搜索物品名字，如：铁锭、强化石')} value={q} onChange={(e) => setQ(e.target.value)} /></label>
+        {found.length > 0 && (
+          <ul className="trade-items pick gm-pick">
+            {found.map((it) => (
+              <li key={it.id} className={items.some((i) => i.item === it.id) ? 'on' : ''} onClick={() => add(it.id)}>
+                <Icon item={it.id} size={24} info={false} />
+                <span className="nm">{it.name}</span>
+                <small className="muted">{tl('点击加入')}</small>
+              </li>
+            ))}
+          </ul>
+        )}
+        {items.length > 0 && (
+          <ul className="trade-items gm-attach">
+            {items.map((i) => (
+              <li key={i.item}>
+                <Icon item={i.item} size={24} info={false} />
+                <span className="nm">{ITEMS[i.item]?.name ?? i.item}</span>
+                <input inputMode="numeric" value={i.qty || ''} onChange={(e) => setQty(i.item, e.target.value)} />
+                <button className="small" onClick={() => setItems(items.filter((x) => x.item !== i.item))}>{tl('移除')}</button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="gm-actions">
+          <button className="primary" disabled={!!bad || busy} onClick={send}>{tl('发送邮件')}</button>
+        </div>
+        {(bad && (pid || title || items.length)) || msg ? <p className={msg?.ok ? 'good' : 'warn'}>{msg?.text ?? bad}</p> : null}
+      </div>
+
+      <h3>{tl('已发送 ')}<small className="muted">{tl('对方上线后一分钟内收到')}</small></h3>
+      {rows === null && <p className="muted">{tl('读取中…')}</p>}
+      {rows?.length === 0 && <p className="muted">{tl('还没有发过')}</p>}
+      <ul className="gm-list">
+        {rows?.map((r) => (
+          <li key={r.id} className={`frame ${r.claimedAt ? 'off' : 'on'}`}>
+            <div><b>{r.title}</b></div>
+            <small className="muted">
+              {tl`${r.targetName ?? tl('玩家')}（UID ${r.targetPid}）`}{' · '}
+              {r.claimedAt ? tl('已收到') : tl('还没收到')}
+            </small>
+            {r.body && <small className="gm-mail-body">{r.body}</small>}
+            <small>{r.items.map((i) => `${ITEMS[i.item]?.name ?? i.item} ×${fmtNum(i.qty)}`).join(tl('、'))}</small>
+            {!r.claimedAt && (
+              <div className="gm-row-tools">
+                <button className="pill warn" disabled={busy} onClick={() => run(() => online.gmMailDelete(r.id), tl('已撤回'))}>{tl('撤回')}</button>
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }

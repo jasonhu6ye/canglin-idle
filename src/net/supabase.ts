@@ -1,6 +1,6 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js';
 import type { GameState, GmBuff } from '../core/types';
-import type { GmInput, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildMember, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
+import type { GmInput, GmMail, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildMember, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { levelSnapshot } from './api';
 import { tl } from '../i18n';
 
@@ -400,7 +400,34 @@ export class SupabaseApi implements OnlineApi {
     const r = ok(await this.sb.from('gm_buffs').delete().eq('id', id).select('id'));
     if (!r?.length) throw new Error(tl('没有权限，或者这条已经删掉了'));
   }
+  // ---- GM 赠送物品（10-26）----
+  async myGmMail(): Promise<GmMail[]> {
+    if (!this.profile?.pid) return [];
+    const rows: Row[] = ok(await this.sb.from('gm_mail').select('id,title,body,items,created_at').eq('target_pid', Number(this.profile.pid)).is('claimed_at', null).limit(20));
+    return rows.map(toGmMail);
+  }
+  async claimGmMail(id: string) { return ok(await this.sb.rpc('claim_gm_mail', { p_mail: id })) as boolean; }
+  async gmMailList(): Promise<GmMailRow[]> {
+    const rows: Row[] = ok(await this.sb.from('gm_mail').select('id,target_pid,title,body,items,created_at,claimed_at').order('created_at', { ascending: false }).limit(100));
+    const pids = [...new Set(rows.map((r) => r.target_pid))];
+    const names = new Map<number, string>();
+    if (pids.length) for (const p of ok(await this.sb.from('profiles').select('pid,name').in('pid', pids)) as Row[]) names.set(Number(p.pid), p.name);
+    return rows.map((r) => ({ ...toGmMail(r), targetPid: Number(r.target_pid), targetName: names.get(Number(r.target_pid)), claimedAt: r.claimed_at ? Date.parse(r.claimed_at) : null }));
+  }
+  async gmMailSend(m: GmMailInput) {
+    const who = ok(await this.sb.from('profiles').select('pid').eq('pid', m.targetPid).maybeSingle());
+    if (!who) throw new Error(tl`找不到 UID ${m.targetPid} 的玩家`);
+    ok(await this.sb.from('gm_mail').insert({ target_pid: m.targetPid, title: m.title, body: m.body, items: m.items }));
+  }
+  async gmMailDelete(id: string) {
+    const r = ok(await this.sb.from('gm_mail').delete().eq('id', id).select('id'));
+    if (!r?.length) throw new Error(tl('没有权限，或者这条已经删掉了'));
+  }
 }
+const toGmMail = (r: Row): GmMail => ({
+  id: r.id, title: r.title, body: r.body ?? '', at: Date.parse(r.created_at),
+  items: (Array.isArray(r.items) ? r.items : []).filter((i: Row) => typeof i?.item === 'string' && Number(i.qty) > 0).map((i: Row) => ({ item: i.item, qty: Math.floor(Number(i.qty)) })),
+});
 const toGm = (r: Row): GmBuff => ({
   id: r.id, name: r.name, tag: r.tag ?? '', kind: r.kind, pct: Number(r.pct),
   from: Date.parse(r.starts_at), to: Date.parse(r.ends_at), all: r.target_pid == null,

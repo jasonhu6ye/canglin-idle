@@ -6,6 +6,7 @@ import { online, type DungeonPresence, type ChatChannel, type ChatMsg, type Frie
 import { ACTIONS, ITEMS } from '../core/data';
 import { store } from '../store';
 import { setGmBuffs } from '../core/gm';
+import { sendMail } from '../core/mail';
 
 /**
  * 聊天和好友（10-25 用户要求：世界 / 公会 / 队伍 / 私聊，玩家数字 ID 加好友）。
@@ -93,6 +94,18 @@ export async function pullGm() {
     const list = await online.myGmBuffs();
     store.dispatch((s) => setGmBuffs(s, list));
   } catch { /* 连不上就下次再拉，存档里的照旧生效 */ }
+  // GM 赠送物品（10-26）：服务器上领取成功一次才放进邮箱，换设备、重复拉也不会多给
+  try {
+    for (const m of await online.myGmMail()) {
+      if (!(await online.claimGmMail(m.id))) continue;
+      const items = m.items.filter((i) => ITEMS[i.item]);
+      store.dispatch((s) => {
+        const next: GameState = JSON.parse(JSON.stringify(s));
+        sendMail(next, 'custom', items, Date.now(), { title: m.title, body: m.body });
+        return next;
+      });
+    }
+  } catch { /* 下次再拉 */ }
 }
 
 export function openChat(channel?: ChatChannel, to?: string | null) {

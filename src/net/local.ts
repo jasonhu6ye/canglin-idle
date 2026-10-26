@@ -1,5 +1,5 @@
 import type { GameState } from '../core/types';
-import type { GmInput, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildMember, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
+import type { GmInput, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildMember, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { GUILD_MAX, levelSnapshot } from './api';
 import { tl } from '../i18n';
 
@@ -19,6 +19,7 @@ interface Db {
   tasks: GuildTask[];
   chat: ChatMsg[];
   gm?: GmRow[];
+  gmMail?: GmMailRow[];
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -186,6 +187,23 @@ export class LocalApi implements OnlineApi {
   }
   async gmDelete(id: string) {
     this.db.gm = (this.db.gm ?? []).filter((x) => x.id !== id);
+    this.flush();
+  }
+  async myGmMail() { return (this.db.gmMail ?? []).filter((m) => m.targetPid === this.db.me?.pid && !m.claimedAt).map(({ targetPid: _p, targetName: _n, claimedAt: _c, ...m }) => m); }
+  async claimGmMail(id: string) {
+    const m = (this.db.gmMail ?? []).find((x) => x.id === id && !x.claimedAt && x.targetPid === this.db.me?.pid);
+    if (!m) return false;
+    m.claimedAt = Date.now();
+    this.flush();
+    return true;
+  }
+  async gmMailList() { return [...(this.db.gmMail ?? [])]; }
+  async gmMailSend(m: GmMailInput) {
+    this.db.gmMail = [{ ...m, id: uid(), at: Date.now(), claimedAt: null }, ...(this.db.gmMail ?? [])];
+    this.flush();
+  }
+  async gmMailDelete(id: string) {
+    this.db.gmMail = (this.db.gmMail ?? []).filter((x) => x.id !== id);
     this.flush();
   }
 }

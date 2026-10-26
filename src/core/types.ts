@@ -109,7 +109,7 @@ export interface ItemDef {
 }
 
 /** 邮件种类：标题和正文按种类在界面上生成，换语言也能跟着变 */
-export type MailKind = 'hw_daily' | 'quest' | 'redeem' | 'hw_expired' | 'gift';
+export type MailKind = 'hw_daily' | 'quest' | 'redeem' | 'hw_expired' | 'gift' | 'custom';
 export interface Mail {
   id: number;
   kind: MailKind;
@@ -122,6 +122,9 @@ export interface Mail {
   claimed?: boolean;
   /** 到这个时间自动删掉（万圣节礼物活动结束就没了） */
   expires?: number;
+  /** custom 邮件（管理员发的）自带标题和正文 */
+  title?: string;
+  body?: string;
 }
 
 export interface ItemStack {
