@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ITEMS, MONSTERS, TIERS, keyId } from './data';
 import { buffMob, chestOdds, dungeonFloor, GATE_CD, mobBuff, rollChest, rollFloors, teamChest, totalMobs } from './dungeon';
-import { advance, combatEstimate, enterDungeon, syncDungeon, gateBlock, gateOpenBlock, leaveDungeon, migrate, newGame, openDungeonChest, openGate, useTownScroll } from './sim';
+import { advance, markContrib, combatEstimate, enterDungeon, syncDungeon, gateBlock, gateOpenBlock, leaveDungeon, migrate, newGame, openDungeonChest, openGate, useTownScroll } from './sim';
 import { nextRandom } from './rng';
 import { XP_TABLE } from './xp';
 import type { DungeonGate, GameState } from './types';
@@ -148,10 +148,30 @@ describe('组队宝箱掷点分配', () => {
     s = enterDungeon(s, g, 3, T0, { members: team, me: 'b' });
     s = advance(s, T0 + 3 * 3600_000).state;
     expect(s.dungeon?.phase).toBe('chest');
+    // 三个人都打出过伤害（10-26：宝箱只分给有输出的人）
+    s = { ...s, dungeon: { ...s.dungeon!, contrib: ['a', 'b', 'c'] } };
     const [s2, got] = openDungeonChest(s);
     const t = teamChest(g, s2.dungeon!.chest!, team);
     expect(got).toEqual(t.shares[1]);
     expect(s2.dungeon!.split).toEqual(t.shares);
+  });
+
+  it('只分给打出过伤害的队友：没参与的不分，只有自己打就按单人开', () => {
+    let s = strong(4);
+    s.loc = { x: 300, y: 300 };
+    const g = { ...gate('green', 4, 2, 32), x: 300, y: 300 };
+    s = enterDungeon(s, g, 3, T0, { members: team, me: 'b' });
+    s = advance(s, T0 + 3 * 3600_000).state;
+    expect(s.dungeon?.phase).toBe('chest');
+    expect(s.dungeon!.contrib).toEqual(['b']);
+    const [solo] = openDungeonChest(s);
+    expect(solo.dungeon!.split).toBeUndefined();
+    const two = markContrib(s, 'a');
+    const [s2, got] = openDungeonChest(two);
+    const crew = team.filter((m) => m.id !== 'c');
+    const t = teamChest(g, s2.dungeon!.chest!, crew);
+    expect(got).toEqual(t.shares[crew.findIndex((m) => m.id === 'b')]);
+    expect(s2.dungeon!.split![team.findIndex((m) => m.id === 'c')]).toEqual({});
   });
 });
 
@@ -324,5 +344,26 @@ describe('打副本', () => {
     const inside = enterDungeon({ ...strong(3), loc: { x: 300, y: 300 } }, { ...gate('green', 3, 2, 1), x: 300, y: 300 }, 1, T0);
     const back = migrate(JSON.parse(JSON.stringify(inside)))!;
     expect(back.dungeon?.gate.seed).toBe(1);
+  });
+});
+
+describe('副本队友伤害记到同一只怪上（10-26）', () => {
+  it('收到队友伤害就扣自己这边的怪血，扣光了怪倒下、记下最后一击', async () => {
+    const { pushMateHit, stopKey, setDgCrew } = await import('./aggro');
+    let s = strong(4);
+    s.loc = { x: 300, y: 300 };
+    const g = { ...gate('green', 4, 2, 41), x: 300, y: 300 };
+    s = enterDungeon(s, g, 1, T0);
+    let t = T0;
+    while (s.dungeon && s.dungeon.phase !== 'fight' && t < T0 + 600_000) s = advance(s, (t += 200)).state;
+    expect(s.dungeon?.phase).toBe('fight');
+    const idx = s.dungeon!.idx;
+    s = advance(s, (t += 10)).state;
+    expect(s.combat).toBeTruthy();
+    pushMateHit(stopKey(g.id, s.dungeon!.floor, idx), s.combat!.monsterHp + 5);
+    s = advance(s, (t += 10)).state;
+    expect(s.dungeon!.idx).toBe(idx + 1);
+    expect(s.dungeon!.lastHit).toMatchObject({ idx, mine: false });
+    setDgCrew(0);
   });
 });

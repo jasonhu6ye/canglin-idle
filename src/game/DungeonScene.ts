@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 import { MONSTERS } from '../core/data';
-import { buffMob, DG_TILE_MS, dungeonFloor, type DgFloor, type DgStop } from '../core/dungeon';
+import { DG_TILE_MS, dungeonFloor, type DgFloor, type DgStop } from '../core/dungeon';
 import { baseOf } from '../core/quality';
-import { combatStats } from '../core/sim';
+import { combatStats, dgMob } from '../core/sim';
 import type { DungeonRun, MonsterDef } from '../core/types';
 import { store } from '../store';
 import { tl } from '../i18n';
@@ -17,6 +17,11 @@ import { OtherPlayers, publishSelf } from './others';
 export const DG_CHEST = 'dg-chest';
 /** 场景 → 界面：飘一条提示 */
 export const DG_MSG = 'dg-msg';
+/** 界面 → 场景：队友打中了怪（队友 id、层、停靠点、伤害、暴击） */
+export const DG_MATE_HIT = 'dg-mate-hit';
+
+/** 队友伤害数字的颜色，按队伍名单顺序（自己是白色/橙色） */
+const MATE_COLORS = ['#6ac8ff', '#c08aff', '#7aeea0', '#ff9ad0', '#ffe07a'];
 
 /** 组队站位：[横向错开, 往后退]（像素） */
 const SLOTS: [number, number][] = [[0, 0], [-11, 4], [11, 4], [-6, 14], [6, 14]];
@@ -56,6 +61,12 @@ export class DungeonScene extends Phaser.Scene {
   private anim = '';
   /** 同一个副本、同一层的队友（10-25 同步） */
   private mates?: OtherPlayers;
+  /** 正在播死亡动画的怪（停靠点下标 → 精灵），最后一击的伤害数字还要飘在它身上 */
+  private dying = new Map<number, Phaser.GameObjects.Sprite>();
+  /** 最后一击多久后打中（毫秒）：死亡动画等它打中再开始 */
+  private deathDelay = new Map<number, number>();
+  /** 队友最近一次打中的时间：画面上让他挥一下武器 */
+  private mateHitAt = new Map<string, number>();
 
   create() {
     this.cameras.main.setBackgroundColor('#06060a');
@@ -78,9 +89,13 @@ export class DungeonScene extends Phaser.Scene {
       const d = p.dg;
       if (!run || !d || d.gate !== run.gate.id || d.floor !== run.floor) return null;
       if (run.members && !run.members.some((m) => m.id === p.playerId)) return null;
-      return { x: d.x, y: d.y, anim: d.anim, flip: d.flip };
+      // 刚打中怪：播出手动作（而不是一直摆架势），一看就知道是谁在打
+      const swing = d.anim?.endsWith('-ready') && this.time.now - (this.mateHitAt.get(p.playerId) ?? -1e9) < 420;
+      return { x: d.x, y: d.y, anim: swing ? d.anim!.replace(/-ready$/, '') : d.anim, flip: d.flip };
     });
-    const cleanup = () => { this.unsub.forEach((u) => u()); this.unsub = []; this.mates?.destroy(); };
+    const onMateHit = (id: string, floor: number, idx: number, dmg: number, crit: boolean) => this.mateHit(id, floor, idx, dmg, crit);
+    this.game.events.on(DG_MATE_HIT, onMateHit);
+    const cleanup = () => { this.unsub.forEach((u) => u()); this.unsub = []; this.mates?.destroy(); this.game.events.off(DG_MATE_HIT, onMateHit); };
     this.events.once('shutdown', cleanup);
     this.events.once('destroy', cleanup);
     this.arrive();
@@ -108,9 +123,10 @@ export class DungeonScene extends Phaser.Scene {
     const key = `${run.gate.id}:${run.floor}`;
     if (key !== this.floorKey) this.buildFloor(run);
     this.seenAt = this.time.now;
+    // 先处理出手和最后一击（要用到还活着的怪），再把打死的怪换成死亡动画
+    this.syncFight(run);
     this.syncMobs(run);
     this.syncChest(run);
-    this.syncFight(run);
   }
 
   // ───────── 画一层 ─────────
@@ -119,6 +135,8 @@ export class DungeonScene extends Phaser.Scene {
     this.objs = [];
     for (const s of this.mobs.values()) s.destroy();
     this.mobs.clear();
+    for (const s of this.dying.values()) s.destroy();
+    this.dying.clear();
     for (const b of this.bars.values()) b.destroy();
     this.bars.clear();
     this.chest = undefined;
@@ -188,8 +206,7 @@ export class DungeonScene extends Phaser.Scene {
           this.mobs.delete(i);
           this.bars.get(i)?.destroy();
           this.bars.delete(i);
-          this.puff(spr.x, spr.y);
-          this.tweens.add({ targets: spr, alpha: 0, duration: 300, onComplete: () => spr.destroy() });
+          this.die(i, spr);
         }
         return;
       }
@@ -210,7 +227,41 @@ export class DungeonScene extends Phaser.Scene {
           fontFamily: FONT, fontSize: '7px', color: m.rank === 'boss' ? '#ff8a6a' : '#ffd86a', stroke: '#000', strokeThickness: 2, resolution: 4,
         }).setOrigin(0.5).setDepth(D_FLOAT - 5);
         this.objs.push(label);
+        s.setData('label', label);
         s.once('destroy', () => label.destroy());
+      }
+    });
+  }
+
+  /**
+   * 怪物倒下（用户 10-26：不能凭空消失）：等最后一击打中，闪白、播死亡动画（倒地、散开），
+   * 躺一会儿再淡出，最后冒一团烟。
+   */
+  private die(i: number, spr: Phaser.GameObjects.Sprite) {
+    this.dying.set(i, spr);
+    const delay = this.deathDelay.get(i) ?? 0;
+    this.deathDelay.delete(i);
+    const look = spr.getData('look') as string;
+    const label = spr.getData('label') as Phaser.GameObjects.Text | undefined;
+    if (label) this.tweens.add({ targets: label, alpha: 0, delay: delay + 200, duration: 400 });
+    this.time.delayedCall(delay + 60, () => {
+      if (!spr.active) return;
+      spr.setTintFill(0xffffff);
+      this.time.delayedCall(90, () => spr.active && spr.clearTint());
+      const key = `mon-${look}-death`;
+      const fade = () => {
+        if (!spr.active) return;
+        this.tweens.add({
+          targets: spr, alpha: 0, delay: 450, duration: 500,
+          onComplete: () => { this.puff(spr.x, spr.y); this.dying.delete(i); spr.destroy(); },
+        });
+      };
+      if (this.anims.exists(key)) {
+        spr.play(key);
+        spr.once('animationcomplete', fade);
+      } else {
+        this.tweens.add({ targets: spr, angle: spr.x > this.player.x ? 80 : -80, y: spr.y + 2, duration: 300, ease: 'Quad.easeIn' });
+        fade();
       }
     });
   }
@@ -337,6 +388,7 @@ export class DungeonScene extends Phaser.Scene {
     publishSelf(store.state, run.gate.x, run.gate.y, undefined, {
       gate: run.gate.id, floor: run.floor, idx: run.idx, phase: run.phase, kills: run.kills,
       x: this.player.x, y: this.player.y + 7, anim: this.anim.startsWith('fight-') ? `fight-${this.weapon()}-ready` : this.anim, flip: this.body.flipX,
+      dmg: run.phase === 'fight' ? store.state.combat?.pTotal ?? 0 : undefined, crit: run.phase === 'fight' ? !!store.state.combat?.pCrit : undefined,
     });
     const p = this.heroPos();
     if (!p) return;
@@ -353,7 +405,13 @@ export class DungeonScene extends Phaser.Scene {
       this.play(Math.abs(vy) > Math.abs(vx) * 1.2 ? (vy > 0 ? 'walk-down' : 'walk-up') : 'walk-side');
       return;
     }
-    this.player.setPosition(p.x, p.y).setDepth(p.y + 1000);
+    // 打完一只怪从站位走回路线上、或者被队友进度拉过去时，不瞬移：比走路快一些地追上去（10-26）
+    const gap = Math.hypot(vx, vy);
+    if (gap > 2 && gap < T * 12) {
+      const v = Math.max((T * 1000) / DG_TILE_MS * 1.6, gap / 0.35);
+      const k = Math.min(1, (v * this.game.loop.delta) / 1000 / gap);
+      this.player.setPosition(this.player.x + vx * k, this.player.y + vy * k).setDepth(this.player.y + 1000);
+    } else this.player.setPosition(p.x, p.y).setDepth(p.y + 1000);
     if (run.phase === 'walk') {
       if (Math.abs(vx) > 0.01) this.faceLeft = vx < 0;
       const dir = Math.abs(vy) > Math.abs(vx) * 1.2 ? (vy > 0 ? 'down' : 'up') : 'side';
@@ -372,14 +430,14 @@ export class DungeonScene extends Phaser.Scene {
     for (const [i, spr] of this.mobs) {
       const m0 = MONSTERS[this.F.stops[i].monster!];
       if (!m0 || (m0.rank === 'normal' && i !== run.idx)) continue;
-      const m = buffMob(m0, run.party);
+      const m = dgMob(m0, 0);
       let g = this.bars.get(i);
       if (!g) { g = this.add.graphics().setDepth(D_FLOAT - 6); this.bars.set(i, g); }
-      const hp = i === run.idx && c && run.phase === 'fight' ? c.monsterHp : m.hp;
+      const frac = i === run.idx && c && run.phase === 'fight' ? c.monsterHp / (c.monsterMax ?? m.hp) : 1;
       const w = m.rank === 'boss' ? 30 : 16;
       g.clear();
       g.fillStyle(0x000000, 0.7).fillRect(spr.x - w / 2 - 1, spr.y - monsterFrameSize(MONSTERS[spr.getData('look')] ?? m) * spr.scaleY - 1, w + 2, 4);
-      g.fillStyle(m.rank === 'boss' ? 0xe04a3a : 0xe0a03a).fillRect(spr.x - w / 2, spr.y - monsterFrameSize(MONSTERS[spr.getData('look')] ?? m) * spr.scaleY, Math.max(0, (w * hp) / m.hp), 2);
+      g.fillStyle(m.rank === 'boss' ? 0xe04a3a : 0xe0a03a).fillRect(spr.x - w / 2, spr.y - monsterFrameSize(MONSTERS[spr.getData('look')] ?? m) * spr.scaleY, Math.max(0, w * Math.min(1, frac)), 2);
     }
   }
 
@@ -398,64 +456,20 @@ export class DungeonScene extends Phaser.Scene {
     const c = store.state.combat;
     const prev = this.seen;
     this.seen = { idx: run.idx, floor: run.floor, p: c?.pSwings ?? 0, m: c?.mSwings ?? 0, hp: store.state.hp };
+    // 这只怪刚被打死（10-26）：最后一击也要挥出去、飘数字，死亡动画等它打中再播
+    const lh = run.lastHit;
+    if (prev && lh && prev.floor === lh.floor && prev.idx === lh.idx && run.idx > prev.idx) {
+      const spr = this.mobs.get(lh.idx);
+      const m = MONSTERS[this.F!.stops[lh.idx]?.monster ?? ''];
+      if (spr && m && lh.mine) this.deathDelay.set(lh.idx, this.strike(spr, m, lh.dmg, !!lh.crit, 0));
+      return;
+    }
     if (!prev || prev.idx !== run.idx || prev.floor !== run.floor || run.phase !== 'fight' || !c) return;
     const spr = this.mobs.get(run.idx);
     const m = MONSTERS[this.F!.stops[run.idx]?.monster ?? ''];
     if (!spr || !m) return;
     const look = spr.getData('look') as string;
-    if ((c.pSwings ?? 0) > prev.p) {
-      const w = this.weapon();
-      const f = FIGHT[w];
-      const st = combatStats(store.state, m);
-      const dur = Math.min(f.ms, Math.max(200, (store.state.combat?.playerTimerMs ?? 2000) * 0.85));
-      const key = `fight-${w}`;
-      this.anim = key;
-      this.body.play({ key, frameRate: (this.anims.get(key).frames.length * 1000) / dur }, false);
-      const dmg = c.pDmg ?? -1;
-      const crit = !!c.pCrit;
-      const leech = c.pLeech ?? 0;
-      const shoot = (land: () => void) => {
-        const from = { x: this.player.x + (this.body.flipX ? -6 : 6), y: this.player.y - 4 };
-        const to = { x: spr.x, y: spr.y - 8 };
-        const far = Math.hypot(to.x - from.x, to.y - from.y);
-        if (FIGHT_RANGE[w] < 1 || far < T * 1.5) return land();
-        const magic = w === 'staff';
-        const heavy = w === 'arbalest' && this.textures.exists('fx-bolt');
-        const ang = Math.atan2(to.y - from.y, to.x - from.x);
-        const pr = magic
-          ? this.add.image(from.x, from.y - 4, 'glow').setTint(0x7ac8ff).setBlendMode(Phaser.BlendModes.ADD).setScale(0.18)
-          : this.add.image(from.x, from.y, heavy ? 'fx-bolt' : 'fx-arrow').setRotation(ang);
-        pr.setDepth(D_FLOAT - 2);
-        // 战弓箭快、带残影；十字弩弩矢快、打中把怪顶退一下（10-26）
-        const k = magic ? 3.6 : w === 'warbow' ? 1.9 : heavy ? 1.7 : 2.6;
-        if (w === 'warbow') {
-          const ghost = this.add.image(from.x, from.y, 'fx-arrow').setRotation(ang).setAlpha(0.35).setTint(0xfff0c0).setDepth(D_FLOAT - 3);
-          this.tweens.add({ targets: ghost, x: to.x, y: to.y, delay: 40, duration: far * k, onComplete: () => ghost.destroy() });
-        }
-        this.tweens.add({
-          targets: pr, x: to.x, y: to.y, duration: far * k, ease: magic ? 'Quad.easeIn' : 'Linear',
-          onComplete: () => {
-            pr.destroy();
-            land();
-            if (heavy && dmg > 0 && spr.active && !this.tweens.isTweening(spr)) {
-              const x0 = spr.x;
-              this.tweens.add({ targets: spr, x: x0 + (spr.x > this.player.x ? 4 : -4), duration: 80, yoyo: true, onComplete: () => { spr.x = x0; } });
-              this.cameras.main.shake(70, 0.0018);
-            }
-          },
-        });
-      };
-      this.time.delayedCall(dur * f.hit, () => shoot(() => {
-        if (!spr.active) return;
-        if (dmg < 0) return this.popText(spr.x + 4, spr.y - 22, tl('未命中'), '#b8b8c0', 7);
-        spr.setTintFill(0xffffff);
-        this.time.delayedCall(70, () => spr.active && spr.clearTint());
-        const heavy = crit || dmg >= Math.max(3, st.playerMaxHit * 0.85);
-        this.popText(spr.x + 4, spr.y - 22, crit ? tl`暴击 ${dmg}!` : `${dmg}`, crit ? '#ff7a30' : heavy ? '#ffb030' : '#ffffff', crit ? 11 : heavy ? 10 : 8);
-        if (leech > 0) this.popText(this.player.x + 6, this.player.y - 30, `+${leech}`, '#6ee86a', 8);
-        if (crit) this.cameras.main.shake(110, 0.003);
-      }));
-    }
+    if ((c.pSwings ?? 0) > prev.p) this.strike(spr, m, c.pDmg ?? -1, !!c.pCrit, c.pLeech ?? 0);
     if ((c.mSwings ?? 0) > prev.m) {
       if (this.anims.exists(`mon-${look}-attack`)) {
         spr.play(`mon-${look}-attack`, true);
@@ -478,6 +492,74 @@ export class DungeonScene extends Phaser.Scene {
         this.time.delayedCall(80, () => this.body.clearTint());
       }
     }
+  }
+
+  /** 主角出手一次：播动作、远程放箭/法球，打中时怪闪白、飘伤害数字。返回多少毫秒后打中 */
+  private strike(spr: Phaser.GameObjects.Sprite, m: MonsterDef, dmg: number, crit: boolean, leech: number): number {
+    const w = this.weapon();
+    const f = FIGHT[w];
+    const st = combatStats(store.state, m);
+    const dur = Math.min(f.ms, Math.max(200, (store.state.combat?.playerTimerMs ?? 2000) * 0.85));
+    const key = `fight-${w}`;
+    this.anim = key;
+    this.body.play({ key, frameRate: (this.anims.get(key).frames.length * 1000) / dur }, false);
+    const from = { x: this.player.x + (this.body.flipX ? -6 : 6), y: this.player.y - 4 };
+    const to = { x: spr.x, y: spr.y - 8 };
+    const far = Math.hypot(to.x - from.x, to.y - from.y);
+    const ranged = !(FIGHT_RANGE[w] < 1 || far < T * 1.5);
+    const magic = w === 'staff';
+    const heavy = w === 'arbalest' && this.textures.exists('fx-bolt');
+    // 战弓箭快、带残影；十字弩弩矢快、打中把怪顶退一下（10-26）
+    const k = magic ? 3.6 : w === 'warbow' ? 1.9 : heavy ? 1.7 : 2.6;
+    const land = () => {
+      if (!spr.active) return;
+      if (dmg < 0) return this.popText(spr.x + 4, spr.y - 22, tl('未命中'), '#b8b8c0', 7);
+      spr.setTintFill(0xffffff);
+      this.time.delayedCall(70, () => spr.active && spr.clearTint());
+      const big = crit || dmg >= Math.max(3, st.playerMaxHit * 0.85);
+      this.popText(spr.x + 4, spr.y - 22, crit ? tl`暴击 ${dmg}!` : `${dmg}`, crit ? '#ff7a30' : big ? '#ffb030' : '#ffffff', crit ? 11 : big ? 10 : 8);
+      if (leech > 0) this.popText(this.player.x + 6, this.player.y - 30, `+${leech}`, '#6ee86a', 8);
+      if (crit) this.cameras.main.shake(110, 0.003);
+    };
+    const shoot = () => {
+      if (!ranged) return land();
+      const ang = Math.atan2(to.y - from.y, to.x - from.x);
+      const pr = magic
+        ? this.add.image(from.x, from.y - 4, 'glow').setTint(0x7ac8ff).setBlendMode(Phaser.BlendModes.ADD).setScale(0.18)
+        : this.add.image(from.x, from.y, heavy ? 'fx-bolt' : 'fx-arrow').setRotation(ang);
+      pr.setDepth(D_FLOAT - 2);
+      if (w === 'warbow') {
+        const ghost = this.add.image(from.x, from.y, 'fx-arrow').setRotation(ang).setAlpha(0.35).setTint(0xfff0c0).setDepth(D_FLOAT - 3);
+        this.tweens.add({ targets: ghost, x: to.x, y: to.y, delay: 40, duration: far * k, onComplete: () => ghost.destroy() });
+      }
+      this.tweens.add({
+        targets: pr, x: to.x, y: to.y, duration: far * k, ease: magic ? 'Quad.easeIn' : 'Linear',
+        onComplete: () => {
+          pr.destroy();
+          land();
+          if (heavy && dmg > 0 && spr.active && !this.tweens.isTweening(spr)) {
+            const x0 = spr.x;
+            this.tweens.add({ targets: spr, x: x0 + (spr.x > this.player.x ? 4 : -4), duration: 80, yoyo: true, onComplete: () => { spr.x = x0; } });
+            this.cameras.main.shake(70, 0.0018);
+          }
+        },
+      });
+    };
+    this.time.delayedCall(dur * f.hit, shoot);
+    return dur * f.hit + (ranged ? far * k : 0);
+  }
+
+  /** 队友打中了怪（10-26）：数字用队友的颜色、带名字，飘在怪身上；队友的小人挥一下武器 */
+  private mateHit(id: string, floor: number, idx: number, dmg: number, crit: boolean) {
+    const run = store.state.dungeon;
+    if (!run || run.floor !== floor) return;
+    const spr = this.mobs.get(idx) ?? this.dying.get(idx);
+    this.mateHitAt.set(id, this.time.now);
+    if (!spr?.active) return;
+    const i = Math.max(0, run.members?.findIndex((m) => m.id === id) ?? 0);
+    const name = run.members?.[i]?.name ?? '';
+    const color = MATE_COLORS[i % MATE_COLORS.length];
+    this.popText(spr.x - 12, spr.y - 14, crit ? tl`${name} 暴击 ${dmg}!` : `${name} ${dmg}`, color, crit ? 9 : 7);
   }
 
   private popText(x: number, y: number, text: string, color: string, size: number) {

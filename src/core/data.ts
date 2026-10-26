@@ -14,7 +14,7 @@ export { MAP_W, MAP_H, MID_BOX, OLD_BOX, at, atW, atF } from './geo';
 import { MAP_W, MAP_H, MID_BOX, OLD_BOX, at, atW, atF } from './geo';
 import { APT_MAX, APT_MIN, COAT_NAME, coatOf, FOAL, FOAL_CHANCE, horseItem, RANCH } from './ranch';
 import { HW_ALTAR, HW_BOX, HW_POINT, HW_TIERS, hwTierOf } from './halloween';
-import { SP, isEn, tl, tlc } from '../i18n';
+import { isEn, tl, tlc } from '../i18n';
 
 /** soon：占位技能，还没有内容（养殖，用户 10-23） */
 export interface SkillInfo { name: string; color: string; group: SkillGroup; desc: string; soon?: boolean }
@@ -422,7 +422,8 @@ TIERS.forEach((t, i) => {
   for (const e of EQUIP_TYPES) {
     const st = e.stats;
     const value = Math.round(e.mats.reduce((v, [m, q]) => v + matCost(m, i) * q, 0) * 1.5);
-    item(`${t.id}_${e.key}`, `${t.metal}${SP}${e.name}`, TOOL_SLOTS.includes(e.slot) ? 'tool' : 'gear', value, {
+    // 装备名字只写阶级（用户 10-26：不要「铁制布甲」这种），如「T4 布袍」
+    item(`${t.id}_${e.key}`, `T${i + 1} ${e.name}`, TOOL_SLOTS.includes(e.slot) ? 'tool' : 'gear', value, {
       tier: i,
       equip: {
         slot: e.slot, skill: e.skill, level: t.level,
@@ -476,7 +477,7 @@ TIERS.forEach((t, i) => {
   for (const j of JEWEL_TYPES) {
     const pct = j.stat in JEWEL_PCT ? JEWEL_PCT[j.stat as keyof typeof JEWEL_PCT][i] : 0;
     const value = Math.round(jewelMats(j, i).reduce((v, [id, q]) => v + (ITEMS_SO_FAR(id) * q), 0) * 1.6);
-    item(jewelId(i, j.key), `${t.metal}${SP}${j.name}`, 'gear', value, {
+    item(jewelId(i, j.key), `T${i + 1} ${j.name}`, 'gear', value, {
       tier: i, desc: j.desc,
       equip: {
         slot: j.slot, skill: 'hitpoints', level: t.level,

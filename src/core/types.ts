@@ -237,6 +237,10 @@ export interface CombatState {
   pCrit?: boolean;
   /** 这一下灯笼吸回了多少血 */
   pLeech?: number;
+  /** 副本（10-26）：自己对这只怪一共打了多少伤害（发给队友）、怪的血量上限和开打时洞里有几个队友 */
+  pTotal?: number;
+  monsterMax?: number;
+  crew?: number;
   /** 怪物最近一次出手：elite / boss 大招，enrage 刚进入狂怒 */
   mArt?: string;
   /** 首领已经狂怒了 */
@@ -411,6 +415,10 @@ export interface DungeonRun {
   members?: { id: string; name: string }[];
   me?: string;
   split?: Record<string, number>[];
+  /** 这一趟对怪打出过伤害的队员 id（10-26：宝箱只分给他们） */
+  contrib?: string[];
+  /** 最近打死的一只怪：最后一下的伤害、是不是自己打的（画面补放最后一击和死亡动画） */
+  lastHit?: { floor: number; idx: number; dmg: number; crit?: boolean; mine: boolean };
 }
 
 export type TaskEndReason = 'complete' | 'noInput' | 'death' | 'level' | 'noAmmo' | 'summon';

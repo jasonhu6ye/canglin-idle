@@ -3,9 +3,10 @@ import { ITEMS, KEY_SHOP, MONSTERS, NODES, type MapNode } from '../core/data';
 import { CHEST_COLOR, chestOdds, mobBuff, coopMates, COOP_DEF, COOP_DMG, dungeonFloor, GATE_REACH, totalMobs } from '../core/dungeon';
 import { allGates, setSharedGates } from '../core/gateShare';
 import { partySize } from '../core/party';
-import { syncDungeon, atShop, buyKey, enterDungeon, gateBlock, leaveDungeon, openDungeonChest, TOWN_BANKS, useTownScroll, walkPos } from '../core/sim';
+import { markContrib, syncDungeon, atShop, buyKey, enterDungeon, gateBlock, leaveDungeon, openDungeonChest, TOWN_BANKS, useTownScroll, walkPos } from '../core/sim';
 import type { DungeonGate, GameState } from '../core/types';
-import { DG_CHEST } from '../game/DungeonScene';
+import { DG_CHEST, DG_MATE_HIT } from '../game/DungeonScene';
+import { dgCrew, pushMateHit, stopKey } from '../core/aggro';
 import { GATE_CLICK, GATE_OPENED } from '../game/MapScene';
 import { online, type Presence } from '../net';
 import { sendRally, useSocial } from '../net/social';
@@ -58,15 +59,30 @@ export function useSharedGates() {
  * （队友清掉的怪这边也算清掉）。队友的位置和动作在副本场景里画。
  */
 function useDungeonSync() {
-  useEffect(() => online.onPresence((all) => {
-    const run = store.state.dungeon;
-    if (!run?.members) return;
-    for (const p of all) {
-      const d = p.dg;
-      if (!d || d.gate !== run.gate.id || !run.members.some((m) => m.id === p.playerId)) continue;
-      if (syncDungeon(store.state, d) !== store.state) store.dispatch((g) => syncDungeon(g, d));
-    }
-  }), []);
+  useEffect(() => {
+    /** 每个队友上次报的「对哪只怪累计打了多少」，新报的减去它就是这段时间新打的伤害 */
+    const seen = new Map<string, { key: string; dmg: number }>();
+    return online.onPresence((all) => {
+      const run = store.state.dungeon;
+      if (!run?.members) return;
+      for (const p of all) {
+        const d = p.dg;
+        if (!d || d.gate !== run.gate.id || !run.members.some((m) => m.id === p.playerId)) continue;
+        // 队友打的伤害（10-26）：记到自己这边同一只怪上，画面上用队友的颜色飘字，并记进宝箱分配名单
+        const key = stopKey(d.gate, d.floor, d.idx);
+        const last = seen.get(p.playerId);
+        const dmg = d.phase === 'fight' ? d.dmg ?? 0 : 0;
+        const delta = last && last.key === key ? dmg - last.dmg : dmg;
+        seen.set(p.playerId, { key, dmg: Math.max(dmg, last && last.key === key ? last.dmg : 0) });
+        if (delta > 0) {
+          pushMateHit(key, delta);
+          if (!run.contrib?.includes(p.playerId)) store.dispatch((g) => markContrib(g, p.playerId));
+          emitToGame(DG_MATE_HIT, p.playerId, d.floor, d.idx, delta, !!d.crit);
+        }
+        if (syncDungeon(store.state, d) !== store.state) store.dispatch((g) => syncDungeon(g, d));
+      }
+    });
+  }, []);
 }
 
 /** 地图上点了洞口、刚开了洞口 */
@@ -198,7 +214,7 @@ export function DungeonHud({ s }: { s: GameState }) {
       <span className="bar wide"><i style={{ width: `${(run.kills / Math.max(1, total)) * 100}%` }} /></span>
       <small>{tl`已清 ${run.kills}/${total} 只`} · {status}</small>
       {(run.phase === 'walk' || run.phase === 'fight') && <small className="muted">{tl('自动打怪中：会自己清完每层、下楼，退出游戏也接着打')}</small>}
-      {run.party > 1 && <small className="warn">{tl`组队 ${run.party} 人：副本怪物全属性 +${Math.round(mobBuff(run.party) * 100)}%`}</small>}
+      {dgCrew() > 0 && <small className="warn">{tl`同洞队友 ${dgCrew()} 人：怪物全属性 +${Math.round(mobBuff(1 + dgCrew()) * 100)}%、血量 +${dgCrew() * 75}%，大家的伤害打在同一只怪上`}</small>}
       {mates > 0 && <small className="gold">{tl`队友协战 ${mates} 人：伤害 +${Math.round(COOP_DMG * mates * 100)}%，受伤 -${Math.round(COOP_DEF * mates * 100)}%`}</small>}
       {run.phase === 'chest' && <button className="pill primary" onClick={openChest}>{tl('打开宝箱')}</button>}
       {run.phase === 'open' && run.loot && (
@@ -220,13 +236,13 @@ function TeamSplit({ run }: { run: NonNullable<GameState['dungeon']> }) {
   return (
     <div className="dg-rolls">
       <small className="muted">{tl('宝箱里的全部战利品（打开时已定好归属）：')}</small>
-      {run.split!.map((share, i) => (
+      {run.split!.map((share, i) => !Object.keys(share).length ? null : (
         <div key={i} className={`dg-roll ${ms[i]?.id === run.me ? 'me' : ''}`}>
           <b className={ms[i]?.id === run.me ? 'gold' : ''}>{ms[i]?.id === run.me ? tl('你') : ms[i]?.name}</b>
           {Object.entries(share).map(([id, n]) => <span key={id} className="with-icon"><Icon item={id} size={16} /> {id === 'coins' ? fmtNum(n) : `×${n}`}</span>)}
         </div>
       ))}
-      <small className="muted">{tl('金币和材料全队平分，装备、钥匙、强化石按运气归属；什么好东西都没分到的人有保底碎片。')}</small>
+      <small className="muted">{tl('只有这一趟打出过伤害的队友参与分配。金币和材料平分，装备、钥匙、强化石按运气归属；什么好东西都没分到的人有保底碎片。')}</small>
     </div>
   );
 }

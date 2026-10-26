@@ -7,7 +7,7 @@ import { OLD_JEWELS, BAR_VALUE, inTownArea, KEY_SHOP, keyOf, OLD_ENH, SCROLL_TOW
 import { nextRandom } from './rng';
 import { buffMob, coopMates, COOP_DEF, COOP_DMG, dungeonFloor, GATE_CD, GATE_MAX, GATE_MS, GATE_REACH, legMs, rollChest, rollChestQuality, rollFloors, teamChest, teamChestQuality, type TeamMember } from './dungeon';
 import { partySize } from './party';
-import { aggroMates, targetChance, threatOf } from './aggro';
+import { aggroMates, dgCrew, stopKey, takeMateHits, targetChance, threatOf } from './aggro';
 import { stepQuests } from './quests';
 import { migrateMail, sendMail } from './mail';
 import { stepAutoFarm, stepRain } from './farm';
@@ -245,6 +245,15 @@ export function gearSum(s: GameState, k: 'hp' | 'xp' | 'luck' | 'crit' | 'dodge'
   for (const id of Object.values(s.equipment)) n += (id && ITEMS[id]?.equip?.[k]) || 0;
   return n;
 }
+/**
+ * 副本里的怪（10-26）：按同洞在线队友人数变强（全属性每人 +5%，最多 +20%），
+ * 血量再按人数加厚（每多一人 +75%），因为队友的伤害会一起算到这只怪身上。离线（crew 0）就是单人数值。
+ */
+export function dgMob(m0: MonsterDef, crew: number): MonsterDef {
+  const m = buffMob(m0, 1 + crew);
+  return crew > 0 ? { ...m, hp: Math.round(m.hp * (1 + 0.75 * crew)) } : m;
+}
+
 /** 怪物这一下普通攻击是不是打向了队友（没有队友一起打时不掷骰，离线补算不受影响） */
 function aimsAtMate(s: GameState, rand: () => number) {
   const mates = aggroMates();
@@ -1007,17 +1016,22 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       }
       return Math.max(step, 1);
     }
-    // 打怪：和野外一样的出手、命中、伤害规则，没有刷新；组队时怪物按人数变强
+    // 打怪：和野外一样的出手、命中、伤害规则，没有刷新。
+    // 组队（10-26）：同洞里在线的队友越多怪越厚，队友打的伤害也记到这只怪身上（大家一起把它打死）
     const m0 = MONSTERS[stop.monster!];
-    const m = m0 && buffMob(m0, run.party);
-    if (!m) {
+    if (!m0) {
       run.idx++;
       run.phase = 'walk';
       run.ms = run.total = legMs(F, run.idx);
       return 1;
     }
-    if (!s.combat) s.combat = { monsterHp: m.hp, playerTimerMs: playerAttackMs(s), monsterTimerMs: m.attackMs, respawnMs: 0 };
+    if (!s.combat) {
+      const crew = dgCrew();
+      const hp = dgMob(m0, crew).hp;
+      s.combat = { monsterHp: hp, monsterMax: hp, crew, playerTimerMs: playerAttackMs(s), monsterTimerMs: m0.attackMs, respawnMs: 0 };
+    }
     const c = s.combat;
+    const m = dgMob(m0, c.crew ?? 0);
     const has = (t: string) => m.traits.includes(t);
     const hurt = (dmg: number) => {
       if (dmg <= 0) return false;
@@ -1035,6 +1049,40 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       s.loc = { ...SPAWN_TILE };
       return true;
     };
+    /** 怪倒下：自己打过它才有掉落；记下最后一击给画面用 */
+    const kill = (dmg: number, crit: boolean, mine: boolean) => {
+      const got: Record<string, number> = {};
+      if ((c.pTotal ?? 0) > 0) {
+        for (const d of m.drops) {
+          if (d.chance === undefined || rand() < dropChance(s, d.chance)) {
+            const q = coinQty(s, d.item, d.qty);
+            addLoot(d.item, q);
+            got[d.item] = (got[d.item] ?? 0) + q;
+            run.got = { ...run.got, [d.item]: (run.got?.[d.item] ?? 0) + q };
+          }
+        }
+      }
+      log({ t: now - dt, kind: 'kill', monster: m.id, xp: c.gain ?? {}, items: got });
+      sum.kills[m.id] = (sum.kills[m.id] ?? 0) + 1;
+      s.stats.kills++;
+      run.kills++;
+      // 打倒最后一层的首领：宝箱品质这时候定下来
+      if (m.rank === 'boss' && F.chest) run.chest = isTeam(run) ? teamChestQuality(run.gate) : rollChestQuality(run.gate.kind, run.gate.floors, rand());
+      run.lastHit = { floor: run.floor, idx: run.idx, dmg, crit, mine };
+      s.combat = null;
+      run.idx++;
+      run.phase = 'walk';
+      run.ms = run.total = legMs(F, run.idx);
+    };
+    // 队友打的伤害（联机层收到后攒着，这里扣掉）
+    const mateDmg = takeMateHits(stopKey(run.gate.id, run.floor, run.idx));
+    if (mateDmg > 0) {
+      c.monsterHp -= mateDmg;
+      if (c.monsterHp <= 0) {
+        kill(mateDmg, false, false);
+        return 1;
+      }
+    }
     const step = Math.min(budget, c.playerTimerMs, c.monsterTimerMs);
     c.playerTimerMs -= step;
     c.monsterTimerMs -= step;
@@ -1052,6 +1100,8 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         const dmg = Math.max(1, Math.min(c.monsterHp, Math.round(raw)));
         c.monsterHp -= dmg;
         c.pDmg = dmg;
+        c.pTotal = (c.pTotal ?? 0) + dmg;
+        if (run.me && !run.contrib?.includes(run.me)) run.contrib = [...(run.contrib ?? []), run.me];
         c.pLeech = leechHeal(s, dmg, rand) || undefined;
         addXp(st.style, dmg);
         addXp('defence', dmg / 3);
@@ -1059,25 +1109,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         if (has('thorns') && hurt(Math.floor(dmg * 0.15))) return Math.max(step, 1);
       }
       if (c.monsterHp <= 0) {
-        const got: Record<string, number> = {};
-        for (const d of m.drops) {
-          if (d.chance === undefined || rand() < dropChance(s, d.chance)) {
-            const q = coinQty(s, d.item, d.qty);
-            addLoot(d.item, q);
-            got[d.item] = (got[d.item] ?? 0) + q;
-            run.got = { ...run.got, [d.item]: (run.got?.[d.item] ?? 0) + q };
-          }
-        }
-        log({ t: now - dt, kind: 'kill', monster: m.id, xp: c.gain ?? {}, items: got });
-        sum.kills[m.id] = (sum.kills[m.id] ?? 0) + 1;
-        s.stats.kills++;
-        run.kills++;
-        // 打倒最后一层的首领：宝箱品质这时候定下来
-        if (m.rank === 'boss' && F.chest) run.chest = isTeam(run) ? teamChestQuality(run.gate) : rollChestQuality(run.gate.kind, run.gate.floors, rand());
-        s.combat = null;
-        run.idx++;
-        run.phase = 'walk';
-        run.ms = run.total = legMs(F, run.idx);
+        kill(c.pDmg ?? 0, !!c.pCrit, true);
         return Math.max(step, 1);
       }
     }
@@ -1794,6 +1826,13 @@ export function syncDungeon(prev: GameState, mate: { gate: string; floor: number
   return s;
 }
 
+/** 队友对这一趟的怪打出过伤害：记进贡献名单（宝箱按名单分） */
+export function markContrib(prev: GameState, id: string): GameState {
+  const r = prev.dungeon;
+  if (!r?.members?.some((m) => m.id === id) || r.contrib?.includes(id) || r.phase === 'open') return prev;
+  return { ...prev, dungeon: { ...r, contrib: [...(r.contrib ?? []), id] } };
+}
+
 /** 没通关就出来时记下进度，洞口没消失前再进会接着打；通关（开了宝箱）后这个洞口就不能再进 */
 function keepDungeon(s: GameState) {
   const r = s.dungeon;
@@ -1826,11 +1865,13 @@ export function openDungeonChest(prev: GameState): [GameState, Record<string, nu
   };
   let got: Record<string, number>;
   let q: number;
-  if (isTeam(r)) {
+  // 宝箱只分给这一趟打出过伤害的队员（10-26）；只有自己一个人打就按单人开。老存档没有记录就按全队
+  const crew = isTeam(r) ? (r.contrib ? r.members!.filter((m) => r.contrib!.includes(m.id)) : r.members!) : [];
+  if (crew.length > 1 && crew.some((m) => m.id === r.me)) {
     q = r.chest ?? teamChestQuality(r.gate);
-    const t = teamChest(r.gate, q, r.members!);
-    got = t.shares[r.members!.findIndex((m) => m.id === r.me)];
-    r.split = t.shares;
+    const t = teamChest(r.gate, q, crew);
+    got = t.shares[crew.findIndex((m) => m.id === r.me)];
+    r.split = r.members!.map((m) => t.shares[crew.indexOf(m)] ?? {});
   } else {
     q = r.chest ?? rollChestQuality(r.gate.kind, r.gate.floors, rand());
     got = rollChest(r.gate, q, rand);

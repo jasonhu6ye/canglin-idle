@@ -31,3 +31,31 @@ export function setAggroMates(t: number[]) {
   mates = t.slice(0, 4);
 }
 export const aggroMates = () => mates;
+
+/*
+ * 副本组队同打一只怪（用户 10-26）：每个人的游戏各自结算战斗，但队友打出的伤害会通过联机层
+ * 传过来，记到自己这边同一只怪身上，所以大家看到的怪物血量一致、一起打死。
+ * crew：同一个洞口里在线的队友人数（怪物血量按它加厚）；离线补算时都是 0。
+ */
+let crew = 0;
+export function setDgCrew(n: number) {
+  crew = Math.max(0, Math.min(4, Math.floor(n)));
+}
+export const dgCrew = () => crew;
+
+const mateHits = new Map<string, number>();
+/** 洞口 + 层 + 停靠点，标识「哪一只怪」 */
+export const stopKey = (gate: string, floor: number, idx: number) => `${gate}:${floor}:${idx}`;
+/** 队友对这只怪打出了 dmg 伤害（联机层收到后调用） */
+export function pushMateHit(key: string, dmg: number) {
+  if (!(dmg > 0)) return;
+  mateHits.set(key, (mateHits.get(key) ?? 0) + dmg);
+  // 只留最近的几只怪，旧的丢掉
+  if (mateHits.size > 20) mateHits.delete(mateHits.keys().next().value!);
+}
+/** 取出还没算进去的队友伤害 */
+export function takeMateHits(key: string): number {
+  const n = mateHits.get(key) ?? 0;
+  if (n) mateHits.delete(key);
+  return n;
+}

@@ -880,4 +880,7 @@ export const EN_UI: Record<string, string> = {
   "已收到": "Received",
   "还没收到": "Not received yet",
   "已撤回": "Recalled",
+  "{0} 暴击 {1}!": "{0} Crit {1}!",
+  "只有这一趟打出过伤害的队友参与分配。金币和材料平分，装备、钥匙、强化石按运气归属；什么好东西都没分到的人有保底碎片。": "Only party members who dealt damage on this run share the loot. Coins and materials are split evenly; gear, keys and enhancement stones go by luck; anyone who got nothing good receives bonus shards.",
+  "同洞队友 {0} 人：怪物全属性 +{1}%、血量 +{2}%，大家的伤害打在同一只怪上": "{0} teammate(s) here: monsters +{1}% stats and +{2}% HP, and everyone's damage hits the same monster",
 };

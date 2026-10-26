@@ -105,6 +105,9 @@ export interface DungeonPresence {
   y: number;
   anim?: string;
   flip?: boolean;
+  /** 自己对当前这只怪一共打了多少伤害、最近一下是不是暴击（10-26：队友那边记到同一只怪上、飘字） */
+  dmg?: number;
+  crit?: boolean;
 }
 
 export type ChatChannel = 'world' | 'guild' | 'party' | 'private';

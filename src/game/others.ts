@@ -26,7 +26,7 @@ export function publishSelf(st: GameState, x: number, y: number, work?: { anim: 
   updateAggro(st, x, y, !!work?.anim.startsWith('fight-'), dg);
   const now = Date.now();
   // 副本里位置变得快，队友要看得跟手一些
-  if (now - checked < (dg ? 300 : 500)) return;
+  if (now - checked < (dg ? 150 : 500)) return;
   checked = now;
   const action = st.paused ? undefined : st.queue[0]?.action;
   const mounted = st.mounted ? st.equipment.mount : undefined;
@@ -35,7 +35,7 @@ export function publishSelf(st: GameState, x: number, y: number, work?: { anim: 
   const hp = Math.max(0, Math.round(st.hp));
   // 血量按 5% 一档比较，打怪时不用每下都发
   const key = JSON.stringify([st.settings.skin, action, mounted, st.equipment, snap.total, snap.combat, Math.round((hp / max) * 20), rallyTime(), work?.anim, work?.flip, (st.gates ?? []).map((g) => g.id).join(),
-    dg && [dg.gate, dg.floor, dg.idx, dg.phase, dg.kills, dg.anim, dg.flip]]);
+    dg && [dg.gate, dg.floor, dg.idx, dg.phase, dg.kills, dg.anim, dg.flip, dg.dmg]]);
   const px = dg ? dg.x / T : x;
   const py = dg ? dg.y / T : y;
   const moved = Math.abs(px - sent.x) + Math.abs(py - sent.y) >= (dg ? 1 : 2);
@@ -204,7 +204,8 @@ export class OtherPlayers {
       else if (d > 1) {
         // 每秒 4 格（骑着快些），落后多了走快些追上
         const base = T * (o.mk ? 8 : 4);
-        const v = (base * Math.max(1, d / (T * 8)) * delta) / 1000;
+        // 副本里（自定义摆位）追得更紧：落后多少就在约 0.15 秒内追上，和队友自己的画面差不多同步
+        const v = ((this.place ? Math.max(base, d / 0.15) : base * Math.max(1, d / (T * 8))) * delta) / 1000;
         const k = Math.min(1, v / d);
         o.box.setPosition(o.box.x + dx * k, o.box.y + dy * k);
         o.dir = Math.abs(dx) > Math.abs(dy) ? 'side' : dy > 0 ? 'down' : 'up';

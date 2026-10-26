@@ -1,5 +1,5 @@
 import { setPartySize } from '../core/party';
-import { setAggroMates, threatOf } from '../core/aggro';
+import { setAggroMates, setDgCrew, threatOf } from '../core/aggro';
 import type { GameState } from '../core/types';
 import { useEffect, useState } from 'react';
 import { online, type DungeonPresence, type ChatChannel, type ChatMsg, type Friend, type Party, type PartyInvite, type Trade } from './index';
@@ -176,6 +176,13 @@ export function updateAggro(s: GameState, x: number, y: number, fighting: boolea
   const me = online.me();
   const action = s.paused ? undefined : s.queue[0]?.action;
   const inFight = dg ? dg.phase === 'fight' : fighting && !!action && ACTIONS[action]?.kind === 'combat';
+  // 同一个洞口里在线的队友（10-26）：怪物血量按人数加厚
+  const run = s.dungeon;
+  setDgCrew(me && run?.members ? run.members.filter((m) => {
+    if (m.id === me.id) return false;
+    const p = online.presenceOf(m.id);
+    return !!p && now - p.at < 30_000 && p.dg?.gate === run.gate.id;
+  }).length : 0);
   if (!me || !st.party || !inFight) return setAggroMates([]);
   const out: number[] = [];
   for (const m of st.party.members) {
