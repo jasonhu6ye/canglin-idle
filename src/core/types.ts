@@ -9,6 +9,7 @@ export type SkillId =
 export type SkillGroup = 'gather' | 'produce' | 'combat';
 
 export type CombatStyle = 'melee' | 'ranged' | 'magic';
+export type ArmorKind = 'plate' | 'leather' | 'cloth';
 
 /** mount：坐骑栏（用户 10-23 要求先留好栏位，坐骑以后加） */
 export type GearSlot = 'weapon' | 'offhand' | 'head' | 'body' | 'feet' | 'hands' | 'neck' | 'ring' | 'mount';
@@ -77,7 +78,7 @@ export interface ItemDef {
     attack: number;
     strength: number;
     defence: number;
-    /** 武器决定战斗方式；护甲上的 style 表示攻击和力量加成只对这种战斗方式生效 */
+    /** 武器决定战斗方式；箭袋、魔法书上的 style 表示它的命中和攻击力只对这种战斗方式生效 */
     style?: CombatStyle;
     /** 工具：对应技能的速度加成，0.1 = 快 10% */
     speed?: number;
@@ -96,6 +97,10 @@ export interface ItemDef {
     crit?: number;
     dodge?: number;
     work?: number;
+    /** 护甲（10-26）：哪种护甲（算套装效果）、防御加成、伤害加成（0.05 = 5%） */
+    armor?: ArmorKind;
+    defPct?: number;
+    dmgPct?: number;
     /** 灯笼（10-26）：吸血，打出伤害的这个比例回成自己的血（0.05 = 5%） */
     leech?: number;
   };

@@ -239,7 +239,7 @@ export function emptySummary(): Summary {
 
 export const level = (s: GameState, skill: SkillId) => levelForXp(s.xp[skill]);
 /** 身上所有装备某项加成之和（饰品的生命、经验、掉率、暴击、闪避、干活速度，火把和项链的攻速，灯笼的吸血） */
-export function gearSum(s: GameState, k: 'hp' | 'xp' | 'luck' | 'crit' | 'dodge' | 'work' | 'haste' | 'leech') {
+export function gearSum(s: GameState, k: 'hp' | 'xp' | 'luck' | 'crit' | 'dodge' | 'work' | 'haste' | 'leech' | 'defPct' | 'dmgPct') {
   let n = 0;
   for (const id of Object.values(s.equipment)) n += (id && ITEMS[id]?.equip?.[k]) || 0;
   return n;
@@ -269,8 +269,8 @@ export function playerBonuses(s: GameState, style = weaponStyle(s)) {
     const e = id && ITEMS[id]?.equip;
     if (!e) continue;
     b.defence += e.defence;
-    // 皮甲只加远程，法袍只加魔法
-    if (e.style && e.style !== style) continue;
+    // 箭袋只加远程，魔法书只加魔法（护甲没有命中和攻击力，混搭都算防御）
+    if (e.style && e.slot !== 'weapon' && e.style !== style) continue;
     b.attack += e.attack;
     b.strength += e.strength;
   }
@@ -492,10 +492,7 @@ export function armorPerks(s: GameState) {
   const n = { plate: 0, leather: 0, cloth: 0 };
   for (const [slot, id] of Object.entries(s.equipment)) {
     const e = id && slot !== 'weapon' && slot !== 'offhand' ? ITEMS[id]?.equip : undefined;
-    if (!e || !e.style || !e.defence) continue;
-    if (e.style === 'melee') n.plate++;
-    else if (e.style === 'ranged') n.leather++;
-    else n.cloth++;
+    if (e?.armor) n[e.armor]++;
   }
   return { reduce: n.plate * 0.03, dodge: 0.03 + n.leather * 0.02 + gearSum(s, 'dodge'), crit: n.cloth * 0.02 + gearSum(s, 'crit') };
 }
@@ -518,8 +515,8 @@ export function combatStats(s: GameState, m: MonsterDef) {
     dodge: perks.dodge,
     reduce: 1 - (1 - perks.reduce) * (1 - COOP_DEF * mates),
     playerHit: hitChance((lvl + 8) * (b.attack + 64) * (1 + boostPct(s, 'atk')), (m.defence + 8) * 64) * (has('evasive') ? 0.8 : 1),
-    playerMaxHit: Math.max(1, Math.round((((lvl + 8) * (strength + 64)) / 64) * dmgMult * (1 + boostPct(s, 'str')) * (1 + COOP_DMG * mates))),
-    monsterHit: m.maxHit > 0 ? hitChance((m.attack + 8) * 64, (level(s, 'defence') + 8) * (b.defence + 64) * (1 + boostPct(s, 'def'))) : 0,
+    playerMaxHit: Math.max(1, Math.round((((lvl + 8) * (strength + 64)) / 64) * dmgMult * (1 + boostPct(s, 'str')) * (1 + gearSum(s, 'dmgPct')) * (1 + COOP_DMG * mates))),
+    monsterHit: m.maxHit > 0 ? hitChance((m.attack + 8) * 64, (level(s, 'defence') + 8) * (b.defence + 64) * (1 + boostPct(s, 'def')) * (1 + gearSum(s, 'defPct'))) : 0,
     monsterMaxHit: m.maxHit * MONSTER_DAMAGE_SCALE,
   };
 }

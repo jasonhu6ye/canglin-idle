@@ -452,7 +452,7 @@ export class DungeonScene extends Phaser.Scene {
         this.time.delayedCall(70, () => spr.active && spr.clearTint());
         const heavy = crit || dmg >= Math.max(3, st.playerMaxHit * 0.85);
         this.popText(spr.x + 4, spr.y - 22, crit ? tl`暴击 ${dmg}!` : `${dmg}`, crit ? '#ff7a30' : heavy ? '#ffb030' : '#ffffff', crit ? 11 : heavy ? 10 : 8);
-        if (leech > 0) this.popText(this.player.x + 6, this.player.y - 30, `+${leech}`, '#ff5a7a', 8);
+        if (leech > 0) this.popText(this.player.x + 6, this.player.y - 30, `+${leech}`, '#6ee86a', 8);
         if (crit) this.cameras.main.shake(110, 0.003);
       }));
     }

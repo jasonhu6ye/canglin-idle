@@ -834,8 +834,8 @@ describe('战斗优化（10-24）', () => {
     let s = newGame(T0, 1);
     s.equipment.weapon = 'wood_dagger';
     expect(combatStats(s, m).crit).toBeCloseTo(0.05);
-    const leather = Object.keys(ITEMS).filter((i) => ITEMS[i].equip?.style === 'ranged' && ITEMS[i].equip?.slot !== 'weapon' && ITEMS[i].equip?.defence);
-    const plate = Object.keys(ITEMS).filter((i) => ITEMS[i].equip?.style === 'melee' && ITEMS[i].equip?.slot !== 'weapon' && ITEMS[i].equip?.defence);
+    const leather = Object.keys(ITEMS).filter((i) => ITEMS[i].equip?.armor === 'leather');
+    const plate = Object.keys(ITEMS).filter((i) => ITEMS[i].equip?.armor === 'plate');
     s.equipment.body = leather.find((i) => ITEMS[i].equip!.slot === 'body');
     expect(armorPerks(s).dodge).toBeCloseTo(0.05);
     s.equipment.body = plate.find((i) => ITEMS[i].equip!.slot === 'body');

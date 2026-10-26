@@ -727,6 +727,12 @@ export const EN_TEXT: Record<string, string> = {
   "T1-T8 每阶 10 件都有不同造型，在工坊制作：锭 + 晶石（项链再加布料），T5 起要宝石。制作也会出品质。": "All 10 pieces have a unique look at every tier from T1 to T8. Craft them at the Workshop from bars + crystals (necklaces also need cloth), with gems from T5 on. Crafted jewelry rolls quality too.",
   "护甲分工、新副手灯笼、交易可放背包物品": "Armor roles, new Lantern off-hand, trading from your bag",
   "护甲重新分工：板甲给大量防御和少量攻击、力量；皮甲攻防均衡；布甲给大量攻击、力量和少量防御。攻击和力量仍只对对应战斗方式生效（板甲近战、皮甲远程、布甲魔法）。": "Armor roles reworked: plate gives lots of defence plus a little attack and strength, leather is balanced, and cloth gives lots of attack and strength plus a little defence. Attack and strength still only apply to the matching style (plate melee, leather ranged, cloth magic).",
-  "新副手「灯笼」：任何战斗方式都加力量（伤害），还有固定 5% 吸血，打出伤害的 5% 回成自己的生命，打中时头顶会飘红色的回血数字。锻造制作：锭 ×1 + 树脂 ×2，T1-T8 每阶造型都不一样。": "New off-hand: the Lantern. It adds strength (damage) for every combat style and has a fixed 5% lifesteal, so 5% of the damage you deal heals you, shown as a red number over your head. Smithed from 1 bar + 2 resin, with a unique look at every tier from T1 to T8.",
+  "新副手「灯笼」：任何战斗方式都加攻击力，还有固定 5% 吸血，打出伤害的 5% 回成自己的生命，打中时头顶会飘绿色的回血数字。锻造制作：锭 ×1 + 树脂 ×2，T1-T8 每阶造型都不一样。": "New off-hand: the Lantern. It adds attack power for every combat style and has a fixed 5% lifesteal, so 5% of the damage you deal heals you, shown as a green number over your head. Smithed from 1 bar + 2 resin, with a unique look at every tier from T1 to T8.",
   "交易可以从背包放东西了：放出去的东西先从仓库扣，不够再从背包扣。": "Trades can now include items from your bag. What you give is taken from your bank first, then your bag.",
+  "护甲混搭、新词条": "Mix-and-match armor and new stats",
+  "护甲可以随便混搭了：板甲、皮甲、布甲的词条对任何战斗方式都生效，玩弓也能穿板甲衣、布甲鞋、皮甲头。成套效果按件算（板甲每件减伤 3%、皮甲每件闪避 +2%、布甲每件暴击 +2%）。": "Armor can now be mixed freely: plate, leather and cloth stats work for every combat style, so an archer can wear a plate chest, cloth boots and a leather cap. Type bonuses count per piece (plate 3% damage reduction, leather +2% dodge, cloth +2% crit each).",
+  "武器词条改为「攻击力」和「命中率」。": "Weapon stats are now Attack power and Hit rate.",
+  "护甲词条改为「基础防御」「防御加成」「伤害加成」：板甲防御最高，布甲伤害加成最高，皮甲居中。衣服每项都是最高的。": "Armor stats are now Base defence, Defence bonus and Damage bonus: plate has the most defence, cloth the most damage bonus, leather sits in between. The body piece is highest in every stat.",
+  "鞋子和手套多一条词条：皮甲和布甲是攻击速度，板甲是闪避。": "Boots and gloves get one extra stat: attack speed on leather and cloth, dodge on plate.",
+  "灯笼吸血的回血数字改成绿色。": "Lantern lifesteal numbers are now green.",
 };

@@ -2184,7 +2184,7 @@ export class MapScene extends Phaser.Scene {
       this.time.delayedCall(hitIn, () => this.foe === foe && this.playerSwingFx(foe, m, dmg, crit));
       // 灯笼吸血：打中后主角头顶飘一个血红色的回血数字
       const leech = c.pLeech ?? 0;
-      if (leech > 0) this.time.delayedCall(hitIn + 260, () => this.float(`+${leech}`, '#ff5a7a'));
+      if (leech > 0) this.time.delayedCall(hitIn + 260, () => this.float(`+${leech}`, '#6ee86a'));
     }
     const big = this.foeSeen.m > prev.m && c.mArt === 'world';
     if (this.foeSeen.m > prev.m) this.monsterSwingFx(c.mDmg ?? -1, c.mArt, foe, m);

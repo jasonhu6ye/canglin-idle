@@ -1,5 +1,5 @@
 import type {
-  ActionDef, Buff, BuffKind, CombatStyle, Drop, EquipSlot, ItemCategory, ItemDef, ItemStack, LootTable, MonsterDef, RegionId, SkillGroup, SkillId, ToolSlot,
+  ActionDef, ArmorKind, Buff, BuffKind, CombatStyle, Drop, EquipSlot, ItemCategory, ItemDef, ItemStack, LootTable, MonsterDef, RegionId, SkillGroup, SkillId, ToolSlot,
 } from './types';
 import { QUALITY_NAME, QUALITY_STAT, QUALITY_SPEED, QUALITY_VALUE, qid } from './quality';
 import { FORM_FAMILY, isAnimal, SPECIES, WORLD_SKILL, type Family, type Species } from './bestiary';
@@ -336,7 +336,9 @@ export interface EquipType {
   maker: SkillId;
   mats: [Mat, number][];
   plus: number;
-  stats: { attack?: number; strength?: number; defence?: number; style?: CombatStyle; speed?: boolean; attackMs?: number; haste?: boolean; twoHanded?: boolean; leech?: number };
+  stats: { attack?: number; strength?: number; defence?: number; style?: CombatStyle; speed?: boolean; attackMs?: number; haste?: boolean; twoHanded?: boolean; leech?: number;
+    /** 护甲（10-26）：防御加成、伤害加成、攻速加成的系数，乘每阶的 ARMOR_PCT */
+    armor?: ArmorKind; defPct?: number; dmgPct?: number; hastePct?: number; dodgePct?: number };
   group: string;
 }
 const W = (key: string, name: string, skill: SkillId, maker: SkillId, mats: [Mat, number][], plus: number, attack: number, strength: number, attackMs: number, style: CombatStyle): EquipType =>
@@ -345,11 +347,19 @@ const ARMOR_SLOTS: [EquipSlot, number, number][] = [
   // [部位, 防御占比, 制作多加几级]
   ['head', 0.3, 2], ['body', 0.5, 6], ['feet', 0.2, 3], ['hands', 0.15, 1],
 ];
-const A = (type: string, names: string[], mat: Mat, maker: SkillId, def: number, attack: number, strength: number, style: CombatStyle): EquipType[] =>
+/*
+ * 护甲词条（用户 10-26）：基础防御（点数）+ 防御加成（%）+ 伤害加成（%），任何战斗方式都生效，三种护甲随便混搭。
+ * 衣服每项都最高（占比 0.5），鞋子和手套额外多一条：皮甲布甲是攻击速度，板甲是闪避（用户 10-26）。
+ */
+const A = (type: ArmorKind, names: string[], mat: Mat, maker: SkillId, def: number, defPct: number, dmgPct: number): EquipType[] =>
   ARMOR_SLOTS.map(([slot, k, plus], j) => ({
     key: `${type}_${slot}`, name: names[j], slot, skill: 'defence' as SkillId, maker, mats: [[mat, [2, 4, 2, 1][j]]] as [Mat, number][], plus,
-    stats: { defence: def * k, attack: attack * k, strength: strength * k, style }, group: { plate: tl('板甲'), leather: tl('皮甲'), cloth: tl('布甲') }[type]!,
+    stats: { defence: def * k, armor: type, defPct: defPct * k, dmgPct: dmgPct * k, ...(slot === 'feet' || slot === 'hands' ? (type === 'plate' ? { dodgePct: 0.5 } : { hastePct: 0.5 }) : {}) },
+    group: { plate: tl('板甲'), leather: tl('皮甲'), cloth: tl('布甲') }[type]!,
   }));
+/** 护甲百分比词条每阶的基数：T1 4% … T8 12% */
+const ARMOR_PCT = [0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.12];
+const pct3 = (x: number) => Math.round(x * 1000) / 1000;
 const OH = (key: string, name: string, skill: SkillId, maker: SkillId, mats: [Mat, number][], plus: number, stats: EquipType['stats']): EquipType =>
   ({ key, name, slot: 'offhand', skill, maker, mats, plus, stats, group: tl('副手') });
 const TL = (key: string, name: string, slot: EquipSlot, skill: SkillId, maker: SkillId, mats: [Mat, number][], plus: number): EquipType =>
@@ -375,11 +385,10 @@ export const EQUIP_TYPES: EquipType[] = [
   // 魔法：加工木材 + 布料
   W('staff', tl('法杖'), 'magic', 'crafting', [['plank', 2], ['cloth', 1]], 4, 1.0, 1.1, 2400, 'magic'),
   // 护甲：头、身、脚、手
-  // 护甲分工（用户 10-26）：板甲大量防御 + 少量攻击力量；皮甲攻防均衡；布甲大量攻击力量 + 少量防御。
-  // 攻击和力量只对对应战斗方式生效（板甲近战、皮甲远程、布甲魔法），防御对谁都算
-  ...A('plate', [tl('板甲头盔'), tl('板甲胸甲'), tl('板甲战靴'), tl('板甲护手')], 'bar', 'smithing', 2.6, 0.2, 0.3, 'melee'),
-  ...A('leather', [tl('皮帽'), tl('皮甲'), tl('皮靴'), tl('皮手套')], 'leather', 'crafting', 1.5, 0.55, 0.6, 'ranged'),
-  ...A('cloth', [tl('布帽'), tl('布袍'), tl('布鞋'), tl('布手套')], 'cloth', 'crafting', 0.6, 0.85, 1.0, 'magic'),
+  // 护甲分工（用户 10-26）：板甲大量防御 + 少量伤害；皮甲攻防均衡；布甲大量伤害 + 少量防御。参数：基础防御、防御加成、伤害加成
+  ...A('plate', [tl('板甲头盔'), tl('板甲胸甲'), tl('板甲战靴'), tl('板甲护手')], 'bar', 'smithing', 2.6, 2.2, 0.7),
+  ...A('leather', [tl('皮帽'), tl('皮甲'), tl('皮靴'), tl('皮手套')], 'leather', 'crafting', 1.5, 1.3, 1.6),
+  ...A('cloth', [tl('布帽'), tl('布袍'), tl('布鞋'), tl('布手套')], 'cloth', 'crafting', 0.6, 0.5, 2.6),
   // 副手（用户 10-25）：火把加攻速（任何战斗方式），副手盾加防御，箭袋只加远程，魔法书只加魔法
   OH('torch', tl('火把'), 'defence', 'fletching', [['plank', 1], ['cloth', 1]], 1, { haste: true }),
   OH('buckler', tl('副手盾'), 'defence', 'smithing', [['bar', 2]], 3, { defence: 0.6 }),
@@ -416,6 +425,9 @@ TIERS.forEach((t, i) => {
         attack: Math.round(p * (st.attack ?? 0)), strength: Math.round(p * (st.strength ?? 0)), defence: Math.round(p * (st.defence ?? 0)),
         style: st.style, speed: st.speed ? TOOL_SPEED[i] : undefined, attackMs: st.attackMs,
         ...(st.haste ? { haste: TORCH_HASTE[i] } : {}), ...(st.twoHanded ? { twoHanded: true } : {}), ...(st.leech ? { leech: st.leech } : {}),
+        ...(st.armor ? { armor: st.armor, defPct: pct3(ARMOR_PCT[i] * st.defPct!), dmgPct: pct3(ARMOR_PCT[i] * st.dmgPct!) } : {}),
+        ...(st.hastePct ? { haste: pct3(ARMOR_PCT[i] * st.hastePct) } : {}),
+        ...(st.dodgePct ? { dodge: pct3(ARMOR_PCT[i] * st.dodgePct) } : {}),
       },
     });
   }
@@ -429,12 +441,12 @@ TIERS.forEach((t, i) => {
 export type JewelStat = 'strength' | 'attack' | 'defence' | 'hp' | 'haste' | 'xp' | 'luck' | 'crit' | 'dodge' | 'work';
 export interface JewelType { key: string; slot: 'neck' | 'ring'; name: string; stat: JewelStat; desc: string; plus: number }
 export const JEWEL_TYPES: JewelType[] = [
-  { key: 'neck_might', slot: 'neck', name: tl('力量项链'), stat: 'strength', desc: tl('所有战斗方式的力量（最高伤害）'), plus: 2 },
+  { key: 'neck_might', slot: 'neck', name: tl('力量项链'), stat: 'strength', desc: tl('攻击力（所有战斗方式）'), plus: 2 },
   { key: 'neck_guard', slot: 'neck', name: tl('守护项链'), stat: 'defence', desc: tl('防御'), plus: 3 },
   { key: 'neck_swift', slot: 'neck', name: tl('迅捷项链'), stat: 'haste', desc: tl('攻击速度'), plus: 4 },
   { key: 'neck_sage', slot: 'neck', name: tl('学者项链'), stat: 'xp', desc: tl('所有技能获得的经验'), plus: 5 },
   { key: 'neck_fortune', slot: 'neck', name: tl('幸运项链'), stat: 'luck', desc: tl('几率掉落物的掉率（打怪和采集）'), plus: 6 },
-  { key: 'ring_aim', slot: 'ring', name: tl('精准戒指'), stat: 'attack', desc: tl('所有战斗方式的攻击（命中）'), plus: 1 },
+  { key: 'ring_aim', slot: 'ring', name: tl('精准戒指'), stat: 'attack', desc: tl('命中率（所有战斗方式）'), plus: 1 },
   { key: 'ring_fury', slot: 'ring', name: tl('暴怒戒指'), stat: 'crit', desc: tl('暴击几率'), plus: 3 },
   { key: 'ring_life', slot: 'ring', name: tl('生命戒指'), stat: 'hp', desc: tl('生命上限'), plus: 2 },
   { key: 'ring_shadow', slot: 'ring', name: tl('灵影戒指'), stat: 'dodge', desc: tl('闪避几率'), plus: 4 },
@@ -625,7 +637,7 @@ for (const it of itemList.filter((x) => x.equip && !x.equip.move)) {
         speed: e.speed ? Math.round(e.speed * QUALITY_SPEED[q] * 1000) / 1000 : undefined,
         ...(e.haste ? { haste: Math.round(e.haste * QUALITY_SPEED[q] * 1000) / 1000 } : {}),
         ...(e.hp ? { hp: Math.round(e.hp * QUALITY_STAT[q]) } : {}),
-        ...Object.fromEntries((['xp', 'luck', 'crit', 'dodge', 'work'] as const).filter((k) => e[k]).map((k) => [k, Math.round(e[k]! * QUALITY_SPEED[q] * 1000) / 1000])),
+        ...Object.fromEntries((['xp', 'luck', 'crit', 'dodge', 'work', 'defPct', 'dmgPct'] as const).filter((k) => e[k]).map((k) => [k, Math.round(e[k]! * QUALITY_SPEED[q] * 1000) / 1000])),
       },
     };
     if (q === 0) Object.assign(it, def);

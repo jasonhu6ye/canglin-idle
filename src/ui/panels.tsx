@@ -15,7 +15,7 @@ import { openCombatLog } from './CombatLog';
 import { XP_TABLE, levelProgress, speedForLevel, SPEED_CAP, BONUS_PER_LEVEL } from '../core/xp';
 import { store } from '../store';
 import { RAIN_FISH } from '../core/weather';
-import { fmtDuration, fmtNum, jewelLine } from './format';
+import { fmtDuration, fmtNum, gearLine, hitPct } from './format';
 import { Codex } from './Codex';
 import { Handbook } from './Handbook';
 import { GmPanel } from './GmPanel';
@@ -82,9 +82,7 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
       {e && (
         <span className={canEquip ? '' : 'warn'}>
           {e.move ? tl`坐骑 · 骑乘时移动速度 +${Math.round(e.move * 100)}%` : tl`需要${SKILLS[e.skill].name} ${e.level} 级`}
-          {e.slot === 'ring' || e.slot === 'neck' ? ` · ${jewelLine(e)}` : e.move ? '' : e.speed ? tl` · ${toolSkillNames(e.slot) || SKILLS[e.skill].name}速度 +${Math.round(e.speed * 100)}%` : tl` · 攻 +${e.attack} 力 +${e.strength} 防 +${e.defence}${e.attackMs ? tl` · 攻速 ${(e.attackMs / 1000).toFixed(1)} 秒` : ''}`}
-          {!e.move && !e.speed && e.haste && e.slot !== 'neck' ? tl` · 攻速 +${Math.round(e.haste * 100)}%` : ''}{e.twoHanded ? tl(' · 双手持握，不能用副手') : ''}{e.leech ? tl` · 吸血 ${Math.round(e.leech * 100)}%（打出伤害的 ${Math.round(e.leech * 100)}% 回成生命）` : ''}
-          {e.style && e.slot !== 'weapon' && tl`（攻、力只对${STYLE_NAME[e.style]}生效）`}
+          {e.move ? '' : e.speed ? tl` · ${toolSkillNames(e.slot) || SKILLS[e.skill].name}速度 +${Math.round(e.speed * 100)}%` : ` · ${gearLine(e)}`}
         </span>
       )}
       <div className="go">
@@ -205,14 +203,16 @@ export function BankPanel({ s }: { s: GameState }) {
   );
 }
 
-/** 装备一行的数值简写：攻击、力量、防御、速度、移速 */
+/** 装备一行的数值简写：攻击力、命中、防御、各种加成、速度、移速 */
 export function gearStats(id: string) {
   const e = ITEMS[id]?.equip;
   if (!e) return '';
   const out: string[] = [];
-  if (e.attack) out.push(tl`攻击 ${e.attack}`);
-  if (e.strength) out.push(tl`力量 ${e.strength}`);
+  if (e.strength) out.push(tl`攻击力 ${e.strength}`);
+  if (e.attack) out.push(tl`命中 +${hitPct(e.attack)}%`);
   if (e.defence) out.push(tl`防御 ${e.defence}`);
+  if (e.defPct) out.push(tl`防御加成 +${Math.round(e.defPct * 1000) / 10}%`);
+  if (e.dmgPct) out.push(tl`伤害 +${Math.round(e.dmgPct * 1000) / 10}%`);
   if (e.speed) out.push(tl`速度 +${Math.round(e.speed * 100)}%`);
   if (e.move) out.push(tl`移速 +${Math.round(e.move * 100)}%`);
   if (e.haste) out.push(tl`攻速 +${Math.round(e.haste * 100)}%`);
@@ -346,7 +346,9 @@ function Attributes({ s }: { s: GameState }) {
   const atkBuff = buffPct(s, 'atk');
   const strBuff = buffPct(s, 'str');
   const defBuff = buffPct(s, 'def');
-  const maxHit = Math.max(1, Math.round((((lvl + 8) * (b.strength + 64)) / 64) * (1 + strBuff)));
+  const dmgPct = gearSum(s, 'dmgPct');
+  const defPct = gearSum(s, 'defPct');
+  const maxHit = Math.max(1, Math.round((((lvl + 8) * (b.strength + 64)) / 64) * (1 + strBuff) * (1 + dmgPct)));
   const atkMs = playerAttackMs(s);
   const pct = (x: number) => `${Math.round(x * 100)}%`;
   const buffs = Object.entries(s.buffs ?? {}) as [BuffKind, { pct: number; ms: number }][];
@@ -376,20 +378,22 @@ function Attributes({ s }: { s: GameState }) {
       <ul className="attr-list">
         {row(tl('生命'), `${s.hp}/${maxHp(s)}`, tl`生命等级 ${level(s, 'hitpoints')} ×10`)}
         {row(tl('战斗方式'), STYLE_NAME[style], weapon ? ITEMS[s.equipment.weapon!].name : tl('空手'))}
-        {row(tl('攻击加成'), `+${b.attack}`, <>{tl('装备')}{atkBuff > 0 && <>{tl` · 料理命中 +${pct(atkBuff)}`}</>}{tl` · ${STYLE_NAME[style]}等级 ${lvl}`}</>)}
-        {row(tl('力量加成'), `+${b.strength}`, <>{tl`装备 +${b.strength}`}{strBuff > 0 && <>{tl` · 料理伤害 +${pct(strBuff)}`}</>}</>)}
-        {row(tl('最高伤害'), maxHit, tl`${STYLE_NAME[style]}等级 ${lvl} 和力量加成算出`)}
-        {row(tl('攻击间隔'), tl`${(atkMs / 1000).toFixed(1)} 秒`, <>{weapon ? tl('看武器种类：匕首快、长枪和弩慢') : tl('默认')}{playerHaste(s) > 0 && <>{tl` · 火把、项链攻速 +${pct(playerHaste(s))}`}</>}</>)}
+        {row(tl('攻击力'), `${b.strength}`, tl('武器为主，副手和项链也加'))}
+        {row(tl('命中率加成'), `+${hitPct(b.attack)}%`, <>{tl('武器、副手、戒指')}{atkBuff > 0 && <>{tl` · 料理命中 +${pct(atkBuff)}`}</>}{tl` · ${STYLE_NAME[style]}等级 ${lvl}`}</>)}
+        {row(tl('伤害加成'), `+${pct(dmgPct + strBuff)}`, <>{tl`护甲 +${pct(dmgPct)}`}{strBuff > 0 && <>{tl` · 料理伤害 +${pct(strBuff)}`}</>}</>)}
+        {row(tl('最高伤害'), maxHit, tl`${STYLE_NAME[style]}等级 ${lvl}、攻击力和伤害加成算出`)}
+        {row(tl('攻击间隔'), tl`${(atkMs / 1000).toFixed(1)} 秒`, <>{weapon ? tl('看武器种类：匕首快、长枪和弩慢') : tl('默认')}{playerHaste(s) > 0 && <>{tl` · 装备攻速 +${pct(playerHaste(s))}（火把、项链、皮甲布甲的鞋子手套）`}</>}</>)}
         {(() => {
           const perks = armorPerks(s);
           return <>
             {row(tl('暴击'), `${pct(0.05 + perks.crit)} · ×1.5`, <>{tl('基础 5%')}{perks.crit > 0 && <>{tl` · 布甲 +${pct(perks.crit)}`}</>}</>)}
-            {row(tl('闪避'), pct(perks.dodge), <>{tl('基础 3%')}{perks.dodge > 0.03 && <>{tl` · 皮甲 +${pct(perks.dodge - 0.03)}`}</>}</>)}
+            {row(tl('闪避'), pct(perks.dodge), <>{tl('基础 3%')}{perks.dodge > 0.03 && <>{tl` · 装备 +${pct(perks.dodge - 0.03)}`}</>}</>)}
             {row(tl('减伤'), pct(perks.reduce), perks.reduce > 0 ? tl('板甲每件 3%') : tl('穿板甲每件减 3%'))}
             {gearSum(s, 'leech') > 0 && row(tl('吸血'), pct(gearSum(s, 'leech')), tl('灯笼：打出伤害的这部分回成生命'))}
           </>;
         })()}
-        {row(tl('防御加成'), `+${b.defence}`, <>{tl`全身装备 · 防御等级 ${level(s, 'defence')}`}{defBuff > 0 && <>{tl` · 料理防御 +${pct(defBuff)}`}</>}</>)}
+        {row(tl('基础防御'), `+${b.defence}`, tl`全身装备 · 防御等级 ${level(s, 'defence')}`)}
+        {row(tl('防御加成'), `+${pct(defPct + defBuff)}`, <>{tl`护甲 +${pct(defPct)}`}{defBuff > 0 && <>{tl` · 料理防御 +${pct(defBuff)}`}</>}</>)}
         {row(tl('移动速度'), tl`${moveSpeed(s).toFixed(1)} 格/秒`, mountMove ? tl`步行 4 格/秒 · 坐骑 +${pct(mountMove)}` : tl('步行 4 格/秒'))}
       </ul>
       <h2>{tl('干活加速 ')}<small className="muted">{tl('动作时间 ÷（1 + 等级 + 工具 + 料理）')}</small></h2>

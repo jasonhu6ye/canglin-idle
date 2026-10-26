@@ -45,13 +45,28 @@ export function joinedText(t: number, now = Date.now()) {
   return { date, age };
 }
 
-/** 饰品（10-26）的加成写成一句：攻、力、防、生命、各种百分比，没有的不写 */
-export function jewelLine(e: NonNullable<import('../core/types').ItemDef['equip']>) {
+/** 命中加成：装备的命中点数换成百分比（命中判定里是 ×(1 + 点数/64)） */
+export const hitPct = (attack: number) => Math.round((attack / 64) * 100);
+
+const STYLE_WORD = { melee: tl('近战'), ranged: tl('远程'), magic: tl('魔法') };
+
+/**
+ * 战斗装备的词条写成一句（10-26 用户定的叫法）：
+ * 武器「攻击力、命中率、出手间隔」；护甲「基础防御、防御加成、伤害加成」（鞋子手套多一条攻速）；饰品、副手各写各的，没有的不写
+ */
+export function gearLine(e: NonNullable<import('../core/types').ItemDef['equip']>) {
   const pc = (x: number) => `${Math.round(x * 1000) / 10}%`;
   const out: string[] = [];
-  if (e.attack) out.push(tl`攻击 +${e.attack}`);
-  if (e.strength) out.push(tl`力量 +${e.strength}`);
-  if (e.defence) out.push(tl`防御 +${e.defence}`);
+  if (e.slot === 'weapon') {
+    out.push(tl`攻击力 ${e.strength}`, tl`命中率 +${hitPct(e.attack)}%`);
+    if (e.attackMs) out.push(tl`出手间隔 ${(e.attackMs / 1000).toFixed(1)} 秒`);
+  } else {
+    if (e.strength) out.push(tl`攻击力 +${e.strength}`);
+    if (e.attack) out.push(tl`命中率 +${hitPct(e.attack)}%`);
+  }
+  if (e.defence) out.push(tl`基础防御 +${e.defence}`);
+  if (e.defPct) out.push(tl`防御加成 +${pc(e.defPct)}`);
+  if (e.dmgPct) out.push(tl`伤害加成 +${pc(e.dmgPct)}`);
   if (e.hp) out.push(tl`生命上限 +${e.hp}`);
   if (e.haste) out.push(tl`攻速 +${pc(e.haste)}`);
   if (e.xp) out.push(tl`所有经验 +${pc(e.xp)}`);
@@ -59,5 +74,8 @@ export function jewelLine(e: NonNullable<import('../core/types').ItemDef['equip'
   if (e.crit) out.push(tl`暴击几率 +${pc(e.crit)}`);
   if (e.dodge) out.push(tl`闪避几率 +${pc(e.dodge)}`);
   if (e.work) out.push(tl`采集和制作速度 +${pc(e.work)}`);
+  if (e.leech) out.push(tl`吸血 ${Math.round(e.leech * 100)}%（打出伤害的 ${Math.round(e.leech * 100)}% 回成生命）`);
+  if (e.twoHanded) out.push(tl('双手持握，不能用副手'));
+  if (e.style && e.slot !== 'weapon') out.push(tl`（只对${STYLE_WORD[e.style]}生效）`);
   return out.join(' · ');
 }
