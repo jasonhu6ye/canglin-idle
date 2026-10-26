@@ -1165,6 +1165,148 @@ function gloves(p: Pix, t: number, mat: 'plate' | 'leather' | 'cloth') {
   }
 }
 
+// ---- 饰品（用户 10-26 重做：每阶项链 5 种、戒指 5 种） ----
+
+/** 各阶镶嵌的晶石颜色：石英、紫晶、黄晶、碧玉、蓝晶、星辉晶、日耀晶、虚空晶 */
+const CRYSTAL = ['#e8eef4', '#a060e0', '#f0d040', '#3aa060', '#3a7ad0', '#b8f0ff', '#ff8a2a', '#7a3ad0'];
+
+/** 宝石：带高光的小圆/椭圆 */
+function gem(p: Pix, cx: number, cy: number, rx: number, ry: number, col: string) {
+  const g = ramp(col);
+  for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++) for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) {
+    const d = ((x + 0.5 - cx) / rx) ** 2 + ((y + 0.5 - cy) / ry) ** 2;
+    if (d > 1) continue;
+    p.set(x, y, d > 0.6 ? g[1] : x < cx && y < cy ? g[4] : g[2]);
+  }
+}
+
+/** 按形状函数填色：inside(x, y) 返回 0 不画、1 边、2 里面 */
+function fill(p: Pix, x0: number, y0: number, x1: number, y1: number, inside: (x: number, y: number) => number, edge: string, body: string) {
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const k = inside(x + 0.5, y + 0.5);
+    if (k) p.set(x, y, k === 1 ? edge : body);
+  }
+}
+
+function necklace(p: Pix, kind: string, t: number) {
+  const M = ramp(t === 0 ? '#8a6a40' : t === 7 ? GOLDS[2] : METAL[t]);
+  const G = CRYSTAL[t];
+  // 链子：从左上到右上垂成一道弧，在中间挂坠子；木制是一串木珠，高阶是粗链
+  for (let i = 0; i <= 30; i++) {
+    const q = i / 30;
+    const x = 3 + q * 18;
+    const y = 2 + Math.sin(q * Math.PI) * 8.5;
+    if (t === 0) { if (i % 3 === 0) { p.set(Math.round(x), Math.round(y), M[2]); p.set(Math.round(x) + 1, Math.round(y), M[3]); } continue; }
+    p.set(Math.round(x), Math.round(y), i % 2 ? M[1] : M[3]);
+    if (t >= 4) p.set(Math.round(x), Math.round(y) + 1, M[0]);
+  }
+  const cx = 12;
+  const cy = 15.5;
+  const m = M;
+  switch (kind) {
+    case 'might': // 力量：菱形坠子，中间一颗大晶石，两边各一道尖刺
+      fill(p, 7, 10, 17, 21, (x, y) => { const d = Math.abs(x - cx) / 5 + Math.abs(y - cy) / 5.5; return d < 0.82 ? 2 : d < 1 ? 1 : 0; }, m[1], m[2]);
+      gem(p, cx, cy, 2.2, 2.6, G);
+      if (t >= 3) { p.set(6, 15, m[3]); p.set(17, 15, m[3]); p.set(5, 15, m[4]); p.set(18, 15, m[4]); }
+      break;
+    case 'guard': // 守护：小盾牌坠子，盾心嵌晶石
+      fill(p, 7, 10, 17, 22, (x, y) => {
+        const w = y < 17 ? 5 : 5 - (y - 17) * 1.05;
+        const dx = Math.abs(x - cx);
+        return y < 10 || dx > w ? 0 : dx > w - 1.1 || y < 11 ? 1 : 2;
+      }, m[1], m[2]);
+      gem(p, cx, 15, 1.8, 1.8, G);
+      if (t >= 3) for (let y = 11; y < 20; y += 2) p.set(cx, y, m[4]);
+      break;
+    case 'swift': // 迅捷：晶石两边一对展开的羽翼
+      // 每边一片三层羽毛的翅膀，往外上方张开
+      fill(p, 3, 10, 21, 21, (x, y) => {
+        const dx = Math.abs(x - cx) - 2;
+        if (dx < 0 || dx > 7.5) return 0;
+        const topY = cy - 1.5 - dx * 0.55;
+        const botY = cy + 3.2 - dx * 0.25 - (Math.floor(dx / 2.5) % 2) * 0.8;
+        return y < topY || y > botY ? 0 : y < topY + 1 ? 1 : 2;
+      }, m[4], m[2]);
+      for (let k = 1; k <= 2; k++) for (const sg of [-1, 1]) for (let i = 0; i < 4; i++) p.set(Math.round(cx + sg * (2 + k * 2.4 + i * 0.3)), Math.round(cy + 0.5 - k * 0.6 + i * 0.6), m[1]);
+      gem(p, cx, cy, 2.2, 2.6, G);
+      break;
+    case 'sage': // 学者：圆形坠子，里面一只「眼睛」（智慧之眼）
+      fill(p, 6, 10, 18, 22, (x, y) => { const d = Math.hypot(x - cx, y - cy); return d < 4.6 ? 2 : d < 5.6 ? 1 : 0; }, m[1], m[3]);
+      fill(p, 7, 13, 17, 18, (x, y) => (Math.abs(y - cy) < 2.4 * (1 - ((x - cx) / 4.4) ** 2) ? 2 : 0), '', '#f4f0e0');
+      gem(p, cx, cy, 1.5, 1.5, G);
+      break;
+    default: // 幸运：四叶草，每片叶子是一颗晶石
+      for (const [dx, dy] of [[-2.4, -2.2], [2.4, -2.2], [-2.4, 2.4], [2.4, 2.4]]) gem(p, cx + dx, cy + dy, 2.2, 2.2, G);
+      p.set(cx, Math.round(cy), m[3]); p.set(cx, Math.round(cy) + 4, m[2]); p.set(cx + 1, Math.round(cy) + 5, m[2]);
+  }
+  // 挂扣
+  p.set(cx, 10, m[3]); p.set(cx - 1, 10, m[2]);
+  // 阶级装饰：T5 起两边多挂两颗小晶石，T7 起链子上点缀星光，精金加金边
+  if (t >= 4) { gem(p, 6.5, 9.5, 1, 1, G); gem(p, 17.5, 9.5, 1, 1, G); }
+  if (t >= 6) for (const [x, y] of [[4, 4], [20, 4], [9, 7], [15, 7]]) p.set(x, y, '#ffffff');
+}
+
+function ring(p: Pix, kind: string, t: number) {
+  const M = ramp(t === 0 ? '#a87a48' : t === 7 ? GOLDS[2] : METAL[t]);
+  const G = CRYSTAL[t];
+  const cx = 12;
+  const cy = 15.5;
+  // 戒圈：斜着看的椭圆环，前面亮后面暗；T3 起双层，木戒有木纹
+  fill(p, 4, 9, 20, 23, (x, y) => {
+    const d = ((x - cx) / 7) ** 2 + ((y - cy) / 6) ** 2;
+    const inner = ((x - cx) / 4.6) ** 2 + ((y - cy) / 3.8) ** 2;
+    return d <= 1 && inner > 1 ? (y > cy ? 2 : 1) : 0;
+  }, M[1], M[3]);
+  if (t >= 2) for (let a = 0.3; a < Math.PI - 0.3; a += 0.12) p.set(Math.round(cx + Math.cos(a) * 5.9), Math.round(cy + Math.sin(a) * 5), M[4]);
+  if (t === 0) for (let a = 0.4; a < Math.PI; a += 0.5) p.set(Math.round(cx + Math.cos(a) * 5.6), Math.round(cy + Math.sin(a) * 4.8), M[0]);
+  // 戒面托：顶上一个小台
+  for (let x = 9; x <= 15; x++) p.set(x, 10, M[2]);
+  const top = 6;
+  switch (kind) {
+    case 'aim': // 精准：圆晶石外面一圈准星刻度
+      fill(p, 6, 0, 18, 12, (x, y) => { const r = Math.hypot(x - cx, y - top); return r < 4.6 && r > 3.6 ? 1 : 0; }, M[3], M[3]);
+      gem(p, cx, top, 3, 3, G);
+      for (const [x, y] of [[cx, top - 5], [cx, top + 4], [cx - 5, top], [cx + 4, top], [cx - 1, top - 5], [cx - 5, top - 1]]) p.set(x, y, M[4]);
+      break;
+    case 'fury': // 暴怒：火焰形的尖晶石，往上窜
+      fill(p, 8, 1, 16, 10, (x, y) => {
+        const w = 3.2 * Math.sin(((y - 1) / 9) * Math.PI * 0.9 + 0.2) + Math.sin(y * 1.7) * 0.4;
+        const dx = Math.abs(x - cx);
+        return dx < w - 0.9 ? 2 : dx < w ? 1 : 0;
+      }, mix(G, '#ff3a1a', 0.5), mix(G, '#ffb040', 0.4));
+      p.set(cx, 3, '#fff0c0');
+      break;
+    case 'life': // 生命：心形晶石
+      fill(p, 7, 2, 17, 11, (x, y) => {
+        const X = (x - cx) / 4.4;
+        const Y = (top + 0.5 - y) / 4;
+        const v = (X * X + Y * Y - 1) ** 3 - X * X * Y * Y * Y;
+        return v < -0.05 ? 2 : v < 0.02 ? 1 : 0;
+      }, mix(G, '#c0203a', 0.6), mix(G, '#ff5a6a', 0.5));
+      p.set(cx - 2, top - 1, '#ffffff');
+      break;
+    case 'shadow': // 灵影：一弯新月托着小晶石
+      fill(p, 6, 1, 18, 11, (x, y) => {
+        const a = Math.hypot(x - cx, y - top);
+        const b = Math.hypot(x - cx - 2.2, y - top + 1.2);
+        return a < 4.6 && b > 3.6 ? (a > 3.8 ? 1 : 2) : 0;
+      }, M[1], M[3]);
+      gem(p, cx + 1.6, top + 0.6, 1.3, 1.3, G);
+      break;
+    default: // 匠心：齿轮形的戒面，中心嵌晶石
+      fill(p, 6, 0, 18, 12, (x, y) => {
+        const a = Math.atan2(y - top, x - cx);
+        const r = Math.hypot(x - cx, y - top);
+        const R = Math.cos(a * 8) > 0.3 ? 5 : 4;
+        return r < R - 1 ? 2 : r < R ? 1 : 0;
+      }, M[1], M[2]);
+      gem(p, cx, top, 1.8, 1.8, G);
+  }
+  // 阶级装饰：T5 起戒圈两侧嵌小晶石，T7 起戒托两边多一对金色翅膀
+  if (t >= 4) { gem(p, 5.5, 14, 1, 1.2, G); gem(p, 18.5, 14, 1, 1.2, G); }
+  if (t >= 6) for (const sg of [-1, 1]) for (let k = 0; k < 3; k++) p.set(cx + sg * (5 + k), 9 - k, GOLDS[3 - (k % 2)]);
+}
+
 // ---- 入口 ----
 
 const urlCache = new Map<string, string>();
@@ -1176,7 +1318,9 @@ export function equipIconUrl(key: string, tier: number): string | null {
   if (hit) return hit;
   const p = new Pix(N, N);
   const [mat, part] = key.includes('_') ? key.split('_') : ['', key];
-  if (key === 'sword') sword(p, tier);
+  if (mat === 'neck') necklace(p, part, tier);
+  else if (mat === 'ring') ring(p, part, tier);
+  else if (key === 'sword') sword(p, tier);
   else if (key === 'spear') spear(p, tier);
   else if (key === 'dagger') dagger(p, tier);
   else if (key === 'shortbow') bow(p, tier, false);

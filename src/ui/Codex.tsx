@@ -1,3 +1,4 @@
+import { jewelLine } from './format';
 import { qClass, qid, QUALITY_NAME } from '../core/quality';
 import { QualityTable } from './Quality';
 import { useSticky } from './sticky';
@@ -183,8 +184,8 @@ export function CodexDetail({ s, id, reveal = false }: { s: GameState; id: strin
       {e && (
         <span>
           {e.move ? tl`坐骑 · 骑乘时移动速度 +${Math.round(e.move * 100)}%` : tl`需要${SKILLS[e.skill].name} ${e.level} 级`}
-          {e.move ? '' : e.speed ? tl` · ${toolSkillNames(e.slot) || SKILLS[e.skill].name}速度 +${Math.round(e.speed * 100)}%` : tl` · 攻 +${e.attack} 力 +${e.strength} 防 +${e.defence}`}
-          {!e.move && !e.speed && e.haste ? tl` · 攻速 +${Math.round(e.haste * 100)}%` : ''}{e.twoHanded ? tl(' · 双手持握，不能用副手') : ''}
+          {e.slot === 'ring' || e.slot === 'neck' ? ` · ${jewelLine(e)}` : e.move ? '' : e.speed ? tl` · ${toolSkillNames(e.slot) || SKILLS[e.skill].name}速度 +${Math.round(e.speed * 100)}%` : tl` · 攻 +${e.attack} 力 +${e.strength} 防 +${e.defence}`}
+          {!e.move && !e.speed && e.haste && e.slot !== 'neck' ? tl` · 攻速 +${Math.round(e.haste * 100)}%` : ''}{e.twoHanded ? tl(' · 双手持握，不能用副手') : ''}
           {e.attackMs ? tl` · 攻速 ${(e.attackMs / 1000).toFixed(1)} 秒` : ''}
           {e.style && e.slot !== 'weapon' && tl`（攻、力只对${STYLE_NAME[e.style]}生效）`}
         </span>

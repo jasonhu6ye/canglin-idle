@@ -89,6 +89,13 @@ export interface ItemDef {
     haste?: number;
     /** 双手武器（双手大盾）：装上就不能用副手 */
     twoHanded?: boolean;
+    /** 饰品（10-26）：生命上限（点数）、经验、掉率、暴击、闪避、干活速度（0.05 = 5%） */
+    hp?: number;
+    xp?: number;
+    luck?: number;
+    crit?: number;
+    dodge?: number;
+    work?: number;
   };
 }
 

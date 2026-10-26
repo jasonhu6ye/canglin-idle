@@ -3,7 +3,7 @@ import { CROP_DEFS, cropsOfField, FARM_NODES, ITEMS, PLOT_BY_ID, plotsOf, WATER_
 import { isRaining } from './weather';
 import { stepQuests } from './quests';
 import { nextRandom } from './rng';
-import { bagRoomFor, boostPct, emptySummary, level, LOG_CAP, levelSpeed, toolSpeed } from './sim';
+import { bagRoomFor, boostPct, gearSum, emptySummary, level, LOG_CAP, levelSpeed, toolSpeed } from './sim';
 import { BONUS_PER_LEVEL } from './xp';
 import type { CombatLogEntry, GameState, Plot, Summary } from './types';
 
@@ -153,7 +153,7 @@ function harvestAt(s: GameState, sum: Summary, plotId: string, t: number, toBank
   if (rand() < bonus) c.outputs.forEach((o) => o.chance === undefined && add(o.item, o.qty));
   // 高级肥料：多收 1 个
   if (p.fert === 2) add(c.id, 1);
-  const xp = Math.round(c.xp * (1 + boostPct(s, 'xp') + partyXpPct()));
+  const xp = Math.round(c.xp * (1 + boostPct(s, 'xp') + gearSum(s, 'xp') + partyXpPct()));
   const before = level(s, 'farming');
   s.xp.farming += xp;
   sum.xp.farming = (sum.xp.farming ?? 0) + xp;

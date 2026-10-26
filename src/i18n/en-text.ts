@@ -720,4 +720,9 @@ export const EN_TEXT: Record<string, string> = {
   "十字弩：最重的远程武器，4.4 秒一发，单发伤害和命中最高，站得最远；双手持握，不能用副手。制弓台制作，木板 ×2 + 锭 ×2 + 皮革 ×1。": "Arbalest: the heaviest ranged weapon, one shot every 4.4s with the highest damage and accuracy per shot, fired from the farthest range. It's two-handed, so no off-hand. Made at the Fletching Bench from 2 planks + 2 bars + 1 leather.",
   "两种武器 T1-T8 都有，每一阶造型都不一样，宝箱和副本也会掉。": "Both come in T1-T8 with a different look at every tier, and drop from chests and dungeons too.",
   "战斗表现：战弓是快速抬手速射，箭更快还带残影；十字弩半蹲瞄准，开火有后坐和烟，弩矢打中会把怪顶退一下，再低头拉弦上箭。": "Combat visuals: the Warbow snaps off quick shots with faster arrows and an afterimage. The Arbalest fires from a crouch with recoil and smoke, its bolt knocks the target back, then you crank it to reload.",
+  "饰品重做：每阶 5 条项链 + 5 枚戒指": "Jewelry rework: 5 necklaces + 5 rings per tier",
+  "旧的蓝宝石、红宝石、钻石戒指和项链已移除，背包、仓库和身上的旧饰品按售价折成金币放进仓库。": "The old sapphire, ruby and diamond rings and necklaces are gone. Any you had in your bag, bank or equipped were refunded as coins to your bank at their sell price.",
+  "项链 5 种：力量项链（力量）、守护项链（防御）、迅捷项链（攻速）、学者项链（经验）、幸运项链（稀有掉落）。": "5 necklaces: Might (strength), Guard (defence), Swift (attack speed), Sage (XP) and Fortune (rare drops).",
+  "戒指 5 种：精准戒指（攻击）、暴怒戒指（暴击）、生命戒指（生命上限）、灵影戒指（闪避）、匠心戒指（采集制作速度）。": "5 rings: Aim (attack), Fury (crit), Life (max HP), Shadow (dodge) and Artisan (gathering and crafting speed).",
+  "T1-T8 每阶 10 件都有不同造型，在工坊制作：锭 + 晶石（项链再加布料），T5 起要宝石。制作也会出品质。": "All 10 pieces have a unique look at every tier from T1 to T8. Craft them at the Workshop from bars + crystals (necklaces also need cloth), with gems from T5 on. Crafted jewelry rolls quality too.",
 };

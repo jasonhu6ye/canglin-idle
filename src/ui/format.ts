@@ -44,3 +44,20 @@ export function joinedText(t: number, now = Date.now()) {
   const age = days === 0 ? tl('今天刚注册') : days < 365 ? tl`${days} 天` : tl`${Math.floor(days / 365)} 年 ${days % 365} 天`;
   return { date, age };
 }
+
+/** 饰品（10-26）的加成写成一句：攻、力、防、生命、各种百分比，没有的不写 */
+export function jewelLine(e: NonNullable<import('../core/types').ItemDef['equip']>) {
+  const pc = (x: number) => `${Math.round(x * 1000) / 10}%`;
+  const out: string[] = [];
+  if (e.attack) out.push(tl`攻击 +${e.attack}`);
+  if (e.strength) out.push(tl`力量 +${e.strength}`);
+  if (e.defence) out.push(tl`防御 +${e.defence}`);
+  if (e.hp) out.push(tl`生命上限 +${e.hp}`);
+  if (e.haste) out.push(tl`攻速 +${pc(e.haste)}`);
+  if (e.xp) out.push(tl`所有经验 +${pc(e.xp)}`);
+  if (e.luck) out.push(tl`几率掉落 +${pc(e.luck)}`);
+  if (e.crit) out.push(tl`暴击几率 +${pc(e.crit)}`);
+  if (e.dodge) out.push(tl`闪避几率 +${pc(e.dodge)}`);
+  if (e.work) out.push(tl`采集和制作速度 +${pc(e.work)}`);
+  return out.join(' · ');
+}

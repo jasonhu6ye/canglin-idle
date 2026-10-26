@@ -1019,7 +1019,7 @@ export function Icon({ item, size = 32, info = true }: { item: string; size?: nu
 /** 装备（武器、盔甲、工具）用逐阶不同造型的大图标（用户 10-23 要求重做，不能只换颜色） */
 function equipUrl(id: string): string | null {
   const it = ITEMS[id];
-  if (!it?.equip || it.tier === undefined || it.equip.slot === 'ring' || it.equip.slot === 'neck') return null;
+  if (!it?.equip || it.tier === undefined) return null;
   const base = baseOf(id);
   const prefix = base.split('_')[0];
   return equipIconUrl(base.slice(prefix.length + 1), it.tier);

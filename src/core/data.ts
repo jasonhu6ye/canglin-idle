@@ -80,6 +80,7 @@ export const REGIONS: Record<RegionId, { name: string; color: string }> = {
 
 const itemList: ItemDef[] = [];
 const ITEMS_NAME = (id: string) => itemList.find((x) => x.id === id)?.name ?? id;
+const ITEMS_SO_FAR = (id: string) => itemList.find((x) => x.id === id)?.value ?? 0;
 const item = (id: string, name: string, category: ItemCategory, value: number, extra: Partial<ItemDef> = {}) => {
   itemList.push({ id, name, category, value, ...extra });
   return id;
@@ -415,16 +416,67 @@ TIERS.forEach((t, i) => {
   }
 });
 
-/** 首饰：精炼锭 + 宝石 */
-const JEWELS: { gem: string; name: string; level: number; power: number; bar: string }[] = [
-  { gem: 'sapphire', name: tl('蓝宝石'), level: 40, power: 8, bar: 'titanium_bar' },
-  { gem: 'ruby', name: tl('红宝石'), level: 55, power: 13, bar: 'runic_bar' },
-  { gem: 'diamond', name: tl('钻石'), level: 70, power: 20, bar: 'meteor_bar' },
+/*
+ * 饰品（用户 10-26 重做）：T1-T8 每阶 10 种，项链 5 种、戒指 5 种，各管一种加成。
+ * 材料：本阶的锭 + 本阶晶石（晶石线终于有用途了），项链多一根布绳，T5 起再嵌一颗宝石。工艺制作，也有随机品质。
+ * 原来的蓝宝石/红宝石/钻石戒指和项链删掉，旧存档按售价折成金币（sim migrate）。
+ */
+export type JewelStat = 'strength' | 'attack' | 'defence' | 'hp' | 'haste' | 'xp' | 'luck' | 'crit' | 'dodge' | 'work';
+export interface JewelType { key: string; slot: 'neck' | 'ring'; name: string; stat: JewelStat; desc: string; plus: number }
+export const JEWEL_TYPES: JewelType[] = [
+  { key: 'neck_might', slot: 'neck', name: tl('力量项链'), stat: 'strength', desc: tl('所有战斗方式的力量（最高伤害）'), plus: 2 },
+  { key: 'neck_guard', slot: 'neck', name: tl('守护项链'), stat: 'defence', desc: tl('防御'), plus: 3 },
+  { key: 'neck_swift', slot: 'neck', name: tl('迅捷项链'), stat: 'haste', desc: tl('攻击速度'), plus: 4 },
+  { key: 'neck_sage', slot: 'neck', name: tl('学者项链'), stat: 'xp', desc: tl('所有技能获得的经验'), plus: 5 },
+  { key: 'neck_fortune', slot: 'neck', name: tl('幸运项链'), stat: 'luck', desc: tl('几率掉落物的掉率（打怪和采集）'), plus: 6 },
+  { key: 'ring_aim', slot: 'ring', name: tl('精准戒指'), stat: 'attack', desc: tl('所有战斗方式的攻击（命中）'), plus: 1 },
+  { key: 'ring_fury', slot: 'ring', name: tl('暴怒戒指'), stat: 'crit', desc: tl('暴击几率'), plus: 3 },
+  { key: 'ring_life', slot: 'ring', name: tl('生命戒指'), stat: 'hp', desc: tl('生命上限'), plus: 2 },
+  { key: 'ring_shadow', slot: 'ring', name: tl('灵影戒指'), stat: 'dodge', desc: tl('闪避几率'), plus: 4 },
+  { key: 'ring_artisan', slot: 'ring', name: tl('匠心戒指'), stat: 'work', desc: tl('采集和制作的速度'), plus: 5 },
 ];
-for (const j of JEWELS) {
-  item(`${j.gem}_ring`, tl`${j.name}戒指`, 'gear', 200 + j.power * 40, { equip: { slot: 'ring', skill: 'hitpoints', level: j.level, attack: j.power, strength: 0, defence: 0 } });
-  item(`${j.gem}_amulet`, tl`${j.name}项链`, 'gear', 220 + j.power * 40, { equip: { slot: 'neck', skill: 'hitpoints', level: j.level, attack: 0, strength: j.power, defence: 0 } });
-}
+/** 每阶数值：百分比类按小数（0.04 = 4%），生命是点数，攻防力按装备强度 */
+const JEWEL_PCT: Record<'haste' | 'xp' | 'luck' | 'crit' | 'dodge' | 'work', number[]> = {
+  haste: [0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.1],
+  xp: [0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.1],
+  luck: [0.04, 0.06, 0.08, 0.1, 0.13, 0.16, 0.2, 0.25],
+  crit: [0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.05],
+  dodge: [0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.05],
+  work: [0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.1],
+};
+const JEWEL_HP = [5, 10, 18, 28, 40, 55, 72, 92];
+export const jewelId = (tier: number, key: string) => `${TIERS[tier].id}_${key}`;
+const jewelMats = (j: JewelType, i: number): [string, number][] => [
+  [matItem('bar', i), j.slot === 'ring' ? 2 : 1], [`crystal_${i + 1}`, j.slot === 'ring' ? 1 : 2],
+  ...(j.slot === 'neck' ? [[`cloth_${i + 1}`, 1] as [string, number]] : []),
+  ...(i >= 4 ? [[GEM_FOR_TIER[i], 1] as [string, number]] : []),
+];
+TIERS.forEach((t, i) => {
+  for (const j of JEWEL_TYPES) {
+    const pct = j.stat in JEWEL_PCT ? JEWEL_PCT[j.stat as keyof typeof JEWEL_PCT][i] : 0;
+    const value = Math.round(jewelMats(j, i).reduce((v, [id, q]) => v + (ITEMS_SO_FAR(id) * q), 0) * 1.6);
+    item(jewelId(i, j.key), `${t.metal}${SP}${j.name}`, 'gear', value, {
+      tier: i, desc: j.desc,
+      equip: {
+        slot: j.slot, skill: 'hitpoints', level: t.level,
+        attack: j.stat === 'attack' ? Math.round(POWER[i] * 0.45) : 0,
+        strength: j.stat === 'strength' ? Math.round(POWER[i] * 0.45) : 0,
+        defence: j.stat === 'defence' ? Math.round(POWER[i] * 0.7) : 0,
+        ...(j.stat === 'hp' ? { hp: JEWEL_HP[i] } : {}),
+        ...(j.stat === 'haste' ? { haste: pct } : {}),
+        ...(j.stat === 'xp' ? { xp: pct } : {}),
+        ...(j.stat === 'luck' ? { luck: pct } : {}),
+        ...(j.stat === 'crit' ? { crit: pct } : {}),
+        ...(j.stat === 'dodge' ? { dodge: pct } : {}),
+        ...(j.stat === 'work' ? { work: pct } : {}),
+      },
+    });
+  }
+});
+/** 删掉的旧饰品（10-26）：id → 普通品质售价，读档时折成金币 */
+export const OLD_JEWELS: Record<string, number> = {
+  sapphire_ring: 520, sapphire_amulet: 540, ruby_ring: 720, ruby_amulet: 740, diamond_ring: 1000, diamond_amulet: 1020,
+};
 
 /** 坐骑：测试服兑换码「中国人能飞」领取（用户 10-23 要求，名字用户改为 Chinese can fly） */
 // 坐骑马（用户 10-24）：畜牧站养大的小马崽，速度资质 50%-200% 随机，每个资质一种物品
@@ -567,6 +619,8 @@ for (const it of itemList.filter((x) => x.equip && !x.equip.move)) {
         ...e, attack: Math.round(e.attack * QUALITY_STAT[q]), strength: Math.round(e.strength * QUALITY_STAT[q]), defence: Math.round(e.defence * QUALITY_STAT[q]),
         speed: e.speed ? Math.round(e.speed * QUALITY_SPEED[q] * 1000) / 1000 : undefined,
         ...(e.haste ? { haste: Math.round(e.haste * QUALITY_SPEED[q] * 1000) / 1000 } : {}),
+        ...(e.hp ? { hp: Math.round(e.hp * QUALITY_STAT[q]) } : {}),
+        ...Object.fromEntries((['xp', 'luck', 'crit', 'dodge', 'work'] as const).filter((k) => e[k]).map((k) => [k, Math.round(e[k]! * QUALITY_SPEED[q] * 1000) / 1000])),
       },
     };
     if (q === 0) Object.assign(it, def);
@@ -887,11 +941,14 @@ TIERS.forEach((t, i) => {
   // 弹药
 });
 
-for (const j of JEWELS) {
-  const inputs = [one(j.bar), one(j.gem)];
-  make(`craft_${j.gem}_ring`, ITEMS[`${j.gem}_ring`].name, 'crafting', j.level, inputs, [one(`${j.gem}_ring`)], 2);
-  make(`craft_${j.gem}_amulet`, ITEMS[`${j.gem}_amulet`].name, 'crafting', j.level + 2, inputs, [one(`${j.gem}_amulet`)], 2);
-}
+// 饰品（10-26）：工艺制作，等级 = 本阶等级 + 每种的 plus
+TIERS.forEach((t, i) => {
+  for (const j of JEWEL_TYPES) {
+    const id = jewelId(i, j.key);
+    const inputs = jewelMats(j, i).map(([m, q]) => one(m, q));
+    make(`craft_${id}`, ITEMS[id].name, 'crafting', t.level + j.plus, inputs, [one(id)], Math.max(1.5, inputs.reduce((a, x) => a + x.qty, 0) * 0.6));
+  }
+});
 
 for (const [fish, name, lvl] of FISH) {
   actionList.push({

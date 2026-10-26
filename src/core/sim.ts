@@ -1,9 +1,9 @@
 import { partyXpPct } from './party';
 import { cleanGm, gmPct, setGmClock } from './gm';
 import { APT_MAX, APT_MIN, FOAL, growMs, HORSE_XP, horseItem, RANCH, RANCH_PENS } from './ranch';
-import { baseOf, qid, rollQuality } from './quality';
+import { baseOf, qid, QUALITY_VALUE, rollQuality } from './quality';
 import { HW_POINT, HW_TIERS, hwFight, hwOpen, hwTierOf, hwWait } from './halloween';
-import { BAR_VALUE, inTownArea, KEY_SHOP, keyOf, OLD_ENH, SCROLL_TOWN, SHARD_PER_STONE, TIERS, ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAP_W, MID_BOX, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, planRoute, travelMs, type MapNode } from './data';
+import { OLD_JEWELS, BAR_VALUE, inTownArea, KEY_SHOP, keyOf, OLD_ENH, SCROLL_TOWN, SHARD_PER_STONE, TIERS, ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAP_W, MID_BOX, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, planRoute, travelMs, type MapNode } from './data';
 import { nextRandom } from './rng';
 import { buffMob, coopMates, COOP_DEF, COOP_DMG, dungeonFloor, GATE_CD, GATE_MAX, GATE_MS, GATE_REACH, legMs, rollChest, rollChestQuality, rollFloors, teamChest, teamChestQuality, type TeamMember } from './dungeon';
 import { partySize } from './party';
@@ -127,6 +127,15 @@ export function migrate(raw: unknown): GameState | null {
       bankIn.coins = (bankIn.coins ?? 0) + Math.floor(q) * price;
     }
   }
+  // 旧饰品删掉了（用户 10-26）：背包、仓库、身上的按售价（含品质）折成金币
+  const oldJewel = (id: string) => {
+    const m = /^([a-z]+_(?:ring|amulet))(?:@q(\d))?$/.exec(id);
+    return m && OLD_JEWELS[m[1]] ? Math.round(OLD_JEWELS[m[1]] * QUALITY_VALUE[Number(m[2] ?? 0)]) : 0;
+  };
+  for (const rec of [obj<Record<string, number>>(s.bank), obj<Record<string, number>>(s.bag)]) {
+    for (const [id, q] of Object.entries(rec ?? {})) if (oldJewel(id) && Number.isFinite(q) && q > 0) bankIn.coins = (bankIn.coins ?? 0) + Math.floor(q) * oldJewel(id);
+  }
+  for (const id of Object.values(obj<Record<string, string>>(s.equipment) ?? {})) if (typeof id === 'string' && oldJewel(id)) bankIn.coins = (bankIn.coins ?? 0) + oldJewel(id);
   // 金币不再放背包（10-25）：背包里的金币并进仓库
   const bagIn = keep(s.bag);
   if (bagIn.coins) { bankIn.coins = (bankIn.coins ?? 0) + bagIn.coins; delete bagIn.coins; }
@@ -229,7 +238,13 @@ export function emptySummary(): Summary {
 }
 
 export const level = (s: GameState, skill: SkillId) => levelForXp(s.xp[skill]);
-export const maxHp = (s: GameState) => Math.round(level(s, 'hitpoints') * 10 * (1 + gmPct(s, 'hp')));
+/** 身上所有装备某项加成之和（饰品的生命、经验、掉率、暴击、闪避、干活速度，火把和项链的攻速） */
+export function gearSum(s: GameState, k: 'hp' | 'xp' | 'luck' | 'crit' | 'dodge' | 'work' | 'haste') {
+  let n = 0;
+  for (const id of Object.values(s.equipment)) n += (id && ITEMS[id]?.equip?.[k]) || 0;
+  return n;
+}
+export const maxHp = (s: GameState) => Math.round((level(s, 'hitpoints') * 10 + gearSum(s, 'hp')) * (1 + gmPct(s, 'hp')));
 
 export function combatLevel(s: GameState) {
   const atk = Math.max(level(s, 'melee'), level(s, 'ranged'), level(s, 'magic'));
@@ -328,7 +343,7 @@ export const buffPct = (s: GameState, k: BuffKind) => s.buffs?.[k]?.pct ?? 0;
 /** 料理增益 + GM 增益：结算都用这个 */
 export const boostPct = (s: GameState, k: BuffKind) => buffPct(s, k) + gmPct(s, k);
 /** GM 稀有掉落：几率掉落的掉率按比例提高，最多到必掉 */
-const dropChance = (s: GameState, c: number) => Math.min(1, c * (1 + gmPct(s, 'drop')));
+const dropChance = (s: GameState, c: number) => Math.min(1, c * (1 + gmPct(s, 'drop') + gearSum(s, 'luck')));
 const coinQty = (s: GameState, item: string, n: number) => (item === 'coins' ? Math.round(n * (1 + gmPct(s, 'coins'))) : n);
 
 /** 吃下一份食物：回血，有增益就挂上（同类只留一个，新的覆盖旧的） */
@@ -396,7 +411,7 @@ export function eat(prev: GameState, id: string): GameState {
 }
 
 export const actionDuration = (s: GameState, a: SkillAction, t = Date.now()) =>
-  Math.round(a.durationMs / (1 + toolSpeed(s, a.skill, a.tool) + levelSpeed(s, a.skill) + boostPct(s, 'speed') + rainBonus(s, a, t)));
+  Math.round(a.durationMs / (1 + toolSpeed(s, a.skill, a.tool) + levelSpeed(s, a.skill) + boostPct(s, 'speed') + gearSum(s, 'work') + rainBonus(s, a, t)));
 
 /** 雨天钓鱼增益：钓点所在区域正在下雨时，钓鱼更快（用户 10-23） */
 export function rainBonus(s: GameState, a: SkillAction, t = Date.now()) {
@@ -407,7 +422,7 @@ export function rainBonus(s: GameState, a: SkillAction, t = Date.now()) {
 
 /** 玩家攻击间隔：看武器，匕首快、长枪和弩慢 */
 /** 攻速加成（火把，用户 10-25） */
-export const playerHaste = (s: GameState) => ITEMS[s.equipment.offhand ?? '']?.equip?.haste ?? 0;
+export const playerHaste = (s: GameState) => gearSum(s, 'haste');
 export const playerAttackMs = (s: GameState) => Math.round((ITEMS[s.equipment.weapon ?? '']?.equip?.attackMs ?? PLAYER_ATTACK_MS) / (1 + playerHaste(s)));
 
 const healOf = (id: string) => ITEMS[id]?.heals ?? 0;
@@ -472,7 +487,7 @@ export function armorPerks(s: GameState) {
     else if (e.style === 'ranged') n.leather++;
     else n.cloth++;
   }
-  return { reduce: n.plate * 0.03, dodge: 0.03 + n.leather * 0.02, crit: n.cloth * 0.02 };
+  return { reduce: n.plate * 0.03, dodge: 0.03 + n.leather * 0.02 + gearSum(s, 'dodge'), crit: n.cloth * 0.02 + gearSum(s, 'crit') };
 }
 
 export function combatStats(s: GameState, m: MonsterDef) {
@@ -671,7 +686,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   };
 
   const addXp = (skill: SkillId, amount: number) => {
-    amount = Math.round(amount * (1 + boostPct(s, 'xp') + partyXpPct()));
+    amount = Math.round(amount * (1 + boostPct(s, 'xp') + gearSum(s, 'xp') + partyXpPct()));
     if (tally) tally.xp[skill] = (tally.xp[skill] ?? 0) + amount;
     // 打怪的经验记在这只怪头上，打死时一起写进战斗日志
     if (s.combat && amount > 0) {
@@ -1157,6 +1172,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   }
   const before = s.quest?.i ?? 0;
   if (stepQuests(s, sum).length) sum.quests = Array.from({ length: (s.quest?.i ?? 0) - before }, (_, k) => before + k);
+  s.hp = Math.min(s.hp, maxHp(s));
   return { state: s, summary: sum };
 }
 
@@ -1336,6 +1352,7 @@ export function equip(prev: GameState, item: string): GameState {
     stow(s, s.equipment[off]!);
     delete s.equipment[off];
   }
+  s.hp = Math.min(s.hp, maxHp(s));
   return s;
 }
 
@@ -1385,6 +1402,7 @@ export function unequip(prev: GameState, slot: EquipSlot): GameState {
   delete s.equipment[slot];
   if (slot === 'mount') s.mounted = false;
   stow(s, id);
+  s.hp = Math.min(s.hp, maxHp(s));
   return s;
 }
 

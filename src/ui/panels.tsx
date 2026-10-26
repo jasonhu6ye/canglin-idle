@@ -15,7 +15,7 @@ import { openCombatLog } from './CombatLog';
 import { XP_TABLE, levelProgress, speedForLevel, SPEED_CAP, BONUS_PER_LEVEL } from '../core/xp';
 import { store } from '../store';
 import { RAIN_FISH } from '../core/weather';
-import { fmtDuration, fmtNum } from './format';
+import { fmtDuration, fmtNum, jewelLine } from './format';
 import { Codex } from './Codex';
 import { Handbook } from './Handbook';
 import { GmPanel } from './GmPanel';
@@ -82,8 +82,8 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
       {e && (
         <span className={canEquip ? '' : 'warn'}>
           {e.move ? tl`坐骑 · 骑乘时移动速度 +${Math.round(e.move * 100)}%` : tl`需要${SKILLS[e.skill].name} ${e.level} 级`}
-          {e.move ? '' : e.speed ? tl` · ${toolSkillNames(e.slot) || SKILLS[e.skill].name}速度 +${Math.round(e.speed * 100)}%` : tl` · 攻 +${e.attack} 力 +${e.strength} 防 +${e.defence}${e.attackMs ? tl` · 攻速 ${(e.attackMs / 1000).toFixed(1)} 秒` : ''}`}
-          {!e.move && !e.speed && e.haste ? tl` · 攻速 +${Math.round(e.haste * 100)}%` : ''}{e.twoHanded ? tl(' · 双手持握，不能用副手') : ''}
+          {e.slot === 'ring' || e.slot === 'neck' ? ` · ${jewelLine(e)}` : e.move ? '' : e.speed ? tl` · ${toolSkillNames(e.slot) || SKILLS[e.skill].name}速度 +${Math.round(e.speed * 100)}%` : tl` · 攻 +${e.attack} 力 +${e.strength} 防 +${e.defence}${e.attackMs ? tl` · 攻速 ${(e.attackMs / 1000).toFixed(1)} 秒` : ''}`}
+          {!e.move && !e.speed && e.haste && e.slot !== 'neck' ? tl` · 攻速 +${Math.round(e.haste * 100)}%` : ''}{e.twoHanded ? tl(' · 双手持握，不能用副手') : ''}
           {e.style && e.slot !== 'weapon' && tl`（攻、力只对${STYLE_NAME[e.style]}生效）`}
         </span>
       )}
@@ -216,6 +216,12 @@ export function gearStats(id: string) {
   if (e.speed) out.push(tl`速度 +${Math.round(e.speed * 100)}%`);
   if (e.move) out.push(tl`移速 +${Math.round(e.move * 100)}%`);
   if (e.haste) out.push(tl`攻速 +${Math.round(e.haste * 100)}%`);
+  if (e.hp) out.push(tl`生命 +${e.hp}`);
+  if (e.xp) out.push(tl`经验 +${Math.round(e.xp * 1000) / 10}%`);
+  if (e.luck) out.push(tl`掉率 +${Math.round(e.luck * 1000) / 10}%`);
+  if (e.crit) out.push(tl`暴击 +${Math.round(e.crit * 1000) / 10}%`);
+  if (e.dodge) out.push(tl`闪避 +${Math.round(e.dodge * 1000) / 10}%`);
+  if (e.work) out.push(tl`干活速度 +${Math.round(e.work * 1000) / 10}%`);
   if (e.twoHanded) out.push(tl('双手'));
   return out.join(' · ');
 }
@@ -372,7 +378,7 @@ function Attributes({ s }: { s: GameState }) {
         {row(tl('攻击加成'), `+${b.attack}`, <>{tl('装备')}{atkBuff > 0 && <>{tl` · 料理命中 +${pct(atkBuff)}`}</>}{tl` · ${STYLE_NAME[style]}等级 ${lvl}`}</>)}
         {row(tl('力量加成'), `+${b.strength}`, <>{tl`装备 +${b.strength}`}{strBuff > 0 && <>{tl` · 料理伤害 +${pct(strBuff)}`}</>}</>)}
         {row(tl('最高伤害'), maxHit, tl`${STYLE_NAME[style]}等级 ${lvl} 和力量加成算出`)}
-        {row(tl('攻击间隔'), tl`${(atkMs / 1000).toFixed(1)} 秒`, <>{weapon ? tl('看武器种类：匕首快、长枪和弩慢') : tl('默认')}{playerHaste(s) > 0 && <>{tl` · 火把攻速 +${pct(playerHaste(s))}`}</>}</>)}
+        {row(tl('攻击间隔'), tl`${(atkMs / 1000).toFixed(1)} 秒`, <>{weapon ? tl('看武器种类：匕首快、长枪和弩慢') : tl('默认')}{playerHaste(s) > 0 && <>{tl` · 火把、项链攻速 +${pct(playerHaste(s))}`}</>}</>)}
         {(() => {
           const perks = armorPerks(s);
           return <>
