@@ -1004,3 +1004,5 @@ h2.dg-blue { color: #6ab4ff; }
 .gm-val { margin-left: 8px; color: #8ee08a; }
 .gm-row-tools { display: flex; flex-wrap: wrap; gap: 6px; }
 .gm-row-tools .pill { font-size: 12px; padding: 3px 8px; }
+.town-pick { display: flex; align-items: center; gap: 8px; margin: 4px 0 8px; flex-wrap: wrap; }
+.town-pick select { background: #120b07; color: var(--gold); border: 1px solid var(--edge); border-radius: 2px; padding: 4px 8px; font: inherit; }

@@ -8,9 +8,10 @@ import { tl } from '../i18n';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
-    id: '2026-10-26-b', date: tl('10 月 26 日'), title: tl('玩家名片显示注册时间'),
+    id: '2026-10-26-b', date: tl('10 月 26 日'), title: tl('玩家注册时间、城镇设施列表'),
     lines: [
       tl('点开其他玩家的名片和好友信息，能看到对方的注册时间和账号年龄（注册了多少天）。'),
+      tl('地点页的「城镇设施」只列你所在的城镇；在野外就列离你最近的城镇，上面的下拉框也能换别的城看。'),
     ],
   },
   {

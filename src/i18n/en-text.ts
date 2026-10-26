@@ -713,4 +713,6 @@ export const EN_TEXT: Record<string, string> = {
   "物品详情的来源里点「寻路」，现在会直接开始这项工作：角色自己走到你选的那个地点，到了就开挖，不再走过去站着发呆。离线也照常算。": "Tapping \"Go\" on a source in item details now starts that job right away: your character walks to the spot you picked and gets to work on arrival instead of standing around. Works offline too.",
   "玩家名片显示注册时间": "Player cards show join date",
   "点开其他玩家的名片和好友信息，能看到对方的注册时间和账号年龄（注册了多少天）。": "Player cards and friend details now show when the account was created and how old it is (days since joining).",
+  "地点页的「城镇设施」只列你所在的城镇；在野外就列离你最近的城镇，上面的下拉框也能换别的城看。": "\"Town facilities\" on the Locations page now lists only the town you're in, or the nearest one when you're in the wild. Use the dropdown above to view another town.",
+  "玩家注册时间、城镇设施列表": "Join dates and town facility list",
 };

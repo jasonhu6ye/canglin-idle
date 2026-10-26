@@ -802,4 +802,7 @@ export const EN_UI: Record<string, string> = {
   '攻速 +{0}%': 'Atk speed +{0}%',
   '双手': 'Two-handed',
   ' · 火把攻速 +{0}': ' · Torch +{0}',
+  "你所在 / 最近的城镇：": "Your town / nearest town:",
+  "正在看：": "Viewing:",
+  "{0}（自动）": "{0} (auto)",
 };

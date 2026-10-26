@@ -1,10 +1,10 @@
 import { qClass } from '../core/quality';
 import { useSticky } from './sticky';
 import { useEffect, useState, type ReactNode } from 'react';
-import { ACTIONS, BUFF_NAME, buffText, cropsOfField, nodesOfAction, WAYSTONES, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, keyOf, SCROLL_TOWN, SHARD_PER_STONE, type MapNode } from '../core/data';
+import { standOf, ACTIONS, BUFF_NAME, buffText, cropsOfField, nodesOfAction, WAYSTONES, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, keyOf, SCROLL_TOWN, SHARD_PER_STONE, type MapNode } from '../core/data';
 import {
   atBank, atMarket, nearestBank, nearestMarket, BAG_SLOTS, BELT_CAP, beltSlotOf, eat, fromBelt, POTION_AT, toBelt, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, armorPerks, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip, openContainer,
-  weaponStyle, buffPct, levelSpeed, maxHp, moveSpeed, playerAttackMs,
+  weaponStyle, walkPos, buffPct, levelSpeed, maxHp, moveSpeed, playerAttackMs,
   redeemCode, toggleMount,
   sortBank, toolSkillNames, TOOL_FOR, playerHaste, combineShards,
 } from '../core/sim';
@@ -849,18 +849,39 @@ const splitTown = (name: string): [string, string] | null => {
   const town = TOWN_NAMES.find((tn) => name.startsWith(`${tn} `));
   return town ? [town, name.slice(town.length + 1)] : null;
 };
-const townName = (n: MapNode) => (n.region === 'town' ? tl('主城') : n.waystone ? n.name.replace(tl('石碑·'), '') : splitTown(n.name)?.[0] ?? tl('落霞城'));
+const townName = (n: MapNode) => (n.region === 'town' ? tl('苍岭城') : n.waystone ? n.name.replace(tl('石碑·'), '') : splitTown(n.name)?.[0] ?? tl('落霞城'));
+/** 每座城的设施（按城名分组，主城在最前） */
+const TOWN_GROUPS = (() => {
+  const g = new Map<string, MapNode[]>();
+  for (const n of NODES) if (n.town) { const k = townName(n); g.set(k, [...(g.get(k) ?? []), n]); }
+  return g;
+})();
+/** 离角色最近的城（看这座城任一设施的距离） */
+function nearestTown(s: GameState) {
+  const p = walkPos(s);
+  let best = '', d = Infinity;
+  for (const [k, ns] of TOWN_GROUPS) for (const n of ns) {
+    const at = standOf(n);
+    const dd = Math.hypot(at.x - p.x, at.y - p.y);
+    if (dd < d) { d = dd; best = k; }
+  }
+  return best;
+}
 
 export function NodeList({ s, onPick }: { s: GameState; onPick: (id: string) => void }) {
   const [tabId, setTabId] = useSticky('nodes.tab', 'town');
   const tab = NODE_TABS.find((t) => t.id === tabId)!;
+  const [townPick, setTownPick] = useSticky<string>('nodes.town', 'auto');
   let rows: { key: string; id: string; name: string; sub: string; lv?: string; dim?: boolean }[] = [];
+  // 城镇设施只列一座城（用户 10-26）：在哪座城就列哪座，在野外列最近的那座；也能手动换
+  const here = tab.id === 'town' ? nearestTown(s) : '';
+  const shownTown = townPick !== 'auto' && TOWN_GROUPS.has(townPick) ? townPick : here;
   if (tab.id === 'town') {
-    rows = NODES.filter((n) => n.town).map((n) => {
+    rows = (TOWN_GROUPS.get(shownTown) ?? []).map((n) => {
       const kinds = n.portal ? [tl('进家园岛屿')] : n.waystone ? [tl('传送')] : n.farm ? [tl('种植')] : n.id === RANCH ? [tl('养马')] : n.salvage ? [tl('分解装备')] : [...new Set(n.actions.map((id) => { const a = ACTIONS[id]; return a.kind === 'skill' ? SKILLS[a.skill].name : tl('战斗'); }))];
       if (n.id.includes('market')) kinds.unshift(tl('买卖'));
-      return { key: n.id, id: n.id, name: n.waystone ? tl('传说石碑') : splitTown(n.name)?.[1] ?? n.name, sub: `${townName(n)} · ${n.closed ? tl('暂未开放') : n.opens === 'bank' ? tl('存取物品') : kinds.join(tl('、'))}`, dim: n.closed };
-    }).sort((a, b) => (a.sub.startsWith(tl('主城')) === b.sub.startsWith(tl('主城')) ? 0 : a.sub.startsWith(tl('主城')) ? -1 : 1));
+      return { key: n.id, id: n.id, name: n.waystone ? tl('传说石碑') : splitTown(n.name)?.[1] ?? n.name, sub: n.closed ? tl('暂未开放') : n.opens === 'bank' ? tl('存取物品') : kinds.join(tl('、')), dim: n.closed };
+    });
   } else if (tab.id === 'boss') {
     rows = BOSSES.map((m) => ({ key: m.id, id: `fight_${m.id}`, name: m.name, sub: `${REGIONS[m.region].name} · ${s.bestiary?.[m.id] ? tl`已击败 ${s.bestiary[m.id]} 次` : tl('未击败')}`, lv: `Lv${m.level}` }));
   } else if (tab.id === 'stone') {
@@ -913,6 +934,15 @@ export function NodeList({ s, onPick }: { s: GameState; onPick: (id: string) => 
           </button>
         ))}
       </div>
+      {tab.id === 'town' && (
+        <div className="town-pick">
+          <span className="muted">{shownTown === here ? tl('你所在 / 最近的城镇：') : tl('正在看：')}</span>
+          <select value={townPick === 'auto' || !TOWN_GROUPS.has(townPick) ? 'auto' : townPick} onChange={(e) => setTownPick(e.target.value)}>
+            <option value="auto">{tl`${here}（自动）`}</option>
+            {[...TOWN_GROUPS.keys()].filter((k) => k !== here).map((k) => <option key={k} value={k}>{k}</option>)}
+          </select>
+        </div>
+      )}
       {tab.skill && <p className="muted">{tl`${SKILLS[tab.skill].name}当前 ${level(s, tab.skill)} 级，灰色的是还没到等级的地点。`}</p>}
       {byRes && (
         <ul className="res-list">
