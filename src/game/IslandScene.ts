@@ -13,9 +13,10 @@ import { darkness } from './ambience';
 import { DPR } from './dpr';
 import { FRAME_H, HERO_FEET, HERO_PAD, HERO_RES, type HeroDir } from './hero';
 import { paintFloor, paintPedestal, paintPortal, paintPortalSwirl, paintThing, paintWall, PORTAL_H, UP } from './homeArt';
-import { liquidIndex, T, tileIndex, VARIANTS } from './tiles';
+import { liquidIndex, T, TILE_RES, TILESET, tileIndex, VARIANTS } from './tiles';
 import { GROUNDS, LIQUIDS, type PropKind } from './world';
 import { paintProp } from './art';
+import { canvasRes } from './pix';
 import { tl } from '../i18n';
 
 /** 岛上用的工具：建造某件东西 / 拆除 / 无（走路） */
@@ -212,9 +213,9 @@ export class IslandScene extends Phaser.Scene {
       }
       data.push(row);
     }
-    const map = this.make.tilemap({ data, tileWidth: T, tileHeight: T });
-    const ts = map.addTilesetImage('tiles', 'tiles', T, T, 1, 2)!;
-    map.createLayer(0, ts, 0, 0)!.setDepth(-10);
+    const map = this.make.tilemap({ data, tileWidth: TILESET.tile, tileHeight: TILESET.tile });
+    const ts = map.addTilesetImage('tiles', 'tiles', TILESET.tile, TILESET.tile, TILESET.margin, TILESET.spacing)!;
+    map.createLayer(0, ts, 0, 0)!.setScale(1 / TILE_RES).setDepth(-10);
     this.groundLayer = map;
     // 草地上零星的草丛、野花，沙滩上的贝壳（只是装饰，铺了地板就盖住）
     this.decor.forEach((o) => o.destroy());
@@ -226,8 +227,9 @@ export class IslandScene extends Phaser.Scene {
       const kind: PropKind | null = g === 'grass' ? (r < 0.012 ? 'tuft' : r < 0.022 ? 'flowers' : 'fern') : g === 'sand' && r < 0.01 ? 'shell' : null;
       if (!kind) continue;
       const key = `prop-${kind}`;
-      if (!this.textures.exists(key)) this.textures.addCanvas(key, paintProp(kind));
-      this.decor.push(this.add.image(x * T + T / 2, (y + 1) * T, key).setOrigin(0.5, 1).setDepth(-6));
+      const c = paintProp(kind);
+      if (!this.textures.exists(key)) this.textures.addCanvas(key, c);
+      this.decor.push(this.add.image(x * T + T / 2, (y + 1) * T, key).setOrigin(0.5, 1).setScale(1 / canvasRes(c)).setDepth(-6));
     }
   }
 

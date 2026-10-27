@@ -32,6 +32,10 @@ export function ramp(cols: string[]): string[] {
   return [deep, a, mix(a, b ?? a, 0.5), b ?? a, mix(b ?? a, WARM, 0.45)];
 }
 
+/** 每张画好的画布的高清倍数，场景按它把精灵缩回原大小 */
+const CANVAS_RES = new WeakMap<HTMLCanvasElement, number>();
+export const canvasRes = (c: HTMLCanvasElement) => CANVAS_RES.get(c) ?? 1;
+
 export class Pix {
   data: (string | null)[];
   /** 画图坐标的原点偏移：角色帧四周留白时，画法照旧按原来的坐标写（outline、canvas 不受影响） */
@@ -147,6 +151,7 @@ export class Pix {
     const c = document.createElement('canvas');
     c.width = this.pw;
     c.height = this.ph;
+    CANVAS_RES.set(c, this.res);
     const ctx = c.getContext('2d')!;
     // 一次性写 ImageData（以前每个像素 fillRect 一次，高清画布像素翻了 4 倍后太慢）
     const img = ctx.createImageData(this.pw, this.ph);

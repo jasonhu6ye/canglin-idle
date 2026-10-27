@@ -1,3 +1,4 @@
+import { canvasRes } from './pix';
 import { leaveHome } from '../core/home';
 import Phaser from 'phaser';
 import { ACTIONS, CROP_DEFS, CROPS, cropsOfField, FARM_PLOTS, PLOT_BY_ID, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, inTownArea, keyOf, DANGER, dangerLevel, nodeOfAction, nodesOfAction, planRoute, standOf, STONE_JUMP_MS, WAYSTONES, travelMs, WALK_TILES_PER_SEC, type MapNode, type Route } from '../core/data';
@@ -23,7 +24,7 @@ import { store } from '../store';
 import { Ambience, D_FLOAT, D_GLOW, D_LABEL, D_PARTICLE, D_SMOKE } from './ambience';
 import { paintArrow, paintBolt, paintHit, paintSlash } from './fxArt';
 import { cropTex, glintTex, soilTex } from './farmArt';
-import { BUILDING_RES, paintBuilding, paintCave, paintDot, paintGlow, paintProp, paintWindmillBlades, PROP_GLOW } from './art';
+import { paintBuilding, paintCave, paintDot, paintGlow, paintProp, paintWindmillBlades, PROP_GLOW } from './art';
 import { DPR } from './dpr';
 import { fxScale, gfxLevel } from './gfx';
 import { paintResNode, resGlow, resOf, type ResKind } from './resArt';
@@ -32,7 +33,7 @@ import { NODE_MARKER, paintSprite, SPRITE_VARIANTS, SPRITES } from './sprites';
 import { MATE_COLORS, onFieldHit, OtherPlayers } from './others';
 import { online } from '../net';
 import type { FieldMateHit } from '../net/social';
-import { animateTileset, liquidIndex, paintTileset, T, TILESET, tileIndex, VARIANTS } from './tiles';
+import { animateTileset, liquidIndex, paintTileset, T, TILE_RES, TILESET, tileIndex, VARIANTS } from './tiles';
 import {
   BUILDINGS, CHUNK, FIELDS, findPath, GROUNDS, groundIndex, hash, isWalkable, LIQUIDS, propsInChunk, reachableNear, regionAt, SPAWN, standTile,
   WANDERERS, type PropKind,
@@ -442,7 +443,7 @@ export class MapScene extends Phaser.Scene {
         });
       }
     }
-    this.textures.addCanvas('windmill-blades', paintWindmillBlades());
+    this.addArt('windmill-blades', paintWindmillBlades());
     const dots: [string, number, string][] = [
       ['p-snow', 2, '#ffffff'], ['p-ember', 1, '#ffa040'], ['p-firefly', 1, '#e8ff7a'], ['p-spore', 1, '#c8a0ff'],
       ['p-mote', 1, '#a8d070'], ['p-dust', 1, '#f0dca0'], ['p-leaf', 2, '#6aa040'], ['p-smoke', 3, '#b0aaa4'], ['p-spark', 1, '#cfe8ff'],
@@ -457,9 +458,18 @@ export class MapScene extends Phaser.Scene {
     this.tilesetTex = this.textures.addCanvas('tiles', this.tilesetCanvas)!;
   }
 
+  /** 高清画布（Pix res > 1）登记成贴图时记下倍数，摆到场景里时缩回原大小 */
+  private texScale = new Map<string, number>();
+  private addArt(key: string, c: HTMLCanvasElement) {
+    if (!this.textures.exists(key)) this.textures.addCanvas(key, c);
+    this.texScale.set(key, 1 / canvasRes(c));
+    return key;
+  }
+  private artScale(key: string) { return this.texScale.get(key) ?? 1; }
+
   private propTexture(kind: PropKind) {
     const key = `prop-${kind}`;
-    if (!this.textures.exists(key)) this.textures.addCanvas(key, paintProp(kind));
+    if (!this.textures.exists(key)) this.addArt(key, paintProp(kind));
     return key;
   }
 
@@ -486,9 +496,10 @@ export class MapScene extends Phaser.Scene {
       for (let x = cx * CHUNK; x < Math.min(MAP_W, (cx + 1) * CHUNK); x++) row.push(this.tileFor(x, y));
       data.push(row);
     }
-    const map = this.make.tilemap({ data, tileWidth: T, tileHeight: T });
-    const ts = map.addTilesetImage('tiles', 'tiles', T, T, TILESET.margin, TILESET.spacing)!;
-    map.createLayer(0, ts, cx * CHUNK * T, cy * CHUNK * T)!.setDepth(-10);
+    // 高清图集：格子是 T×TILE_RES 真像素，图层缩回去，世界坐标不变
+    const map = this.make.tilemap({ data, tileWidth: TILESET.tile, tileHeight: TILESET.tile });
+    const ts = map.addTilesetImage('tiles', 'tiles', TILESET.tile, TILESET.tile, TILESET.margin, TILESET.spacing)!;
+    map.createLayer(0, ts, cx * CHUNK * T, cy * CHUNK * T)!.setScale(1 / TILE_RES).setDepth(-10);
     return map;
   }
 
@@ -498,15 +509,15 @@ export class MapScene extends Phaser.Scene {
     BUILDINGS.forEach((b, i) => {
       // 同样大小、同样风格的房子共用一张图（12080 有十座城，几百栋房子）
       const key = `bld-${b.kind}-${b.w}x${b.h}-${b.theme ?? ''}-${i % 3}`;
-      if (!this.textures.exists(key)) this.textures.addCanvas(key, paintBuilding(b.kind, b.w, b.h, i % 3, b.theme));
+      if (!this.textures.exists(key)) this.addArt(key, paintBuilding(b.kind, b.w, b.h, i % 3, b.theme));
       const bx = (b.x + b.w / 2) * T;
       const by = (b.y + b.h) * T;
       // 高清贴图：按倍数缩回原大小，下面算位置都用 displayWidth/Height
-      const img = this.add.image(bx, by, key).setOrigin(0.5, 1).setScale(1 / BUILDING_RES).setDepth(by + 1000);
+      const img = this.add.image(bx, by, key).setOrigin(0.5, 1).setScale(this.artScale(key)).setDepth(by + 1000);
       // 脚下一片淡淡的投影，房子才像落在地上
       this.add.ellipse(bx + 2, by - 1, img.displayWidth + 6, 9, 0x000000, 0.22).setDepth(by + 999);
       if (b.kind === 'windmill') {
-        const blades = this.add.image(bx, by - img.displayHeight + 16, 'windmill-blades').setScale(1 / BUILDING_RES).setDepth(by + 1001);
+        const blades = this.add.image(bx, by - img.displayHeight + 16, 'windmill-blades').setScale(this.artScale('windmill-blades')).setDepth(by + 1001);
         this.tweens.add({ targets: blades, angle: 360, duration: 9000, repeat: -1 });
       }
       if (b.kind === 'fountain') this.sparkle(bx, by - 26, 18);
@@ -789,7 +800,8 @@ export class MapScene extends Phaser.Scene {
     for (const p of propsInChunk(cx, cy)) {
       const px = p.x * T + T / 2;
       const py = p.y * T + T;
-      const img = this.add.image(px, py, this.propTexture(p.kind)).setOrigin(0.5, 1).setDepth(py + 1000);
+      const pk = this.propTexture(p.kind);
+      const img = this.add.image(px, py, pk).setOrigin(0.5, 1).setScale(this.artScale(pk)).setDepth(py + 1000);
       if (hash(p.x, p.y, 12) < 0.5 && p.kind !== 'lamp' && p.kind !== 'fence') img.setFlipX(true);
       objs.push(img);
       const glow = PROP_GLOW[p.kind];
@@ -1011,10 +1023,10 @@ export class MapScene extends Phaser.Scene {
     slots.slice(0, res.length * per).forEach(([dx, dy], i) => {
       const r = res[Math.floor(i / per) % res.length];
       const key = `res-${r.kind}-${r.tier}`;
-      if (!this.textures.exists(key)) this.textures.addCanvas(key, paintResNode(r.kind, r.tier));
+      if (!this.textures.exists(key)) this.addArt(key, paintResNode(r.kind, r.tier));
       const x = (n.x + dx) * T + T / 2;
       const y = (n.y + dy) * T + T;
-      this.add.image(x, y, key).setOrigin(0.5, 1).setScale(1.25).setDepth(y + 1000).setFlipX(i % 2 === 1 && r.kind !== 'hide');
+      this.add.image(x, y, key).setOrigin(0.5, 1).setScale(1.25 * this.artScale(key)).setDepth(y + 1000).setFlipX(i % 2 === 1 && r.kind !== 'hide');
       const glow = resGlow(r.kind, r.tier);
       if (glow) this.addGlow(x, y - 8, glow[0], glow[1]);
     });
@@ -1241,8 +1253,8 @@ export class MapScene extends Phaser.Scene {
     if (n.cave) {
       // 洞窟入口：一座带黑洞口的石山，暂未开放
       const key = `cave-${n.region}`;
-      if (!this.textures.exists(key)) this.textures.addCanvas(key, paintCave(n.region));
-      this.add.image(cx, cy + T / 2 - T * 2, key).setOrigin(0.5, 1).setScale(1.3 / BUILDING_RES).setDepth(cy + 1000 - T * 2);
+      if (!this.textures.exists(key)) this.addArt(key, paintCave(n.region));
+      this.add.image(cx, cy + T / 2 - T * 2, key).setOrigin(0.5, 1).setScale(1.3 * this.artScale(key)).setDepth(cy + 1000 - T * 2);
       this.add.text(cx, cy - 64, tl`${n.name}\n（未开放）`, {
         fontFamily: FONT, fontSize: '8px', color: '#d8c8f0', backgroundColor: '#1b120ccc', padding: { x: 3, y: 1 }, resolution: 4, align: 'center',
       }).setOrigin(0.5, 1).setDepth(D_LABEL);

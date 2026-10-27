@@ -264,7 +264,7 @@ export function resIconUrl(id: string): string | null {
   if (isMat(r.kind)) return matIconUrl(r.kind, r.tier);
   const hit = iconCache.get(id);
   if (hit) return hit;
-  const p = new Pix(16, 16);
+  const p = new Pix(16, 16, 2);
   const t = r.tier;
   if (r.kind === 'ore') oreRock(p, 7.5, 8.5, 6, 5.5, t, 11 + t);
   if (r.kind === 'log') {
@@ -281,7 +281,7 @@ export function resIconUrl(id: string): string | null {
 // ---- 地图上的资源物件 ----
 
 function oreNode(t: number) {
-  const p = new Pix(26, 20);
+  const p = new Pix(26, 20, 2);
   oreRock(p, 9, 11, 7.5, 6.5, t, 40 + t);
   oreRock(p, 18.5, 13.5, 5, 4.5, t, 50 + t);
   return p.outline();
@@ -293,7 +293,7 @@ function treeNode(t: number) {
   const conifer = t === 2 || t === 4;
   const w = t === 3 || t === 5 || t === 7 ? 26 : 20;
   const h = conifer ? 30 : 28;
-  const p = new Pix(w, h);
+  const p = new Pix(w, h, 2);
   const cx = w / 2 - 0.5;
   p.trunk(cx, h - 10, h - 2, t === 3 || t === 5 ? 4 : 3, bark);
   if (t === 1) for (let y = h - 9; y < h - 2; y += 2) p.set(cx, y, '#2a2a2a');
@@ -333,7 +333,7 @@ function treeNode(t: number) {
 }
 
 function cottonNode(t: number) {
-  const p = new Pix(24, 16);
+  const p = new Pix(24, 16, 2);
   cottonPlant(p, 5, 15, 9, t, 1);
   cottonPlant(p, 12, 15, 12, t, 2);
   cottonPlant(p, 19, 15, 8, t, 3);
@@ -342,7 +342,7 @@ function cottonNode(t: number) {
 
 function hideNode(t: number) {
   // 晒皮架：两根木桩、一根横梁，兽皮挂在中间
-  const p = new Pix(24, 22);
+  const p = new Pix(24, 22, 2);
   const wood = ['#4a2e1a', '#6a4426', '#8a5c34'];
   p.trunk(3, 3, 21, 2, wood);
   p.trunk(20, 3, 21, 2, wood);
