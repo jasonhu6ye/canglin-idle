@@ -19,6 +19,11 @@ export const UP: Record<string, number> = {
   fishtank: 8, cat_bed: 0, rug_long: 0, st_atelier: 10,
   fountain: 14, pond: 0, pine_tree: 30, cherry_tree: 26, bush: 4, rock: 4, haystack: 8, scarecrow: 16, signpost: 12, mailbox: 8,
   campfire: 2, torch: 14, stone_lantern: 14, tent: 10, beehive: 6, dog_house: 10, birdbath: 6, garden_bed: 2, windmill: 34,
+  farm_plot: 0, water_barrel: 6, compost: 4,
+  painting: 10, candle: 6, teddy: 2, books: 2, tea_set: 0, music_box: 2, crystal_ball: 4, bonsai: 4, paper_lantern: 12, hourglass: 4,
+  ship_model: 6, gem_case: 8, pumpkin_lamp: 2, plush_cat: 2, trophy_cup: 6,
+  bunk_bed: 10, bookcase_tall: 16, counter: 6, round_table: 2, throne: 14, bed_royal: 10,
+  gazebo: 26, swing: 16, maple_tree: 26, palm_tree: 30, boat: 0, coop: 12, telescope: 10, totem: 22, flower_cart: 6,
 };
 
 const WOOD = ['#3a2416', '#5e3a22', '#7e5232', '#a06c40', '#c48a56'];
@@ -401,7 +406,7 @@ export function paintThing(id: string, w: number, h: number): HTMLCanvasElement 
       break;
     }
     default:
-      if (!paintMore(id, p, W, H, up, box)) box(1, 1, W - 2, H - 2, COPPER, 3);
+      if (!paintMore(id, p, W, H, up, box) && !paintNew(id, p, W, H, up, box)) box(1, 1, W - 2, H - 2, COPPER, 3);
   }
   return p.outlineTinted().canvas();
 }
@@ -772,6 +777,291 @@ function paintMore(id: string, p: Pix, W: number, H: number, up: number, box: Bo
         }
       }
       p.rect(cx - 1, 11, 3, 3, WOOD[4]);
+      return true;
+    }
+  }
+  return false;
+}
+
+const MAPLE = ['#5a1a0e', '#8a2a14', '#c0461e', '#e0702a', '#f8a848'];
+const PALM = ['#1a3a14', '#2a5a1e', '#3e7e2a', '#5ea23a', '#86c45a'];
+const CLOTH_B = ['#141e4a', '#22306e', '#34489a', '#5068c0', '#7a92e0'];
+const VELVET = ['#2a0a2a', '#4a1448', '#6e2468', '#94388a', '#c060b0'];
+
+/** 10-27 新增：家园农田、饰品、家具、户外 */
+function paintNew(id: string, p: Pix, W: number, H: number, up: number, box: Box): boolean {
+  const legs = (xs: number[], from: number, pal = WOOD) => { for (const lx of xs) for (let y = from; y < H; y++) { p.set(lx, y, pal[1]); p.set(lx + 1, y, pal[0]); } };
+  const cx = Math.floor(W / 2);
+  const B = H - 1;
+  switch (id) {
+    case 'farm_plot':
+      // 一圈矮木框，里面的土由场景按每格地的状态画
+      for (let x = 0; x < W; x++) { p.set(x, 0, WOOD[3]); p.set(x, 1, WOOD[1]); p.set(x, H - 2, WOOD[3]); p.set(x, H - 1, WOOD[1]); }
+      for (let y = 0; y < H; y++) { p.set(0, y, WOOD[3]); p.set(1, y, WOOD[1]); p.set(W - 2, y, WOOD[3]); p.set(W - 1, y, WOOD[1]); }
+      for (let y = 2; y < H - 2; y++) for (let x = 2; x < W - 2; x++) p.set(x, y, phash(x, y, 31) < 0.2 ? '#5a3e22' : '#6e5232');
+      for (const [x, y] of [[0, 0], [W - 2, 0], [0, H - 2], [W - 2, H - 2]]) p.rect(x, y, 2, 2, WOOD[4]);
+      return true;
+    case 'water_barrel':
+      for (let y = B - 14; y < B; y++) for (let x = 3; x < 13; x++) p.set(x, y, x === 3 ? WOOD[3] : x === 12 ? WOOD[0] : (x % 3 === 0 ? WOOD[1] : WOOD[2]));
+      for (const y of [B - 12, B - 4]) for (let x = 3; x < 13; x++) p.set(x, y, IRON[2]);
+      for (let x = 4; x < 12; x++) { p.set(x, B - 15, WOOD[4]); p.set(x, B - 14, x % 3 ? WATER[3] : WATER[4]); }
+      p.rect(12, B - 6, 2, 1, IRON[3]);
+      return true;
+    case 'compost':
+      box(2, B - 11, 12, 12, WOOD, 2);
+      for (let y = B - 9; y < B; y += 3) for (let x = 3; x < 13; x++) p.set(x, y, WOOD[0]);
+      for (let x = 3; x < 13; x++) { p.set(x, B - 12, phash(x, 1, 33) < 0.5 ? LEAF[2] : '#5a3e22'); if (x % 3 === 0) p.set(x, B - 13, LEAF[3]); }
+      return true;
+    // ───── 饰品 ─────
+    case 'painting':
+      // 小画架上一幅风景画
+      for (const lx of [4, 11]) for (let y = B - 9; y < H; y++) p.set(lx + (y > B - 3 ? (lx < 8 ? -1 : 1) : 0), y, WOOD[2]);
+      box(2, 1, 12, 14, GOLD, 1);
+      for (let y = 3; y < 13; y++) for (let x = 4; x < 12; x++) p.set(x, y, y < 7 ? '#8ac8f0' : y < 9 ? (x < 8 ? '#5a8a5a' : '#7aa86a') : '#4a7a3a');
+      p.set(10, 4, '#fff0a0'); p.set(10, 5, '#f8d860');
+      return true;
+    case 'candle':
+      p.rect(4, B - 2, 8, 2, COPPER[2]); p.rect(5, B - 3, 6, 1, COPPER[3]);
+      p.rect(7, B - 10, 2, 7, '#f4ead0'); p.set(7, B - 10, '#ffffff');
+      p.set(7, B - 12, '#ffd060'); p.set(8, B - 11, '#ff9a3a'); p.set(7, B - 11, '#fff4c0'); p.set(7, B - 13, '#fff0a0');
+      return true;
+    case 'teddy':
+    case 'plush_cat': {
+      const pal = id === 'teddy' ? ['#3a2210', '#6a4220', '#8a5a30', '#a87442', '#c89060'] : ['#3a3a42', '#6a6a74', '#9a9aa4', '#c8c8d0', '#ececf0'];
+      p.blob(8, B - 4, 4.5, 3.5, pal, 41);
+      p.blob(8, B - 10, 3.5, 3, pal, 42);
+      if (id === 'teddy') { p.rect(4, B - 14, 2, 2, pal[2]); p.rect(10, B - 14, 2, 2, pal[2]); p.set(8, B - 9, pal[0]); }
+      else { p.set(5, B - 14, pal[3]); p.set(5, B - 13, pal[3]); p.set(11, B - 14, pal[3]); p.set(11, B - 13, pal[3]); p.set(13, B - 5, pal[3]); p.set(14, B - 6, pal[3]); p.set(8, B - 9, '#e88a9a'); }
+      p.set(7, B - 11, '#141010'); p.set(9, B - 11, '#141010');
+      if (id === 'teddy') p.rect(6, B - 7, 4, 1, '#c04a4a');
+      return true;
+    }
+    case 'books': {
+      const cols = ['#b03a3a', '#3a6ab0', '#3a9a5a', '#d8a040', '#8a4ab0'];
+      for (let i = 0; i < 5; i++) {
+        const y = B - 2 - i * 3;
+        const x0 = 2 + Math.floor(phash(i, 1, 43) * 3);
+        for (let x = x0; x < x0 + 11 - (i % 2); x++) { p.set(x, y, cols[i]); p.set(x, y + 1, mix(cols[i], '#000000', 0.35)); }
+        p.set(x0 + 9 - (i % 2), y, '#ece6d6');
+      }
+      return true;
+    }
+    case 'tea_set':
+      p.rect(1, B - 2, 14, 2, '#ece6d6'); p.rect(1, B - 1, 14, 1, '#c8c0b0');
+      for (let y = B - 8; y < B - 2; y++) for (let x = 3; x < 9; x++) p.set(x, y, x === 3 ? '#ffffff' : (y === B - 5 ? '#3a6ab0' : '#e0dcd0'));
+      p.rect(5, B - 9, 2, 1, '#3a6ab0'); p.set(9, B - 6, '#e0dcd0'); p.set(10, B - 7, '#e0dcd0'); p.set(2, B - 6, '#e0dcd0');
+      p.rect(11, B - 5, 3, 3, '#e0dcd0'); p.set(12, B - 5, '#8a5a2a');
+      return true;
+    case 'music_box':
+      box(2, B - 8, 12, 8, DARKWOOD, 3);
+      for (let x = 2; x < 14; x++) p.set(x, B - 6, GOLD[3]);
+      p.rect(6, B - 4, 4, 2, GOLD[2]);
+      for (let y = B - 14; y < B - 8; y++) for (let x = 3; x < 13; x++) if (y < B - 12 || x === 3 || x === 12) p.set(x, y, DARKWOOD[3]);
+      p.set(8, B - 11, '#f8b4cc'); p.set(8, B - 10, '#e888aa'); p.set(7, B - 9, '#ffffff');
+      return true;
+    case 'crystal_ball':
+      p.rect(4, B - 3, 8, 3, GOLD[2]); p.rect(5, B - 4, 6, 1, GOLD[3]);
+      for (let y = 0; y < 10; y++) for (let x = 0; x < 10; x++) {
+        const d = Math.hypot(x - 4.5, y - 4.5);
+        if (d > 4.8) continue;
+        p.set(3 + x, B - 14 + y, d > 3.8 ? '#5a3a9a' : (x + y) % 4 === 0 ? '#c8a8ff' : d < 2 ? '#e8d8ff' : '#8a6ae0');
+      }
+      p.set(6, B - 12, '#ffffff'); p.set(5, B - 11, '#ffffff');
+      return true;
+    case 'bonsai':
+      p.rect(3, B - 4, 10, 4, '#6a4a8a'); p.rect(3, B - 4, 10, 1, '#8a6aaa'); p.rect(4, B, 8, 1, '#4a2a6a');
+      p.line(8, B - 5, 6, B - 10, WOOD[1]); p.line(7, B - 8, 11, B - 12, WOOD[2]);
+      p.blob(5, B - 12, 3.5, 2.5, PINE, 44); p.blob(11, B - 14, 3.5, 2.5, PINE, 45);
+      return true;
+    case 'paper_lantern':
+      for (let y = 0; y < B - 13; y++) p.set(8, y + 2, DARKWOOD[2]);
+      for (let y = B - 14; y < B - 2; y++) {
+        const half = 5 - Math.abs(y - (B - 8)) * 0.35;
+        for (let x = Math.round(8 - half); x < 8 + half; x++) p.set(x, y, (y - (B - 14)) % 3 === 0 ? '#c03a2a' : x < 7 ? '#ff7a4a' : '#ff5a3a');
+      }
+      p.rect(6, B - 15, 5, 1, '#3a2010'); p.rect(6, B - 2, 5, 1, '#3a2010'); p.set(8, B - 1, GOLD[3]); p.set(8, B, GOLD[2]);
+      return true;
+    case 'hourglass':
+      p.rect(3, B - 1, 10, 2, WOOD[2]); p.rect(3, B - 17, 10, 2, WOOD[3]);
+      for (const lx of [4, 11]) for (let y = B - 15; y < B - 1; y++) p.set(lx, y, WOOD[1]);
+      for (let y = B - 15; y < B - 1; y++) {
+        const half = Math.max(0.5, Math.abs(y - (B - 8)) * 0.45);
+        for (let x = Math.round(8 - half); x < 8 + half; x++) p.set(x, y, (y < B - 8 && y > B - 12) || y > B - 4 ? HAY[3] : '#d8eef8');
+      }
+      p.set(8, B - 7, HAY[3]); p.set(8, B - 6, HAY[3]);
+      return true;
+    case 'ship_model':
+      p.rect(3, B - 1, 10, 2, DARKWOOD[2]);
+      for (let x = 1; x < 15; x++) { const d = Math.abs(x - 7.5); for (let y = B - 6; y < B - 2 - (d > 5 ? 1 : 0); y++) p.set(x, y, y === B - 6 ? WOOD[4] : WOOD[2]); }
+      for (let y = B - 20; y < B - 6; y++) p.set(8, y, DARKWOOD[2]);
+      for (let y = B - 19; y < B - 8; y++) for (let x = 9; x < 9 + Math.min(5, (y - (B - 19)) * 0.6 + 1); x++) p.set(x, y, '#ece6d6');
+      for (let y = B - 17; y < B - 9; y++) for (let x = Math.round(8 - (y - (B - 17)) * 0.5); x < 8; x++) p.set(x, y, '#d8d0c0');
+      p.set(8, B - 21, '#c04a4a'); p.set(9, B - 21, '#c04a4a');
+      return true;
+    case 'gem_case':
+      box(1, B - 6, 14, 7, DARKWOOD, 2);
+      for (let y = B - 21; y < B - 6; y++) for (let x = 2; x < 14; x++) p.set(x, y, x === 2 || x === 13 || y === B - 21 ? GOLD[3] : (x + y) % 7 === 0 ? '#e8f4ff' : '#a8c8d8');
+      for (const [gx, gy, col] of [[5, B - 12, '#e83a4a'], [10, B - 15, '#3a7ae8'], [8, B - 9, '#3ae87a']] as [number, number, string][]) { p.rect(gx - 1, gy, 3, 2, col); p.set(gx, gy - 1, mix(col, '#ffffff', 0.5)); }
+      return true;
+    case 'pumpkin_lamp':
+      p.blob(8, B - 5, 6.5, 5, ['#5a2a06', '#a04a0a', '#d86a12', '#f08a2a', '#ffb04a'], 46);
+      for (const x of [5, 8, 11]) for (let y = B - 9; y < B; y++) p.set(x, y, '#a04a0a');
+      p.rect(7, B - 12, 2, 3, LEAF[1]);
+      p.set(5, B - 7, '#ffe070'); p.set(6, B - 7, '#ffe070'); p.set(10, B - 7, '#ffe070'); p.set(11, B - 7, '#ffe070');
+      for (let x = 5; x < 12; x++) p.set(x, B - 3, x % 2 ? '#ffe070' : '#ff9a2a');
+      return true;
+    case 'trophy_cup':
+      p.rect(4, B - 2, 8, 3, DARKWOOD[2]); p.rect(6, B - 6, 4, 4, GOLD[2]);
+      for (let y = B - 20; y < B - 8; y++) { const half = 5 - Math.max(0, (y - (B - 14)) * 0.6); for (let x = Math.round(8 - half); x < 8 + half; x++) p.set(x, y, x < 7 ? GOLD[4] : GOLD[3]); }
+      p.rect(7, B - 8, 2, 2, GOLD[2]);
+      for (const sx of [1, 13]) { p.rect(sx, B - 19, 2, 1, GOLD[2]); p.rect(sx + (sx < 8 ? 0 : 1), B - 18, 1, 4, GOLD[2]); }
+      p.set(8, B - 16, '#ffffff');
+      return true;
+    // ───── 家具 ─────
+    case 'bunk_bed':
+      for (const lx of [0, W - 2]) for (let y = 0; y < H; y++) { p.set(lx, y, WOOD[3]); p.set(lx + 1, y, WOOD[1]); }
+      for (const by of [4, H - 14]) {
+        box(2, by, W - 4, 8, WOOD, 1);
+        for (let y = by + 1; y < by + 6; y++) for (let x = 2; x < W - 2; x++) p.set(x, y, x < 6 ? '#ece6d6' : (x + y) % 6 === 0 ? CLOTH_B[1] : CLOTH_B[2]);
+      }
+      for (let y = 2; y < H - 14; y += 3) { p.set(W - 4, y, WOOD[4]); p.set(W - 3, y, WOOD[4]); }
+      return true;
+    case 'bookcase_tall': {
+      box(0, 0, W, H, DARKWOOD, 2);
+      const books = ['#b03a3a', '#3a6ab0', '#3a9a5a', '#d8a040', '#8a4ab0', '#e0e0d0', '#4a8a8a'];
+      const rows = 4;
+      const rh = Math.floor((H - 4) / rows);
+      for (let row = 0; row < rows; row++) {
+        const y0 = 3 + row * rh;
+        for (let x = 2; x < W - 2; x++) p.set(x, y0 + rh - 2, DARKWOOD[3]);
+        for (let x = 2; x < W - 3; x += 2) {
+          if (phash(x, row, 47) < 0.12) continue;
+          const c = books[Math.floor(phash(x, row, 48) * books.length)];
+          const hh = rh - 3 - Math.floor(phash(x, row, 49) * 2);
+          for (let y = y0 + rh - 2 - hh; y < y0 + rh - 2; y++) { p.set(x, y, c); p.set(x + 1, y, mix(c, '#000000', 0.3)); }
+        }
+      }
+      return true;
+    }
+    case 'counter':
+      box(0, up, W, H - up, STONE, 4);
+      for (let y = up + 5; y < H - 1; y++) for (const dx of [2, cx + 1]) for (let x = dx; x < dx + cx - 3; x++) p.set(x, y, x === dx || y === up + 5 ? WOOD[3] : WOOD[2]);
+      p.rect(4, up - 3, 6, 3, '#e8e0c8'); p.rect(5, up - 4, 4, 1, '#d84a3a');
+      p.rect(W - 10, up - 2, 6, 2, WOOD[3]); p.set(W - 7, up - 3, IRON[4]); p.set(W - 6, up - 4, IRON[4]);
+      return true;
+    case 'round_table': {
+      for (let y = 0; y < H - 10; y++) for (let x = 0; x < W; x++) {
+        const d = Math.hypot((x - (W - 1) / 2) / (W / 2 - 1), (y - (H - 12) / 2) / ((H - 12) / 2));
+        if (d > 1) continue;
+        p.set(x, y, d > 0.9 ? WOOD[1] : d > 0.82 ? WOOD[4] : phash(x, y, 50) < 0.1 ? WOOD[2] : WOOD[3]);
+      }
+      for (let y = H - 12; y < H - 9; y++) for (let x = 3; x < W - 3; x++) if (Math.hypot((x - (W - 1) / 2) / (W / 2 - 3), 0) <= 1) p.set(x, y, WOOD[1]);
+      p.rect(cx - 2, H - 9, 4, 7, WOOD[1]); p.rect(cx - 6, H - 2, 12, 2, WOOD[0]);
+      p.rect(cx - 2, 6, 5, 3, '#ece6d6'); p.set(cx, 5, '#c84a3a'); p.rect(cx - 10, 10, 3, 3, '#e0dcd0'); p.rect(cx + 8, 12, 3, 3, '#e0dcd0');
+      return true;
+    }
+    case 'throne':
+      box(1, 0, 14, 16, VELVET, 2);
+      for (let x = 1; x < 15; x++) p.set(x, 0, GOLD[3]);
+      for (const sx of [1, 7, 13]) { p.rect(sx, -1 + 1, 2, 2, GOLD[4]); }
+      box(0, 14, 16, 8, GOLD, 2);
+      box(2, 13, 12, 4, VELVET, 2);
+      box(0, 10, 3, 10, GOLD, 2); box(13, 10, 3, 10, GOLD, 2);
+      legs([1, 13], H - 6, GOLD);
+      p.set(8, 5, '#e83a4a'); p.set(8, 6, '#a82a3a');
+      return true;
+    case 'bed_royal':
+      box(0, 0, W, 14, DARKWOOD, 3);
+      for (let x = 0; x < W; x++) p.set(x, 0, GOLD[3]);
+      for (const lx of [0, W - 3]) { box(lx, 0, 3, H, DARKWOOD, 2); p.rect(lx, 0, 3, 2, GOLD[4]); }
+      box(3, 10, W - 6, H - 12, DARKWOOD, 1);
+      for (let y = 11; y < H - 3; y++) for (let x = 3; x < W - 3; x++) p.set(x, y, '#f4f0e6');
+      for (const px of [5, cx + 1]) for (let y = 12; y < 17; y++) for (let x = px; x < px + 10; x++) p.set(x, y, y === 12 ? '#ffffff' : '#e8e2d4');
+      for (let y = 18; y < H - 3; y++) for (let x = 3; x < W - 3; x++) p.set(x, y, y === 18 ? VELVET[4] : y === H - 4 ? GOLD[3] : (x + y) % 8 === 0 ? VELVET[1] : x < 6 ? VELVET[3] : VELVET[2]);
+      p.set(cx, 7, GOLD[4]); p.rect(cx - 1, 6, 3, 1, GOLD[3]);
+      return true;
+    // ───── 户外 ─────
+    case 'gazebo': {
+      // 六根柱子撑一个红瓦尖顶
+      for (const lx of [3, cx - 1, W - 5]) for (let y = 22; y < H - 2; y++) { p.set(lx, y, PLASTER[4]); p.set(lx + 1, y, PLASTER[2]); }
+      box(1, H - 4, W - 2, 4, STONE, 2);
+      for (let y = 0; y < 24; y++) {
+        const half = Math.min(W / 2, 3 + y * 1.3);
+        for (let x = Math.ceil(cx - half); x < cx + half; x++) p.set(x, y, y > 19 ? BRICK[0] : (Math.floor(x / 3) + y) % 4 === 0 ? BRICK[1] : y % 4 === 0 ? BRICK[3] : BRICK[2]);
+      }
+      p.rect(cx - 1, 0, 2, 2, GOLD[3]);
+      for (let x = 2; x < W - 2; x += 4) p.set(x, 24, '#f0c850');
+      p.rect(cx - 6, H - 12, 12, 3, WOOD[3]); legs([cx - 5, cx + 3], H - 9);
+      return true;
+    }
+    case 'swing':
+      for (const lx of [1, W - 3]) for (let y = 2; y < H; y++) { p.set(lx + (y > H - 6 ? (lx < cx ? -1 : 1) : 0), y, WOOD[3]); p.set(lx + 1, y, WOOD[1]); }
+      box(0, 0, W, 3, WOOD, 1);
+      for (const rx of [9, W - 10]) for (let y = 3; y < H - 8; y++) p.set(rx, y, '#c8b088');
+      box(7, H - 9, W - 14, 3, WOOD, 1);
+      return true;
+    case 'maple_tree':
+      p.trunk(8, H - 14, H - 1, 4, DARKWOOD);
+      p.blob(8, H - 26, 7.5, 9, MAPLE, 51);
+      p.blob(4, H - 18, 4, 4, MAPLE, 52);
+      p.blob(12, H - 18, 4, 4, MAPLE, 53);
+      p.set(3, H - 3, MAPLE[3]); p.set(12, H - 2, MAPLE[2]);
+      return true;
+    case 'palm_tree': {
+      for (let y = 10; y < H; y++) { const x = Math.round(8 + Math.sin(y / 9) * 2); p.set(x, y, (y % 3 === 0) ? WOOD[1] : WOOD[3]); p.set(x + 1, y, WOOD[2]); }
+      const top = { x: Math.round(8 + Math.sin(10 / 9) * 2), y: 10 };
+      for (const [dx, dy] of [[-8, 4], [8, 4], [-7, -3], [7, -3], [0, -8], [-4, 7], [4, 7]]) {
+        for (let i = 0; i <= 8; i++) {
+          const t = i / 8;
+          const x = Math.round(top.x + dx * t);
+          const y = Math.round(top.y + dy * t + t * t * 3);
+          p.set(x, y, PALM[3]); p.set(x, y + 1, PALM[1]);
+        }
+      }
+      p.rect(top.x - 1, top.y + 1, 3, 2, '#7a4a1a'); p.set(top.x, top.y + 1, '#a06a2a');
+      return true;
+    }
+    case 'boat':
+      for (let x = 0; x < W; x++) {
+        const d = Math.abs(x - (W - 1) / 2) / (W / 2);
+        const top = B - 9 + Math.round(d * d * 3);
+        const bot = B - Math.round(d * d * 5);
+        for (let y = top; y <= bot; y++) p.set(x, y, y === top ? WOOD[4] : y < top + 3 ? WOOD[3] : y > bot - 2 ? WOOD[0] : WOOD[2]);
+      }
+      for (const sx of [14, 30]) p.rect(sx, B - 8, 4, 2, WOOD[1]);
+      p.line(20, B - 7, 34, B - 12, WOOD[1]); p.rect(34, B - 13, 2, 3, WOOD[3]);
+      return true;
+    case 'coop':
+      box(1, 10, W - 2, H - 10, WOOD, 2);
+      for (let y = 0; y < 12; y++) { const half = 4 + y * 1.4; for (let x = Math.ceil(cx - half); x < cx + half; x++) p.set(x, y, y > 9 ? BRICK[0] : y % 3 === 0 ? BRICK[3] : BRICK[2]); }
+      for (let y = H - 14; y < H - 1; y++) for (let x = cx - 4; x < cx + 4; x++) p.set(x, y, y < H - 12 ? WOOD[0] : '#1a1008');
+      p.line(cx + 4, H - 1, W - 3, H - 8, WOOD[3]);
+      // 门口一只鸡
+      p.rect(W - 9, H - 6, 4, 4, '#f4f0e6'); p.set(W - 6, H - 7, '#d83a2a'); p.set(W - 5, H - 5, '#f0a030');
+      return true;
+    case 'telescope':
+      for (const [x0, x1] of [[8, 3], [8, 13], [8, 8]]) p.line(x0, B - 10, x1, B, WOOD[2]);
+      for (let i = 0; i < 14; i++) { const x = 2 + i; const y = B - 10 - Math.round(i * 0.7); p.set(x, y, i > 10 ? GOLD[3] : IRON[3]); p.set(x, y + 1, i > 10 ? GOLD[2] : IRON[1]); if (i < 4) p.set(x, y - 1, IRON[2]); }
+      p.set(15, B - 20, '#d8f0ff');
+      return true;
+    case 'totem': {
+      const faces = [[BRICK, B - 30], [CLOTH_G, B - 21], [WOOD, B - 12]] as [string[], number][];
+      for (const [pal, y0] of faces) {
+        box(3, y0, 10, 9, pal, 2);
+        p.rect(5, y0 + 3, 2, 2, '#ffffff'); p.rect(9, y0 + 3, 2, 2, '#ffffff'); p.set(6, y0 + 4, '#141010'); p.set(10, y0 + 4, '#141010');
+        p.rect(6, y0 + 6, 4, 1, pal[0]);
+      }
+      p.rect(0, B - 26, 3, 2, CLOTH_B[3]); p.rect(13, B - 26, 3, 2, CLOTH_B[3]);
+      p.rect(7, B - 3, 2, 3, WOOD[1]);
+      p.set(8, B - 28, GOLD[4]);
+      return true;
+    }
+    case 'flower_cart': {
+      box(2, H - 13, W - 6, 8, WOOD, 2);
+      const cols = ['#e84a6a', '#f0c850', '#ffffff', '#a070e0', '#ff8a3a', '#6ac8f0'];
+      for (let x = 3; x < W - 5; x++) for (let y = H - 19; y < H - 13; y++) if (phash(x, y, 54) < 0.55) p.set(x, y, phash(x, y, 55) < 0.4 ? LEAF[2] : cols[Math.floor(phash(x, y, 56) * cols.length)]);
+      for (const wx of [7, W - 10]) { p.blob(wx, H - 4, 3, 3, DARKWOOD, 57); p.set(wx, H - 4, IRON[3]); }
+      p.line(W - 4, H - 10, W - 1, H - 6, WOOD[3]);
       return true;
     }
   }

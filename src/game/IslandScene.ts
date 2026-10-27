@@ -1,8 +1,11 @@
 import Phaser from 'phaser';
 import { NODES, WALK_TILES_PER_SEC } from '../core/data';
 import {
-  buildDef, canPlace, homeCan, HOME_PORTAL, HOME_SPAWN, homeSize, ISLAND, ISLAND_C, islandGround, leaveHome, placeBuild, removeAt, thingGrid,
+  buildDef, canPlace, homeCan, homePlotCells, homePlots, HOME_PORTAL, HOME_SPAWN, homeSize, ISLAND, ISLAND_C, islandGround, leaveHome, placeBuild, removeAt, thingGrid,
 } from '../core/home';
+import { CROP_DEFS, CROPS } from '../core/data';
+import { fieldOfPlot, pickSeed, plotGrowth, plotPhase, tendPlot } from '../core/farm';
+import { cropTex, glintTex, soilTex } from './farmArt';
 import type { HomeThing } from '../core/types';
 import { gameHour } from '../core/weather';
 import { store } from '../store';
@@ -54,7 +57,11 @@ export class IslandScene extends Phaser.Scene {
   private sizeDrawn = 0;
   private objs: Phaser.GameObjects.GameObject[] = [];
   private lamps: Phaser.GameObjects.Image[] = [];
-  private sig = '';
+  private sigThings?: HomeThing[];
+  private sigFloors?: Record<string, string>;
+  /** 家园农田的每格地：土、作物、熟了的闪光 */
+  private cells: { id: string; soil: Phaser.GameObjects.Image; crop: Phaser.GameObjects.Image; glint: Phaser.GameObjects.Image; key: string }[] = [];
+  private cellAt = new Map<string, string>();
   private tool: HomeTool = null;
   private ghost?: Phaser.GameObjects.Image;
   private ghostBox?: Phaser.GameObjects.Graphics;
@@ -85,6 +92,7 @@ export class IslandScene extends Phaser.Scene {
     this.setupCamera();
     this.redraw(true);
     this.unsub.push(store.subscribe(() => this.onStore()));
+    this.time.addEvent({ delay: 500, loop: true, callback: () => this.growCells() });
     const onTool = (t: HomeTool) => this.setTool(t);
     this.game.events.on(HOME_TOOL, onTool);
     this.unsub.push(() => this.game.events.off(HOME_TOOL, onTool));
@@ -220,9 +228,10 @@ export class IslandScene extends Phaser.Scene {
   private redraw(force: boolean) {
     const h = store.state.home;
     this.drawGround();
-    const sig = `${h?.lv}|${h?.things.length}|${Object.keys(h?.floors ?? {}).length}`;
-    if (!force && sig === this.sig) return;
-    this.sig = sig;
+    // 只比数量的话，拆一件再摆一件（数量不变）画面就不刷新：换成比对象本身（存档每次改都换新数组）
+    if (!force && h?.things === this.sigThings && h?.floors === this.sigFloors) return;
+    this.sigThings = h?.things;
+    this.sigFloors = h?.floors;
     this.rebuild();
   }
 
@@ -243,6 +252,60 @@ export class IslandScene extends Phaser.Scene {
       if (d?.wall || d?.walk) walls.add(k(t.x, t.y));
     }
     for (const t of h.things) this.drawThing(t, walls);
+    this.buildCells();
+  }
+
+  // ───────── 家园农田（10-27）：每块 4×4 格，和城里的田一样点地块种 / 浇水 / 收获 ─────────
+  private buildCells() {
+    this.cells = [];
+    this.cellAt.clear();
+    for (const t of homePlots(store.state)) for (const c of homePlotCells(t)) {
+      const cx = c.x * T + T / 2;
+      const soil = this.add.image(cx, c.y * T + T / 2, soilTex(this, 'empty')).setDepth(-3);
+      const crop = this.add.image(cx, c.y * T + T + 1, cropTex(this, 'potato', 0)).setOrigin(0.5, 1).setDepth(c.y * T + T + 1000).setVisible(false);
+      const glint = this.add.image(cx + 4, c.y * T + 3, glintTex(this)).setDepth(9e5).setVisible(false);
+      this.objs.push(soil, crop, glint);
+      this.cells.push({ id: c.id, soil, crop, glint, key: '' });
+      this.cellAt.set(k(c.x, c.y), c.id);
+    }
+    this.growCells();
+  }
+  private growCells() {
+    const now = Date.now();
+    const farm = store.state.farm ?? {};
+    const blink = Math.floor(now / 500) % 2 === 0;
+    for (const p of this.cells) {
+      const plot = farm[p.id];
+      const ph = plotPhase(plot, now);
+      const stage = !plot ? -1 : ph === 'ripe' ? 3 : Math.min(2, Math.floor(plotGrowth(plot, now) * 3));
+      const key = `${plot?.crop ?? ''}:${stage}:${plot?.water ? 1 : 0}`;
+      p.glint.setVisible(ph === 'ripe' && blink);
+      if (key === p.key) continue;
+      p.key = key;
+      p.crop.setScale(ph === 'ripe' ? 1.15 : 1);
+      p.soil.setTexture(soilTex(this, !plot ? 'empty' : plot.water ? 'wet' : 'dry'));
+      const known = !!plot && CROPS.some((c) => c[0] === plot.crop);
+      p.crop.setVisible(known);
+      if (known) p.crop.setTexture(cropTex(this, plot!.crop, stage));
+    }
+  }
+  /** 点了一格地：空地种下、长着的浇水、熟了收获；什么都没变（浇过水了）就打开这块田的面板 */
+  private tendCell(id: string) {
+    const st = store.state;
+    const field = fieldOfPlot(id)!;
+    const p = st.farm?.[id];
+    const ph = plotPhase(p, Date.now());
+    const crop = p ? undefined : pickSeed(st, field);
+    if (!p && !crop) {
+      this.game.events.emit(HOME_MSG, tl('没有能种的种子'));
+      this.game.events.emit(HOME_CLICK, field);
+      return;
+    }
+    store.farm((g, t) => tendPlot(g, id, crop, t));
+    if (store.state === st) { this.game.events.emit(HOME_CLICK, field); return; }
+    this.growCells();
+    if (ph === 'growing') this.game.events.emit(HOME_MSG, tl('浇水'));
+    else if (ph === 'empty') this.game.events.emit(HOME_MSG, tl`种下 ${CROP_DEFS[crop!].name}`);
   }
 
   private drawThing(t: HomeThing, walls: Set<string>) {
@@ -262,7 +325,7 @@ export class IslandScene extends Phaser.Scene {
       if (!this.textures.exists(key)) return;
       img = this.add.image(bx + T / 2, by - 6, key).setOrigin(0.5, 1).setDisplaySize(16, 16).setDepth(by + 1000);
     } else {
-      img = this.add.image(bx, by, this.thingTex(t.id)).setOrigin(0, 1).setDepth(d.floor ? -4 : by + 1000);
+      img = this.add.image(bx, by, this.thingTex(t.id)).setOrigin(0, 1).setDepth(d.floor || d.plot ? -4 : by + 1000);
     }
     this.objs.push(img);
     if (d.station || d.chest) {
@@ -325,7 +388,7 @@ export class IslandScene extends Phaser.Scene {
     const d = buildDef(t.id);
     const px = Math.floor(this.player.x / T);
     const py = Math.floor(this.player.y / T);
-    if (!why && d && !d.walk && !d.floor && px >= x && px < x + d.w && py >= y && py < y + d.h) why = tl('你站在这里，先走开');
+    if (!why && d && !d.walk && !d.floor && !d.plot && px >= x && px < x + d.w && py >= y && py < y + d.h) why = tl('你站在这里，先走开');
     if (why) {
       if (this.painted.size === 1) this.game.events.emit(HOME_MSG, why);
       return;
@@ -422,6 +485,8 @@ export class IslandScene extends Phaser.Scene {
         this.game.events.emit(HOME_CLICK, home);
         return;
       }
+      const cell = !this.tool && this.cellAt.get(k(this.tileAt(p).x, this.tileAt(p).y));
+      if (cell) { this.tendCell(cell); return; }
       this.workManual = true;
       this.walkTo(this.tileAt(p));
     });
@@ -452,7 +517,7 @@ export class IslandScene extends Phaser.Scene {
     const things = store.state.home?.things ?? [];
     for (const [key, i] of grid) {
       const d = buildDef(things[i].id);
-      if (!d || d.walk || d.floor) continue;
+      if (!d || d.walk || d.floor || d.plot) continue;
       const [x, y] = key.split(',').map(Number);
       if (x >= 0 && y >= 0 && x < ISLAND && y < ISLAND) g[y * ISLAND + x] = 1;
     }

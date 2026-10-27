@@ -297,7 +297,8 @@ export interface Plot {
 }
 
 /** 家园岛屿上摆的一件东西：左上角所在的格子 */
-export interface HomeThing { id: string; x: number; y: number }
+/** n：家园农田的编号（1-8），田里每格地的 id 是 hfield<n>:<格> */
+export interface HomeThing { id: string; x: number; y: number; n?: number }
 
 export interface GameState {
   version: 3;
