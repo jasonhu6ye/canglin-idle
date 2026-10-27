@@ -49,12 +49,12 @@ main { grid-area: main; position: relative; overflow: hidden; min-height: 0; }
 .panel { padding: 6px 9px; }
 .frame { padding: 8px 10px; }
 
-.go button, .go .btn-like, .tabs3 button, .opts button, .pill, .zoom-btns button, .x, .place, .slot, .cell, .skill-card, .node-list button, .modal .primary, .pick-row button, .slot-picker .close, .hb-index button {
+.go button, .go .btn-like, .tabs3 button, .opts button, .pill, .zoom-btns button, .x, .place, .slot, .cell, .skill-card, .node-list button, .modal .primary, .pick-row button, .slot-picker .close, .hb-index button, .mon-rows button {
   background: linear-gradient(#4a3220, #33221a); border: 0; border-radius: 2px;
   box-shadow: 0 0 0 1px var(--edge), inset 0 1px 0 #7a5a36, inset 0 -2px 0 #1d130c;
 }
 .go button:active:not(:disabled), .tabs3 button:active, .opts button:active, .pill:active, .place:active, .slot:active, .cell:active,
-.skill-card:active, .node-list button:active, .map-buttons button:active {
+.skill-card:active, .node-list button:active, .mon-rows button:active, .map-buttons button:active {
   transform: translateY(1px); box-shadow: 0 0 0 1px var(--edge), inset 0 2px 0 #1d130c;
 }
 button.primary, .modal .primary {
@@ -459,6 +459,7 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .guild .guild-card { display: flex; gap: 10px; align-items: center; padding: 10px; margin: 6px 0; }
 .guild .guild-emblem { width: 48px; height: 48px; flex: none; display: grid; place-items: center; font-size: 22px; font-weight: 700; color: #6a5a40; border: 2px dashed #6a5a40; border-radius: 4px; }
 .guild .guild-card p { margin: 4px 0 0; font-size: 12px; line-height: 1.5; }
+.guild-card .go { margin-top: 8px; }
 .guild-list { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .guild-list li { display: flex; justify-content: space-between; padding: 6px 10px; background: #120b07; box-shadow: 0 0 0 1px var(--edge); border-radius: 2px; font-size: 13px; }
 .guild .ghost { opacity: 0.55; }
@@ -807,6 +808,10 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
   .app:not(.collapsed) .tabbar button img { display: none; }
   .app:not(.collapsed) .tabbar .help-btn { flex-basis: 22px; }
   .app:not(.collapsed) .tabbar .fold-btn { flex-basis: 22px; }
+}
+/* 英文标签长短差很多（Character 比 Bag 长一倍）：按字宽分配，免得长的挤到隔壁 */
+@media (min-width: 900px) {
+  html[lang="en"] .app:not(.collapsed) .tabbar button:not(.help-btn):not(.fold-btn) { flex: 1 1 auto; padding-left: 2px; padding-right: 2px; }
 }
 
 /* 好友页和交易（10-25） */

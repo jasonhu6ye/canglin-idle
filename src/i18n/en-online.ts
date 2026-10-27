@@ -82,7 +82,7 @@ export const EN_ONLINE: Record<string, string> = {
   '这个名字已经有人用了，换一个吧': 'That name is taken. Try another one.',
   '邮箱格式不对': "That doesn't look like a valid email",
   '操作太频繁，请稍等一会儿': 'Too many attempts. Please wait a moment.',
-  '苍岭放置': 'Canglin Idle',
+  '苍岭放置': 'Sword and Spells',
   '正在连接服务器…': 'Connecting to the server…',
   '连不上服务器。可能是网络不好，稍后再试。': "Can't reach the server. Your connection may be spotty, so try again in a bit.",
   '重试': 'Retry',

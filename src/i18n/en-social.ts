@@ -100,7 +100,7 @@ export const EN_SOCIAL: Record<string, string> = {
   '排行榜 ': 'Leaderboard ',
   '总等级、战斗等级、各技能': 'Total level, combat level, each skill',
   '查看排行榜': 'View leaderboard',
-  '苍岭放置（暂定名）测试服。角色会一直执行队列里的任务，关掉网页也会在下次打开时结算离线收益，最多 24 小时。': 'Canglin Idle (working title), test server. Your character keeps working through the queue, and offline progress is settled the next time you open the game, up to 24 hours.',
+  '苍岭放置（暂定名）测试服。角色会一直执行队列里的任务，关掉网页也会在下次打开时结算离线收益，最多 24 小时。': 'Sword and Spells (working title), test server. Your character keeps working through the queue, and offline progress is settled the next time you open the game, up to 24 hours.',
   '世界 {0}×{1} 格，{2} 个区域，{3} 座城镇。{4} 种技能、{5} 种物品、{6} 种怪物（精英 {7}、首领 {8}），资源、装备和怪物都是正式数值。 美术全部用代码逐像素绘制。存档跟着账号保存在云端。': 'A {0}×{1} tile world with {2} regions and {3} towns. {4} skills, {5} items and {6} monsters ({7} elites, {8} bosses), all with final stats. Every piece of art is drawn pixel by pixel in code. Your save is stored in the cloud with your account.',
   '在线玩家': 'Players online',
   '离线': 'Offline',
