@@ -1678,7 +1678,10 @@ type Pt = { x: number; y: number };
 export type NavField = (seeds: Pt[]) => (p: Pt) => { d: number; i: number };
 let navField: NavField | undefined;
 /** 地图加载后注册真实的步行距离；没注册（单元测试、地图还没载入）就按直线 × 1.25 估 */
-export const setNavField = (f: NavField | undefined) => { navField = f; };
+let navStampN = 0;
+export const setNavField = (f: NavField | undefined) => { navField = f; navStampN++; };
+/** 步行距离场换过几次（界面缓存估时用：换了就重算） */
+export const navStamp = () => navStampN;
 const straight = (from: Pt) => (p: Pt) => Math.hypot(p.x - from.x, p.y - from.y) * 1.25;
 /** 从 from 出发走到各处要走多少格 */
 export function walkFrom(from: Pt): (to: Pt) => number {
