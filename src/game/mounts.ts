@@ -49,4 +49,4 @@ export function saddleBob(frameName: string) {
 /** 坐骑在旁边等的时候离人多远（马比狼大） */
 export const besideXOf = (kind: string) => (kind === 'wolf' ? -22 : -26);
 /** 南瓜顶比狼背高多少 */
-const PK_SEAT = 8;
+const PK_SEAT = 13;

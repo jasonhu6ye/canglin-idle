@@ -568,7 +568,7 @@ item('mount_danmark', 'Chinese can fly', 'gear', 0, {
 });
 // 南瓜坐骑（用户 10-27）：万圣节南瓜积分兑换，见 halloween.ts
 item(HW_MOUNT, tl('南瓜灵驹'), 'gear', 0, {
-  desc: tl('万圣节限定坐骑。会蹦会跳的巨型南瓜灯，肚子里的鬼火从刻出来的眼睛和嘴里透出光，跑起来一路洒下火星和幽紫鬼火。骑乘时移动速度 +200%。用南瓜积分兑换。'),
+  desc: tl('万圣节限定坐骑。没有腿的巨型南瓜灯，靠底下一团幽紫鬼火托着悬浮，肚子里的火光从刻出来的眼睛和嘴里透出来，飞起来一路拖着鬼火、洒下火星。骑乘时移动速度 +200%。用南瓜积分兑换。'),
   equip: { slot: 'mount', skill: 'hitpoints', level: 1, attack: 0, strength: 0, defence: 0, move: 2 },
 });
 
