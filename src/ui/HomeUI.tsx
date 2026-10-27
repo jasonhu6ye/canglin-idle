@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import type { MapNode } from '../core/data';
 import {
-  affordable, atPortal, BUILD_CATS, BUILDS, buildDef, enterHome, HOME_SIZES, HOME_UPGRADES, homeLevel, homeSize, isTrophy, leaveHome, upgradeHome,
+  affordable, atPortal, BUILD_CATS, BUILDS, buildDef, comfortLevel, comfortOf, COMFORT_SPEED, COMFORT_STEPS, COMFORT_XP, enterHome, HOME_PLOT_MAX, HOME_SIZES,
+  HOME_UPGRADES, homeComfort, homeFieldId, homeLevel, homePlots, homeSize, isTrophy, leaveHome, upgradeHome,
   type BuildCat, type BuildDef,
 } from '../core/home';
 import type { GameState } from '../core/types';
-import { HOME_MSG, HOME_TOOL, homeIcons, type HomeTool } from '../game/IslandScene';
+import { HOME_CLICK, HOME_MSG, HOME_TOOL, homeIcons, type HomeTool } from '../game/IslandScene';
+import { fieldCounts } from '../core/farm';
 import { paintFloor, paintThing, paintWall } from '../game/homeArt';
 import { store } from '../store';
 import { fmtNum } from './format';
@@ -32,6 +34,8 @@ export function PortalSheet({ s, node, onClose }: { s: GameState; node: MapNode;
           <li>{tl('岛上能放灶台、熔炉、铁砧、工作台、制弓台、药剂台，站在岛上就能直接干活。')}</li>
           <li>{tl('放一个储物箱，岛上就能存取仓库，干活背包满了也直接存进去。')}</li>
           <li>{tl('首领的战旗和战利品可以摆出来当装饰。')}</li>
+          <li>{tl`能自己摆家园农田（最多 ${HOME_PLOT_MAX} 块），所有已解锁的作物都能种。`}</li>
+          <li>{tl('摆家具和饰品能提高舒适度，舒适度越高，所有技能的经验和干活速度加成越多（人不在岛上也算）。')}</li>
           <li>{tl('岛上做不了的任务（采集、打怪），点「继续工作」会自己从传送门出来去做。')}</li>
         </ul>
         {things > 0 && <p className="muted">{tl`岛上已经摆了 ${things} 件东西。`}</p>}
@@ -66,6 +70,7 @@ export function HomeHud({ s }: { s: GameState }) {
   const [cat, setCat] = useState<BuildCat>('struct');
   const [tool, setToolRaw] = useState<HomeTool>(null);
   const [msg, setMsg] = useState('');
+  const [info, setInfo] = useState<'comfort' | 'farm' | null>(null);
   const setTool = (t: HomeTool) => { setToolRaw(t); emitToGame(HOME_TOOL, t); };
   // 场景里右键退出建造时同步按钮状态
   useEffect(() => onGameEvent(HOME_TOOL, (t: HomeTool) => setToolRaw(t)), []);
@@ -77,14 +82,39 @@ export function HomeHud({ s }: { s: GameState }) {
     ? [...new Set([...Object.keys(s.bank), ...Object.keys(s.bag)])].filter(isTrophy).map((id) => buildDef(`deco:${id}`)!).filter(Boolean)
     : BUILDS.filter((d) => d.cat === cat);
   const close = () => { setOpen(false); setTool(null); };
+  const score = homeComfort(s.home);
+  const clv = comfortLevel(score);
+  const plots = homePlots(s);
+  const toggle = (k: 'comfort' | 'farm') => { setInfo(info === k ? null : k); close(); };
   return (
     <>
       <div className="home-bar">
         <b>{tl('家园岛屿')}</b> <small className="muted">{homeSize(s)}×{homeSize(s)}</small>
-        <button className={`pill ${open ? 'on' : ''}`} onClick={() => (open ? close() : setOpen(true))}>{open ? tl('收起建造') : tl('建造')}</button>
+        <button className={`pill ${info === 'comfort' ? 'on' : ''}`} onClick={() => toggle('comfort')} title={tl('舒适度')}>{tl`舒适 ${clv} 级`}</button>
+        {plots.length > 0 && <button className={`pill ${info === 'farm' ? 'on' : ''}`} onClick={() => toggle('farm')}>{tl`农田 ${plots.length}/${HOME_PLOT_MAX}`}</button>}
+        <button className={`pill ${open ? 'on' : ''}`} onClick={() => { setInfo(null); if (open) close(); else setOpen(true); }}>{open ? tl('收起建造') : tl('建造')}</button>
         <button className="pill" onClick={() => { close(); store.dispatch(leaveHome); }}>{tl('回城')}</button>
       </div>
       {msg && <div className="home-msg">{msg}</div>}
+      {info === 'comfort' && <ComfortCard s={s} score={score} lv={clv} onClose={() => setInfo(null)} />}
+      {info === 'farm' && (
+        <div className="home-build frame">
+          <b>{tl('家园农田')}</b> <small className="muted">{tl`${plots.length}/${HOME_PLOT_MAX} 块 · 点地块种 / 浇水 / 收获，点这里打开整块田`}</small>
+          <ul className="home-fields">
+            {plots.map((t) => {
+              const id = homeFieldId(t.n!);
+              const n = fieldCounts(s, id, Date.now());
+              return (
+                <li key={id} onClick={() => { setInfo(null); emitToGame(HOME_CLICK, id); }}>
+                  <b>{tl`家园农田 ${t.n}`}</b>
+                  <small className="muted">{tl`空地 ${n.empty} · 生长中 ${n.growing} · 可收获 `}<b className={n.ripe ? 'gold' : ''}>{n.ripe}</b>{s.settings.autoFarm?.[id] ? tl(' · 自动补种') : ''}</small>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="go"><button onClick={() => setInfo(null)}>{tl('关闭')}</button></div>
+        </div>
+      )}
       {open && (
         <div className="home-build frame">
           <div className="chips-row">
@@ -130,5 +160,25 @@ export function HomeHud({ s }: { s: GameState }) {
         </div>
       )}
     </>
+  );
+}
+
+/** 舒适度：分数、等级、下一级还差多少、现在的加成，以及最舒服的几件东西 */
+function ComfortCard({ s, score, lv, onClose }: { s: GameState; score: number; lv: number; onClose: () => void }) {
+  const next = COMFORT_STEPS[lv];
+  const prev = lv ? COMFORT_STEPS[lv - 1] : 0;
+  const pct = next ? Math.min(100, ((score - prev) / (next - prev)) * 100) : 100;
+  const top = [...new Map((s.home?.things ?? []).map((t) => [t.id, buildDef(t.id)])).values()]
+    .filter((d): d is BuildDef => !!d && comfortOf(d) > 0).sort((a, b) => comfortOf(b) - comfortOf(a)).slice(0, 6);
+  return (
+    <div className="home-build frame comfort-card">
+      <b>{tl`舒适度 ${Math.floor(score)}`}</b> <small className="muted">{tl`${lv}/${COMFORT_STEPS.length} 级`}</small>
+      <div className="comfort-bar"><i style={{ width: `${pct}%` }} /></div>
+      <p className="small">{next ? tl`再攒 ${Math.ceil(next - score)} 点升到 ${lv + 1} 级` : tl('已经满级了')}
+        {' · '}{tl`现在：所有技能经验 +${Math.round(lv * COMFORT_XP * 100)}%、干活速度 +${(lv * COMFORT_SPEED * 100).toFixed(1)}%`}</p>
+      <p className="muted small">{tl('摆家具、饰品、户外摆件和战利品都能加舒适度，饰品和战利品加得最多；同一种东西摆得越多，后面的加得越少（最多算 6 件）。铺地板也加一点。人不在岛上、离线也照样有加成。')}</p>
+      {top.length > 0 && <p className="small">{tl('最舒服的：')}{top.map((d) => tl`${d.name} +${comfortOf(d)}`).join(tl('、'))}</p>}
+      <div className="go"><button onClick={onClose}>{tl('关闭')}</button></div>
+    </div>
   );
 }

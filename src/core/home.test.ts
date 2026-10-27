@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { canPlace, enterHome, HOME_SPAWN, homeCan, homeChest, leaveHome, migrateHome, placeBuild, removeAt, upgradeHome, atPortal } from './home';
+import {
+  canPlace, enterHome, HOME_SPAWN, homeCan, homeChest, leaveHome, migrateHome, placeBuild, removeAt, upgradeHome, atPortal,
+  BUILDS, comfortLevel, homeComfort, homePct, homePlots, homePlotCells, HOME_PLOT_MAX, PORTAL_IDS, homeNode,
+} from './home';
+import { ITEMS } from './data';
+import { fieldCounts, fieldCrops, harvestAll, nearField, plantAll, tendPlot } from './farm';
+import { advance } from './sim';
 import { NODES, standOf } from './data';
 import { atBank, atMarket, nearNode, newGame } from './sim';
 import type { GameState } from './types';
@@ -90,3 +96,121 @@ describe('家园岛屿', () => {
     expect(canPlace(s, 'wall_wood', HOME_SPAWN.x, HOME_SPAWN.y)).toBe('传送门旁边要留出来');
   });
 });
+
+describe('家园农田和舒适度（10-27）', () => {
+  const rich = () => {
+    const s = onIsland();
+    s.bank = { ...s.bank, plank_2: 2000, stone: 2000, fert_basic: 100, seed_potato: 30, plank_1: 200, cloth_1: 50, green_herb: 50, wheat: 50, copper_bar: 50 };
+    return s;
+  };
+  /** 从岛中间往外找能放的位置 */
+  const spot = (s: GameState, id: string) => {
+    for (let r = 0; r < 60; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+      const x = X + dx * 2, y = Y + dy * 2;
+      if (!canPlace(s, id, x, y)) return { x, y };
+    }
+    throw new Error('no spot');
+  };
+
+  it('农田最多 8 块，编号 1-8，拆掉的空号再用', () => {
+    let s = rich();
+    for (let i = 0; i < HOME_PLOT_MAX; i++) { const p = spot(s, 'farm_plot'); s = placeBuild(s, 'farm_plot', p.x, p.y); }
+    expect(homePlots(s).map((t) => t.n).sort()).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(canPlace(s, 'farm_plot', X + 40, Y + 40)).toBe('农田最多 8 块');
+    const third = homePlots(s).find((t) => t.n === 3)!;
+    s = removeAt(s, third.x + 1, third.y + 1);
+    expect(homePlots(s)).toHaveLength(7);
+    const p = spot(s, 'farm_plot');
+    s = placeBuild(s, 'farm_plot', p.x, p.y);
+    expect(homePlots(s).map((t) => t.n).sort()).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    // 读档保留编号
+    expect(migrateHome(s.home)!.things.filter((t) => t.id === 'farm_plot').map((t) => t.n).sort()).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+  });
+
+  it('家园农田在岛上就能种，什么阶级都能种；拆田退种子', () => {
+    let s = rich();
+    const p = spot(s, 'farm_plot');
+    s = placeBuild(s, 'farm_plot', p.x, p.y);
+    const t = homePlots(s)[0];
+    const cells = homePlotCells(t);
+    expect(cells).toHaveLength(16);
+    expect(nearField(s, 'hfield1')).toBe(true);
+    expect(fieldCrops('hfield1').length).toBeGreaterThan(30);
+    expect(homeNode('hfield1')?.name).toBe('家园农田 1');
+    const now = 1_700_000_000_000;
+    const r = tendPlot(s, cells[0].id, 'potato', now);
+    expect(r.state.farm?.[cells[0].id]?.crop).toBe('potato');
+    const all = plantAll(r.state, 'hfield1', 'potato', now);
+    expect(fieldCounts(all.state, 'hfield1', now).growing).toBe(16);
+    const seeds = all.state.bank.seed_potato + (all.state.bag.seed_potato ?? 0);
+    // 出岛就够不着
+    expect(nearField(leaveHome(all.state), 'hfield1')).toBe(false);
+    // 熟了收
+    const later = now + 24 * 3_600_000;
+    const h = harvestAll(all.state, 'hfield1', later);
+    expect((h.state.bag.potato ?? 0) + (h.state.bank.potato ?? 0)).toBeGreaterThan(16);
+    // 拆田：种着的每格退一颗种子，田里的记录清掉
+    const gone = removeAt(all.state, t.x, t.y);
+    expect(homePlots(gone)).toHaveLength(0);
+    expect(Object.keys(gone.farm ?? {}).filter((k) => k.startsWith('hfield'))).toHaveLength(0);
+    expect(gone.bank.seed_potato + (gone.bag.seed_potato ?? 0)).toBe(seeds + 16);
+  });
+
+  it('家园农田能自动补种（离线也算）', () => {
+    let s = rich();
+    const p = spot(s, 'farm_plot');
+    s = placeBuild(s, 'farm_plot', p.x, p.y);
+    s.settings.autoFarm = { hfield1: true };
+    const T0 = 1_700_000_000_000;
+    const r = plantAll(s, 'hfield1', 'potato', T0);
+    const { state, summary } = advance(r.state, T0 + 3 * 3_600_000);
+    expect(summary.items.potato).toBeGreaterThan(16);
+    expect(state.bank.potato).toBeGreaterThan(0);
+  });
+
+  it('地毯上能摆家具，田里不能摆东西也不能铺地板', () => {
+    let s = rich();
+    s.bank = { ...s.bank, cloth_2: 100, cloth_3: 100, plank_3: 100, hide_1: 50 };
+    const rug = spot(s, 'rug_round');
+    s = placeBuild(s, 'rug_round', rug.x, rug.y);
+    expect(canPlace(s, 'table', rug.x, rug.y)).toBeNull();
+    s = placeBuild(s, 'table', rug.x, rug.y);
+    // 拆除先拆上面的桌子
+    const a = removeAt(s, rug.x, rug.y);
+    expect(a.home!.things.map((t) => t.id)).toEqual(['rug_round']);
+    const p = spot(s, 'farm_plot');
+    s = placeBuild(s, 'farm_plot', p.x, p.y);
+    expect(canPlace(s, 'table', p.x + 1, p.y + 1)).toBe('田里不能摆东西');
+    expect(canPlace(s, 'floor_wood', p.x + 1, p.y + 1)).toBe('田里不能铺地板');
+    expect(canPlace(s, 'rug_round', p.x + 2, p.y + 2)).toBe('这里已经有东西了');
+  });
+
+  it('摆饰品加舒适度，同种东西越摆越少，舒适度给经验和速度加成', () => {
+    let s = rich();
+    expect(homeComfort(s.home)).toBe(0);
+    expect(homePct(s, 'xp')).toBe(0);
+    const scores: number[] = [];
+    for (let i = 0; i < 8; i++) { const p = spot(s, 'painting'); s = placeBuild(s, 'painting', p.x, p.y); scores.push(homeComfort(s.home)); }
+    const gains = scores.map((v, i) => v - (scores[i - 1] ?? 0));
+    expect(gains[0]).toBeGreaterThan(gains[1]);
+    expect(gains[7]).toBe(0);
+    for (const id of ['books', 'candle', 'flowerbed']) { const p = spot(s, id); s = placeBuild(s, id, p.x, p.y); }
+    expect(comfortLevel(homeComfort(s.home))).toBeGreaterThan(0);
+    expect(homePct(s, 'xp')).toBeGreaterThan(0);
+    expect(homePct(s, 'speed')).toBeGreaterThan(0);
+  });
+
+  it('每个城的家园传送门都能进；所有建造材料都存在', () => {
+    expect(PORTAL_IDS.length).toBe(NODES.filter((n) => n.portal).length);
+    for (const id of PORTAL_IDS) {
+      const n = NODES.find((x) => x.id === id)!;
+      const s = newGame(1);
+      s.loc = { x: n.x, y: n.y + 1 };
+      s.travel = null; s.walk = null;
+      expect(enterHome(s).home?.inside, id).toBe(true);
+    }
+    for (const d of BUILDS) for (const c of d.cost) expect(ITEMS[c.item], `${d.id}:${c.item}`).toBeTruthy();
+  });
+});
+

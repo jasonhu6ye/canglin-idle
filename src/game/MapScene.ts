@@ -21,7 +21,8 @@ import { FIGHT, FIGHT_RANGE, fightWeapon, FRAME_H, FRAME_W, HERO_ANIMS, HERO_FEE
 import type { MonsterDef, RegionId, Summary } from '../core/types';
 import { store } from '../store';
 import { Ambience, D_FLOAT, D_GLOW, D_LABEL, D_PARTICLE, D_SMOKE } from './ambience';
-import { paintArrow, paintBolt, paintCrop, paintHit, paintSlash } from './fxArt';
+import { paintArrow, paintBolt, paintHit, paintSlash } from './fxArt';
+import { cropTex, glintTex, soilTex } from './farmArt';
 import { paintBuilding, paintCave, paintDot, paintGlow, paintProp, paintWindmillBlades, PROP_GLOW } from './art';
 import { DPR } from './dpr';
 import { paintResNode, resGlow, resOf, type ResKind } from './resArt';
@@ -526,78 +527,9 @@ export class MapScene extends Phaser.Scene {
   private plots: { id: string; field: string; x: number; y: number; soil: Phaser.GameObjects.Image; crop: Phaser.GameObjects.Image; glint: Phaser.GameObjects.Image; key: string }[] = [];
   private plotAt = new Map<number, string>();
 
-  private cropTex(crop: string, stage: number) {
-    const key = `crop-${crop}-${stage}`;
-    if (!this.textures.exists(key)) {
-      const c = CROPS.find((x) => x[0] === crop)!;
-      this.textures.addCanvas(key, paintCrop(c[3], c[5], stage));
-    }
-    return key;
-  }
-
-  /**
-   * 地块的土（用户 10-23：种上种子田要有变化）：
-   * 空地 = 平整的浅色松土，四角插着小木桩；种下 = 翻成一条条土垄，中间一个埋了种子的小土包；
-   * 浇过水 = 土色变深、垄沟里有一点水光
-   */
-  private soilTex(kind: 'empty' | 'dry' | 'wet') {
-    const key = `plot-${kind}`;
-    if (!this.textures.exists(key)) {
-      const c = document.createElement('canvas');
-      c.width = T;
-      c.height = T;
-      const g = c.getContext('2d')!;
-      const px = (x: number, y: number, col: string) => { g.fillStyle = col; g.fillRect(x, y, 1, 1); };
-      if (kind === 'empty') {
-        g.fillStyle = '#6e5232';
-        g.fillRect(1, 1, T - 2, T - 2);
-        g.fillStyle = '#86663e';
-        g.fillRect(2, 2, T - 4, T - 4);
-        // 松土的颗粒
-        for (let i = 0; i < 18; i++) px(2 + ((i * 7) % (T - 4)), 2 + ((i * 5 + (i >> 2)) % (T - 4)), i % 3 ? '#9a7848' : '#6a4e2e');
-        // 四角的小木桩
-        for (const [x, y] of [[1, 1], [T - 2, 1], [1, T - 2], [T - 2, T - 2]]) { px(x, y, '#c8a060'); px(x, y + (y < 8 ? 1 : -1), '#7a5a30'); }
-      } else {
-        const wet = kind === 'wet';
-        const [edge, base, ridge, lit] = wet ? ['#1e120a', '#352010', '#4a2c18', '#7a8ca8'] : ['#3a2616', '#563a20', '#6e4a2a', '#94693a'];
-        g.fillStyle = edge;
-        g.fillRect(1, 1, T - 2, T - 2);
-        g.fillStyle = base;
-        g.fillRect(2, 2, T - 4, T - 4);
-        // 三条土垄：上沿亮、下沿暗
-        for (const y of [4, 8, 12]) {
-          g.fillStyle = ridge;
-          g.fillRect(3, y, T - 6, 1);
-          g.fillStyle = edge;
-          g.fillRect(3, y + 1, T - 6, 1);
-          for (let x = 3 + (y % 3); x < T - 3; x += 4) px(x, y - 1, lit);
-        }
-        // 中间埋种子的小土包
-        g.fillStyle = wet ? '#4a2c18' : '#7a5430';
-        g.fillRect(6, 9, 4, 2);
-        g.fillRect(7, 8, 2, 1);
-        if (wet) { px(4, 13, '#a8c8e8'); px(11, 5, '#a8c8e8'); }
-      }
-      this.textures.addCanvas(key, c);
-    }
-    return key;
-  }
-
-  private glintTex() {
-    if (!this.textures.exists('plot-glint')) {
-      const c = document.createElement('canvas');
-      c.width = 5;
-      c.height = 5;
-      const g = c.getContext('2d')!;
-      g.fillStyle = '#fff3a0';
-      g.fillRect(2, 0, 1, 5);
-      g.fillRect(0, 2, 5, 1);
-      g.fillStyle = '#ffffff';
-      g.fillRect(2, 2, 1, 1);
-      this.textures.addCanvas('plot-glint', c);
-    }
-    return 'plot-glint';
-  }
+  private cropTex(crop: string, stage: number) { return cropTex(this, crop, stage); }
+  private soilTex(kind: 'empty' | 'dry' | 'wet') { return soilTex(this, kind); }
+  private glintTex() { return glintTex(this); }
 
   /** 田里：能种的地块按存档画；其余耕地上隔一格种一株装饰作物（这块田最低阶的作物，长势随机） */
   private buildFields() {

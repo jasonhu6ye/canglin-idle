@@ -12,7 +12,7 @@ import { aggroMates, dgCrew, stopKey, takeMateHits, targetChance, threatOf } fro
 import { stepQuests } from './quests';
 import { migrateMail, sendMail } from './mail';
 import { stepAutoFarm, stepRain } from './farm';
-import { homeCan, homeChest, migrateHome } from './home';
+import { homeCan, homeChest, homePct, migrateHome } from './home';
 import { isRaining, RAIN_FISH } from './weather';
 import { BONUS_PER_LEVEL, levelForXp, speedForLevel, XP_TABLE } from './xp';
 import type {
@@ -368,8 +368,8 @@ export const levelBonus = (s: GameState, a: SkillAction) => Math.max(0, level(s,
 
 /** 当前生效的料理增益比例 */
 export const buffPct = (s: GameState, k: BuffKind) => s.buffs?.[k]?.pct ?? 0;
-/** 料理增益 + GM 增益：结算都用这个 */
-export const boostPct = (s: GameState, k: BuffKind) => buffPct(s, k) + gmPct(s, k) + guildPct(s, k);
+/** 料理增益 + GM 增益 + 公会加成 + 家园舒适度：结算都用这个 */
+export const boostPct = (s: GameState, k: BuffKind) => buffPct(s, k) + gmPct(s, k) + guildPct(s, k) + homePct(s, k);
 /** GM 稀有掉落：几率掉落的掉率按比例提高，最多到必掉 */
 const dropChance = (s: GameState, c: number) => Math.min(1, c * (1 + gmPct(s, 'drop') + guildPct(s, 'drop') + gearSum(s, 'luck')));
 const coinQty = (s: GameState, item: string, n: number) => (item === 'coins' ? Math.round(n * (1 + gmPct(s, 'coins') + guildPct(s, 'coins'))) : n);
