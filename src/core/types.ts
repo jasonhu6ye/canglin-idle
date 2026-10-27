@@ -327,6 +327,8 @@ export interface GameState {
   gmBuffs?: GmBuff[];
   /** 所在公会的等级（公会加成用，登录后从服务器同步；没加公会是空） */
   guildLv?: number;
+  /** 公会科技等级（10-27） */
+  guildTech?: Partial<Record<'xp' | 'speed' | 'coins' | 'drop', number>>;
   /** 新手任务：第几个、当前进度 */
   quest?: { i: number; n: number };
   bestiary?: Record<string, number>;

@@ -5,9 +5,10 @@ import { qClass } from '../core/quality';
 import { sortItemIds } from '../core/sim';
 import {
   EXCHANGE_DAY_MAX, GUILD_MAX_LV, GUILD_XP, VALUE_PER_CONTRIB, VAULT_COST, VAULT_SLOTS,
-  dailyTasks, exchangeGain, guildMembersCap, guildPerks, guildSlots, setGuildLv, utcDay, utcWeek,
+  GUILD_SHOP, GUILD_TECH, TECH_MAX, checkinGain, dailyTasks, exchangeGain, guildMembersCap, guildPerks, guildSlots, setGuildLv,
+  techCap, techCost, utcDay, utcWeek, type ShopItem,
 } from '../core/guild';
-import { online, type Guild, type GuildBankLog, type GuildMember, type GuildRole, type GuildTask, type GuildVault } from '../net';
+import { online, type Guild, type GuildBankLog, type GuildDay, type GuildEvent, type GuildMember, type GuildRole, type GuildTask, type GuildVault } from '../net';
 import { store } from '../store';
 import { Icon } from './icons';
 import { fmtNum } from './format';
@@ -64,13 +65,20 @@ function ask(max: number) {
 
 export const weeklyOf = (m: GuildMember) => (m.week === utcWeek() ? m.weekly : 0);
 
-interface Ctx { s: GameState; guild: Guild; members: GuildMember[]; me?: GuildMember; role: GuildRole; act: Act; reload: () => Promise<void> }
+interface Ctx { s: GameState; guild: Guild; members: GuildMember[]; me?: GuildMember; role: GuildRole; act: Act; reload: () => Promise<void>; day?: GuildDay }
+type Tab = 'info' | 'tasks' | 'shop' | 'tech' | 'bank' | 'events';
 
-export function GuildPlay(p: Ctx) {
-  const { guild, me } = p;
-  const [tab, setTab] = useSticky<'info' | 'tasks' | 'bank'>('guild.tab', 'info');
-  // 公会等级存进存档，加成离线也算
-  useEffect(() => { store.dispatch((g) => setGuildLv(g, guild.level)); }, [guild.level]);
+export function GuildPlay(props: Omit<Ctx, 'day'>) {
+  const { guild, me } = props;
+  const [tab, setTab] = useSticky<Tab>('guild.tab', 'info');
+  const [day, setDay] = useState<GuildDay>();
+  // 每次公会数据刷新都顺便拉一下自己今天的兑换、取物、签到
+  const reload = useCallback(async () => { await props.reload(); setDay(await online.guildDay()); }, [props.reload]);
+  useEffect(() => { void online.guildDay().then(setDay).catch(() => {}); }, [guild.id]);
+  const p: Ctx = { ...props, reload, day };
+  // 公会等级和科技存进存档，加成离线也算
+  const techKey = JSON.stringify(guild.tech);
+  useEffect(() => { store.dispatch((g) => setGuildLv(g, guild.level, guild.tech)); }, [guild.level, techKey]);
   const lv = guild.level;
   const next = GUILD_XP[lv] ?? null;
   const pct = next == null ? 100 : ((guild.xp - GUILD_XP[lv - 1]) / (next - GUILD_XP[lv - 1])) * 100;
@@ -81,17 +89,25 @@ export function GuildPlay(p: Ctx) {
         <span className="bar wide"><i style={{ width: `${Math.max(0, Math.min(100, pct))}%` }} /></span>
         <small className="muted">
           {tl`公会贡献值 ${fmtNum(guild.points)}`}
-          {me && tl` · 我的贡献：累计 ${fmtNum(me.contrib)}，本周 ${fmtNum(weeklyOf(me))}`}
+          {me && tl` · 我的贡献：可用 ${fmtNum(me.contrib - me.spent)}，累计 ${fmtNum(me.contrib)}，本周 ${fmtNum(weeklyOf(me))}`}
         </small>
+        <div className="row-tools">
+          <button className="small primary" disabled={p.act.busy || !day || day.checkedIn} onClick={() => void p.act.run(async () => { await online.guildCheckin(); await reload(); })}>
+            {day?.checkedIn ? tl('今天已签到') : tl`签到 +${checkinGain(guild.level)} 贡献`}
+          </button>
+        </div>
       </div>
       <div className="chips-row">
-        {([['info', tl('等级和兑换')], ['tasks', tl('公会任务')], ['bank', tl('公会仓库')]] as const).map(([id, label]) => (
+        {([['info', tl('加成和兑换')], ['tasks', tl('公会任务')], ['shop', tl('公会商店')], ['tech', tl('公会科技')], ['bank', tl('公会仓库')], ['events', tl('公会动态')]] as const).map(([id, label]) => (
           <button key={id} className={`pill ${tab === id ? 'on' : ''}`} onClick={() => setTab(id)}>{label}</button>
         ))}
       </div>
       {tab === 'info' && <Info {...p} />}
       {tab === 'tasks' && <Tasks {...p} />}
+      {tab === 'shop' && <Shop {...p} />}
+      {tab === 'tech' && <Tech {...p} />}
       {tab === 'bank' && <Bank {...p} />}
+      {tab === 'events' && <Events {...p} />}
     </>
   );
 }
@@ -101,17 +117,16 @@ function perkText(lv: number) {
   return [tl`经验 +${Math.round(p.xp * 100)}%`, tl`金币 +${Math.round(p.coins * 100)}%`, tl`干活速度 +${Math.round(p.speed * 100)}%`].join(' · ');
 }
 
-function Info({ s, guild, me, act, reload }: Ctx) {
+function Info({ s, guild, act, reload, day }: Ctx) {
   const [q, setQ] = useState('');
-  const today = me?.donatedDay === utcDay() ? me.donated ?? 0 : 0;
-  const left = Math.max(0, EXCHANGE_DAY_MAX - today);
+  const left = Math.max(0, EXCHANGE_DAY_MAX - (day?.exchanged ?? 0));
   const mine = useMemo(() => ownList(s), [s.bank, s.bag]);
   const trade = (id: string) => {
     const value = ITEMS[id].value;
     // 今天剩下的额度最多能换几个
     const cap = Math.min(own(s, id), Math.floor((left * VALUE_PER_CONTRIB) / Math.max(1, value)));
     const n = ask(cap);
-    if (n > 0 && exchangeGain(value, n) > 0) void act.run(async () => { await hand(id, n, () => online.exchangeItems(id, n, value)); await reload(); });
+    if (n > 0 && exchangeGain(value, n) > 0) void act.run(async () => { await hand(id, n, () => online.exchangeItems(id, n)); await reload(); });
   };
   const lv = guild.level;
   return (
@@ -121,6 +136,7 @@ function Info({ s, guild, me, act, reload }: Ctx) {
         <b>{tl`当前 Lv${lv}`}</b> <small>{lv > 1 ? perkText(lv) : tl('2 级起开始有加成')}</small>
         <br /><small className="muted">{tl`人数上限 ${guildMembersCap(lv)} · 公共仓库 ${guildSlots(lv)} 种物品`}</small>
         {lv < GUILD_MAX_LV && <><br /><small className="muted">{tl`下一级：${perkText(lv + 1)} · 人数 ${guildMembersCap(lv + 1)} · 仓库 ${guildSlots(lv + 1)} 种`}</small></>}
+        {GUILD_TECH.some((t) => guild.tech[t.id]) && <><br /><small>{tl('科技：')}{GUILD_TECH.filter((t) => guild.tech[t.id]).map((t) => `${t.name} Lv${guild.tech[t.id]}`).join(' · ')}</small></>}
       </div>
       <h3>{tl('物品兑换贡献 ')}<small className="muted">{tl`每 ${VALUE_PER_CONTRIB} 金币价值 = 1 贡献`}</small></h3>
       <p className="muted small-note">{tl`用自己仓库和背包里的东西换贡献，同时给公会同样多的经验和贡献值。今天还能换 ${fmtNum(left)} / ${EXCHANGE_DAY_MAX} 贡献（每天 0 点 UTC 重置）。`}</p>
@@ -192,7 +208,7 @@ function Tasks({ s, guild, act, reload }: Ctx) {
   );
 }
 
-function Bank({ s, guild, members, me, role, act, reload }: Ctx) {
+function Bank({ s, guild, members, me, role, act, reload, day }: Ctx) {
   const [vaults, setVaults] = useState<GuildVault[]>([]);
   const [vault, setVault] = useSticky<number>('guild.vault', 0);
   const [items, setItems] = useState<[string, number][] | null>(null);
@@ -239,7 +255,8 @@ function Bank({ s, guild, members, me, role, act, reload }: Ctx) {
     const name = prompt(tl`私人仓库的名字（花 ${fmtNum(cost)} 公会贡献值，开好后只有你和会长能进，可以再加人）`, tl('私人仓库'));
     if (name != null) void act.run(async () => { const i = await online.openVault(name); setVault(i); setMode('perm'); await reload(); await load(); });
   };
-  const rule = guild.takeMin < 0 ? tl('只有会长和副会长能取') : guild.takeMin === 0 ? tl('所有成员都能取') : tl`累计贡献 ${guild.takeMin} 以上的成员能取`;
+  const rule = (guild.takeMin < 0 ? tl('只有会长和副会长能取') : guild.takeMin === 0 ? tl('所有成员都能取') : tl`累计贡献 ${guild.takeMin} 以上的成员能取`)
+    + (guild.takeDay > 0 ? tl`，成员每天最多取 ${fmtNum(guild.takeDay)} 金币价值` : '');
   const nextCost = VAULT_COST[vaults.length];
   return (
     <>
@@ -257,6 +274,7 @@ function Bank({ s, guild, members, me, role, act, reload }: Ctx) {
       <p className="muted small-note">
         {tl`随时随地都能存取，不用回城。取出的东西放进自己的仓库。${used} / ${slots} 种 · `}
         {vault === 0 ? rule : tl`只有名单里的人${cur?.officers ? tl('、副会长') : ''}和会长能进`}
+        {vault === 0 && role === 'member' && guild.takeDay > 0 && tl` · 你今天还能取 ${fmtNum(Math.max(0, guild.takeDay - (day?.took ?? 0)))}`}
       </p>
       {inVault && (
         <div className="chips-row">
@@ -316,7 +334,11 @@ function Bank({ s, guild, members, me, role, act, reload }: Ctx) {
           <button disabled={act.busy} onClick={() => {
             const v = prompt(tl('成员从公共仓库取东西要多少累计贡献？填 0 = 所有人都能取，-1 = 只有会长和副会长'), String(guild.takeMin));
             if (v != null && Number.isFinite(Number(v))) void act.run(async () => { await online.setTakeMin(Math.floor(Number(v))); await reload(); });
-          }}>{tl`设置取物门槛（现在：${rule}）`}</button>
+          }}>{tl('设置取物门槛')}</button>
+          <button disabled={act.busy} onClick={() => {
+            const v = prompt(tl('普通成员每天最多从公共仓库取多少金币价值的东西？填 0 = 不限'), String(guild.takeDay));
+            if (v != null && Number.isFinite(Number(v))) void act.run(async () => { await online.setTakeDay(Math.floor(Number(v))); await reload(); });
+          }}>{tl('设置每日取物上限')}</button>
         </div>
       )}
       {inVault && mode === 'perm' && cur && canEdit && <VaultPerm v={cur} members={members} act={act} onSaved={load} />}
@@ -350,5 +372,105 @@ function VaultPerm({ v, members, act, onSaved }: { v: GuildVault; members: Guild
         <button className="primary" disabled={act.busy} onClick={() => void act.run(async () => { await online.setVault(v.idx, name, [...allow], officers); await onSaved(); })}>{tl('保存权限')}</button>
       </div>
     </>
+  );
+}
+
+function Shop({ s, guild, me, act, reload }: Ctx) {
+  const [bought, setBought] = useState<Record<string, number>>({});
+  const avail = me ? me.contrib - me.spent : 0;
+  const buy = (x: ShopItem) => {
+    const max = Math.min(x.daily - (bought[x.item] ?? 0), Math.floor(avail / x.price));
+    const n = ask(max);
+    if (n > 0) void act.run(async () => {
+      const got = await online.buyGuildItem(x.item, n);
+      give(x.item, got);
+      setBought((b) => ({ ...b, [x.item]: (b[x.item] ?? 0) + got }));
+      await reload();
+    });
+  };
+  return (
+    <>
+      <p className="muted small-note">{tl`花自己的可用贡献买东西（现在可用 ${fmtNum(avail)}），买到的直接放进仓库。公会等级越高解锁越多，每样每天限购。退出公会后没花完的贡献会清零。`}</p>
+      <ul className="guild-list guild-scroll">
+        {GUILD_SHOP.map((x) => {
+          const locked = guild.level < x.lv;
+          return (
+            <li key={x.item} className={locked ? 'ghost' : ''}>
+              <span className="with-icon"><Icon item={x.item} size={28} /> <b className={qClass(ITEMS[x.item]?.quality)}>{nameOf(x.item)}</b> <small className="muted">{tl`仓库有 ${fmtNum(s.bank[x.item] ?? 0)}`}</small></span>
+              <span className="row-tools">
+                <small className="muted">{locked ? tl`公会 Lv${x.lv} 解锁` : tl`${fmtNum(x.price)} 贡献 · 每天 ${x.daily} 个`}</small>
+                <button className="small" disabled={act.busy || locked || avail < x.price || (bought[x.item] ?? 0) >= x.daily} onClick={() => buy(x)}>{tl('购买')}</button>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </>
+  );
+}
+
+function Tech({ guild, role, act, reload }: Ctx) {
+  const cap = techCap(guild.level);
+  return (
+    <>
+      <p className="muted small-note">{tl`会长和副会长花公会贡献值升级，加成给所有成员、离线也算。每项最高 ${TECH_MAX} 级，现在公会 Lv${guild.level} 最高能升到 ${cap} 级（每两级公会等级多 1 级）。公会贡献值 ${fmtNum(guild.points)}。`}</p>
+      <ul className="guild-list">
+        {GUILD_TECH.map((t) => {
+          const lv = guild.tech[t.id] ?? 0, cost = techCost(lv);
+          const full = lv >= TECH_MAX;
+          return (
+            <li key={t.id}>
+              <span>
+                <b>{t.name}</b> <small className="muted">Lv{lv}/{TECH_MAX}</small><br />
+                <small className="muted">{tl`${t.desc} +${Math.round(t.per * 100)}% 每级，现在 +${Math.round(t.per * lv * 100)}%`}</small>
+              </span>
+              <span className="row-tools">
+                {!full && <small className="muted">{tl`${fmtNum(cost)} 贡献值`}</small>}
+                {role !== 'member' && !full && (
+                  <button className="small" disabled={act.busy || lv >= cap || guild.points < cost} onClick={() => confirm(tl`花 ${fmtNum(cost)} 公会贡献值把「${t.name}」升到 ${lv + 1} 级？`) && void act.run(async () => { await online.upgradeTech(t.id); await reload(); })}>
+                    {lv >= cap ? tl`公会 Lv${(lv + 1) * 2} 解锁` : tl('升级')}
+                  </button>
+                )}
+                {full && <small>{tl('已满级')}</small>}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </>
+  );
+}
+
+const ROLE_NAME: Record<string, string> = { leader: tl('会长'), officer: tl('副会长'), member: tl('成员') };
+function eventText(e: GuildEvent) {
+  switch (e.kind) {
+    case 'join': return tl`${e.name} 加入了公会`;
+    case 'leave': return tl`${e.name} 离开了公会`;
+    case 'role': return tl`${e.name} 成为了${ROLE_NAME[e.detail] ?? e.detail}`;
+    case 'level': return tl`公会升到了 ${e.detail} 级！`;
+    case 'vault': return tl`${e.name} 开了私人仓库「${e.detail}」`;
+    case 'task': return tl`公会任务「${nameOf(e.detail)}」完成了`;
+    case 'tech': {
+      const [k, lv] = e.detail.split(':');
+      return tl`${e.name} 把「${GUILD_TECH.find((t) => t.id === k)?.name ?? k}」升到了 ${lv} 级`;
+    }
+    default: return e.detail;
+  }
+}
+
+function Events({ act }: Ctx) {
+  const [list, setList] = useState<GuildEvent[] | null>(null);
+  useEffect(() => { void act.run(async () => setList(await online.guildEvents())); }, []);
+  return (
+    <ul className="guild-list guild-scroll">
+      {!list && <li className="ghost">{tl('读取中…')}</li>}
+      {list && !list.length && <li className="ghost">{tl('还没有动态')}</li>}
+      {list?.map((e, i) => (
+        <li key={i}>
+          <span>{eventText(e)}</span>
+          <small className="muted">{new Date(e.at).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</small>
+        </li>
+      ))}
+    </ul>
   );
 }

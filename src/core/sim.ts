@@ -1,6 +1,6 @@
 import { partyXpPct } from './party';
 import { cleanGm, gmPct, setGmClock } from './gm';
-import { GUILD_MAX_LV, guildPct } from './guild';
+import { GUILD_MAX_LV, cleanTech, guildPct } from './guild';
 import { APT_MAX, APT_MIN, FOAL, growMs, HORSE_XP, horseItem, RANCH, RANCH_PENS } from './ranch';
 import { baseOf, qid, QUALITY_VALUE, rollQuality } from './quality';
 import { HW_POINT, HW_TIERS, hwFight, hwOpen, hwTierOf, hwWait } from './halloween';
@@ -178,6 +178,7 @@ export function migrate(raw: unknown): GameState | null {
     quest: obj<GameState['quest']>(s.quest) && Number.isInteger(s.quest!.i) && s.quest!.i >= 0 ? { i: s.quest!.i, n: Math.max(0, num(s.quest!.n, 0)) } : { i: 0, n: 0 },
     gmBuffs: cleanGm(s.gmBuffs),
     guildLv: Number.isInteger(s.guildLv) && s.guildLv! > 0 ? Math.min(GUILD_MAX_LV, s.guildLv!) : undefined,
+    guildTech: cleanTech(s.guildTech),
     buffs: Object.fromEntries(Object.entries(obj<GameState['buffs']>(s.buffs) ?? {}).filter(([, b]) => b && Number.isFinite(b.pct) && Number.isFinite(b.ms) && b.ms > 0)),
     mounted: !!s.mounted && !!equipment.mount,
     redeemed: arr<string>(s.redeemed).filter((c) => typeof c === 'string'),
@@ -370,7 +371,7 @@ export const buffPct = (s: GameState, k: BuffKind) => s.buffs?.[k]?.pct ?? 0;
 /** 料理增益 + GM 增益：结算都用这个 */
 export const boostPct = (s: GameState, k: BuffKind) => buffPct(s, k) + gmPct(s, k) + guildPct(s, k);
 /** GM 稀有掉落：几率掉落的掉率按比例提高，最多到必掉 */
-const dropChance = (s: GameState, c: number) => Math.min(1, c * (1 + gmPct(s, 'drop') + gearSum(s, 'luck')));
+const dropChance = (s: GameState, c: number) => Math.min(1, c * (1 + gmPct(s, 'drop') + guildPct(s, 'drop') + gearSum(s, 'luck')));
 const coinQty = (s: GameState, item: string, n: number) => (item === 'coins' ? Math.round(n * (1 + gmPct(s, 'coins') + guildPct(s, 'coins'))) : n);
 
 /** 吃下一份食物：回血，有增益就挂上（同类只留一个，新的覆盖旧的） */

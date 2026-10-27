@@ -649,6 +649,79 @@ alter table public.guild_members add column if not exists donated_day date;
 alter table public.guild_tasks add column if not exists per int not null default 1;
 alter table public.guild_tasks add column if not exists day date;
 
+-- 10-27 完善：物品价格表（兑换、任务、限额都按服务器上的价格算，不信客户端）、公会商店、科技、签到、动态。
+-- item_values / guild_shop 的数据在 supabase/guild-data.sql（由 src/core/guildSql.ts 生成，改了物品价格要重新生成再跑一次）
+create table if not exists public.item_values (
+  id text primary key,
+  value int not null,
+  -- 能出现在每日公会任务里的阶级（0-7），不能出的是空
+  task_tier int
+);
+create table if not exists public.guild_shop (
+  item text primary key,
+  price int not null check (price > 0),
+  lv int not null,
+  daily int not null
+);
+alter table public.item_values enable row level security;
+alter table public.guild_shop enable row level security;
+drop policy if exists "item_values 所有人可看" on public.item_values;
+create policy "item_values 所有人可看" on public.item_values for select using (true);
+drop policy if exists "guild_shop 所有人可看" on public.guild_shop;
+create policy "guild_shop 所有人可看" on public.guild_shop for select using (true);
+-- 每天的兑换、取物、签到记在玩家身上（以前记在公会成员上，退会再进就能重置）
+alter table public.profiles add column if not exists g_day date;
+alter table public.profiles add column if not exists g_exchanged bigint not null default 0;
+alter table public.profiles add column if not exists g_took bigint not null default 0;
+alter table public.profiles add column if not exists g_checkin date;
+-- 个人贡献花掉的部分（公会商店）：可用 = contrib - spent
+alter table public.guild_members add column if not exists spent bigint not null default 0;
+-- 公会科技等级 {xp, speed, coins, drop}；成员每天从公共仓库最多取多少金币价值的东西（0 = 不限）
+alter table public.guilds add column if not exists tech jsonb not null default '{}'::jsonb;
+alter table public.guilds add column if not exists take_day int not null default 0;
+create table if not exists public.guild_shop_buys (
+  player_id uuid not null references public.profiles(id) on delete cascade,
+  item text not null,
+  day date not null,
+  qty int not null default 0,
+  primary key (player_id, item, day)
+);
+alter table public.guild_shop_buys enable row level security;
+drop policy if exists "guild_shop_buys 看自己的" on public.guild_shop_buys;
+create policy "guild_shop_buys 看自己的" on public.guild_shop_buys for select using (player_id = auth.uid());
+-- 公会动态：入会、退会、升级、任职、科技、私人仓库、任务完成
+create table if not exists public.guild_events (
+  id bigserial primary key,
+  guild_id uuid not null references public.guilds(id) on delete cascade,
+  kind text not null,
+  name text not null default '',
+  detail text not null default '',
+  at timestamptz not null default now()
+);
+create index if not exists guild_events_guild on public.guild_events (guild_id, at desc);
+alter table public.guild_events enable row level security;
+drop policy if exists "guild_events 本会可看" on public.guild_events;
+create policy "guild_events 本会可看" on public.guild_events for select
+  using (guild_id = (select guild_id from public.guild_members where player_id = auth.uid()));
+
+-- 记一条公会动态（内部用），顺便清掉 30 天前的
+create or replace function public.guild_event(p_guild uuid, p_kind text, p_name text, p_detail text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (select 1 from guilds where id = p_guild) then return; end if;
+  insert into guild_events (guild_id, kind, name, detail) values (p_guild, p_kind, coalesce(p_name, ''), coalesce(p_detail, ''));
+  delete from guild_events where guild_id = p_guild and at < now() - interval '30 days';
+end $$;
+revoke execute on function public.guild_event(uuid, text, text, text) from public, anon, authenticated;
+
+-- 跨天了把玩家的每日计数清零（内部用）
+create or replace function public.guild_day_reset(p_player uuid) returns void
+language sql security definer set search_path = public as $$
+  update profiles set g_day = (now() at time zone 'utc')::date, g_exchanged = 0, g_took = 0
+    where id = p_player and g_day is distinct from (now() at time zone 'utc')::date
+$$;
+revoke execute on function public.guild_day_reset(uuid) from public, anon, authenticated;
+
 create or replace function public.guild_xp_table() returns bigint[] language sql immutable as $$
   select array[0, 5000, 15000, 35000, 70000, 120000, 200000, 320000, 500000, 800000]::bigint[]
 $$;
@@ -686,49 +759,52 @@ end $$;
 revoke execute on function public.guild_add_contrib(uuid, bigint) from public, anon, authenticated;
 
 -- 物品兑换贡献（用户 10-26：贡献靠物品换）：每 10 金币价值 = 1 贡献 = 1 公会经验，每人每天（UTC）最多换 2000 贡献。
--- 单价由客户端按物品价值给（p_value），东西本地先扣；返回实际收下的数量，多的退回
+-- 价格查服务器上的 item_values（10-27 修：以前单价由客户端给，可以乱填）；东西本地先扣，返回实际收下的数量，多的退回
 drop function if exists public.donate_coins(int);
-create or replace function public.exchange_items(p_item text, p_qty int, p_value int) returns int
+drop function if exists public.exchange_items(text, int, int);
+create or replace function public.exchange_items(p_item text, p_qty int) returns int
 language plpgsql security definer set search_path = public as $$
-declare m guild_members; today date := (now() at time zone 'utc')::date; left_ bigint; v int; q int; n bigint;
+declare m guild_members; left_ bigint; v int; q int; n bigint;
 begin
   if p_item = 'coins' then raise exception '金币不能兑换贡献'; end if;
-  select * into m from guild_members where player_id = auth.uid() for update;
+  select * into m from guild_members where player_id = auth.uid();
   if m.player_id is null then raise exception '还没加入公会'; end if;
-  v := least(greatest(p_value, 1), 100000);
-  left_ := 2000 - case when m.donated_day is distinct from today then 0 else m.donated end;
+  select value into v from item_values where id = p_item;
+  if v is null or v <= 0 then raise exception '这个东西不能兑换'; end if;
+  perform guild_day_reset(auth.uid());
+  select 2000 - g_exchanged into left_ from profiles where id = auth.uid() for update;
   if left_ <= 0 then raise exception '今天的兑换已经满了'; end if;
   q := least(greatest(p_qty, 0)::bigint, (left_ * 10) / v)::int;
   n := (q::bigint * v) / 10;
   if q <= 0 or n <= 0 then raise exception '数量太少，换不到 1 点贡献'; end if;
-  update guild_members set
-    donated = case when donated_day is distinct from today then 0 else donated end + n,
-    donated_day = today
-  where player_id = auth.uid();
+  update profiles set g_exchanged = g_exchanged + n where id = auth.uid();
   perform guild_add_contrib(auth.uid(), n);
   perform guild_add_xp(m.guild_id, n);
   return q;
 end $$;
-grant execute on function public.exchange_items(text, int, int) to authenticated;
+grant execute on function public.exchange_items(text, int) to authenticated;
 
--- 每日公会任务：客户端按公会 id + 日期算出同样的三条，谁先打开公会页谁把今天的写进来
+-- 每日公会任务：客户端按公会 id + 日期挑出同样的三样东西，谁先打开公会页谁把今天的写进来。
+-- 10-27 修：只收物品 id，要多少个、每个几点贡献、奖励都由服务器按价格算（和 src/core/guild.ts dailyTasks 一样的公式）
 create or replace function public.ensure_guild_tasks(p_tasks jsonb) returns void
 language plpgsql security definer set search_path = public as $$
-declare g uuid; today date := (now() at time zone 'utc')::date; t jsonb;
+declare g uuid; lv int; top int; today date := (now() at time zone 'utc')::date; t jsonb; iv item_values; nd int; pr int; n int := 0;
 begin
   select guild_id into g from guild_members where player_id = auth.uid();
   if g is null then raise exception '还没加入公会'; end if;
-  perform 1 from guilds where id = g for update;
+  select level into lv from guilds where id = g for update;
+  top := least(7, greatest(1, lv));
   if exists (select 1 from guild_tasks where guild_id = g and day = today) then return; end if;
   delete from guild_tasks where guild_id = g and ends_at < now() - interval '1 day';
-  for t in select * from jsonb_array_elements(coalesce(p_tasks, '[]'::jsonb)) limit 5 loop
+  for t in select * from jsonb_array_elements(coalesce(p_tasks, '[]'::jsonb)) loop
+    exit when n >= 3;
+    select * into iv from item_values where id = t->>'target' and task_tier is not null and task_tier <= top;
+    continue when iv.id is null or exists (select 1 from guild_tasks where guild_id = g and day = today and target = iv.id);
+    nd := greatest(10, least(300, (round(1500.0 / iv.value / 5) * 5)::int));
+    pr := greatest(1, round(iv.value * 1.5 / 10)::int);
     insert into guild_tasks (guild_id, kind, target, need, have, reward, per, day, ends_at) values (
-      g, 'donate', left(t->>'target', 40),
-      least(greatest((t->>'need')::int, 1), 5000),
-      0,
-      least(greatest((t->>'reward')::int, 1), 50000),
-      least(greatest((t->>'per')::int, 1), 100),
-      today, (today + 1)::timestamp at time zone 'utc');
+      g, 'donate', iv.id, nd, 0, (round(nd * pr * 0.5) + 100 * lv)::int, pr, today, (today + 1)::timestamp at time zone 'utc');
+    n := n + 1;
   end loop;
 end $$;
 grant execute on function public.ensure_guild_tasks(jsonb) to authenticated;
@@ -748,7 +824,10 @@ begin
   update guild_tasks set have = have + add where id = p_task;
   perform guild_add_contrib(auth.uid(), add::bigint * t.per);
   perform guild_add_xp(g, add::bigint * t.per);
-  if t.have + add >= t.need then perform guild_add_xp(g, t.reward); end if;
+  if t.have + add >= t.need then
+    perform guild_add_xp(g, t.reward);
+    perform guild_event(g, 'task', '', t.target);
+  end if;
   return add;
 end $$;
 grant execute on function public.contribute(uuid, int) to authenticated;
@@ -851,7 +930,8 @@ language plpgsql security definer set search_path = public as $$
 declare g uuid; lv int; nm text; cap int;
 begin
   if p_qty <= 0 or p_qty > 1000000 then raise exception '数量不对'; end if;
-  if p_item = 'coins' then raise exception '金币请用捐献'; end if;
+  if p_item = 'coins' then raise exception '金币不能存进公会仓库'; end if;
+  if not exists (select 1 from item_values where id = p_item) then raise exception '这个东西不能存'; end if;
   select guild_id into g from guild_members where player_id = auth.uid();
   if g is null then raise exception '还没加入公会'; end if;
   if not can_vault(g, p_vault, auth.uid()) then raise exception '没有这个仓库的权限'; end if;
@@ -874,16 +954,27 @@ grant execute on function public.guild_deposit(text, int, int) to authenticated;
 drop function if exists public.guild_withdraw(text, int);
 create or replace function public.guild_withdraw(p_item text, p_qty int, p_vault int default 0) returns int
 language plpgsql security definer set search_path = public as $$
-declare m guild_members; tm int; have bigint; n int; nm text;
+declare m guild_members; tm int; td int; have bigint; n int; nm text; v int; took bigint; capped boolean;
 begin
   select * into m from guild_members where player_id = auth.uid();
   if m.player_id is null then raise exception '还没加入公会'; end if;
   if not can_vault(m.guild_id, p_vault, auth.uid()) then raise exception '没有这个仓库的权限'; end if;
-  select take_min into tm from guilds where id = m.guild_id;
+  select take_min, take_day into tm, td from guilds where id = m.guild_id;
   if p_vault = 0 and m.role = 'member' and (tm < 0 or m.contrib < tm) then raise exception '贡献不够，不能从公会仓库取东西'; end if;
   select qty into have from guild_bank where guild_id = m.guild_id and vault = p_vault and item = p_item for update;
   n := least(greatest(p_qty, 0), coalesce(have, 0))::int;
   if n <= 0 then return 0; end if;
+  -- 10-27：会长可以限制普通成员每天从公共仓库取多少金币价值的东西，防止有人一次搬空
+  capped := p_vault = 0 and m.role = 'member' and td > 0;
+  if capped then
+    perform guild_day_reset(auth.uid());
+    select coalesce(value, 1) into v from item_values where id = p_item;
+    v := greatest(coalesce(v, 1), 1);
+    select g_took into took from profiles where id = auth.uid() for update;
+    n := least(n::bigint, (td - took) / v)::int;
+    if n <= 0 then raise exception '今天从公会仓库取的东西已经到上限了'; end if;
+    update profiles set g_took = g_took + n::bigint * v where id = auth.uid();
+  end if;
   if n = have then delete from guild_bank where guild_id = m.guild_id and vault = p_vault and item = p_item;
   else update guild_bank set qty = qty - n where guild_id = m.guild_id and vault = p_vault and item = p_item; end if;
   select name into nm from profiles where id = auth.uid();
@@ -913,3 +1004,126 @@ begin
   update guild_bank b set pos = coalesce(array_position(p_items, b.item), 100000) where b.guild_id = g and b.vault = p_vault;
 end $$;
 grant execute on function public.sort_guild_bank(int, text[]) to authenticated;
+
+-- ============ 公会完善（10-27）：签到、商店、科技、取物上限、动态 ============
+-- 每日签到：每人每天一次（记在玩家身上，换公会也只能签一次），得 10 + 5×公会等级 贡献，公会拿同样多的经验和贡献值
+create or replace function public.guild_checkin() returns int
+language plpgsql security definer set search_path = public as $$
+declare g uuid; lv int; today date := (now() at time zone 'utc')::date; n int; ok int;
+begin
+  select guild_id into g from guild_members where player_id = auth.uid();
+  if g is null then raise exception '还没加入公会'; end if;
+  update profiles set g_checkin = today where id = auth.uid() and g_checkin is distinct from today;
+  get diagnostics ok = row_count;
+  if ok = 0 then raise exception '今天已经签到过了'; end if;
+  select level into lv from guilds where id = g;
+  n := 10 + 5 * lv;
+  perform guild_add_contrib(auth.uid(), n);
+  perform guild_add_xp(g, n);
+  return n;
+end $$;
+grant execute on function public.guild_checkin() to authenticated;
+
+-- 公会商店：花自己的可用贡献（累计 - 已花）买东西，商品按公会等级解锁，每样每天限购。返回买到的数量，东西客户端放进仓库
+create or replace function public.buy_guild_item(p_item text, p_qty int) returns int
+language plpgsql security definer set search_path = public as $$
+declare m guild_members; sh guild_shop; lv int; today date := (now() at time zone 'utc')::date; bought int; q int;
+begin
+  select * into m from guild_members where player_id = auth.uid() for update;
+  if m.player_id is null then raise exception '还没加入公会'; end if;
+  select * into sh from guild_shop where item = p_item;
+  if sh.item is null then raise exception '商店里没有这个'; end if;
+  select level into lv from guilds where id = m.guild_id;
+  if lv < sh.lv then raise exception '公会等级不够'; end if;
+  select coalesce(sum(qty), 0) into bought from guild_shop_buys where player_id = auth.uid() and item = p_item and day = today;
+  q := least(greatest(p_qty, 0), sh.daily - bought);
+  if q <= 0 then raise exception '今天已经买到上限了'; end if;
+  q := least(q::bigint, (m.contrib - m.spent) / sh.price)::int;
+  if q <= 0 then raise exception '贡献不够'; end if;
+  update guild_members set spent = spent + q::bigint * sh.price where player_id = auth.uid();
+  insert into guild_shop_buys (player_id, item, day, qty) values (auth.uid(), p_item, today, q)
+    on conflict (player_id, item, day) do update set qty = guild_shop_buys.qty + excluded.qty;
+  delete from guild_shop_buys where player_id = auth.uid() and day < today - 7;
+  return q;
+end $$;
+grant execute on function public.buy_guild_item(text, int) to authenticated;
+
+-- 公会科技：会长和副会长花公会贡献值升级，每项最高 5 级、不超过公会等级的一半；第 n 级花 3000×2^(n-1)
+create or replace function public.upgrade_tech(p_kind text) returns int
+language plpgsql security definer set search_path = public as $$
+declare g uuid; r text; gd guilds; cur int; cost bigint; nm text;
+begin
+  if p_kind not in ('xp', 'speed', 'coins', 'drop') then raise exception '没有这项科技'; end if;
+  select guild_id, role into g, r from guild_members where player_id = auth.uid();
+  if r is null or r = 'member' then raise exception '只有会长和副会长能升级科技'; end if;
+  select * into gd from guilds where id = g for update;
+  cur := coalesce((gd.tech->>p_kind)::int, 0);
+  if cur >= least(5, gd.level / 2) then raise exception '已经到上限了，公会升级后才能继续'; end if;
+  cost := 3000 * (2 ^ cur)::bigint;
+  if gd.points < cost then raise exception '公会贡献值不够'; end if;
+  update guilds set points = points - cost, tech = tech || jsonb_build_object(p_kind, cur + 1) where id = g;
+  select name into nm from profiles where id = auth.uid();
+  perform guild_event(g, 'tech', nm, p_kind || ':' || (cur + 1));
+  return cur + 1;
+end $$;
+grant execute on function public.upgrade_tech(text) to authenticated;
+
+-- 会长设普通成员每天从公共仓库最多取多少金币价值（0 = 不限）
+create or replace function public.set_take_day(p_value int) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if public.my_role() is distinct from 'leader' then raise exception '只有会长能改'; end if;
+  update guilds set take_day = greatest(p_value, 0)
+    where id = (select guild_id from guild_members where player_id = auth.uid());
+end $$;
+grant execute on function public.set_take_day(int) to authenticated;
+
+-- 公会动态的触发器：入会、离开（同时从私人仓库名单里删掉，以后重新加入也不会自动有权限）、任职、升级、开私人仓库
+create or replace function public.guild_members_event() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare nm text;
+begin
+  select name into nm from profiles where id = coalesce(new.player_id, old.player_id);
+  if tg_op = 'INSERT' then
+    perform guild_event(new.guild_id, 'join', nm, '');
+  elsif tg_op = 'DELETE' then
+    update guild_vaults set allow = array_remove(allow, old.player_id) where guild_id = old.guild_id;
+    perform guild_event(old.guild_id, 'leave', nm, '');
+  elsif new.role is distinct from old.role then
+    perform guild_event(new.guild_id, 'role', nm, new.role);
+  end if;
+  return null;
+end $$;
+drop trigger if exists guild_members_event on public.guild_members;
+create trigger guild_members_event after insert or delete or update of role on public.guild_members
+  for each row execute function public.guild_members_event();
+
+create or replace function public.guilds_event() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.level > old.level then perform guild_event(new.id, 'level', '', new.level::text); end if;
+  return null;
+end $$;
+drop trigger if exists guilds_event on public.guilds;
+create trigger guilds_event after update of level on public.guilds for each row execute function public.guilds_event();
+
+create or replace function public.guild_vaults_event() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare nm text;
+begin
+  select name into nm from profiles where id = auth.uid();
+  perform guild_event(new.guild_id, 'vault', nm, new.name);
+  return null;
+end $$;
+drop trigger if exists guild_vaults_event on public.guild_vaults;
+create trigger guild_vaults_event after insert on public.guild_vaults for each row execute function public.guild_vaults_event();
+
+-- 自己今天的兑换、取物、签到（profiles 的这几列自己能看）
+create or replace function public.my_guild_day() returns table (exchanged bigint, took bigint, checked_in boolean)
+language sql stable security definer set search_path = public as $$
+  select case when g_day = (now() at time zone 'utc')::date then g_exchanged else 0 end,
+         case when g_day = (now() at time zone 'utc')::date then g_took else 0 end,
+         g_checkin is not distinct from (now() at time zone 'utc')::date
+  from profiles where id = auth.uid()
+$$;
+grant execute on function public.my_guild_day() to authenticated;

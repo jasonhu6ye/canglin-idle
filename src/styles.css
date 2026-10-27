@@ -1088,3 +1088,5 @@ h2.dg-blue { color: #6ab4ff; }
 .hb-search { width: 100%; margin: 6px 0 4px; min-height: 36px; padding: 6px 10px; font: inherit; font-size: 16px; color: #fff3c4; background: #1b120c; border: 1px solid var(--edge); border-radius: 2px; }
 .hb-first { margin: 8px 0 4px; padding: 8px; border: 1px solid #7a5a2a; background: #2a1c10; border-radius: 3px; }
 .hb-first > b { display: block; margin-bottom: 6px; color: var(--gold); font-size: 13px; }
+.guild .guild-list li > span:first-child { flex: 1; min-width: 0; }
+.guild .guild-list .row-tools small, .guild .guild-list .row-tools button { white-space: nowrap; }
