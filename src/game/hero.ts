@@ -246,7 +246,7 @@ interface Pose {
   /** 眨眼 */
   blink?: boolean;
   /** 待机施法阶段（冰火咒师用）：抬手、掌心凝聚元素、白光召剑、握剑、剑散成光点、放下手；castK 是该阶段的进度 0-1 */
-  cast?: 'rise' | 'raise' | 'flash' | 'beam' | 'slam' | 'fade' | 'lower';
+  cast?: 'rise' | 'raise' | 'merge' | 'orb' | 'flash' | 'beam' | 'slam' | 'wave' | 'fade' | 'lower';
   castK?: number;
   /** 这一帧在动作里的进度 0-1、帧序号（特效闪烁用，生成精灵表时填） */
   t?: number;
@@ -861,7 +861,7 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
       // 举剑过头
       const UP = { ex: 4.6, ey: 0.6, hx: 1.3, hy: -2.2 };
       const slamK = pose.cast === 'slam' ? (pose.castK ?? 0) : 0;
-      const [from, to, kk] = pose.cast === 'rise' ? [DOWN, WIDE, k] : pose.cast === 'raise' ? [WIDE, WIDE, k] : pose.cast === 'lower' ? [HOLD, DOWN, k]
+      const [from, to, kk] = pose.cast === 'rise' ? [DOWN, WIDE, k] : pose.cast === 'raise' ? [WIDE, WIDE, k] : pose.cast === 'merge' ? [WIDE, HOLD, k] : pose.cast === 'lower' ? [HOLD, DOWN, k]
         : pose.cast === 'slam' ? (slamK < 0.5 ? [HOLD, UP, ease(slamK * 2)] : [UP, HOLD, Math.min(1, (slamK - 0.5) * 4)]) : [HOLD, HOLD, k];
       const at = (key: keyof typeof DOWN) => lerp(from[key], to[key], kk);
       hands = [];
@@ -1215,8 +1215,8 @@ function drawVoidHood(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose:
   const purple = ['#5a2a98', '#d090ff'];
   const ey = Math.round(cy + 0.9);
   const eyes: [number, string[]][] = side
-    ? [[Math.round(hx + 1.2), pose.cast === 'beam' ? purple : pose.cast === 'raise' || pose.cast === 'rise' ? red : cyan]]
-    : [[Math.round(hx - 2), pose.cast === 'beam' ? purple : pose.cast === 'raise' || pose.cast === 'rise' ? red : cyan], [Math.round(hx + 1), pose.cast === 'beam' ? purple : cyan]];
+    ? [[Math.round(hx + 1.2), pose.cast === 'beam' || pose.cast === 'slam' || pose.cast === 'wave' ? purple : pose.cast === 'raise' || pose.cast === 'rise' || pose.cast === 'merge' ? red : cyan]]
+    : [[Math.round(hx - 2), pose.cast === 'beam' || pose.cast === 'slam' || pose.cast === 'wave' ? purple : pose.cast === 'raise' || pose.cast === 'rise' || pose.cast === 'merge' || pose.cast === 'orb' ? red : cyan], [Math.round(hx + 1), pose.cast === 'beam' || pose.cast === 'slam' || pose.cast === 'wave' ? purple : cyan]];
   const bright = flicker(pose, 2) > 0.45;
   for (const [x, c] of eyes) {
     // 亮点四周一圈暗光，眼睛才像在发光
@@ -1341,7 +1341,7 @@ function drawFrostfireFx(p: Pix, o: Outfit, pose: Pose, at: { cx: number; sy: nu
     const ox = Math.round(cx + Math.cos(a) * 11);
     const oy = Math.round(sy + 3 + Math.sin(a) * 3.2);
     const rune = RUNES[(i + Math.floor(t * 6)) % RUNES.length];
-    const c = cast === 'beam' || cast === 'slam' || cast === 'fade' ? PUR[2] : Math.sin(a) > 0 ? RING[3] : RING[2];
+    const c = cast === 'beam' || cast === 'slam' || cast === 'wave' || cast === 'fade' ? PUR[2] : Math.sin(a) > 0 ? RING[3] : RING[2];
     for (let j = 0; j < 9; j++) if (rune[j]) empty(ox + (j % 3) - 1, oy + Math.floor(j / 3) - 1, c);
   }
   if (cast === 'rise' || cast === 'raise') {
@@ -1424,6 +1424,50 @@ function drawFrostfireFx(p: Pix, o: Outfit, pose: Pose, at: { cx: number; sy: nu
         empty(x, y, kk < 0.5 ? (i % 2 ? FIRE[2] : FIRE[1]) : (i % 2 ? ICE[2] : ICE[1]));
       }
     }
+  } else if (cast === 'merge' || cast === 'orb') {
+    // 合掌：火和冰顺着手臂往胸前汇，越来越多；法球：一颗火冰各半、旋转的双色球，核心白亮，外面一圈火星和冰屑绕着飞
+    const ox = cx - 0.5, oy = sy + 2.2;
+    const r = cast === 'merge' ? 1 + k * 2.4 : 3.4 + Math.sin(k * TAU * 2) * 0.4;
+    if (cast === 'merge') {
+      for (let j = 0; j < 7; j++) {
+        const ph = (t * 4 + j * 0.14) % 1;
+        if (ph > 0.9) continue;
+        const fx = lerp(lx, ox, ph), fy = lerp(ly - 3, oy, ph) - Math.sin(ph * Math.PI) * 3;
+        const ix = lerp(rx2, ox, ph), iy = lerp(ry2 - 3, oy, ph) - Math.sin(ph * Math.PI) * 3;
+        put(fx, fy, ph < 0.5 ? FLAME[3] : FLAME[2]);
+        put(fx, fy + 1, FLAME[1]);
+        put(ix, iy, ph < 0.5 ? ICE[3] : ICE[2]);
+        put(ix + 1, iy, ICE[1]);
+      }
+      // 手上残留的火和冰慢慢熄
+      const left = 1 - k;
+      if (left > 0.15) flameField(put, lx, ly - 1, 2 + left * 4, Math.round(2 + left * 7), t, seed);
+      if (left > 0.15) for (let dy = -1; dy <= 1; dy++) put(rx2, ry2 - 3 + dy, dy ? ICE[1] : ICE[3]);
+    }
+    const spin = t * TAU * 3;
+    for (let dy = -Math.ceil(r); dy <= Math.ceil(r); dy++) {
+      for (let dx = -Math.ceil(r); dx <= Math.ceil(r); dx++) {
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d > r) continue;
+        const a = Math.atan2(dy, dx) + spin + d * 0.9;
+        const fire = Math.sin(a) > 0;
+        const R2 = fire ? FLAME : ICE;
+        put(ox + dx, oy + dy, d < r * 0.35 ? '#ffffff' : d < r * 0.7 ? R2[3] : R2[2]);
+      }
+    }
+    for (let j = 0; j < 8; j++) {
+      const a = (j / 8) * TAU - spin * 0.8;
+      const rr = r + 2.5 + (j % 2);
+      empty(ox + Math.cos(a) * rr * 1.3, oy + Math.sin(a) * rr, j % 2 ? FLAME[2] : ICE[2]);
+    }
+    if (cast === 'orb' && k > 0.6) {
+      // 快召剑时法球往外冒白光
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * TAU + spin;
+        const len = (k - 0.6) * 12;
+        for (let q = r + 1; q < r + 1 + len; q++) empty(ox + Math.cos(a) * q * 1.3, oy + Math.sin(a) * q * 0.8, '#ffffff');
+      }
+    }
   } else if (cast === 'flash') {
     // 白光炸开：身前一团白加十二道放射线，一帧比一帧更长更散，法阵也亮成白色
     const mx = cx, my = sy + 5;
@@ -1435,7 +1479,7 @@ function drawFrostfireFx(p: Pix, o: Outfit, pose: Pose, at: { cx: number; sy: nu
     const core = 2 + Math.round(k * 2);
     for (let dy = -core; dy <= core; dy++) for (let dx = -core; dx <= core; dx++) if (Math.abs(dx) + Math.abs(dy) <= core + 1) put(mx + dx, my + dy, '#ffffff');
     for (let j = 0; j < 10; j++) empty(mx - 12 + ((j * 5 + seed) % 24), HERO_FEET - 1 - (j % 4), j % 3 ? '#ffffff' : PUR[2]);
-  } else if (cast === 'beam' || cast === 'slam' || cast === 'fade') {
+  } else if (cast === 'beam' || cast === 'slam' || cast === 'wave' || cast === 'fade') {
     // 召唤出的光剑：双手握住剑柄，剑尖朝下；剑身白芯紫边，边上几道亮光往下走，剑周围飘紫色光屑。
     // 举剑砸地时剑跟着手上下，砸下去从脚下放出一圈紫色冲击波。消散时从剑尖开始化成光点
     const gy = Math.round(ly);
@@ -1498,6 +1542,31 @@ function drawFrostfireFx(p: Pix, o: Outfit, pose: Pose, at: { cx: number; sy: nu
         const x = cx - 1 + Math.round(Math.sin(j * 2.1 + fade * 6) * (2 + ph * 5));
         const y = cut - ph * 9 + (j % 3);
         empty(x, y, ph < 0.4 ? PUR[3] : ph < 0.7 ? PUR[2] : PUR[1]);
+      }
+    }
+    if (cast === 'wave') {
+      // 剑插在地上：接连两道冲击波往外扩，脚下八道紫色地裂光纹一闪一闪，剑尖处往上冒光柱
+      for (const off of [0, 0.5]) {
+        const w = (k + off) % 1;
+        for (const [rr, c] of [[w, w < 0.3 ? PUR[3] : PUR[2]], [w - 0.15, PUR[1]]] as [number, string][]) {
+          if (rr <= 0) continue;
+          for (let i = 0; i < 96; i++) {
+            const a = (i / 96) * TAU;
+            empty(cx + Math.cos(a) * 16 * rr, gy + 1 + Math.sin(a) * 5 * rr, c);
+          }
+        }
+      }
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * TAU + 0.3;
+        const len = 6 + ((i * 3 + seed) % 4) * 2;
+        for (let q = 2; q < len; q++) {
+          if ((q + seed + i) % 2) continue;
+          empty(cx + Math.cos(a) * q * 1.6, HERO_FEET - 0.5 + Math.sin(a) * q * 0.45, q < len * 0.6 ? PUR[2] : PUR[0]);
+        }
+      }
+      for (let j = 0; j < 6; j++) {
+        const ph = (t * 3 + j * 0.17) % 1;
+        empty(cx - 3 + j + Math.round(Math.sin(ph * 6 + j) * 1), tip - 1 - ph * 12, ph < 0.4 ? PUR[3] : PUR[1]);
       }
     }
     if (strike) {
@@ -1701,14 +1770,15 @@ const walk = (dir: HeroDir): HeroAnim => ({
 });
 
 /**
- * 待机 72 帧、8 帧每秒（9 秒一圈，呼吸 6 次）。普通外观只是呼吸眨眼；冰火咒师在这一圈里施法（用户 10-27 要十几帧以上的动作展示、再拉长）：
- * 0-11 站立，12-17 抬手，18-37 掌心聚火凝冰，38-40 白光召剑，41-52 握剑，53-60 举剑砸地放冲击波，61-66 剑散成光点，67-71 放下手
+ * 待机 96 帧、8 帧每秒（12 秒一圈，呼吸 8 次）。普通外观只是呼吸眨眼；冰火咒师在这一圈里施法（用户 10-27 要十几帧以上的动作展示、再拉长、再加帧）：
+ * 0-11 站立，12-17 抬手，18-35 掌心聚火凝冰，36-43 合掌把火冰汇到胸前，44-53 双色法球旋转，54-56 白光召剑，57-68 握剑，
+ * 69-76 举剑砸地放冲击波，77-84 剑插在地上再放两道冲击波和地裂光纹，85-90 剑散成光点，91-95 放下手
  */
-const CAST_PHASES: [number, Pose['cast']][] = [[12, undefined], [18, 'rise'], [38, 'raise'], [41, 'flash'], [53, 'beam'], [61, 'slam'], [67, 'fade'], [72, 'lower']];
+const CAST_PHASES: [number, Pose['cast']][] = [[12, undefined], [18, 'rise'], [36, 'raise'], [44, 'merge'], [54, 'orb'], [57, 'flash'], [69, 'beam'], [77, 'slam'], [85, 'wave'], [91, 'fade'], [96, 'lower']];
 const idle = (dir: HeroDir): HeroAnim => ({
-  key: `idle-${dir}`, frames: 72, rate: 8,
+  key: `idle-${dir}`, frames: 96, rate: 8,
   pose: (t, i) => {
-    const b = Math.sin(t * TAU * 6);
+    const b = Math.sin(t * TAU * 8);
     let from = 0;
     let cast: Pose['cast'];
     let castK = 1;
@@ -1718,7 +1788,7 @@ const idle = (dir: HeroDir): HeroAnim => ({
     }
     return {
       dir, bob: b > 0.3 ? 1 : 0, legF: 0.12, legB: -0.1, armF: 0.1 + b * 0.05, armB: -0.1,
-      elbowF: 0.25, elbowB: 0.2, cape: Math.round(1 + b), blink: i === 5 || i === 47, cast, castK,
+      elbowF: 0.25, elbowB: 0.2, cape: Math.round(1 + b), blink: i === 5 || i === 63, cast, castK,
     };
   },
 });
