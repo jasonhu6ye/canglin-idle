@@ -185,7 +185,7 @@ export const EN_UI: Record<string, string> = {
 
   // ---- 怪物图鉴 ----
   '普通': 'Normal',
-  '必掉': 'Always',
+  '必掉': 'Guaranteed',
   '已击败 {0}/{1} 种 · 当前筛选 {2}/{3}': 'Defeated {0}/{1} species · Filtered {2}/{3}',
   '生物': 'Creatures',
   '怪物': 'Monsters',
@@ -196,7 +196,7 @@ export const EN_UI: Record<string, string> = {
   '{0} · {1} · 出没：{2}': '{0} · {1} · Found in: {2}',
   '在地图上追踪': 'Track on map',
   '尚未击败。打败一次后可查看属性、特性和掉落。': 'Not defeated yet. Beat it once to see its stats, traits and drops.',
-  '已击败 {0} 只': 'Defeated {0}',
+  '已击败 {0} 只': '{0} kills',
   '生命 ': 'HP ',
   '攻击 ': 'Attack ',
   '防御 ': 'Defence ',
@@ -441,7 +441,7 @@ export const EN_UI: Record<string, string> = {
   '大型洞窟 · 尚未开放，敬请期待': 'Great cave · Not open yet. Stay tuned!',
   '已激活：站在任意一座激活过的石碑旁就能传送到这里': 'Active: teleport here from any activated waystone',
   '未激活：走到石碑旁边就会激活': 'Inactive: walk up to it to activate',
-  '可练：{0}': 'Train: {0}',
+  '可练：{0}': 'Trains: {0}',
   '点怪物去追踪：Boss 和交过手的能找到准确位置，其他只到大概的刷新区域': 'Tap a monster to track it. Bosses and anything you\'ve fought show their exact spot; others only their rough spawn area',
   ' 世界首领': ' World Boss',
   ' 精英': ' Elite',
