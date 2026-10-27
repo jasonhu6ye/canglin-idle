@@ -113,7 +113,7 @@ export const EN_SOCIAL: Record<string, string> = {
   '先加好友才能私聊、组队和交易': 'Add them as a friend first to whisper, party up, or trade.',
   '查看信息': 'Info',
   '查看装备': 'Gear',
-  '正在': 'Doing',
+  '正在': 'Activity',
   '身上没有装备': 'Nothing equipped',
   '已经是好友了': 'Already friends',
   '同意好友申请': 'Accept friend request',

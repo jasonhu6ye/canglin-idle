@@ -216,7 +216,7 @@ export const EN_ONLINE: Record<string, string> = {
   "账号年龄": "Account age",
   "今天刚注册": "Joined today",
   "{0} 天": "{0} days",
-  "{0} 年 {1} 天": "{0} y {1} d",
+  "{0} 年 {1} 天": "{0}y {1}d",
   '公会任务、公会仓库和公会加成下一步开放。': 'Guild quests, a guild bank and guild perks are coming next.',
   // 公会等级、贡献、仓库（10-26）
   '任务不存在': 'Quest not found',
@@ -293,6 +293,6 @@ export const EN_ONLINE: Record<string, string> = {
   "武器、护甲、饰品、工具都能送，品质任选，通过邮件发给指定玩家": "Weapons, armor, jewelry and tools, any quality, sent to a player by mail",
   "通过邮件发给指定玩家，装备在「赠送装备」里送": "Sent to a player by mail. Use Gift Gear for equipment",
   "品质": "Quality",
-  "搜索装备名字，如：精金长剑、铁镐、项链": "Search gear, e.g. Adamant Longsword, Iron Pickaxe, Necklace",
+  "搜索装备名字，如：精金长剑、铁镐、项链": "Search gear, e.g. T8 Sword, T4 Pickaxe, Necklace",
   "无品质 · 点击加入": "No quality · tap to add",
 };
