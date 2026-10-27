@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { store } from '../store';
 import { useEffect, useRef } from 'react';
-import { DPR } from '../game/dpr';
+import { DPR, setDpr } from '../game/dpr';
+import { dprFor, gfxLevel, gfxTick, onGfx } from '../game/gfx';
 import { BOSS_BANNER, GATE_CLICK, GATE_OPENED, MapScene, NODE_CLICK, PLAYER_CLICK, REGION_CHANGE } from '../game/MapScene';
 import { HOME_CLICK, HOME_MSG, HOME_TOOL, IslandScene } from '../game/IslandScene';
 import { DG_CHEST, DG_MSG, DungeonScene } from '../game/DungeonScene';
@@ -65,7 +66,25 @@ export function GameCanvas({ onNodeClick }: { onNodeClick: (nodeId: string) => v
       if (g.isBooted && g.isRunning) g.step(performance.now(), 0);
     });
     ro.observe(el);
+    // 画质自动档：每帧报一下帧时长
+    g.events.on(Phaser.Core.Events.STEP, (_t: number, d: number) => gfxTick(d));
+    // 换画质档：画布按新的像素倍数重设尺寸，各场景镜头按比例缩放，看到的范围不变
+    const offGfx = onGfx(() => {
+      const next = dprFor(gfxLevel());
+      if (next === DPR) return;
+      const r = next / DPR;
+      setDpr(next);
+      // 先缩放镜头再改画布：窄屏改尺寸时地图场景会按新倍数重新适配缩放
+      for (const sc of g.scene.getScenes(false)) {
+        const cam = sc.cameras?.main;
+        if (cam) cam.setZoom(cam.zoom * r);
+      }
+      const s = size();
+      g.scale.setZoom(1 / next);
+      g.scale.resize(s.w, s.h);
+    });
     return () => {
+      offGfx();
       ro.disconnect();
       g.destroy(true);
       if (game === g) game = null;

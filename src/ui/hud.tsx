@@ -71,12 +71,13 @@ export function BossBar({ s }: { s: GameState }) {
   const m = MONSTERS[a.monster];
   if (m.rank !== 'boss') return null;
   const hp = s.combat.respawnMs > 0 ? 0 : Math.max(0, s.combat.monsterHp);
-  const pct = (hp / m.hp) * 100;
+  const full = s.combat.monsterMax ?? m.hp;
+  const pct = (hp / full) * 100;
   return (
     <div className="boss-bar">
       <div className="name"><small>{m.event ? tl('万圣节限定') : m.world ? tl('世界首领') : tl('首领')}</small>{m.name}<span>Lv{m.level}</span></div>
       <div className="track"><i className="trail" style={{ width: `${pct}%` }} /><i className="fill" style={{ width: `${pct}%` }} />
-      <div className="num">{s.combat.respawnMs > 0 ? tl`重新出现中… ${Math.ceil(s.combat.respawnMs / 1000)} 秒` : `${Math.ceil(hp)} / ${m.hp}`}</div></div>
+      <div className="num">{s.combat.respawnMs > 0 ? tl`重新出现中… ${Math.ceil(s.combat.respawnMs / 1000)} 秒` : `${Math.ceil(hp)} / ${full}`}</div></div>
     </div>
   );
 }
@@ -165,7 +166,8 @@ export function StatusChips({ s, extra, log, chat }: { s: GameState; extra?: Rea
     );
   } else if (a?.kind === 'combat') {
     const m = MONSTERS[a.monster];
-    const hp = s.combat?.monsterHp ?? m.hp;
+    const full = s.combat?.monsterMax ?? m.hp;
+    const hp = s.combat?.monsterHp ?? full;
     const style = weaponStyle(s);
     const respawn = s.combat?.respawnMs ?? 0;
     const max = maxHp(s);
@@ -176,8 +178,8 @@ export function StatusChips({ s, extra, log, chat }: { s: GameState; extra?: Rea
     body = (
       <>
         <SkillIcon skill={style} size={14} /> <b style={{ color: SKILLS[style].color }}>{SKILLS[style].name}</b> · {m.name}
-        <span className="bar wide foe"><i style={{ width: `${respawn ? 0 : (Math.max(0, hp) / m.hp) * 100}%` }} /></span>
-        {respawn ? <em>{tl`下一只 ${Math.ceil(respawn / 1000)} 秒后出现`}</em> : <em>{Math.max(0, hp)}/{m.hp}</em>}
+        <span className="bar wide foe"><i style={{ width: `${respawn ? 0 : (Math.max(0, hp) / full) * 100}%` }} /></span>
+        {respawn ? <em>{tl`下一只 ${Math.ceil(respawn / 1000)} 秒后出现`}</em> : <em>{Math.max(0, hp)}/{full}</em>}
         <span className="fight-me">
           <b>{tl('你')}</b>
           <span className={`bar me ${me < 0.3 ? 'low' : me < 0.6 ? 'mid' : ''}`}><i style={{ width: `${me * 100}%` }} /></span>

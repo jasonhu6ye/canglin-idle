@@ -115,9 +115,18 @@ export interface Presence {
   gates?: import('../core/types').DungeonGate[];
   /** 在副本里（10-25 同步）：哪个洞口、第几层、进度、在副本里的像素位置和动作 */
   dg?: DungeonPresence;
+  /** 野外组队打怪（10-27）：打的哪个点的怪（动作 id）、第几只、对它累计打了多少、最近一下暴击没有 */
+  fd?: FieldHit;
   at: number;
   /** 发送序号（发送方的毫秒时钟，单调递增）：在线状态和移动广播谁新用谁，见 presenceSync.ts */
   s?: number;
+}
+
+export interface FieldHit {
+  k: string;
+  n: number;
+  dmg: number;
+  crit?: boolean;
 }
 
 export interface DungeonPresence {

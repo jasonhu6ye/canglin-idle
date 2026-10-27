@@ -11,7 +11,7 @@ import { paintDgChest, paintDgDecor, paintDgFloor, paintDgWall, paintStairs, the
 import { FIGHT, FIGHT_RANGE, fightWeapon, FRAME_H, HERO_FEET, HERO_PAD } from './hero';
 import { animsOf, monsterFrameSize, paintMonsterSheet } from './monsterArt';
 import { T } from './tiles';
-import { OtherPlayers, publishSelf } from './others';
+import { MATE_COLORS, OtherPlayers, publishSelf } from './others';
 
 /** 场景 → 界面：点了宝箱（界面去开箱、弹战利品） */
 export const DG_CHEST = 'dg-chest';
@@ -20,8 +20,6 @@ export const DG_MSG = 'dg-msg';
 /** 界面 → 场景：队友打中了怪（队友 id、层、停靠点、伤害、暴击） */
 export const DG_MATE_HIT = 'dg-mate-hit';
 
-/** 队友伤害数字的颜色，按队伍名单顺序（自己是白色/橙色） */
-const MATE_COLORS = ['#6ac8ff', '#c08aff', '#7aeea0', '#ff9ad0', '#ffe07a'];
 
 /** 组队站位：[横向错开, 往后退]（像素） */
 const SLOTS: [number, number][] = [[0, 0], [-11, 4], [11, 4], [-6, 14], [6, 14]];

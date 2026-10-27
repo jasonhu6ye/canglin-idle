@@ -5,7 +5,7 @@ import { tl } from '../i18n';
 import { actionName } from './format';
 import { emitToGame } from './GameCanvas';
 import { ACTIONS } from '../core/data';
-import { startNow, walkPos } from '../core/sim';
+import { leaveWork, startNow, toggleMount, walkPos } from '../core/sim';
 import { store } from '../store';
 import { portrait } from './hud';
 import { setAutoGate } from './Dungeon';
@@ -18,6 +18,13 @@ const FOLLOW_KEY = 'canglin-follow-leader';
 let follow = (() => { try { return localStorage.getItem(FOLLOW_KEY) === '1'; } catch { return false; } })();
 let lastChase = 0;
 let chaseTo: { x: number; y: number } | null = null;
+/** 跟着队长开打的那个战斗动作：队长不打了，自己也停下跟上 */
+let followFight: string | null = null;
+/**
+ * 跟随站位（用户 10-27）：队员按名单顺序站在队长身边不同的格子，不再全挤在队长右边同一格。
+ * [dx, dy] 格，相对队长
+ */
+const FOLLOW_SLOTS: [number, number][] = [[-1, 1], [1, 1], [-2, 0], [2, 0], [0, 2], [-1, -1], [1, -1]];
 
 /**
  * 左上角队伍栏（用户 10-25）：队友头像、名字、血量，点一下看名片（能寻路过去）。
@@ -51,7 +58,7 @@ export function PartyFrames({ onPick }: { onPick: (playerId: string) => void }) 
     setNote(follow ? tl('开始跟随队长：跟着队长走，队长打哪只怪就一起打') : tl('已停止跟随队长'));
   };
   useEffect(() => {
-    if (!followOn || !leader) return;
+    if (!followOn || !leader || !party) return;
     const s = store.state;
     if (s.dungeon || s.home?.inside) return;
     // 队长进了副本（用户 10-26：以前队员走到洞口就发呆）：走到同一个洞口进去，阵亡了也会再走回来
@@ -61,18 +68,31 @@ export function PartyFrames({ onPick }: { onPick: (playerId: string) => void }) 
     }
     const a = leader.action ? ACTIONS[leader.action] : undefined;
     if (a?.kind === 'combat') {
+      followFight = leader.action!;
       if (s.queue[0]?.action !== leader.action || s.paused) store.dispatch((g) => startNow(g, leader.action!, { type: 'infinite' }));
       return;
     }
+    // 队长不打了（10-27：以前队员会留在原地一直打）：跟着开打的那只也停下，接着跟队长走
+    if (followFight && s.queue[0]?.action === followFight && !s.paused) store.dispatch(leaveWork);
+    followFight = null;
     const me = walkPos(s);
-    const far = Math.abs(leader.x - me.x) + Math.abs(leader.y - me.y) > 3;
-    // 远路重新规划很费时：还在往队长那边走、队长也没走远，就不重算（以前每 3 秒重算一次，远路会一顿一顿的）
-    const moved = !chaseTo || Math.hypot(leader.x - chaseTo.x, leader.y - chaseTo.y) > 6;
-    if (far && (moved || !s.walk) && Date.now() - lastChase > 3000) {
-      lastChase = Date.now();
-      chaseTo = { x: leader.x, y: leader.y };
-      emitToGame('walktile', leader.x, leader.y);
+    const i = Math.max(0, party.members.filter((m) => m.playerId !== party.leader).findIndex((m) => m.playerId === online.me()?.id));
+    const [ox, oy] = FOLLOW_SLOTS[i % FOLLOW_SLOTS.length];
+    const spot = { x: Math.round(leader.x) + ox, y: Math.round(leader.y) + oy };
+    const gap = Math.abs(leader.x - me.x) + Math.abs(leader.y - me.y);
+    // 已经在队长身边（3 格内）就不动；正往站位走、队长也没走远就不重算路（远路重新规划很费时）
+    if (gap <= 3 && !s.walk) return;
+    const moved = !chaseTo || Math.hypot(spot.x - chaseTo.x, spot.y - chaseTo.y) > 4;
+    if (!(moved || !s.walk) || Date.now() - lastChase < 1500) return;
+    // 队长骑着坐骑走远路：自己有坐骑也骑上，不然越落越远
+    if (leader.mounted && !s.mounted && s.equipment.mount && gap > 12) {
+      store.dispatch((g) => toggleMount(g, true));
+      lastChase = Date.now() - 900;
+      return;
     }
+    lastChase = Date.now();
+    chaseTo = spot;
+    emitToGame('walktile', spot.x, spot.y, true);
   }, [followOn, leader?.x, leader?.y, leader?.action, leader?.dg?.gate, store.state.dungeon?.gate.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!note) return; const t = setTimeout(() => setNote(''), 6000); return () => clearTimeout(t); }, [note]);
   const mates = party?.members.filter((m) => m.playerId !== me?.id) ?? [];

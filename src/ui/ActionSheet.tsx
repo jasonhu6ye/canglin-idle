@@ -80,7 +80,7 @@ function TaskProgress({ s }: { s: GameState }) {
     pct = (1 - s.travel.ms / s.travel.total) * 100;
     note = tl`寻路中 · 还要 ${Math.ceil(s.travel.ms / 1000)} 秒`;
   } else if (a.kind === 'skill') pct = (Math.max(0, s.progressMs) / actionDuration(s, a)) * 100;
-  else if (s.combat) pct = (1 - Math.max(0, s.combat.monsterHp) / MONSTERS[a.monster].hp) * 100;
+  else if (s.combat) pct = (1 - Math.max(0, s.combat.monsterHp) / (s.combat.monsterMax ?? MONSTERS[a.monster].hp)) * 100;
   if (s.queue.length > 1) what += tl` · 后面还排了 ${s.queue.length - 1} 个`;
   return (
     <div className={`task-prog ${s.paused ? 'paused' : ''}`}>

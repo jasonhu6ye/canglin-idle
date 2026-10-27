@@ -25,11 +25,13 @@ import { paintArrow, paintBolt, paintHit, paintSlash } from './fxArt';
 import { cropTex, glintTex, soilTex } from './farmArt';
 import { paintBuilding, paintCave, paintDot, paintGlow, paintProp, paintWindmillBlades, PROP_GLOW } from './art';
 import { DPR } from './dpr';
+import { fxScale, gfxLevel } from './gfx';
 import { paintResNode, resGlow, resOf, type ResKind } from './resArt';
 import { baseOf } from '../core/quality';
 import { NODE_MARKER, paintSprite, SPRITE_VARIANTS, SPRITES } from './sprites';
-import { OtherPlayers } from './others';
+import { MATE_COLORS, onFieldHit, OtherPlayers } from './others';
 import { online } from '../net';
+import type { FieldMateHit } from '../net/social';
 import { animateTileset, liquidIndex, paintTileset, T, TILESET, tileIndex, VARIANTS } from './tiles';
 import {
   BUILDINGS, CHUNK, FIELDS, findPath, GROUNDS, groundIndex, hash, isWalkable, LIQUIDS, propsInChunk, reachableNear, regionAt, SPAWN, standTile,
@@ -168,6 +170,7 @@ export class MapScene extends Phaser.Scene {
   private tilesetCanvas!: HTMLCanvasElement;
   private tilesetTex!: Phaser.Textures.CanvasTexture;
   private chunks = new Map<number, { destroy(): void }[]>();
+  private liquidSkip = 0;
   private glows: { img: Phaser.GameObjects.Image; phase: number; base: number }[] = [];
   private particles: Particle[] = [];
   private region: RegionId = 'town';
@@ -330,19 +333,21 @@ export class MapScene extends Phaser.Scene {
     });
     this.game.events.on('walkto', onWalkTo);
     // 走到某个格子旁边（去找队友、队长召集；用户 10-25），远路一样顺路用石碑
-    const onWalkTile = awake((x: number, y: number) => {
+    // follow：跟随队长时传 true，目标格本身能站就站那（各人的站位格不一样，不挤到同一格），也不画点击标记
+    const onWalkTile = awake((x: number, y: number, follow = false) => {
       const at = { x: Math.round(x), y: Math.round(y) };
-      const dest = [{ x: at.x + 1, y: at.y }, { x: at.x - 1, y: at.y }, { x: at.x, y: at.y + 1 }, { x: at.x, y: at.y - 1 }, at]
-        .find((t) => isWalkable(t.x, t.y));
+      const near = [{ x: at.x + 1, y: at.y }, { x: at.x - 1, y: at.y }, { x: at.x, y: at.y + 1 }, { x: at.x, y: at.y - 1 }];
+      const dest = (follow ? [at, ...near] : [...near, at]).find((t) => isWalkable(t.x, t.y));
       if (!dest) return;
       const r: Route = planRoute(store.state.waystones, this.playerTile(), dest, moveSpeed(store.state));
       if (r.via) {
-        this.viaStones(r.via, () => this.moveTo(dest.x, dest.y));
+        this.viaStones(r.via, () => this.moveTo(dest.x, dest.y, !follow));
         return;
       }
-      this.moveTo(dest.x, dest.y);
+      this.moveTo(dest.x, dest.y, !follow);
     });
     this.game.events.on('walktile', onWalkTile);
+    this.unsub.push(onFieldHit((h) => this.mateHit(h)));
     this.unsub.push(() => this.game.events.off('walktile', onWalkTile));
     this.takeWalk = () => {
       const id = store.pendingWalk;
@@ -372,6 +377,8 @@ export class MapScene extends Phaser.Scene {
     // 水面和岩浆动画：重画图集里的液体格子
     this.time.addEvent({
       delay: 220, loop: true, callback: () => {
+        // 低画质：水面隔一拍才动一下（重画图集、上传贴图是这里最费的）
+        if (gfxLevel() === 0 && ++this.liquidSkip % 2) return;
         animateTileset(this.tilesetCanvas, ++this.frame);
         this.tilesetTex.refresh();
       },
@@ -893,6 +900,11 @@ export class MapScene extends Phaser.Scene {
     if (px !== playerPos.x || py !== playerPos.y) this.fadeNearLabel(px, py);
     playerPos.x = px;
     playerPos.y = py;
+    // 野外组队（10-27）：一起打这只怪的人围着它站
+    const fa = this.currentAction ? ACTIONS[this.currentAction] : undefined;
+    this.others.fight = this.foe?.active && this.working && fa?.kind === 'combat'
+      ? { action: this.currentAction!, x: this.foe.getData('hx'), y: this.foe.getData('hy'), melee: this.foe.getData('melee'), weapon: fightWeapon(baseOf(store.state.equipment.weapon ?? '')) }
+      : undefined;
     this.others.step(delta, playerPos);
     // 正在干活就把当前的动作动画发给别人（挖矿、砍树、打怪…）
     const cur = this.working && !this.manual && !this.mountBusy ? this.playerBody.anims.currentAnim?.key : undefined;
@@ -929,7 +941,7 @@ export class MapScene extends Phaser.Scene {
   private updateParticles() {
     const kind = AMBIENT[this.region];
     const v = this.cameras.main.worldView;
-    if (kind && this.particles.length < (kind === 'snow' ? 70 : 34) && Math.random() < 0.5) {
+    if (kind && this.particles.length < (kind === 'snow' ? 70 : 34) * fxScale() && Math.random() < 0.5) {
       const img = this.add.image(v.x + Math.random() * v.width, v.y + Math.random() * v.height, `p-${kind}`).setDepth(D_PARTICLE);
       if (kind === 'firefly' || kind === 'ember' || kind === 'spore') img.setBlendMode(Phaser.BlendModes.ADD);
       const max = 2000 + Math.random() * 3000;
@@ -2096,7 +2108,7 @@ export class MapScene extends Phaser.Scene {
       // 首领的血条和名字压在所有东西上面，远处也看得清
       const depth = b.label ? D_LABEL - 1 : b.spr.depth + 1;
       b.bg.setPosition(b.spr.x, top).setDepth(depth).setAlpha(b.spr.alpha);
-      const ratio = b.live && c ? (c.respawnMs > 0 ? 0 : Math.max(0, c.monsterHp / b.m.hp)) : 1;
+      const ratio = b.live && c ? (c.respawnMs > 0 ? 0 : Math.max(0, c.monsterHp / (c.monsterMax ?? b.m.hp))) : 1;
       b.fill.setPosition(b.spr.x - b.w / 2, top - 1).setDepth(depth).setAlpha(b.spr.alpha).setScale(ratio, 1);
       b.shown = ratio >= b.shown ? ratio : Math.max(ratio, b.shown - this.game.loop.delta / 900);
       b.trail.setPosition(b.spr.x - b.w / 2, top - 1).setDepth(depth).setAlpha(b.spr.alpha * 0.85).setScale(b.shown, 1);
@@ -2403,6 +2415,21 @@ export class MapScene extends Phaser.Scene {
     const x0 = spr.getData('x0') ?? spr.x;
     spr.setData('x0', x0);
     this.tweens.add({ targets: spr, x: x0 + dir * 2, duration: 50, yoyo: true, onComplete: () => spr.active && spr.setX(x0) });
+  }
+
+  /** 野外组队：队友打中了我也在打的怪，队友出手、怪闪一下、用队友的颜色飘数字 */
+  private mateHit(h: FieldMateHit) {
+    const foe = this.foe;
+    if (!foe?.active) return;
+    const hitIn = Math.max(0, this.others.swing(h.id));
+    this.time.delayedCall(hitIn, () => {
+      if (this.foe !== foe || !foe.active) return;
+      this.hitFlash(foe, 1);
+      const m = this.currentAction ? MONSTERS[(ACTIONS[this.currentAction] as { monster?: string }).monster ?? ''] : undefined;
+      const S = m ? monsterFrameSize(m) * foe.scaleY : 24;
+      const color = MATE_COLORS[h.i % MATE_COLORS.length];
+      this.popText(foe.x - 8, foe.y - S * 0.5, h.crit ? tl`${h.name} 暴击 ${h.dmg}!` : `${h.name} ${h.dmg}`, color, h.crit ? 9 : 7);
+    });
   }
 
   /** 弹跳的伤害数字：先往上蹦，再落一点淡出 */
@@ -2778,6 +2805,7 @@ export class MapScene extends Phaser.Scene {
       const reach = FIGHT_RANGE[fightWeapon(baseOf(store.state.equipment.weapon ?? ''))] * T;
       this.foe = this.monSprite(m, this.player.x + melee + reach, this.player.y + 7).setFlipX(true);
       this.foe.setData('reach', reach);
+      this.foe.setData('hx', this.foe.x).setData('hy', this.foe.y).setData('melee', melee);
       this.foe.setDepth(this.foe.y + 1000);
       this.foeSeen = undefined;
       // 普通怪平时不挂血条，正在打的这只也挂一条，看得出还剩多少血

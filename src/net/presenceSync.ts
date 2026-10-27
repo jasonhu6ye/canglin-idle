@@ -7,7 +7,7 @@ import type { Presence } from './api';
  * - 快变的（位置、动作、血量、副本进度）走 broadcast，包小、不受 presence 限额。
  * 每条都带发送时的序号 s（发送方的毫秒时钟，单调递增），收到的一边按 s 取新的那条叠上去。
  */
-export const FAST_KEYS = ['x', 'y', 'anim', 'flip', 'hp', 'dg'] as const;
+export const FAST_KEYS = ['x', 'y', 'anim', 'flip', 'hp', 'dg', 'fd'] as const;
 export type FastKey = (typeof FAST_KEYS)[number];
 export type Fast = Pick<Presence, FastKey> & { s: number };
 
@@ -19,13 +19,13 @@ export function slowKey(p: Partial<Presence>): string {
 }
 
 export function fastOf(p: Partial<Presence>, s: number): Fast {
-  return { x: p.x ?? 0, y: p.y ?? 0, anim: p.anim, flip: p.flip, hp: p.hp, dg: p.dg, s };
+  return { x: p.x ?? 0, y: p.y ?? 0, anim: p.anim, flip: p.flip, hp: p.hp, dg: p.dg, fd: p.fd, s };
 }
 
 /** 把收到的移动叠到在线状态上：比在线状态本身新的才叠（没动作就清掉 anim，所以每个快字段都要覆盖） */
 export function withMove(p: Presence, m: Fast | undefined): Presence {
   if (!m || m.s <= (p.s ?? 0)) return p;
-  return { ...p, x: m.x, y: m.y, anim: m.anim, flip: m.flip, hp: m.hp ?? p.hp, dg: m.dg, s: m.s };
+  return { ...p, x: m.x, y: m.y, anim: m.anim, flip: m.flip, hp: m.hp ?? p.hp, dg: m.dg, fd: m.fd, s: m.s };
 }
 
 /** 收到的广播先粗查一下，别人乱发的东西不进游戏 */
@@ -40,7 +40,15 @@ export function readFast(raw: unknown): (Fast & { id: string }) | null {
     flip: typeof r.flip === 'boolean' ? r.flip : undefined,
     hp: typeof r.hp === 'number' ? r.hp : undefined,
     dg: r.dg && typeof r.dg === 'object' ? (r.dg as Presence['dg']) : undefined,
+    fd: readFieldHit(r.fd),
   };
+}
+
+function readFieldHit(v: unknown): Presence['fd'] {
+  if (!v || typeof v !== 'object') return undefined;
+  const f = v as Record<string, unknown>;
+  if (typeof f.k !== 'string' || typeof f.n !== 'number' || typeof f.dmg !== 'number' || !Number.isFinite(f.dmg)) return undefined;
+  return { k: f.k, n: f.n, dmg: f.dmg, crit: f.crit === true || undefined };
 }
 
 /**

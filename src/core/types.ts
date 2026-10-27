@@ -245,6 +245,8 @@ export interface CombatState {
   pTotal?: number;
   monsterMax?: number;
   crew?: number;
+  /** 野外（10-27）：这是第几只（刷新一只加一），队友按它分辨伤害打在哪一只上 */
+  copy?: number;
   /** 怪物最近一次出手：elite / boss 大招，enrage 刚进入狂怒 */
   mArt?: string;
   /** 首领已经狂怒了 */

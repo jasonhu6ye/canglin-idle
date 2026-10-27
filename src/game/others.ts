@@ -1,10 +1,10 @@
 import Phaser from 'phaser';
 import { levelSnapshot, online, type DungeonPresence, type Presence } from '../net';
 import { moveCadence } from '../net/presenceSync';
-import { rallyTime, updateAggro } from '../net/social';
+import { rallyTime, takeFieldHits, updateAggro, type FieldMateHit } from '../net/social';
 import { maxHp } from '../core/sim';
 import type { GameState } from '../core/types';
-import { FIGHT_RANGE, FRAME_H, FRAME_W, HERO_ANIMS, type FightWeapon, HERO_FEET, HERO_PAD, outfitOf, paintHeroSheet } from './hero';
+import { FIGHT, FIGHT_RANGE, FRAME_H, FRAME_W, HERO_ANIMS, type FightWeapon, HERO_FEET, HERO_PAD, outfitOf, paintHeroSheet } from './hero';
 import { besideXOf, ensureMountTex, mountKindOf, saddleBob, seatOf } from './mounts';
 import { T } from './tiles';
 import { WOLF_FEET, WOLF_H } from './wolfArt';
@@ -22,6 +22,13 @@ const KEEPALIVE_MS = 15_000;
 /** 别的在线玩家（看附近有没有人，决定发位置发多勤） */
 let everyone: Presence[] = [];
 let listening = false;
+/** 野外组队：队友打中了我也在打的怪（地图场景订阅，画队友出手和伤害数字） */
+type FieldHitFn = (h: FieldMateHit) => void;
+const fieldSubs = new Set<FieldHitFn>();
+export function onFieldHit(f: FieldHitFn) {
+  fieldSubs.add(f);
+  return () => { fieldSubs.delete(f); };
+}
 /** 有几个人看得到我：副本里是同一个洞口的人，大地图上是视野范围里的人 */
 function watchers(x: number, y: number, dg?: DungeonPresence) {
   let n = 0;
@@ -39,7 +46,13 @@ let sent = { x: -1, y: -1, key: '', at: 0 };
 let checked = 0;
 export function publishSelf(st: GameState, x: number, y: number, work?: { anim: string; flip: boolean }, dg?: DungeonPresence) {
   if (!online.me()) return;
-  if (!listening) { listening = true; online.onPresence((all) => { everyone = all; }); }
+  if (!listening) {
+    listening = true;
+    online.onPresence((all) => {
+      everyone = all;
+      for (const h of takeFieldHits(all)) fieldSubs.forEach((f) => f(h));
+    });
+  }
   updateAggro(st, x, y, !!work?.anim.startsWith('fight-'), dg);
   const now = Date.now();
   const [gap, step] = moveCadence(watchers(x, y, dg), !!dg);
@@ -50,9 +63,12 @@ export function publishSelf(st: GameState, x: number, y: number, work?: { anim: 
   const snap = levelSnapshot(st);
   const max = maxHp(st);
   const hp = Math.max(0, Math.round(st.hp));
+  // 野外组队打同一只怪：带上自己对这一只累计打了多少（队友那边记到同一只怪上）
+  const c = st.combat;
+  const fd = !dg && action && c?.crew && work?.anim.startsWith('fight-') ? { k: action, n: c.copy ?? 0, dmg: c.pTotal ?? 0, crit: c.pCrit || undefined } : undefined;
   // 血量按 5% 一档比较，打怪时不用每下都发
   const key = JSON.stringify([st.settings.skin, action, mounted, st.equipment, snap.total, snap.combat, Math.round((hp / max) * 20), rallyTime(), work?.anim, work?.flip, (st.gates ?? []).map((g) => g.id).join(),
-    dg && [dg.gate, dg.floor, dg.idx, dg.phase, dg.kills, dg.anim, dg.flip, dg.dmg]]);
+    dg && [dg.gate, dg.floor, dg.idx, dg.phase, dg.kills, dg.anim, dg.flip, dg.dmg], fd && [fd.n, fd.dmg]]);
   const px = dg ? dg.x / T : x;
   const py = dg ? dg.y / T : y;
   const moved = Math.abs(px - sent.x) + Math.abs(py - sent.y) >= step && now - sent.at >= gap;
@@ -60,11 +76,33 @@ export function publishSelf(st: GameState, x: number, y: number, work?: { anim: 
   if (!moved && key === sent.key && now - sent.at < KEEPALIVE_MS) return;
   sent = { x: px, y: py, key, at: now };
   online.publishPresence({ x, y, outfit: st.settings.skin, action, mounted, equip: { ...st.equipment }, total: snap.total, combat: snap.combat, hp, maxHp: max, rally: rallyTime() || undefined, anim: work?.anim, flip: work?.flip, gates: st.gates?.length ? st.gates : undefined,
-    dg: dg ? { ...dg, x: Math.round(dg.x), y: Math.round(dg.y) } : undefined });
+    dg: dg ? { ...dg, x: Math.round(dg.x), y: Math.round(dg.y) } : undefined, fd });
 }
 
 /** 同一格的站位：第 0 个是原位，往后排在左上、左下、更靠后 */
 const CROWD: [number, number][] = [[0, 0], [-6, -10], [-6, 10], [-14, 0], [-14, -14], [-14, 14], [-22, -6], [-22, 8]];
+
+/**
+ * 野外组队打同一只怪的站位（用户 10-27）：围着怪站，不叠在一起。
+ * 近战的在怪的两侧（右边那个朝左打），[横向 × 贴身距离, 纵向像素]；远程的在自己身后错开，[往后退, 纵向]。
+ * 自己永远在怪的左边，所以自己是近战就不占左边正中，自己是远程就不占远程正中。
+ */
+const MELEE_SPOTS: [number, number][] = [[1, 0], [-0.85, -11], [0.85, 11], [-0.85, 11], [0.85, -11], [1.5, -6], [1.5, 6]];
+const RANGED_SPOTS: [number, number][] = [[0, -12], [0, 12], [-10, -22], [-10, 22], [-18, 0]];
+const meleeRange = (w?: FightWeapon) => (w ? FIGHT_RANGE[w] ?? 0 : 0) < 0.75;
+const weaponOfAnim = (anim?: string) => /^fight-(\w+?)(-ready)?$/.exec(anim ?? '')?.[1] as FightWeapon | undefined;
+
+/** 队友伤害数字的颜色，按队伍名单顺序 */
+export const MATE_COLORS = ['#6ac8ff', '#c08aff', '#7aeea0', '#ff9ad0', '#ffe07a'];
+
+/** 自己正在打的怪：画面上的位置（脚底像素）、贴身距离、自己的武器 */
+export interface FightAnchor {
+  action: string;
+  x: number;
+  y: number;
+  melee: number;
+  weapon: FightWeapon;
+}
 
 interface Other {
   box: Phaser.GameObjects.Container;
@@ -94,6 +132,9 @@ export class OtherPlayers {
   private others = new Map<string, Other>();
   private latest: Presence[] = [];
   private off: () => void;
+  /** 大地图上自己正在打的怪（地图场景每帧设），一起打它的人围着它站 */
+  fight?: FightAnchor;
+  private swingAt = new Map<string, number>();
   /** place：这个人画在哪（像素，脚底），不画就返回 null。默认是大地图：按格子摆，在副本里的人不画 */
   constructor(private scene: Phaser.Scene, private place?: (p: Presence) => { x: number; y: number; anim?: string; flip?: boolean } | null) {
     this.off = online.onPresence((all) => { this.latest = all; });
@@ -121,6 +162,40 @@ export class OtherPlayers {
       }
     }
     return key;
+  }
+
+  /** 队友打中了一下：播一遍出手动作。返回多少毫秒后打中（飘字用），这人没画出来就是 -1 */
+  swing(id: string): number {
+    const o = this.others.get(id);
+    const w = weaponOfAnim(o?.anim);
+    if (!o || !w) return -1;
+    this.swingAt.set(id, this.scene.time.now);
+    return Math.round(FIGHT[w].ms * FIGHT[w].hit);
+  }
+
+  /** 和自己打同一只怪的人各站哪（按 id 排序，各家算出来的顺序一样） */
+  private fightSpots(near: { x: number; y: number }) {
+    const out = new Map<string, { x: number; y: number; flip: boolean }>();
+    const f = this.fight;
+    if (!f) return out;
+    const crew = this.latest
+      .filter((p) => !p.dg && p.action === f.action && p.anim?.startsWith('fight-') && Math.abs(p.x - near.x) + Math.abs(p.y - near.y) <= 10)
+      .sort((a, b) => (a.playerId < b.playerId ? -1 : 1));
+    const meMelee = meleeRange(f.weapon);
+    const melee = meMelee ? MELEE_SPOTS : [[-1, 0] as [number, number], ...MELEE_SPOTS];
+    const ranged = meMelee ? [[0, 0] as [number, number], ...RANGED_SPOTS] : RANGED_SPOTS;
+    let mi = 0, ri = 0;
+    for (const p of crew) {
+      const w = weaponOfAnim(p.anim);
+      if (meleeRange(w)) {
+        const [sx, sy] = melee[mi++ % melee.length];
+        out.set(p.playerId, { x: f.x + sx * f.melee, y: f.y + sy, flip: sx > 0 });
+      } else {
+        const [bx, sy] = ranged[ri++ % ranged.length];
+        out.set(p.playerId, { x: f.x - f.melee - (w ? FIGHT_RANGE[w] : 0) * T + bx, y: f.y + sy, flip: false });
+      }
+    }
+    return out;
   }
 
   publish(st: GameState, x: number, y: number, work?: { anim: string; flip: boolean }) {
@@ -193,9 +268,18 @@ export class OtherPlayers {
     // 同一格上一起干活、打怪的人各站各的位置（自己占第 0 个位置），远程往后站（用户 10-25）
     const crowd = new Map<string, number>();
     crowd.set(`${Math.round(near.x)},${Math.round(near.y)}`, 1);
+    const spots = this.place ? undefined : this.fightSpots(near);
+    const now = this.scene.time.now;
     const onMap = (p: Presence) => {
       if (p.dg) return null;
       if (Math.abs(p.x - near.x) > VIEW_TILES || Math.abs(p.y - near.y) > VIEW_TILES) return null;
+      const spot = spots?.get(p.playerId);
+      if (spot) {
+        // 刚打中一下：播出手动作，播完回到架势
+        const w = weaponOfAnim(p.anim);
+        const swing = w && now - (this.swingAt.get(p.playerId) ?? -1e9) < Math.min(FIGHT[w].ms, 700);
+        return { x: spot.x, y: spot.y, anim: swing ? `fight-${w}` : p.anim, flip: spot.flip };
+      }
       let x = p.x * T + T / 2, y = p.y * T + T / 2 + 7;
       if (p.anim) {
         const cell = `${p.x},${p.y}`;
@@ -246,7 +330,6 @@ export class OtherPlayers {
       const dx = o.tx - o.box.x, dy = o.ty - o.box.y;
       const d = Math.hypot(dx, dy);
       let moving = false;
-      const now = this.scene.time.now;
       // 隔太远（刚传送或刚出现）直接放过去
       if (d > T * 30) o.box.setPosition(o.tx, o.ty);
       else if (d > 0.5) {

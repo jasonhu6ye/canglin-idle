@@ -8,7 +8,7 @@ import { OLD_JEWELS, BAR_VALUE, inTownArea, KEY_SHOP, keyOf, OLD_ENH, SCROLL_TOW
 import { nextRandom } from './rng';
 import { buffMob, coopMates, COOP_DEF, COOP_DMG, dungeonFloor, GATE_AFTER_CLEAR, GATE_CD, GATE_MAX, GATE_MS, GATE_REACH, legMs, rollChest, rollChestQuality, rollFloors, teamChest, teamChestQuality, type TeamMember } from './dungeon';
 import { partySize } from './party';
-import { aggroMates, dgCrew, stopKey, takeMateHits, targetChance, threatOf } from './aggro';
+import { aggroMates, dgCrew, fieldCrew, fieldKey, stopKey, takeMateHits, targetChance, threatOf } from './aggro';
 import { stepQuests } from './quests';
 import { migrateMail, sendMail } from './mail';
 import { stepAutoFarm, stepRain } from './farm';
@@ -256,6 +256,13 @@ export function dgMob(m0: MonsterDef, crew: number): MonsterDef {
   const m = buffMob(m0, 1 + crew);
   return crew > 0 ? { ...m, hp: Math.round(m.hp * (1 + 0.75 * crew)) } : m;
 }
+
+/** 野外组队（10-27）：只加厚血量，每个一起打的队友 +60%（伤害叠加，所以组队比单打快一些） */
+export function fieldMob(m0: MonsterDef, crew: number): MonsterDef {
+  return crew > 0 ? { ...m0, hp: Math.round(m0.hp * (1 + 0.6 * crew)) } : m0;
+}
+/** 一次结算超过这么久就是离线补算 / 切后台回来，按单人算 */
+const LIVE_MS = 10_000;
 
 /** 怪物这一下普通攻击是不是打向了队友（没有队友一起打时不掷骰，离线补算不受影响） */
 function aimsAtMate(s: GameState, rand: () => number) {
@@ -606,6 +613,8 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   s.lastTick = now;
   sum.elapsedMs = dt;
   const from = now - dt;
+  /** 实时结算（正开着游戏）：组队一起打怪只在这时候算 */
+  const live = dt <= LIVE_MS;
 
   const rand = () => {
     const [r, next] = nextRandom(s.rng);
@@ -895,14 +904,20 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     return step;
   };
 
+  /** 野外组队：这一只怪开打时一起打的队友人数（只在实时结算时算） */
+  const crewNow = () => (live ? fieldCrew() : 0);
   const stepCombat = (task: Task, a: CombatAction, budget: number): number => {
-    const m = MONSTERS[a.monster];
+    const m0 = MONSTERS[a.monster];
     if (!s.combat) {
       // 交过手就记下来：之后追踪能找到准确位置（图鉴仍要击败才解锁）
-      if (s.bestiary?.[m.id] === undefined) s.bestiary = { ...s.bestiary, [m.id]: 0 };
-      s.combat = { monsterHp: m.hp, playerTimerMs: playerAttackMs(s), monsterTimerMs: m.attackMs, respawnMs: 0 };
+      if (s.bestiary?.[m0.id] === undefined) s.bestiary = { ...s.bestiary, [m0.id]: 0 };
+      const crew = crewNow();
+      const hp = fieldMob(m0, crew).hp;
+      takeMateHits(fieldKey(task.action));
+      s.combat = { monsterHp: hp, monsterMax: crew ? hp : undefined, crew: crew || undefined, copy: 1, playerTimerMs: playerAttackMs(s), monsterTimerMs: m0.attackMs, respawnMs: 0 };
     }
     const c = s.combat;
+    const m = fieldMob(m0, c.crew ?? 0);
     const has = (t: string) => m.traits.includes(t);
     /** 玩家掉血，死了回城复活。返回是否死亡 */
     const hurt = (dmg: number) => {
@@ -926,11 +941,46 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       task.stocked = false;
       return true;
     };
+    /** 怪倒下：掉落（组队时自己打过它才有）、记战绩、开始刷新；新刷出来的按当时队友人数定血量 */
+    const kill = () => {
+      const got: Record<string, number> = {};
+      if (!c.crew || (c.pTotal ?? 0) > 0) {
+        for (const d of m.drops) {
+          if (d.chance === undefined || rand() < dropChance(s, d.chance)) {
+            const q = coinQty(s, d.item, d.qty);
+            addLoot(d.item, q);
+            got[d.item] = (got[d.item] ?? 0) + q;
+          }
+        }
+      }
+      log({ t: now - dt, kind: 'kill', monster: m.id, xp: c.gain ?? {}, items: got });
+      sum.kills[m.id] = (sum.kills[m.id] ?? 0) + 1;
+      s.stats.kills++;
+      task.deathStreak = 0;
+      s.bestiary = { ...s.bestiary, [m.id]: (s.bestiary?.[m.id] ?? 0) + 1 };
+      task.done++;
+      // 召唤出来的南瓜王打赢一次就走了，要再召唤
+      if (m.event && s.halloween) s.halloween = { ...s.halloween, summoned: undefined };
+      const crew = crewNow();
+      const hp = fieldMob(m0, crew).hp;
+      s.combat = { monsterHp: hp, monsterMax: crew ? hp : undefined, crew: crew || undefined, copy: (c.copy ?? 0) + 1, playerTimerMs: playerAttackMs(s), monsterTimerMs: m.attackMs, respawnMs: m.respawnMs ?? RESPAWN_MS, pSwings: c.pSwings, pDmg: c.pDmg, mSwings: c.mSwings, pCrit: c.pCrit };
+    };
     if (c.respawnMs > 0) {
       const step = Math.min(budget, c.respawnMs);
       c.respawnMs -= step;
       regen(s, step);
+      // 怪还没刷出来，队友这时打的是上一只，不算
+      if (c.respawnMs <= 0) takeMateHits(fieldKey(task.action));
       return step;
+    }
+    // 队友打的伤害（10-27 野外组队）：记到同一只怪上，队友打死的也算一起打死
+    const mateDmg = c.crew ? takeMateHits(fieldKey(task.action)) : 0;
+    if (mateDmg > 0) {
+      c.monsterHp -= mateDmg;
+      if (c.monsterHp <= 0) {
+        kill();
+        return 1;
+      }
     }
     const step = Math.min(budget, c.playerTimerMs, c.monsterTimerMs);
     c.playerTimerMs -= step;
@@ -951,6 +1001,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         const dmg = Math.max(1, Math.min(c.monsterHp, Math.round(raw)));
         c.monsterHp -= dmg;
         c.pDmg = dmg;
+        if (c.crew) c.pTotal = (c.pTotal ?? 0) + dmg;
         c.pLeech = leechHeal(s, dmg, rand) || undefined;
         addXp(st.style, dmg);
         addXp('defence', dmg / 3);
@@ -959,23 +1010,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         if (has('thorns') && hurt(Math.floor(dmg * 0.15))) return step;
       }
       if (c.monsterHp <= 0) {
-        const got: Record<string, number> = {};
-        for (const d of m.drops) {
-          if (d.chance === undefined || rand() < dropChance(s, d.chance)) {
-            const q = coinQty(s, d.item, d.qty);
-            addLoot(d.item, q);
-            got[d.item] = (got[d.item] ?? 0) + q;
-          }
-        }
-        log({ t: now - dt, kind: 'kill', monster: m.id, xp: c.gain ?? {}, items: got });
-        sum.kills[m.id] = (sum.kills[m.id] ?? 0) + 1;
-        s.stats.kills++;
-        task.deathStreak = 0;
-        s.bestiary = { ...s.bestiary, [m.id]: (s.bestiary?.[m.id] ?? 0) + 1 };
-        task.done++;
-        // 召唤出来的南瓜王打赢一次就走了，要再召唤
-        if (m.event && s.halloween) s.halloween = { ...s.halloween, summoned: undefined };
-        s.combat = { monsterHp: m.hp, playerTimerMs: playerAttackMs(s), monsterTimerMs: m.attackMs, respawnMs: m.respawnMs ?? RESPAWN_MS, pSwings: c.pSwings, pDmg: c.pDmg, mSwings: c.mSwings, pCrit: c.pCrit };
+        kill();
         return step;
       }
     }

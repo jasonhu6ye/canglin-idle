@@ -1,4 +1,5 @@
 import { UI_SCALES, useUiScale } from './uiScale';
+import { gfxLevel, gfxPref, onGfx, setGfxPref, type GfxPref } from '../game/gfx';
 import { qClass } from '../core/quality';
 import { useSticky } from './sticky';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -654,6 +655,7 @@ function SettingsPage({ s, onClose }: { s: GameState; onClose: () => void }) {
       </div>
       <p className="muted small-note">{tl('只有打怪前才会回仓库拿食物和药水；走路、寻路去队友身边、采集和制作都不会带。选「不带」就完全不回仓库拿。')}</p>
       <h3>{tl('界面')}</h3>
+      <GfxSetting />
       <UiScaleSetting />
       <h3>{tl('账号')}</h3>
       <AccountSettings />
@@ -668,6 +670,29 @@ function SettingsPage({ s, onClose }: { s: GameState; onClose: () => void }) {
         <button className="danger" onClick={() => setConfirming(true)}>{tl('删除存档，重新开始')}</button>
       )}
     </div>
+  );
+}
+
+/** 画质（10-27）：自动按帧率在高、中、低之间调；也能固定一档 */
+function GfxSetting() {
+  const [pref, setPref] = useState(gfxPref);
+  const [level, setLevel] = useState(gfxLevel);
+  useEffect(() => onGfx(() => setLevel(gfxLevel())), []);
+  const names = [tl('低'), tl('中'), tl('高')];
+  const opts: [GfxPref, string][] = [['auto', tl('自动')], ['high', tl('高')], ['mid', tl('中')], ['low', tl('低')]];
+  return (
+    <>
+      <div className="opts">
+        <span className="lbl">{tl('画质')}</span>
+        {opts.map(([p, name]) => (
+          <button key={p} className={pref === p ? 'on' : ''} onClick={() => { setGfxPref(p); setPref(p); setLevel(gfxLevel()); }}>{name}</button>
+        ))}
+      </div>
+      <p className="muted small-note">
+        {pref === 'auto' ? tl`当前：${names[level]}。` : ''}
+        {tl('高：按屏幕原生清晰度画，特效全开；中：2 倍清晰度；低：1 倍清晰度，少画飘落物和小动物，最省电。「自动」会按帧率自己调，卡了就降一档，稳了再升回来。')}
+      </p>
+    </>
   );
 }
 

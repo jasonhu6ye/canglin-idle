@@ -2,6 +2,7 @@
  * 地图氛围：昼夜明暗、下雨、走路扬尘、飞鸟和蝴蝶。
  * 纯画面效果，不影响存档；时间和天气都按现实时钟算，所以刷新页面也连续。
  */
+import { fxScale, gfxLevel } from './gfx';
 import Phaser from 'phaser';
 import type { RegionId } from '../core/types';
 import { paintBird, paintButterfly, paintRain, paintSplash } from './fxArt';
@@ -89,7 +90,7 @@ export class Ambience {
   private updateRain(dt: number, rain: boolean) {
     const v = this.scene.cameras.main.worldView;
     if (rain) {
-      const want = Math.min(220, Math.round((v.width * v.height) / 900));
+      const want = Math.min(220, Math.round(((v.width * v.height) / 900) * fxScale()));
       for (let i = 0; i < 6 && this.drops.length < want; i++) {
         const img = this.scene.add.image(v.x + Math.random() * (v.width + 60), v.y - 10 + Math.random() * v.height * 0.3, 'fx-rain').setDepth(D_PARTICLE);
         this.drops.push({ img, vx: -0.09, vy: 0.42 + Math.random() * 0.1, until: v.y + Math.random() * v.height });
@@ -113,7 +114,7 @@ export class Ambience {
 
   /** 走路时脚下扬起一点尘土 */
   private updateDust(dt: number, hero: { x: number; y: number; walking: boolean }) {
-    if (!hero.walking) { this.dustMs = 0; return; }
+    if (!hero.walking || gfxLevel() === 0) { this.dustMs = 0; return; }
     this.dustMs -= dt;
     if (this.dustMs > 0) return;
     this.dustMs = 170;
@@ -124,7 +125,7 @@ export class Ambience {
   /** 白天偶尔飞过一只鸟（地上带影子）；草地多的地方有蝴蝶 */
   private updateCritters(time: number, dt: number, region: RegionId, rain: boolean) {
     const v = this.scene.cameras.main.worldView;
-    if (time > this.nextCritter && this.critters.length < 6) {
+    if (time > this.nextCritter && this.critters.length < (gfxLevel() === 0 ? 0 : 6)) {
       this.nextCritter = time + 2500 + Math.random() * 4000;
       const day = this.dark < 0.5 && !rain;
       const bugs = day && (region === 'town' || region === 'woodland' || region === 'giantwood' || region === 'highland' || region === 'savanna' || region === 'autumn' || region === 'jungle' || region === 'tropic');
