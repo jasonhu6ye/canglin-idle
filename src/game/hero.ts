@@ -45,7 +45,9 @@ export interface Outfit {
   /** 镇上的村民：不背行囊 */
   npc?: boolean;
   /** 兑换码外观（用户 10-23）：特殊头部造型，hair 这时是头部主色 */
-  head?: 'pumpkin' | 'voidpumpkin' | 'paleknight' | 'jester' | 'bone';
+  head?: 'pumpkin' | 'voidpumpkin' | 'paleknight' | 'jester' | 'bone' | 'voidhood';
+  /** 袍子下摆、兜帽边的金线 */
+  trim?: string;
   /** 不背行囊、没有围巾尾巴 */
   noPack?: boolean;
   /** 身后的破披风 */
@@ -55,7 +57,7 @@ export interface Outfit {
   /** 发光色（眼睛、脸、灯、粒子）：暗、中、亮 */
   glow?: string[];
   /** 粒子特效 */
-  fx?: 'embers' | 'wisps' | 'sparks' | 'mist' | 'confetti';
+  fx?: 'embers' | 'wisps' | 'sparks' | 'mist' | 'confetti' | 'frostfire';
   /** 衣服上的菱格花纹（小丑） */
   harlequin?: boolean;
   /** 要用这个兑换码解锁 */
@@ -97,6 +99,16 @@ export const OUTFITS: Outfit[] = [
     coat: ['#1a2a5a', '#2a4088', '#3e5cb8', '#7a98e0'], shirt: ['#a8acb4', '#e0e4ec'],
     pants: ['#3a3a44', '#565662'], boots: ['#3a2a1a', '#6a4a2a'], scarf: ['#b08a2a', '#f0c84a'],
     pack: ['#6a6a74', '#9a9aa4', '#c8c8d0'], roll: '#2a4088',
+  },
+  {
+    // 用户 10-27 给的录屏原型：黑袍尖帽的咒师，脸是一团黑只剩两点幽光，左手火右手冰，脚下金色法阵，待机会施法
+    id: 'frostfire', name: tl('冰火咒师'), desc: tl('黑袍尖帽，帽檐下是一团看不见脸的黑暗，只剩两点幽光。左手燃火、右手凝冰，脚下一圈金色法阵，站着不动时会施法。'),
+    skin: ['#060408', '#100c14'], hair: ['#1a1620', '#2a2430', '#3c3448'],
+    coat: ['#201a28', '#302838', '#443a50', '#5e526c'], shirt: ['#2a2434', '#3a3246'],
+    pants: ['#14101a', '#201a28'], boots: ['#3a2a18', '#6a4a28'], scarf: ['#302838', '#443a50'],
+    pack: ['#302838', '#443a50', '#5e526c'], roll: '#302838',
+    head: 'voidhood', noPack: true, cloak: ['#1a1622', '#2a2434', '#3e3648'], trim: '#e0a030',
+    glow: ['#1a6ab0', '#4ad0ff', '#e0ffff'], fx: 'frostfire',
   },
   // ---- 兑换码「为爱发电」解锁的五套（用户 10-23 给的参考图和录屏，按本作画法重画） ----
   {
@@ -233,6 +245,8 @@ interface Pose {
   bobber?: [number, number];
   /** 眨眼 */
   blink?: boolean;
+  /** 待机施法阶段（冰火咒师用）：举手凝聚元素、白光炸开、紫色光柱 */
+  cast?: 'raise' | 'flash' | 'beam';
   /** 这一帧在动作里的进度 0-1、帧序号（特效闪烁用，生成精灵表时填） */
   t?: number;
   seed?: number;
@@ -754,8 +768,8 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
     // 背心翻领：贴着衬衣的一列亮边
     for (let y = Math.floor(sy + 1); y < beltY; y++) {
       const open = openAt((y + 0.5 - sy) / (hipY - sy));
-      p.set(Math.floor(cx - open - 0.5), y, C[3]);
-      p.set(Math.ceil(cx + open - 0.5), y, C[2]);
+      p.set(Math.floor(cx - open - 0.5), y, o.trim ?? C[3]);
+      p.set(Math.ceil(cx + open - 0.5), y, o.trim ? mix(o.trim, '#000000', 0.3) : C[2]);
     }
     // 背带
     if (!bare) {
@@ -765,6 +779,13 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
   } else if (side && !bare) {
     p.line(cx - 1.1, sy + 0.3, cx + 1.1, beltY - 0.5, R.pack[1]);
     p.line(cx - 1.8, sy + 0.6, cx + 0.4, beltY, R.pack[0]);
+  }
+  // 袍子下摆的金线
+  if (o.trim) {
+    for (let x = Math.floor(cx - (side ? 2.9 : 4.2)); x <= Math.ceil(cx + (side ? 3 : 4.2)); x++) {
+      const y = Math.ceil(hipY);
+      if (C.includes(p.get(x, y) ?? '')) p.set(x, y, o.trim);
+    }
   }
   // 腰带、铜扣、挂包
   const bl = cx - (side ? 2.7 : 3.7);
@@ -786,7 +807,7 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
   // ---- 正面 / 背面的手臂 ----
   let hands: [number, number][] = [];
   if (!side) {
-    const [l, r] = pose.armLift ?? [0, 0];
+    const [l, r] = (o.head === 'voidhood' && pose.cast ? (pose.cast === 'raise' ? [2.6, 2.6] : [1.6, 1.6]) : pose.armLift) ?? [0, 0];
     const arm = (x: number, lift: number) => {
       const top = sy + 1.1;
       const end = sy + 6.6 - lift;
@@ -856,7 +877,7 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
   if (o.offhand === 'shield' && down) drawShield(p, cx - 5.6, sy + 3.2, 'front');
   if (o.offhand === 'shield' && up) drawShield(p, cx - 2.6, sy + 1.4, 'back');
   const out = p.outlineTinted();
-  if (o.fx) drawFx(out, o, pose, { cx, sy, hipY, headY, lantern });
+  if (o.fx) drawFx(out, o, pose, { cx, sy, hipY, headY, lantern, hands });
   return out;
 }
 
@@ -886,6 +907,7 @@ function drawSpecialHead(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, po
   const mid = glowAt(o, f - 0.3);
   const ey = Math.round(cy + 0.2);
 
+  if (o.head === 'voidhood') return drawVoidHood(p, o, R, cx, cy, pose);
   if (o.head === 'pumpkin' || o.head === 'voidpumpkin') {
     // 扁圆的南瓜，五道竖棱，顶上一截弯梗和一片叶子
     ball(p, hx, cy - 0.2, side ? 5.2 : 5.7, 4.7, H);
@@ -1039,20 +1061,185 @@ function drawSpecialHead(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, po
 const dxEye = (x: number, hx: number) => (x < hx ? 1 : 0);
 
 /** 破披风：侧面往身后飘，正面从两肩露出来，背面盖住整个背；下摆一缕一缕的 */
+/** 冰火咒师的头：尖顶兜帽往一边弯、帽口镶金线，帽檐下一团黑，两只眼睛随施法变色，帽前两道白色的翎纹 */
+function drawVoidHood(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose: Pose) {
+  const { dir } = pose;
+  const side = dir === 'side';
+  const up = dir === 'up';
+  const wave = pose.cape ?? 0;
+  const HD = R.coat;
+  const hx = side ? cx + 0.5 : cx;
+  const trim = o.trim ?? GOLD[2];
+  // 尖顶：正面往右弯，侧面往脑后弯
+  const bend = side ? -1 : 1;
+  const tip: [number, number][] = [[hx, cy - 4.2], [hx + bend * 1.6, cy - 7.4], [hx + bend * (4.2 + wave * 0.3), cy - 9.2], [hx + bend * (7 + wave * 0.6), cy - 8.6 + wave * 0.2]];
+  for (let i = 1; i < tip.length; i++) capsule(p, tip[i - 1][0], tip[i - 1][1], tip[i][0], tip[i][1], 1.9 - i * 0.45, HD);
+  ball(p, hx, cy - 0.3, side ? 5 : 5.3, 5, HD);
+  // 帽前两道白翎纹
+  const W = '#f4f0f8';
+  if (!up) {
+    const fx0 = side ? hx + 1.4 : hx;
+    for (let i = 0; i <= 4; i++) {
+      p.paint(fx0 - 2 + i, cy - 2.2 - i * 0.8, W);
+      if (!side) p.paint(fx0 + 2 - i, cy - 2.2 - i * 0.8, W);
+    }
+  } else {
+    p.paint(hx - 1, cy - 4.6, W);
+    p.paint(hx + 1, cy - 4.6, W);
+  }
+  if (up) return;
+  // 帽檐下是一团黑
+  const VOID = ['#060408', '#060408', '#0a0810', '#0a0810', '#0e0c16'];
+  const fy = cy + 1.1;
+  const fx = side ? hx + 1.2 : hx;
+  const isFace = (x: number, y: number) => {
+    const dx = (x + 0.5 - fx) / (side ? 3.2 : 3.5);
+    const dy = (y + 0.5 - fy) / 3.3;
+    return dx * dx + dy * dy <= 1 && y + 0.5 >= cy - 1.3 && (!side || x + 0.5 > hx - 0.2);
+  };
+  ball(p, fx, fy, side ? 3.2 : 3.5, 3.3, VOID, 0, isFace);
+  // 帽口镶金线：黑面周围一圈兜帽像素换成金色
+  for (let y = Math.floor(fy - 4); y <= Math.ceil(fy + 4); y++) {
+    for (let x = Math.floor(fx - 5); x <= Math.ceil(fx + 5); x++) {
+      if (isFace(x, y) || !HD.includes(p.get(x, y) ?? '')) continue;
+      if (isFace(x - 1, y) || isFace(x + 1, y) || isFace(x, y + 1)) p.set(x, y, trim);
+    }
+  }
+  if (pose.blink) return;
+  // 眼睛：平时青色；凝聚元素时左红右青；光柱时紫色
+  const cyan = ['#2a90c0', '#5ae0ff'];
+  const red = ['#c02a1a', '#ff6a4a'];
+  const purple = ['#7a3ac8', '#d090ff'];
+  const ey = Math.round(cy + 1.2);
+  const eyes: [number, string[]][] = side
+    ? [[Math.round(hx + 2.4), pose.cast === 'beam' ? purple : pose.cast === 'raise' ? red : cyan]]
+    : [[Math.round(hx - 2), pose.cast === 'beam' ? purple : pose.cast === 'raise' ? red : cyan], [Math.round(hx + 1), pose.cast === 'beam' ? purple : cyan]];
+  const bright = flicker(pose, 2) > 0.45;
+  for (const [x, c] of eyes) {
+    p.set(x, ey, c[1]);
+    p.set(x, ey + 1, bright ? c[1] : c[0]);
+    p.set(x, ey + 2, c[0]);
+  }
+}
+
+/** 冰火咒师的特效：脚下金色法阵、左手火右手冰、白光炸开、紫色光柱，所有动作里法阵和火星都在 */
+function drawFrostfireFx(p: Pix, o: Outfit, pose: Pose, at: { cx: number; sy: number; hipY: number; headY: number; hands: [number, number][] }, put: (x: number, y: number, c: string) => void) {
+  const t = pose.t ?? 0;
+  const seed = pose.seed ?? 0;
+  const { cx, sy, hipY, headY, hands } = at;
+  const empty = (x: number, y: number, c: string) => { if (!p.get(Math.round(x), Math.round(y))) put(x, y, c); };
+  // ---- 脚下的法阵：椭圆金环，环上亮点转动，环外一圈放射的光线 ----
+  const RING = ['#a86a14', '#e8a020', '#ffd850', '#fff4b0'];
+  const ry = 4.2, rx = 13;
+  const gy = HERO_FEET - 0.4;
+  const spin = t * TAU + seed * 0.37;
+  for (let i = 0; i < 72; i++) {
+    const a = (i / 72) * TAU;
+    const x = cx + Math.cos(a) * rx;
+    const y = gy + Math.sin(a) * ry;
+    const k = (Math.sin(a * 3 - spin) + 1) / 2;
+    empty(x, y, k > 0.8 ? RING[3] : k > 0.45 ? RING[2] : RING[1]);
+  }
+  for (let j = 0; j < 10; j++) {
+    const a = (j / 10) * TAU + spin * 0.5;
+    const ph = (t * 2 + j * 0.3) % 1;
+    const r0 = 0.55 + ph * 0.5;
+    const x = cx + Math.cos(a) * rx * r0;
+    const y = gy + Math.sin(a) * ry * r0;
+    empty(x, y, ph < 0.5 ? RING[2] : RING[0]);
+    if (ph < 0.3) empty(x + Math.cos(a), y + Math.sin(a) * 0.4, RING[3]);
+  }
+  // ---- 身边常驻：左边飘火星、右边飘冰晶 ----
+  const FIRE = ['#c83a1a', '#ff7a2a', '#ffd060', '#fff8e0'];
+  const ICE = ['#1a7ab8', '#4ac8ff', '#c8f4ff', '#ffffff'];
+  for (let j = 0; j < 3; j++) {
+    const ph = (t * 1.5 + j * 0.33 + (seed % 7) * 0.05) % 1;
+    const fx = cx - 8 + Math.sin(ph * 6 + j) * 1.5;
+    const fy = hipY + 2 - ph * 14;
+    empty(fx, fy, ph < 0.4 ? FIRE[2] : FIRE[1]);
+    const ix = cx + 8 + Math.sin(ph * 5 + j * 2) * 1.5;
+    const iy = hipY + 1 - ((ph + 0.5) % 1) * 14;
+    empty(ix, iy, ((ph + 0.5) % 1) < 0.4 ? ICE[2] : ICE[1]);
+  }
+  if (pose.dir !== 'down' || !pose.cast || hands.length < 2) return;
+  const [[lx, ly], [rx2, ry2]] = hands;
+  if (pose.cast === 'raise') {
+    // 左手火苗：三根高低不一的焰舌，随帧摇摆
+    const k = (seed * 7) % 3;
+    const tongues: [number, number][] = [[-1, 3 + k], [0, 5 + ((k + 1) % 3)], [1, 3 + ((k + 2) % 3)]];
+    for (const [dx, h] of tongues) {
+      for (let i = 0; i < h; i++) {
+        const x = lx + dx + (i > 2 ? Math.round(Math.sin(t * TAU * 2 + i + dx)) * 0.5 : 0);
+        put(x, ly - 1 - i, i < 1 ? FIRE[3] : i < h * 0.5 ? FIRE[2] : i < h - 1 ? FIRE[1] : FIRE[0]);
+      }
+    }
+    for (let j = 0; j < 3; j++) {
+      const ph = (t * 2 + j * 0.3) % 1;
+      empty(lx - 2 + j * 2 + Math.sin(ph * 8) * 1, ly - 6 - ph * 5, ph < 0.5 ? FIRE[2] : FIRE[0]);
+    }
+    // 右手冰晶：菱形晶体加四角的星光
+    const cy0 = ry2 - 3.5;
+    for (let dy = -3; dy <= 3; dy++) {
+      const w = 2 - Math.abs(dy) * 0.7;
+      for (let dx = -Math.floor(w); dx <= Math.floor(w); dx++) {
+        put(rx2 + dx, cy0 + dy, dx === 0 && dy <= 0 ? ICE[3] : Math.abs(dx) + Math.abs(dy) < 2 ? ICE[2] : dx < 0 ? ICE[2] : ICE[1]);
+      }
+    }
+    const tw = Math.floor(t * 8) % 2;
+    for (const [dx, dy] of tw ? [[-3, -4], [3, 1]] : [[3, -4], [-3, 2]]) {
+      empty(rx2 + dx, cy0 + dy, ICE[3]);
+      empty(rx2 + dx + 1, cy0 + dy, ICE[1]);
+      empty(rx2 + dx - 1, cy0 + dy, ICE[1]);
+      empty(rx2 + dx, cy0 + dy - 1, ICE[1]);
+      empty(rx2 + dx, cy0 + dy + 1, ICE[1]);
+    }
+  } else if (pose.cast === 'flash') {
+    // 白光炸开：身前一团白加八道放射线
+    const mx = cx, my = sy + 5;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * TAU + (seed % 2) * 0.3;
+      const len = 6 + (i % 2) * 3;
+      for (let r = 1; r <= len; r++) put(mx + Math.cos(a) * r * 1.4, my + Math.sin(a) * r * 0.8, r < len - 1 ? '#ffffff' : '#ffe8ff');
+    }
+    for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (Math.abs(dx) + Math.abs(dy) <= 3) put(mx + dx, my + dy, '#ffffff');
+    for (let j = 0; j < 6; j++) empty(mx - 9 + ((j * 5 + seed) % 18), HERO_FEET - 1 - (j % 3), '#ffffff');
+  } else {
+    // 紫色光柱：从脚下升到胸口，中间白、两边紫，白色的光点往上走
+    const top = sy + 2.5;
+    const bottom = HERO_FEET - 0.5;
+    const PUR = ['#5a2a9a', '#9a5ae8', '#d8b8ff', '#ffffff'];
+    for (let y = Math.floor(top); y <= bottom; y++) {
+      const k = (y - top) / (bottom - top);
+      const w = k < 0.1 ? 1 : 2;
+      for (let dx = -w; dx <= w - 1; dx++) put(cx + dx, y, Math.abs(dx + 0.5) < 1 ? PUR[3] : PUR[1]);
+      if (k > 0.1) { put(cx - w - 1, y, PUR[0]); put(cx + w, y, PUR[0]); }
+    }
+    for (let j = 0; j < 5; j++) {
+      const ph = (t * 2.5 + j * 0.2) % 1;
+      const y = bottom - ph * (bottom - top);
+      put(cx + (j % 2 ? 1 : -2), y, PUR[2]);
+      put(cx + (j % 2 ? 2 : -3), y, ph < 0.5 ? PUR[3] : PUR[1]);
+    }
+    for (let j = 0; j < 4; j++) empty(cx - 7 + ((j * 5 + seed * 3) % 14), HERO_FEET - 1 - (j % 2), PUR[2]);
+  }
+}
+
 function drawCloak(p: Pix, o: Outfit, cx: number, sy: number, hipY: number, pose: Pose) {
   const CL = ramp(o.cloak!);
   const wave = pose.cape ?? 0;
   const side = pose.dir === 'side';
   const up = pose.dir === 'up';
-  const bottom = hipY + (up ? 4.5 : 4);
+  // 咒师的袍子：下摆撑得更开，像一只钟
+  const bell = o.head === 'voidhood';
+  const bottom = hipY + (up ? 4.5 : bell ? 5 : 4);
   for (let y = Math.floor(sy - 0.5); y <= Math.ceil(bottom); y++) {
     const k = (y - sy) / (bottom - sy);
     let l: number, r: number;
     if (side) {
-      l = cx - 2.4 - k * (3.4 + wave * 0.9);
-      r = cx + 0.8 - k * 1.2;
+      l = cx - 2.4 - k * (3.4 + wave * 0.9 + (bell ? 1.2 : 0));
+      r = cx + 0.8 - k * 1.2 + (bell ? k * 3.2 : 0);
     } else {
-      const hw = 4.2 + k * (up ? 1.8 : 1.6);
+      const hw = 4.2 + k * (up ? 1.8 : 1.6) + (bell ? k * 2.2 : 0);
       l = cx - hw;
       r = cx + hw;
     }
@@ -1063,7 +1250,8 @@ function drawCloak(p: Pix, o: Outfit, cx: number, sy: number, hipY: number, pose
       if (y > ragged) continue;
       const nx = ((x + 0.5 - (l + r) / 2) / ((r - l) / 2 || 1)) * 0.8;
       const fold = Math.sin(x * 1.3 + wave) > 0.6 ? 1 : 0;
-      p.set(x, y, tone(CL, nx, k < 0.1 ? -0.6 : 0.1, fold));
+      // 下摆每一缕的尖上镶金线
+      p.set(x, y, o.trim && y > ragged - 1 ? o.trim : tone(CL, nx, k < 0.1 ? -0.6 : 0.1, fold));
     }
   }
 }
@@ -1108,7 +1296,7 @@ function drawLantern(p: Pix, o: Outfit, hx: number, hy: number, pose: Pose, hidd
 }
 
 /** 粒子特效：画在描边之后，不带黑边；按帧进度循环，位置用哈希打散 */
-function drawFx(p: Pix, o: Outfit, pose: Pose, at: { cx: number; sy: number; hipY: number; headY: number; lantern: [number, number] | null }) {
+function drawFx(p: Pix, o: Outfit, pose: Pose, at: { cx: number; sy: number; hipY: number; headY: number; lantern: [number, number] | null; hands: [number, number][] }) {
   const t = pose.t ?? 0;
   const seed = pose.seed ?? 0;
   const G = o.glow ?? ['#c84a10', '#ffa020', '#fff0a0'];
@@ -1116,6 +1304,7 @@ function drawFx(p: Pix, o: Outfit, pose: Pose, at: { cx: number; sy: number; hip
   const put = (x: number, y: number, c: string) => {
     if (x >= -HERO_PAD.l && y >= -HERO_PAD.t && x < HERO_W + HERO_PAD.r && y < HERO_H + HERO_PAD.b) p.set(x, y, c);
   };
+  if (o.fx === 'frostfire') return drawFrostfireFx(p, o, pose, at, put);
   if (o.fx === 'embers' || o.fx === 'wisps') {
     // 火星 / 鬼火：从灯里往上飘，越往上越暗，到头就灭
     const src: [number, number][] = [];
@@ -1212,12 +1401,17 @@ const walk = (dir: HeroDir): HeroAnim => ({
   },
 });
 
+/** 待机 24 帧（4 秒一圈，呼吸 3 次）：后 16 帧是冰火咒师的施法段，普通外观看不出区别 */
 const idle = (dir: HeroDir): HeroAnim => ({
-  key: `idle-${dir}`, frames: 8, rate: 6,
-  pose: (t, i) => ({
-    dir, bob: Math.sin(t * TAU) > 0.3 ? 1 : 0, legF: 0.12, legB: -0.1, armF: 0.1 + Math.sin(t * TAU) * 0.05, armB: -0.1,
-    elbowF: 0.25, elbowB: 0.2, cape: Math.round(1 + Math.sin(t * TAU)), blink: i === 5,
-  }),
+  key: `idle-${dir}`, frames: 24, rate: 6,
+  pose: (t, i) => {
+    const b = Math.sin(t * TAU * 3);
+    return {
+      dir, bob: b > 0.3 ? 1 : 0, legF: 0.12, legB: -0.1, armF: 0.1 + b * 0.05, armB: -0.1,
+      elbowF: 0.25, elbowB: 0.2, cape: Math.round(1 + b), blink: i === 5 || i === 17,
+      cast: i < 8 ? undefined : i < 16 ? 'raise' : i < 18 ? 'flash' : 'beam',
+    };
+  },
 });
 
 /** 双手挥动的工具：从 from 抡到 to */
