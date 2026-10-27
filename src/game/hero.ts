@@ -1115,24 +1115,30 @@ function drawVoidHood(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose:
     // 侧面（用户 10-27 参考图）：兜帽往脑后拖出一大截，越往后越细，收成一个尖角；下面顺着脖子披到肩上
     const sag = wave * 0.35;
     // 末端圆钝，不收成尖（用户 10-27）
-    const spine: [number, number, number][] = [[hx - 1.5, cy - 1.4, 4.8], [hx - 4.6, cy - 2.2 + sag * 0.5, 4.1], [hx - 7.4, cy - 2.8 + sag, 3.3], [hx - 9.2, cy - 3 + sag * 1.2, 2.6]];
+    const spine: [number, number, number][] = [[hx - 1.2, cy - 1, 5.2], [hx - 4.2, cy - 1.6 + sag * 0.5, 4.6], [hx - 6.8, cy - 1.9 + sag, 3.8]];
     for (let i = 1; i < spine.length; i++) {
       const [x0, y0, r0] = spine[i - 1];
       const [x1, y1, r1] = spine[i];
       for (let k = 0; k <= 1; k += 0.25) ball(p, lerp(x0, x1, k), lerp(y0, y1, k), lerp(r0, r1, k), lerp(r0, r1, k) * 0.92, HD, i > 1 ? 1 : 0);
     }
-    ball(p, hx + 0.2, cy - 0.4, 5.2, 5.3, HD);
-    capsule(p, hx - 3.6, cy + 1, hx - 3.2, cy + 4.6, 1.9, HD, 1);
+    ball(p, hx + 0.2, cy - 0.4, 5.4, 5.5, HD);
+    // 帽子后面顺着脖子披到肩上，和披风连成一片
+    capsule(p, hx - 4.2, cy + 1, hx - 4.4, cy + 5.6, 2.4, HD, 1);
+    capsule(p, hx + 2.6, cy + 3.4, hx + 3.4, cy + 5.6, 1.6, HD, 0);
     // 帽子上几道顺着拖尾走的褶子
     for (let i = 0; i < 3; i++) p.paint(hx - 3 - i * 2.4, cy + 0.2 - i * 0.6, HD[0]);
     p.paint(hx - 4.4, cy + 2, HD[0]);
   } else {
-    ball(p, hx, cy - 0.6, 5.5, 5.3, HD);
-    const fold: [number, number][] = [[hx + bend * 1.5, cy - 4.4], [hx + bend * 4.2, cy - 4.2 + wave * 0.15], [hx + bend * (6.2 + wave * 0.3), cy - 2.4 + wave * 0.4], [hx + bend * (6.6 + wave * 0.3), cy + 0.6 + wave * 0.5]];
-    for (let i = 1; i < fold.length; i++) capsule(p, fold[i - 1][0], fold[i - 1][1], fold[i][0], fold[i][1], 2.3 - i * 0.45, HD, i > 1 ? 1 : 0);
-    // 帽兜上的几道褶子
-    for (let i = 0; i < 3; i++) p.paint(hx + bend * (3.2 + i * 1.1), cy - 3.4 + i * 1.5, HD[0]);
+    // 正面 / 背面（用户 10-27：不要尖，要像披着带兜帽的披风）：一个比头大一圈的圆兜帽，两侧顺着脸颊披到肩上，和披风连成一片
+    ball(p, hx, cy - 0.8, 6.3, 5.8, HD);
+    for (const sg of [-1, 1]) capsule(p, hx + sg * 5, cy + 0.8, hx + sg * 6.4, cy + 5.4 + wave * 0.2, 2.1, HD, sg > 0 ? 1 : 0);
+    // 兜帽顶上两道横褶，脸颊两侧各一道竖褶
+    for (let i = -2; i <= 2; i++) p.paint(hx + i, cy - 5.6 + Math.abs(i) * 0.4, HD[0]);
+    for (let i = -1; i <= 1; i++) p.paint(hx + i * 2, cy - 4 + Math.abs(i) * 0.3, HD[1]);
+    p.paint(hx - 5.4, cy + 2.4, HD[0]);
+    p.paint(hx + 5.6, cy + 3, HD[0]);
   }
+  void bend;
   // 帽前两道白翎纹
   const W = '#f4f0f8';
   if (!up) {
@@ -1151,7 +1157,7 @@ function drawVoidHood(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose:
   const fx = side ? hx + 2 : hx;
   const top = side ? cy - 2.2 : cy - 2.6;
   const chin = side ? cy + 3.2 : cy + 3.6;
-  const hw = side ? 3 : 4;
+  const hw = side ? 3 : 4.2;
   const isFace = (x: number, y: number) => {
     const px = x + 0.5, py = y + 0.5;
     if (py > chin || py < top) return false;
@@ -1184,6 +1190,9 @@ function drawVoidHood(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose:
     : [[Math.round(hx - 2), pose.cast === 'beam' ? purple : pose.cast === 'raise' || pose.cast === 'rise' ? red : cyan], [Math.round(hx + 1), pose.cast === 'beam' ? purple : cyan]];
   const bright = flicker(pose, 2) > 0.45;
   for (const [x, c] of eyes) {
+    // 亮点四周一圈暗光，眼睛才像在发光
+    const halo = mix(c[0], '#060408', 0.45);
+    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) if (VOID.includes(p.get(x + dx, ey + dy) ?? '')) p.set(x + dx, ey + dy, halo);
     p.set(x, ey, c[1]);
     if (side) p.set(x + 2, ey, bright ? c[1] : c[0]);
     else if (bright) p.set(x + (x < hx ? -1 : 1), ey, c[0]);
@@ -1206,12 +1215,24 @@ function drawFrostfireFx(p: Pix, o: Outfit, pose: Pose, at: { cx: number; sy: nu
   const gy = HERO_FEET - 0.4;
   const spin = t * TAU + seed * 0.37;
   const hot = cast === 'flash' || (cast === 'slam' && k > 0.5);
-  for (let i = 0; i < 72; i++) {
-    const a = (i / 72) * TAU;
-    const x = cx + Math.cos(a) * rx;
-    const y = gy + Math.sin(a) * ry;
-    const kk = (Math.sin(a * 3 - spin) + 1) / 2;
-    empty(x, y, hot ? (kk > 0.5 ? '#ffffff' : RING[3]) : kk > 0.8 ? RING[3] : kk > 0.45 ? RING[2] : RING[1]);
+  // 环内铺一层稀疏的暗金光（隔点画），环本身两格厚
+  for (let y = Math.floor(gy - ry); y <= Math.ceil(gy + ry); y++) {
+    for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) {
+      const dx = (x + 0.5 - cx) / rx, dy = (y + 0.5 - gy) / ry;
+      const d = dx * dx + dy * dy;
+      if (d > 0.9 || ((x + y * 2 + Math.floor(t * 4)) % 3)) continue;
+      empty(x, y, d > 0.55 ? RING[1] : RING[0]);
+    }
+  }
+  for (const [rr, bright] of [[1, true], [0.9, false]] as [number, boolean][]) {
+    for (let i = 0; i < 80; i++) {
+      const a = (i / 80) * TAU;
+      const x = cx + Math.cos(a) * rx * rr;
+      const y = gy + Math.sin(a) * ry * rr;
+      const kk = (Math.sin(a * 3 - spin) + 1) / 2;
+      const c = hot ? (kk > 0.5 ? '#ffffff' : RING[3]) : kk > 0.8 ? RING[3] : kk > 0.45 ? RING[2] : RING[1];
+      empty(x, y, bright ? c : mix(c, RING[0], 0.5));
+    }
   }
   // 内圈符文：八个小点，每个点两格，反向转；握剑时变紫
   for (let i = 0; i < 8; i++) {
@@ -1247,20 +1268,22 @@ function drawFrostfireFx(p: Pix, o: Outfit, pose: Pose, at: { cx: number; sy: nu
     const fx = cx - 8 - (j % 2) * 2 + Math.sin(ph * 6 + j) * 1.5;
     const fy = hipY + 2 - ph * 15;
     empty(fx, fy, ph < 0.4 ? FIRE[2] : FIRE[1]);
-    if (ph < 0.2) empty(fx, fy + 1, FIRE[0]);
+    if (ph < 0.5) { empty(fx, fy + 1, FIRE[0]); empty(fx + 1, fy, FIRE[1]); }
     const ix = cx + 8 + (j % 2) * 2 + Math.sin(ph * 5 + j * 2) * 1.5;
     const iy = hipY + 1 - ((ph + 0.5) % 1) * 15;
     empty(ix, iy, ((ph + 0.5) % 1) < 0.4 ? ICE[2] : ICE[1]);
+    if (((ph + 0.5) % 1) < 0.5) { empty(ix - 1, iy, ICE[0]); empty(ix, iy - 1, ICE[1]); }
   }
   if (pose.dir !== 'down' || !cast || hands.length < 2) return;
   const [[lx, ly], [rx2, ry2]] = hands;
   if (cast === 'rise' || cast === 'raise') {
     // 掌心起火、凝冰：抬手时只有一点火星，抬到位后火越烧越旺、冰晶越长越大，火焰和冰雾绕着手螺旋上升
     const grow = cast === 'rise' ? k * 0.3 : 0.3 + k * 0.7;
-    const h0 = Math.round(2 + grow * 7);
+    const h0 = Math.round(2 + grow * 9);
     const wob = (seed * 7) % 3;
     const tongues: [number, number][] = [[-1, h0 - 2 + ((wob + 1) % 3)], [0, h0 + (wob % 2)], [1, h0 - 2 + ((wob + 2) % 3)]];
-    if (grow > 0.5) tongues.push([-2, Math.round(h0 * 0.45)], [2, Math.round(h0 * 0.45) + (wob & 1)]);
+    if (grow > 0.5) tongues.push([-2, Math.round(h0 * 0.55)], [2, Math.round(h0 * 0.55) + (wob & 1)]);
+    if (grow > 0.8) tongues.push([-3, Math.round(h0 * 0.3)], [3, Math.round(h0 * 0.3)]);
     for (const [dx, h] of tongues) {
       for (let i = 0; i < h; i++) {
         const sway = i > 2 ? Math.round(Math.sin(t * TAU * 3 + i * 0.9 + dx)) : 0;
@@ -1282,7 +1305,7 @@ function drawFrostfireFx(p: Pix, o: Outfit, pose: Pose, at: { cx: number; sy: nu
       empty(lx - 2 + j * 1.2 + Math.sin(ph * 8 + j) * 1.5, ly - 2 - h0 - ph * 6, ph < 0.5 ? FIRE[2] : FIRE[0]);
     }
     // 右手冰晶：菱形晶体慢慢长大，四角的星光闪烁，周围小冰碴
-    const ir = 1 + grow * 3;
+    const ir = 1 + grow * 3.6;
     const cy0 = ry2 - 1.2 - ir;
     for (let dy = -Math.ceil(ir); dy <= Math.ceil(ir); dy++) {
       const w = (ir - Math.abs(dy)) * 0.75;
@@ -1347,12 +1370,16 @@ function drawFrostfireFx(p: Pix, o: Outfit, pose: Pose, at: { cx: number; sy: nu
       if (y > cut) continue;
       const kk = (y - gy) / len;
       if (kk > 0.93) { put(cx - 1, y, PUR[2]); continue; }
-      put(cx - 2, y, glow > 0.6 ? PUR[1] : PUR[0]);
+      put(cx - 2, y, glow > 0.6 ? PUR[2] : PUR[1]);
       put(cx - 1, y, PUR[3]);
       put(cx, y, kk < 0.7 ? PUR[3] : PUR[2]);
-      put(cx + 1, y, glow > 0.6 ? PUR[1] : PUR[0]);
-      // 剑身两侧的光晕
-      if (!fade && (y + seed) % 3 === 0) { empty(cx - 3, y, PUR[0]); empty(cx + 2, y, PUR[0]); }
+      put(cx + 1, y, glow > 0.6 ? PUR[2] : PUR[1]);
+      // 剑身两侧的光晕：两格宽，隔行闪
+      if (!fade) {
+        put(cx - 3, y, PUR[0]);
+        put(cx + 2, y, PUR[0]);
+        if ((y + seed) % 2 === 0) { empty(cx - 4, y, PUR[0]); empty(cx + 3, y, PUR[0]); }
+      }
     }
     if (!fade) {
       for (let j = 0; j < 4; j++) {
