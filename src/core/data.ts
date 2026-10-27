@@ -204,10 +204,14 @@ export const CROPS: [string, string, number, string, string, 'veg' | 'grain'][] 
   ['lingzhi', tl('灵芝'), 95, '#a0402a', tl('灵芝炖汤'), 'veg'], ['immortal_peach', tl('仙桃'), 100, '#ffb0c0', tl('仙桃蜜饯'), 'veg'],
   ['phoenix_fruit', tl('凤凰果'), 105, '#ff8a3a', tl('凤凰果挞'), 'veg'], ['world_fruit', tl('世界树果'), 110, '#f0ffb0', tl('世界树果羹'), 'veg'],
 ];
-/** 集市种子摊卖的种子（T1-T2） */
-export const SEED_SHOP = CROPS.filter((c) => c[2] < 20).map((c) => `seed_${c[0]}`);
-/** 种子在集市的售价 = 价值 × 4 */
+/**
+ * 集市种子摊卖的种子（10-27 经济优化：以前只卖 T1-T2，现在所有种子都卖，种植等级够了才能买，
+ * 让高阶玩家的金币有地方花）。售价 = 价值 × 4，T3 起 × 6
+ */
+export const SEED_SHOP = CROPS.map((c) => `seed_${c[0]}`);
 export const SEED_PRICE = 4;
+export const seedLevel = (id: string) => CROPS.find((c) => `seed_${c[0]}` === id)?.[2] ?? 0;
+export const seedPrice = (id: string) => (ITEMS[id]?.value ?? 0) * (seedLevel(id) < 20 ? SEED_PRICE : 6);
 CROPS.forEach(([id, name, lvl, , dish]) => {
   const tier = tierForLevel(lvl);
   const where = [tl('城镇农田'), tl('城镇农田'), tl('南郊麦田'), tl('南郊麦田'), tl('东郊菜园'), tl('东郊菜园'), tl('西岭灵田'), tl('西岭灵田')][tier];
@@ -311,8 +315,18 @@ export function inTownArea(x: number, y: number): boolean {
 }
 /** 商人卖的钥匙和价格（金币） */
 export const KEY_SHOP: [string, number][] = [
-  ['dkey_g4', 2500], ['dkey_g5', 6000], ['dkey_b4', 5000], ['dkey_b5', 12000], ['dkey_b6', 30000],
+  ['dkey_g4', 2500], ['dkey_g5', 6000], ['dkey_g6', 15000], ['dkey_g7', 36000], ['dkey_g8', 80000],
+  ['dkey_b4', 5000], ['dkey_b5', 12000], ['dkey_b6', 30000], ['dkey_b7', 75000],
 ];
+/**
+ * 城镇商人的材料柜台（10-27 经济优化）：T1-T6 的矿石、原木、棉花、兽皮按价值 × 7 卖，每样每天限购 200。
+ * 金币多了能直接买材料练制作，不用全靠自己采；比卖价贵得多，买来加工再卖一定亏（经济测试里核对）
+ */
+export const MAT_PRICE = 7;
+export const MAT_DAILY = 200;
+/** 回城卷轴也在商人这里卖，每天限 5 张 */
+export const SCROLL_PRICE = 600;
+export const SCROLL_DAILY = 5;
 // 名字直接写「T4 绿洞副本钥匙」（用户 10-25）
 KEY_TIERS.forEach((t) => {
   const shop = (kind: DungeonKind) => KEY_SHOP.some(([id]) => id === keyId(kind, t));
@@ -1775,3 +1789,6 @@ export function dangerLevel(node: MapNode, combatLevel: number): number {
   const d = Math.max(...levels) - combatLevel;
   return d <= -10 ? 1 : d <= 5 ? 2 : d <= 20 ? 3 : 4;
 }
+
+/** 材料柜台卖的东西（T1-T6 矿石、原木、棉花、兽皮） */
+export const MAT_SHOP: string[] = TIERS.slice(0, 6).flatMap((T, t) => [T.ore, `${T.wood}_log`, `cotton_${t + 1}`, `hide_${t + 1}`]).filter((id) => ITEMS[id]);

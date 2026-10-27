@@ -333,6 +333,8 @@ export interface GameState {
   guildLv?: number;
   /** 公会科技等级（10-27） */
   guildTech?: Partial<Record<'xp' | 'speed' | 'coins' | 'drop', number>>;
+  /** 商人今天卖给你的东西（UTC 日期 + 各样数量），每天限购用 */
+  shopBuys?: { day: string; n: Record<string, number> };
   /** 新手任务：第几个、当前进度 */
   quest?: { i: number; n: number };
   bestiary?: Record<string, number>;

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { ITEMS, KEY_SHOP, MONSTERS, NODES, type MapNode } from '../core/data';
+import { ITEMS, KEY_SHOP, MAT_SHOP, MONSTERS, NODES, SCROLL_TOWN, type MapNode } from '../core/data';
 import { CHEST_COLOR, chestOdds, mobBuff, coopMates, COOP_DEF, COOP_DMG, dungeonFloor, GATE_REACH, totalMobs } from '../core/dungeon';
 import { allGates, setSharedGates } from '../core/gateShare';
 import { partySize } from '../core/party';
-import { markContrib, syncDungeon, atShop, buyKey, enterDungeon, gateBlock, leaveDungeon, openDungeonChest, TOWN_BANKS, useTownScroll, walkPos } from '../core/sim';
+import { markContrib, syncDungeon, atShop, buyGoods, buyKey, shopBought, shopRow, enterDungeon, gateBlock, leaveDungeon, openDungeonChest, TOWN_BANKS, useTownScroll, walkPos } from '../core/sim';
 import type { DungeonGate, GameState } from '../core/types';
 import { DG_CHEST, DG_MATE_HIT } from '../game/DungeonScene';
 import { dgCrew, pushMateHit, stopKey } from '../core/aggro';
@@ -329,7 +329,7 @@ export function ShopSheet({ s, node, onClose }: { s: GameState; node: MapNode; o
         <button className="back" onClick={onClose}>{tl('‹ 返回')}</button>
         <h2>{node.name}</h2>
       </div>
-      <p className="muted pad">{tl('用仓库里的金币买副本钥匙。更高阶的钥匙只能从副本宝箱里开出来。')}</p>
+      <p className="muted pad">{tl('用仓库里的金币买副本钥匙、回城卷轴和 T1-T6 的基础材料，买到的东西进仓库。T8 蓝洞钥匙只能从副本宝箱里开出来。')}</p>
       <div className="ranch-stats">
         <span>{tl('仓库金币 ')}<b>{fmtNum(s.bank.coins ?? 0)}</b></span>
         {!near && <button className="primary" onClick={() => { store.requestWalk(node.id); onClose(); }}>{tl('寻路到商人')}</button>}
@@ -348,6 +348,29 @@ export function ShopSheet({ s, node, onClose }: { s: GameState; node: MapNode; o
               </div>
               <div className="salv-qty">
                 <button className="primary" disabled={!can} onClick={() => store.dispatch((g) => buyKey(g, id, 1))}>{tl('买 1 把')}</button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <h3 className="pad">{tl('杂货和材料')}<small className="muted">{tl(' · 每样每天限购，北京时间早上 8 点刷新')}</small></h3>
+      <div className="salv-list">
+        {[SCROLL_TOWN, ...MAT_SHOP].map((id) => {
+          const [price, daily] = shopRow(id)!;
+          const left = daily - shopBought(s, id);
+          const coins = s.bank.coins ?? 0;
+          const opts = id === SCROLL_TOWN ? [1] : [10, 50];
+          return (
+            <div key={id} className="salv-row">
+              <Icon item={id} size={32} />
+              <div className="salv-info">
+                <b>{ITEMS[id].name}</b>
+                <small>{tl`${fmtNum(price)} 金币 · 今天还能买 ${left} · 仓库 ${fmtNum(s.bank[id] ?? 0)}`}</small>
+              </div>
+              <div className="salv-qty">
+                {opts.map((n) => (
+                  <button key={n} disabled={!near || left < n || coins < price * n} onClick={() => store.dispatch((g) => buyGoods(g, id, n))}>{tl`买 ${n}`}</button>
+                ))}
               </div>
             </div>
           );
