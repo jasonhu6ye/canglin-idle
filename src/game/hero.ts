@@ -1115,12 +1115,9 @@ function drawVoidHood(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose:
     // 侧面（用户 10-27 参考图）：兜帽往脑后拖出一大截，越往后越细，收成一个尖角；下面顺着脖子披到肩上
     const sag = wave * 0.35;
     // 末端圆钝，不收成尖（用户 10-27）
-    const spine: [number, number, number][] = [[hx - 1.2, cy - 1, 5.2], [hx - 4.2, cy - 1.6 + sag * 0.5, 4.6], [hx - 6.8, cy - 1.9 + sag, 3.8]];
-    for (let i = 1; i < spine.length; i++) {
-      const [x0, y0, r0] = spine[i - 1];
-      const [x1, y1, r1] = spine[i];
-      for (let k = 0; k <= 1; k += 0.25) ball(p, lerp(x0, x1, k), lerp(y0, y1, k), lerp(r0, r1, k), lerp(r0, r1, k) * 0.92, HD, i > 1 ? 1 : 0);
-    }
+    // 侧面（用户 10-27：不要尖）：脑后一个圆鼓鼓的大帽兜，整体像一颗往后偏的圆球
+    ball(p, hx - 3.2 + sag * 0.3, cy - 1.2 + sag * 0.4, 6, 5.4, HD, 1);
+    ball(p, hx - 1.6, cy - 0.8, 5.6, 5.4, HD);
     ball(p, hx + 0.2, cy - 0.4, 5.4, 5.5, HD);
     // 帽子后面顺着脖子披到肩上，和披风连成一片
     capsule(p, hx - 4.2, cy + 1, hx - 4.4, cy + 5.6, 2.4, HD, 1);
@@ -1129,16 +1126,13 @@ function drawVoidHood(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose:
     for (let i = 0; i < 3; i++) p.paint(hx - 3 - i * 2.4, cy + 0.2 - i * 0.6, HD[0]);
     p.paint(hx - 4.4, cy + 2, HD[0]);
   } else {
-    // 正面 / 背面（用户 10-27：不要尖，要像披着带兜帽的披风）：一个比头大一圈的圆兜帽，两侧顺着脸颊披到肩上，和披风连成一片
-    ball(p, hx, cy - 0.8, 6.3, 5.8, HD);
-    for (const sg of [-1, 1]) capsule(p, hx + sg * 5, cy + 0.8, hx + sg * 6.4, cy + 5.4 + wave * 0.2, 2.1, HD, sg > 0 ? 1 : 0);
-    // 兜帽顶上两道横褶，脸颊两侧各一道竖褶
-    for (let i = -2; i <= 2; i++) p.paint(hx + i, cy - 5.6 + Math.abs(i) * 0.4, HD[0]);
-    for (let i = -1; i <= 1; i++) p.paint(hx + i * 2, cy - 4 + Math.abs(i) * 0.3, HD[1]);
-    p.paint(hx - 5.4, cy + 2.4, HD[0]);
-    p.paint(hx + 5.6, cy + 3, HD[0]);
+    // 正面 / 背面（用户 10-27 定稿，不要再改）：圆兜帽，头顶偏右多出一截软塌塌的帽兜垂下来，走路时轻轻晃
+    ball(p, hx, cy - 0.6, 5.5, 5.3, HD);
+    const fold: [number, number][] = [[hx + bend * 1.5, cy - 4.4], [hx + bend * 4.2, cy - 4.2 + wave * 0.15], [hx + bend * (6.2 + wave * 0.3), cy - 2.4 + wave * 0.4], [hx + bend * (6.6 + wave * 0.3), cy + 0.6 + wave * 0.5]];
+    for (let i = 1; i < fold.length; i++) capsule(p, fold[i - 1][0], fold[i - 1][1], fold[i][0], fold[i][1], 2.3 - i * 0.45, HD, i > 1 ? 1 : 0);
+    // 帽兜上的几道褶子
+    for (let i = 0; i < 3; i++) p.paint(hx + bend * (3.2 + i * 1.1), cy - 3.4 + i * 1.5, HD[0]);
   }
-  void bend;
   // 帽前两道白翎纹
   const W = '#f4f0f8';
   if (!up) {
@@ -1157,7 +1151,7 @@ function drawVoidHood(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose:
   const fx = side ? hx + 2 : hx;
   const top = side ? cy - 2.2 : cy - 2.6;
   const chin = side ? cy + 3.2 : cy + 3.6;
-  const hw = side ? 3 : 4.2;
+  const hw = side ? 3 : 4;
   const isFace = (x: number, y: number) => {
     const px = x + 0.5, py = y + 0.5;
     if (py > chin || py < top) return false;
