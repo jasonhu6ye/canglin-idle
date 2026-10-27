@@ -805,6 +805,41 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
     ball(p, cx - 1.8, beltY + 2, 1.3, 1.2, R.pack);
   }
 
+  // ---- 咒师的长袍下摆（用户 10-27：下身要有披风感，脚别露出来）：从腰下一直罩到脚面，只露一点靴尖；走路时随步子摆动 ----
+  if (o.head === 'voidhood') {
+    const top = Math.floor(hipY) - 1;
+    const bottom = HERO_FEET - 1;
+    const swing = side ? (pose.legF ?? 0) * 2.2 : 0;
+    for (let y = top; y <= bottom; y++) {
+      const k = (y - top) / (bottom - top);
+      let l: number, r: number;
+      if (side) {
+        l = cx - 2.8 - k * (2 + wave * 0.4) + swing * k * 0.4;
+        r = cx + 3 + k * 1.8 + swing * k;
+      } else {
+        const hw = 4 + k * 2.8;
+        l = cx - hw;
+        r = cx + hw;
+      }
+      for (let x = Math.floor(l); x <= Math.ceil(r); x++) {
+        const px = x + 0.5;
+        if (px < l || px > r) continue;
+        // 下摆撕成几缕
+        const hem = bottom - phash(x, 9, 13) * 1.6;
+        if (y > hem) continue;
+        const nx = ((px - (l + r) / 2) / ((r - l) / 2 || 1)) * 0.9;
+        // 布料的竖褶：一道亮一道暗，往下摆方向慢慢散开，走路时跟着飘
+        const ph = Math.sin(x * 0.95 + k * 1.6 + wave * 0.4 + swing * 0.3);
+        const dim = ph < -0.45 ? 1 : 0;
+        const lit = ph > 0.55 ? 0.5 : 0;
+        const c = y > hem - 1 ? (o.trim ?? C[3]) : y > hem - 2 ? C[3] : tone(C, nx * 0.6 + lit, 0.15 - lit * 0.6, dim);
+        p.set(x, y, c);
+      }
+    }
+    // 正面袍子中间的金线一直延到下摆
+    if (down) for (let y = top; y < bottom - 1; y++) if (C.includes(p.get(cx - 1, y) ?? '')) p.set(cx - 1, y, o.trim ?? C[3]);
+  }
+
   // ---- 正面 / 背面的手臂 ----
   let hands: [number, number][] = [];
   if (!side) {
@@ -1194,6 +1229,29 @@ function drawVoidHood(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose:
   }
 }
 
+/**
+ * 细节火焰：以 (x0, y0) 为火苗底部中心、宽 w 高 h 的火焰场。越往上越窄，边缘按噪声舔动，噪声随帧号往上滚，
+ * 中心是白黄的内焰、外面一层橙红的外焰，最外一圈暗红
+ */
+const FLAME = ['#7a1a10', '#d03a1a', '#ff7a2a', '#ffd060', '#fff8e0'];
+function flameField(put: (x: number, y: number, c: string) => void, x0: number, y0: number, w: number, h: number, t: number, seed: number, R = FLAME, lean = 0) {
+  for (let dy = 0; dy < h; dy++) {
+    const yy = dy / h;
+    const half = (w / 2) * (1 - yy * yy * 0.85) * (1 + 0.15 * Math.sin(t * TAU * 2 + dy * 0.8));
+    const sway = Math.round(Math.sin(t * TAU * 3 + dy * 0.6) * yy * 1.2 + lean * yy);
+    for (let dx = -Math.ceil(half); dx <= Math.ceil(half); dx++) {
+      const edge = Math.abs(dx) / (half || 1);
+      if (edge > 1) continue;
+      const n = phash(dx + 40, dy - seed * 2, 21);
+      const v = (1 - yy) * (1 - edge * 0.8) + (n - 0.5) * 0.4;
+      if (v < 0.18) continue;
+      put(x0 + dx + sway, y0 - dy, v > 0.82 ? R[4] : v > 0.62 ? R[3] : v > 0.42 ? R[2] : v > 0.28 ? R[1] : R[0]);
+    }
+  }
+}
+/** 小符文：3×3 的几个形状，围着角色转 */
+const RUNES: number[][] = [[0, 1, 0, 1, 1, 1, 0, 1, 0], [1, 0, 1, 0, 1, 0, 1, 0, 1], [1, 1, 1, 0, 1, 0, 0, 1, 0], [0, 1, 0, 1, 0, 1, 0, 1, 0], [1, 0, 0, 1, 1, 0, 1, 1, 1], [0, 1, 1, 0, 1, 0, 1, 1, 0]];
+
 /** 冰火咒师的特效：脚下双层金色法阵、左手火右手冰、白光召剑、光剑、砸地冲击波，所有动作里法阵和火星冰晶都在 */
 function drawFrostfireFx(p: Pix, o: Outfit, pose: Pose, at: { cx: number; sy: number; hipY: number; headY: number; hands: [number, number][] }, put: (x: number, y: number, c: string) => void) {
   const t = pose.t ?? 0;
@@ -1268,21 +1326,55 @@ function drawFrostfireFx(p: Pix, o: Outfit, pose: Pose, at: { cx: number; sy: nu
     empty(ix, iy, ((ph + 0.5) % 1) < 0.4 ? ICE[2] : ICE[1]);
     if (((ph + 0.5) % 1) < 0.5) { empty(ix - 1, iy, ICE[0]); empty(ix, iy - 1, ICE[1]); }
   }
-  if (pose.dir !== 'down' || !cast || hands.length < 2) return;
+  if (pose.dir !== 'down' || hands.length < 2) return;
   const [[lx, ly], [rx2, ry2]] = hands;
+  if (!cast) {
+    // 站着的时候掌心也在阴燃：左手一小簇火、右手一粒冰光，一明一暗
+    if (flicker(pose, 2) > 0.35) flameField(put, lx, ly - 1, 3, 4, t, seed);
+    put(rx2, ry2 - 1.5, flicker(pose, 3) > 0.5 ? ICE[3] : ICE[2]);
+    put(rx2, ry2 - 2.5, ICE[1]);
+    return;
+  }
+  // 施法时绕身一圈金色符文（握剑时变紫），在身后的那几个被身体挡住
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * TAU + t * TAU * 1.2 + seed * 0.05;
+    const ox = Math.round(cx + Math.cos(a) * 11);
+    const oy = Math.round(sy + 3 + Math.sin(a) * 3.2);
+    const rune = RUNES[(i + Math.floor(t * 6)) % RUNES.length];
+    const c = cast === 'beam' || cast === 'slam' || cast === 'fade' ? PUR[2] : Math.sin(a) > 0 ? RING[3] : RING[2];
+    for (let j = 0; j < 9; j++) if (rune[j]) empty(ox + (j % 3) - 1, oy + Math.floor(j / 3) - 1, c);
+  }
   if (cast === 'rise' || cast === 'raise') {
     // 掌心起火、凝冰：抬手时只有一点火星，抬到位后火越烧越旺、冰晶越长越大，火焰和冰雾绕着手螺旋上升
     const grow = cast === 'rise' ? k * 0.3 : 0.3 + k * 0.7;
-    const h0 = Math.round(2 + grow * 9);
-    const wob = (seed * 7) % 3;
-    const tongues: [number, number][] = [[-1, h0 - 2 + ((wob + 1) % 3)], [0, h0 + (wob % 2)], [1, h0 - 2 + ((wob + 2) % 3)]];
-    if (grow > 0.5) tongues.push([-2, Math.round(h0 * 0.55)], [2, Math.round(h0 * 0.55) + (wob & 1)]);
-    if (grow > 0.8) tongues.push([-3, Math.round(h0 * 0.3)], [3, Math.round(h0 * 0.3)]);
-    for (const [dx, h] of tongues) {
-      for (let i = 0; i < h; i++) {
-        const sway = i > 2 ? Math.round(Math.sin(t * TAU * 3 + i * 0.9 + dx)) : 0;
-        put(lx + dx + sway, ly - 1 - i, i < 1 ? FIRE[3] : i < h * 0.45 ? FIRE[2] : i < h - 1 ? FIRE[1] : FIRE[0]);
+    const h0 = Math.round(3 + grow * 10);
+    flameField(put, lx, ly - 1, 3 + grow * 5, h0, t, seed, FLAME, -0.6);
+    // 火星从火尖往上蹦
+    for (let j = 0; j < 6; j++) {
+      const ph = (t * 3 + j * 0.17 + phash(j, 4, 9) * 0.5) % 1;
+      if (ph > grow) continue;
+      empty(lx - 3 + j * 1.2 + Math.sin(ph * 10 + j) * 1.5, ly - 1 - h0 * 0.7 - ph * 7, ph < 0.4 ? FLAME[3] : ph < 0.7 ? FLAME[2] : FLAME[1]);
+    }
+    // 右手周围的霜雾：一团带噪声的冷光，越大越浓
+    const mr = 2 + grow * 4;
+    for (let dy = -Math.ceil(mr); dy <= Math.ceil(mr); dy++) {
+      for (let dx = -Math.ceil(mr * 1.3); dx <= Math.ceil(mr * 1.3); dx++) {
+        const d = Math.sqrt((dx / 1.3) * (dx / 1.3) + dy * dy) / mr;
+        if (d > 1) continue;
+        const n = phash(dx + 60, dy - seed, 33);
+        const v = (1 - d) * 0.9 + (n - 0.5) * 0.5;
+        if (v < 0.45) continue;
+        empty(rx2 + dx, ry2 - 3 - grow * 2 + dy, v > 0.85 ? ICE[2] : v > 0.65 ? ICE[1] : ICE[0]);
       }
+    }
+    // 飘落的雪花（小十字）
+    for (let j = 0; j < 4; j++) {
+      const ph = (t * 1.2 + j * 0.25 + phash(j, 5, 9) * 0.5) % 1;
+      if (ph > grow) continue;
+      const x = rx2 - 5 + j * 3 + Math.round(Math.sin(ph * 7 + j) * 1.5);
+      const y = ry2 - 10 + ph * 12;
+      empty(x, y, ICE[3]);
+      empty(x - 1, y, ICE[2]); empty(x + 1, y, ICE[2]); empty(x, y - 1, ICE[2]); empty(x, y + 1, ICE[2]);
     }
     // 绕手的火焰螺旋和冰雾螺旋
     const turns = grow * 1.5;
@@ -1381,6 +1473,16 @@ function drawFrostfireFx(p: Pix, o: Outfit, pose: Pose, at: { cx: number; sy: nu
         const y = Math.round(gy + 1 + ph * (len - 2));
         put(cx + (j % 2 ? 2 : -3), y, ph < 0.5 ? PUR[2] : PUR[1]);
         put(cx + (j % 2 ? 3 : -4), y, PUR[0]);
+      }
+      // 剑身上不时窜过的电光：一道锯齿从柄到尖
+      if (seed % 3 === 0) {
+        let zx = cx - 1 + (seed % 2 ? 2 : -3);
+        for (let y = gy + 1; y <= tip; y += 2) {
+          zx += (phash(y, seed, 44) > 0.5 ? 1 : -1);
+          zx = Math.max(cx - 5, Math.min(cx + 4, zx));
+          empty(zx, y, '#ffffff');
+          empty(zx + (zx < cx ? -1 : 1), y + 1, PUR[2]);
+        }
       }
       // 绕着剑飘的紫色光屑
       for (let j = 0; j < 8; j++) {
