@@ -1080,3 +1080,6 @@ h2.dg-blue { color: #6ab4ff; }
 }
 .ui-scale input[type=range] { flex: 1; min-width: 120px; accent-color: var(--gold); }
 .ui-scale button { flex: 0 0 auto; padding: 7px 12px; }
+.gm-quality { margin: 2px 0; }
+.gm-quality .pill { padding: 4px 10px; font-weight: bold; }
+.gm-attach select { background: #1b120c; color: #fff3c4; border: 1px solid var(--edge); border-radius: 2px; padding: 4px; font: inherit; font-size: 13px; }

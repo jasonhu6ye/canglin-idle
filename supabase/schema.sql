@@ -212,6 +212,20 @@ $$;
 -- ========== 玩家数字 ID（10-25，用来加好友） ==========
 alter table public.profiles add column if not exists pid bigint generated always as identity (start with 10000001);
 create unique index if not exists profiles_pid on public.profiles (pid);
+-- 新注册账号的数字 ID 改成随机 8 位（10-27 用户要求）；老账号的 ID 不变
+-- 随机范围 20000000-99999999，避开以前按顺序发的 1000xxxx；撞号就重抽
+create or replace function public.random_pid() returns bigint
+language plpgsql volatile security definer set search_path = public as $$
+declare n bigint;
+begin
+  loop
+    n := 20000000 + floor(random() * 80000000)::bigint;
+    exit when not exists (select 1 from profiles where pid = n);
+  end loop;
+  return n;
+end $$;
+alter table public.profiles alter column pid drop identity if exists;
+alter table public.profiles alter column pid set default public.random_pid();
 
 -- ========== 好友 ==========
 -- 一对好友存一行：from_id 发的申请，accepted 后算好友

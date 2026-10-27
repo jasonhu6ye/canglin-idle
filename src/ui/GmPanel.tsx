@@ -7,6 +7,7 @@ import type { ItemStack } from '../core/types';
 import { fmtNum } from './format';
 import { Icon } from './icons';
 import { pullGm } from '../net/social';
+import { baseOf, qid, qualityOf, QUALITY_COLOR, QUALITY_NAME } from '../core/quality';
 import { tl } from '../i18n';
 
 /**
@@ -41,7 +42,7 @@ const left = (ms: number) => {
 };
 
 export function GmPanel({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<'buff' | 'mail'>('buff');
+  const [tab, setTab] = useState<'buff' | 'mail' | 'gear'>('buff');
   return (
     <div className="page guild gm-panel">
       <div className="sheet-head">
@@ -52,8 +53,9 @@ export function GmPanel({ onClose }: { onClose: () => void }) {
       <div className="gm-seg gm-tabs">
         <button className={`pill ${tab === 'buff' ? 'on' : ''}`} onClick={() => setTab('buff')}>{tl('增益')}</button>
         <button className={`pill ${tab === 'mail' ? 'on' : ''}`} onClick={() => setTab('mail')}>{tl('赠送物品')}</button>
+        <button className={`pill ${tab === 'gear' ? 'on' : ''}`} onClick={() => setTab('gear')}>{tl('赠送装备')}</button>
       </div>
-      {tab === 'buff' ? <BuffTab /> : <MailTab />}
+      {tab === 'buff' ? <BuffTab /> : <MailTab key={tab} gear={tab === 'gear'} />}
     </div>
   );
 }
@@ -196,10 +198,13 @@ function BuffTab() {
 
 /** 能送的东西：材料、食物、钥匙、宝箱之类，装备和工具除外；金币也能送 */
 const GIFTABLE = Object.values(ITEMS).filter((it) => !it.equip && it.category !== 'gear' && it.category !== 'tool');
+/** 能送的装备（10-27）：武器、护甲、饰品、工具、副手、背包、坐骑，只列原版，品质另选 */
+const GEAR = Object.values(ITEMS).filter((it) => (it.equip || it.category === 'gear' || it.category === 'tool') && !it.quality);
+const hasQuality = (base: string) => !!ITEMS[qid(base, 1)];
 const MAX_ATTACH = 10;
 
-/** 赠送物品（10-26）：给指定 UID 发一封带附件的邮件，标题正文自定义 */
-function MailTab() {
+/** 赠送物品（10-26）：给指定 UID 发一封带附件的邮件，标题正文自定义；gear = 赠送装备页，可选任意品质 */
+function MailTab({ gear }: { gear: boolean }) {
   const [rows, setRows] = useState<GmMailRow[] | null>(null);
   const [pid, setPid] = useState('');
   const [title, setTitle] = useState('');
@@ -208,6 +213,7 @@ function MailTab() {
   const [q, setQ] = useState('');
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [quality, setQuality] = useState(0);
 
   const load = async () => {
     try {
@@ -233,13 +239,22 @@ function MailTab() {
   const found = useMemo(() => {
     const k = q.trim();
     if (!k) return [];
-    return GIFTABLE.filter((it) => it.name.includes(k) || it.id.includes(k)).slice(0, 30);
-  }, [q]);
-  const add = (id: string) => {
+    return (gear ? GEAR : GIFTABLE).filter((it) => it.name.includes(k) || it.id.includes(k)).slice(0, 30);
+  }, [q, gear]);
+  const add = (base: string) => {
+    const id = gear && hasQuality(base) ? qid(base, quality) : base;
     setMsg(null);
     if (items.some((i) => i.item === id)) return;
     if (items.length >= MAX_ATTACH) return setMsg({ text: tl`一封最多 ${MAX_ATTACH} 种物品`, ok: false });
     setItems([...items, { item: id, qty: 1 }]);
+  };
+  // 换品质：同一件装备换成另一档的 id；已经有那一档就合并数量
+  const setQ1 = (id: string, q: number) => {
+    const to = qid(baseOf(id), q);
+    if (to === id) return;
+    const old = items.find((i) => i.item === id)!;
+    const has = items.find((i) => i.item === to);
+    setItems(has ? items.filter((i) => i.item !== id).map((i) => (i.item === to ? { ...i, qty: i.qty + old.qty } : i)) : items.map((i) => (i.item === id ? { ...i, item: to } : i)));
   };
   const setQty = (id: string, v: string) => setItems(items.map((i) => (i.item === id ? { ...i, qty: Math.min(1e9, Math.floor(Number(v.replace(/\D/g, '')) || 0)) } : i)));
 
@@ -262,19 +277,29 @@ function MailTab() {
 
   return (
     <>
-      <h3>{tl('赠送物品')} <small className="muted">{tl('通过邮件发给指定玩家，装备和工具不能送')}</small></h3>
+      {gear
+        ? <h3>{tl('赠送装备')} <small className="muted">{tl('武器、护甲、饰品、工具都能送，品质任选，通过邮件发给指定玩家')}</small></h3>
+        : <h3>{tl('赠送物品')} <small className="muted">{tl('通过邮件发给指定玩家，装备在「赠送装备」里送')}</small></h3>}
       <div className="gm-form frame">
         <label><span>{tl('玩家')}</span><input inputMode="numeric" placeholder={tl('玩家 UID，如 10000002')} value={pid} onChange={(e) => { setPid(e.target.value.replace(/\D/g, '')); setMsg(null); }} /></label>
         <label><span>{tl('标题')}</span><input maxLength={30} placeholder={tl('如：活动补偿')} value={title} onChange={(e) => { setTitle(e.target.value); setMsg(null); }} /></label>
         <label className="gm-body"><span>{tl('正文')}</span><textarea maxLength={500} rows={4} placeholder={tl('邮件内容（可不写）')} value={body} onChange={(e) => setBody(e.target.value)} /></label>
-        <label><span>{tl('物品')}</span><input placeholder={tl('搜索物品名字，如：铁锭、强化石')} value={q} onChange={(e) => setQ(e.target.value)} /></label>
+        {gear && (
+          <div className="gm-seg gm-quality">
+            <span>{tl('品质')}</span>
+            {QUALITY_NAME.map((nm, i) => (
+              <button key={i} className={`pill ${quality === i ? 'on' : ''}`} style={{ color: QUALITY_COLOR[i] }} onClick={() => setQuality(i)}>{nm}</button>
+            ))}
+          </div>
+        )}
+        <label><span>{gear ? tl('装备') : tl('物品')}</span><input placeholder={gear ? tl('搜索装备名字，如：精金长剑、铁镐、项链') : tl('搜索物品名字，如：铁锭、强化石')} value={q} onChange={(e) => setQ(e.target.value)} /></label>
         {found.length > 0 && (
           <ul className="trade-items pick gm-pick">
             {found.map((it) => (
-              <li key={it.id} className={items.some((i) => i.item === it.id) ? 'on' : ''} onClick={() => add(it.id)}>
+              <li key={it.id} className={items.some((i) => baseOf(i.item) === it.id) ? 'on' : ''} onClick={() => add(it.id)}>
                 <Icon item={it.id} size={24} info={false} />
                 <span className="nm">{it.name}</span>
-                <small className="muted">{tl('点击加入')}</small>
+                <small className="muted">{gear && !hasQuality(it.id) ? tl('无品质 · 点击加入') : tl('点击加入')}</small>
               </li>
             ))}
           </ul>
@@ -284,7 +309,12 @@ function MailTab() {
             {items.map((i) => (
               <li key={i.item}>
                 <Icon item={i.item} size={24} info={false} />
-                <span className="nm">{ITEMS[i.item]?.name ?? i.item}</span>
+                <span className="nm" style={gear ? { color: QUALITY_COLOR[qualityOf(i.item)] } : undefined}>{ITEMS[i.item]?.name ?? i.item}</span>
+                {gear && hasQuality(baseOf(i.item)) && (
+                  <select value={qualityOf(i.item)} onChange={(e) => setQ1(i.item, Number(e.target.value))}>
+                    {QUALITY_NAME.map((nm, k) => <option key={k} value={k}>{nm}</option>)}
+                  </select>
+                )}
                 <input inputMode="numeric" value={i.qty || ''} onChange={(e) => setQty(i.item, e.target.value)} />
                 <button className="small" onClick={() => setItems(items.filter((x) => x.item !== i.item))}>{tl('移除')}</button>
               </li>
@@ -298,6 +328,14 @@ function MailTab() {
       </div>
 
       <h3>{tl('已发送 ')}<small className="muted">{tl('对方上线后一分钟内收到')}</small></h3>
+      {!!rows?.some((r) => r.claimedAt) && (
+        <div className="gm-row-tools">
+          <button className="pill" disabled={busy} onClick={() => run(async () => {
+            // 只删对方已经收到的；还没收到的要单独撤回，免得误删
+            for (const r of rows!.filter((x) => x.claimedAt)) await online.gmMailDelete(r.id);
+          }, tl('已清空收到的记录'))}>{tl('清空已收到的记录')}</button>
+        </div>
+      )}
       {rows === null && <p className="muted">{tl('读取中…')}</p>}
       {rows?.length === 0 && <p className="muted">{tl('还没有发过')}</p>}
       <ul className="gm-list">
@@ -310,11 +348,11 @@ function MailTab() {
             </small>
             {r.body && <small className="gm-mail-body">{r.body}</small>}
             <small>{r.items.map((i) => `${ITEMS[i.item]?.name ?? i.item} ×${fmtNum(i.qty)}`).join(tl('、'))}</small>
-            {!r.claimedAt && (
-              <div className="gm-row-tools">
-                <button className="pill warn" disabled={busy} onClick={() => run(() => online.gmMailDelete(r.id), tl('已撤回'))}>{tl('撤回')}</button>
-              </div>
-            )}
+            <div className="gm-row-tools">
+              {r.claimedAt
+                ? <button className="pill" disabled={busy} onClick={() => run(() => online.gmMailDelete(r.id), tl('已删除记录'))}>{tl('删除记录')}</button>
+                : <button className="pill warn" disabled={busy} onClick={() => run(() => online.gmMailDelete(r.id), tl('已撤回'))}>{tl('撤回')}</button>}
+            </div>
           </li>
         ))}
       </ul>
