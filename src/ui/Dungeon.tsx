@@ -329,7 +329,9 @@ export function ShopSheet({ s, node, onClose }: { s: GameState; node: MapNode; o
         <button className="back" onClick={onClose}>{tl('‹ 返回')}</button>
         <h2>{node.name}</h2>
       </div>
-      <p className="muted pad">{tl('用仓库里的金币买副本钥匙、回城卷轴和 T1-T6 的基础材料，买到的东西进仓库。T8 蓝洞钥匙只能从副本宝箱里开出来。')}</p>
+      {/* 内容放进能滚动的区域（10-27：以前整页不能往下滑，下面的材料看不到） */}
+      <div className="sheet-body">
+      <p className="muted pad">{tl('用仓库里的金币买副本钥匙、回城卷轴和 T1-T6 的基础材料，买到的东西进仓库。T7、T8 的钥匙只能从副本宝箱里开出来。')}</p>
       <div className="ranch-stats">
         <span>{tl('仓库金币 ')}<b>{fmtNum(s.bank.coins ?? 0)}</b></span>
         {!near && <button className="primary" onClick={() => { store.requestWalk(node.id); onClose(); }}>{tl('寻路到商人')}</button>}
@@ -377,6 +379,7 @@ export function ShopSheet({ s, node, onClose }: { s: GameState; node: MapNode; o
         })}
       </div>
       {!near && <p className="muted pad">{tl('要站在商人旁边才能买。')}</p>}
+      </div>
     </div>
   );
 }

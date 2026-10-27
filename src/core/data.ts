@@ -315,8 +315,9 @@ export function inTownArea(x: number, y: number): boolean {
 }
 /** 商人卖的钥匙和价格（金币） */
 export const KEY_SHOP: [string, number][] = [
-  ['dkey_g4', 2500], ['dkey_g5', 6000], ['dkey_g6', 15000], ['dkey_g7', 36000], ['dkey_g8', 80000],
-  ['dkey_b4', 5000], ['dkey_b5', 12000], ['dkey_b6', 30000], ['dkey_b7', 75000],
+  // T7、T8 钥匙不卖（用户 10-27），只能从副本宝箱里开
+  ['dkey_g4', 2500], ['dkey_g5', 6000], ['dkey_g6', 15000],
+  ['dkey_b4', 5000], ['dkey_b5', 12000], ['dkey_b6', 30000],
 ];
 /**
  * 城镇商人的材料柜台（10-27 经济优化）：T1-T6 的矿石、原木、棉花、兽皮按价值 × 7 卖，每样每天限购 200。

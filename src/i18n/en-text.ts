@@ -1042,4 +1042,10 @@ export const EN_TEXT: Record<string, string> = {
   " · 每样每天限购，北京时间早上 8 点刷新": " · Daily limit per item, resets at 00:00 UTC",
   "{0} 金币 · 今天还能买 {1} · 仓库 {2}": "{0} coins · {1} left today · Bank {2}",
   "钥匙 T4-T8，绿洞和蓝洞各一套。苍岭城和落霞城仓库旁的「副本商人」用金币卖 T4-T8 绿洞钥匙和 T4-T7 蓝洞钥匙，T8 蓝洞钥匙只能从副本宝箱里开出来。商人还卖回城卷轴和 T1-T6 的矿石、原木、棉花、兽皮（价格是卖价的 7 倍，每样每天限购），金币多了可以直接买材料练制作。": "Keys come in T4–T8, one set each for green and blue dungeons. The Dungeon Merchant next to the banks in Canglin and Duskhaven sells T4–T8 green keys and T4–T7 blue keys for coins; the T8 blue key only comes from dungeon chests. The merchant also sells Recall Scrolls and T1–T6 ore, logs, cotton and hides (7× the sell price, daily limit per item), so you can spend spare coins on materials to train crafting.",
+  "商人页面修复": "Merchant page fix",
+  "修复副本商人页面滑不动、看不到下面「杂货和材料」的问题。": "Fixed the dungeon merchant page not scrolling, which hid the \"Goods & materials\" counter below.",
+  "商人不再卖 T7、T8 的副本钥匙，它们只能从副本宝箱里开出来。": "The merchant no longer sells T7 and T8 dungeon keys; they only come from dungeon chests.",
+  "用仓库里的金币买副本钥匙、回城卷轴和 T1-T6 的基础材料，买到的东西进仓库。T7、T8 的钥匙只能从副本宝箱里开出来。": "Buy dungeon keys, Recall Scrolls and T1–T6 basic materials with coins from your bank; purchases go to your bank. T7 and T8 keys only come from dungeon chests.",
+  "钥匙 T4-T8，绿洞和蓝洞各一套。苍岭城和落霞城仓库旁的「副本商人」用金币卖 T4-T6 的绿洞和蓝洞钥匙，T7、T8 的钥匙只能从副本宝箱里开出来。商人还卖回城卷轴和 T1-T6 的矿石、原木、棉花、兽皮（价格是卖价的 7 倍，每样每天限购），金币多了可以直接买材料练制作。": "Keys come in T4–T8, one set each for green and blue dungeons. The Dungeon Merchant next to the banks in Canglin and Duskhaven sells T4–T6 green and blue keys for coins; T7 and T8 keys only come from dungeon chests. The merchant also sells Recall Scrolls and T1–T6 ore, logs, cotton and hides (7× the sell price, daily limit per item), so you can spend spare coins on materials to train crafting.",
+  "副本钥匙商人加了 T6 绿洞钥匙（T7、T8 钥匙仍然只能从宝箱里开）。": "The dungeon key merchant now also sells the T6 green key (T7 and T8 keys still only come from chests).",
 };
