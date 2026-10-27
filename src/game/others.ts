@@ -82,6 +82,10 @@ interface Other {
   flip: boolean;
   /** 副本里队友头顶的小血条（10-26） */
   bar?: Phaser.GameObjects.Graphics;
+  /** 估出来的对方移动速度（像素/秒）、目标上次变的时间、上次真在走的时间（10-27 插值） */
+  spd: number;
+  tAt: number;
+  movedAt: number;
   hp?: number;
   maxHp?: number;
 }
@@ -219,10 +223,18 @@ export class OtherPlayers {
         body.play(`${key}:idle-down`);
         const name = this.scene.add.text(0, -HERO_FEET + 1, '', { fontFamily: FONT, fontSize: '7px', color: '#cfe0ff', stroke: '#000', strokeThickness: 2, resolution: 4 }).setOrigin(0.5);
         const box = this.scene.add.container(tx, ty, [body, name]).setAlpha(0.92);
-        o = { box, body, name, key, tx, ty, dir: 'down', flip: false };
+        o = { box, body, name, key, tx, ty, dir: 'down', flip: false, spd: 0, tAt: 0, movedAt: 0 };
         this.others.set(p.playerId, o);
       }
       o.name.setText(p.guildTag ? `[${p.guildTag}] ${p.name}` : p.name);
+      if (tx !== o.tx || ty !== o.ty) {
+        // 按两次同步之间走了多远估对方的速度（骑快马时比走路快两三倍），平滑一下免得忽快忽慢
+        const now = this.scene.time.now;
+        const dt = now - o.tAt;
+        const jump = Math.hypot(tx - o.tx, ty - o.ty);
+        if (o.tAt && dt > 60 && dt < 3000 && jump < T * 30) o.spd = o.spd ? o.spd * 0.6 + (jump / dt) * 1000 * 0.4 : (jump / dt) * 1000;
+        o.tAt = now;
+      }
       o.tx = tx; o.ty = ty;
       o.hp = p.hp; o.maxHp = p.maxHp;
       this.setMount(o, p.mounted ? mountKindOf(p.mounted) : undefined);
@@ -234,19 +246,23 @@ export class OtherPlayers {
       const dx = o.tx - o.box.x, dy = o.ty - o.box.y;
       const d = Math.hypot(dx, dy);
       let moving = false;
+      const now = this.scene.time.now;
       // 隔太远（刚传送或刚出现）直接放过去
       if (d > T * 30) o.box.setPosition(o.tx, o.ty);
-      else if (d > 1) {
-        // 每秒 4 格（骑着快些），落后多了走快些追上
-        const base = T * (o.mk ? 8 : 4);
-        // 副本里（自定义摆位）追得更紧：落后多少就在约 0.15 秒内追上，和队友自己的画面差不多同步
-        const v = ((this.place ? Math.max(base, d / 0.15) : base * Math.max(1, d / (T * 8))) * delta) / 1000;
+      else if (d > 0.5) {
+        // 按估出来的对方速度匀速走（10-27：以前固定每秒 4 格，骑马的人越落越远再猛追，一顿一顿的）；
+        // 落后多了就在约半秒内追上。副本里（自定义摆位）追得更紧，约 0.15 秒
+        const base = Math.max(T * (o.mk ? 6 : 3.5), Math.min(T * 16, o.spd));
+        const v = (Math.max(base, d / (this.place ? 0.15 : 0.5)) * delta) / 1000;
         const k = Math.min(1, v / d);
         o.box.setPosition(o.box.x + dx * k, o.box.y + dy * k);
         o.dir = Math.abs(dx) > Math.abs(dy) ? 'side' : dy > 0 ? 'down' : 'up';
         o.flip = o.dir === 'side' && dx < 0;
+        o.movedAt = now;
         moving = true;
       }
+      // 刚走到上一个同步点、下一个还在路上：多播一小会儿走路动画，不在每格之间站一下又走
+      else if (now - o.movedAt < 300 && now - o.tAt < 600) moving = true;
       this.pose(o, moving);
       if (this.place) this.drawBar(o);
       o.box.setDepth(o.box.y + 999);

@@ -287,7 +287,17 @@ export class MapScene extends Phaser.Scene {
     this.unsub.push(() => this.game.events.off('waystone', onStone));
     this.time.addEvent({ delay: 300, loop: true, callback: () => this.checkStones() });
     // 空闲时一点点建步行距离图，建好以后寻路估时、比较走路和石碑都按真实绕路距离算
-    const nav = this.time.addEvent({ delay: 50, loop: true, callback: () => { if (warmNav(10)) { nav.remove(); store.emit(); } } });
+    // 放到浏览器空闲时做（画完一帧以后），每次只做几毫秒，不挤占游戏帧（10-27：以前在帧里每次做 10 毫秒，走路会一顿一顿）
+    let navDone = false;
+    type Idle = (cb: (d: { timeRemaining(): number }) => void, o?: { timeout: number }) => number;
+    const ric = (window as unknown as { requestIdleCallback?: Idle }).requestIdleCallback;
+    const navStep = (d?: { timeRemaining(): number }) => {
+      if (navDone) return;
+      if (warmNav(Math.min(8, Math.max(2, d ? d.timeRemaining() - 1 : 3)))) { navDone = true; store.emit(); return; }
+      if (ric) ric(navStep, { timeout: 500 }); else setTimeout(navStep, 40);
+    };
+    navStep();
+    this.unsub.push(() => { navDone = true; });
     const onTeleport = awake((id: string) => this.teleport(id));
     this.game.events.on('teleport', onTeleport);
     this.unsub.push(() => this.game.events.off('teleport', onTeleport));

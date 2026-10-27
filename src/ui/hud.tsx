@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from 'react';
-import { ACTIONS, ITEMS, MONSTERS, nodeOfAction, nearestVariant, NODES, SKILLS } from '../core/data';
+import { useMemo, useState, type ReactNode } from 'react';
+import { ACTIONS, ITEMS, MONSTERS, nodeOfAction, nearestVariant, navStamp, NODES, SKILLS } from '../core/data';
 import { QUESTS, questProgress, questText } from '../core/quests';
 import { actionDuration, beltSlotOf, combatEstimate, combatLevel, dismissStop, enqueue, rainBonus, isBankId, level, maxHp, moveSpeed, removeTask, resumeWork, toggleMount, weaponStyle } from '../core/sim';
 import { jumpTo, producerOf } from './ActionSheet';
@@ -229,9 +229,15 @@ export function QuestCard({ s, onGo }: { s: GameState; onGo: (nodeId: string) =>
     try { localStorage.setItem('canglin-quest-fold', open ? '1' : '0'); } catch { /* 存不了就算了 */ }
   };
   const p = questProgress(s);
+  const hint = p?.q.hint;
+  const speed = moveSpeed(s);
+  // 找最近的同类点位要遍历所有动作、算寻路，界面每次刷新都算会掉帧：位置、石碑、速度没变就用上次的
+  const { near, node } = useMemo(() => {
+    if (!hint) return { near: undefined, node: undefined };
+    const v = nearestVariant(hint, s.loc, s.waystones, speed);
+    return { near: v, node: NODES.find((n) => n.id === hint) ?? v?.node ?? nodeOfAction(hint, s.loc, s.waystones, speed) };
+  }, [hint, s.loc.x, s.loc.y, s.waystones?.length, speed, navStamp()]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!p) return null;
-  const near = nearestVariant(p.q.hint, s.loc, s.waystones, moveSpeed(s));
-  const node = NODES.find((n) => n.id === p.q.hint) ?? near?.node ?? nodeOfAction(p.q.hint, s.loc, s.waystones, moveSpeed(s));
   const act = near?.action ?? p.q.hint;
   const idx = (s.quest?.i ?? 0) + 1;
   return (
