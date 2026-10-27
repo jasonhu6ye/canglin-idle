@@ -42,6 +42,8 @@ export interface Outfit {
   roll: string;
   /** 兜帽代替头发 */
   hood?: boolean;
+  /** 发型：HAIR_STYLES 的序号，没有就是短发 */
+  hairStyle?: number;
   /** 镇上的村民：不背行囊 */
   npc?: boolean;
   /** 兑换码外观（用户 10-23）：特殊头部造型，hair 这时是头部主色 */
@@ -186,7 +188,64 @@ export const NPC_OUTFITS: Record<string, Outfit> = {
     pack: ['#6a4a1a', '#9a6a2a', '#c8903a'], roll: '#8a3ab0',
   },
 };
-export const outfitOf = (id?: string) => OUTFITS.find((o) => o.id === id) ?? OUTFITS[0];
+
+// ---- 自定义造型（衣橱「捏人」）：在一套普通外观上换发型、发色、肤色、外衣、围巾 ----
+// 存成「外观id~6 个字符」写进 settings.skin，联机、头像、精灵表都只认这一串，不用另加字段。每个字符 0 = 用原外观的颜色。
+
+export const HAIR_STYLES = [tl('短发'), tl('马尾'), tl('长发'), tl('刺猬头'), tl('丸子头'), tl('双马尾')];
+export const SKIN_TONES: [string, string][] = [
+  ['#e0b090', '#ffe2cc'], ['#d8a882', '#f8dcc0'], ['#c8946a', '#f2c9a0'], ['#a8704a', '#d8a078'], ['#86563a', '#b87e58'], ['#5c3a26', '#8a5c40'],
+];
+export const HAIR_COLORS: string[][] = [
+  ['#4a2a18', '#7a4a28', '#a8703a'], ['#141418', '#2a2a32', '#44444e'], ['#a87a2a', '#e0b040', '#fff0a0'], ['#7a1e0e', '#c0401a', '#f07a3a'],
+  ['#8a909a', '#c8ccd6', '#f4f6fa'], ['#1a3a7a', '#2e64c0', '#6aa8f0'], ['#8a2a5a', '#d05a90', '#ffa8cc'], ['#1e5a3a', '#2e9a5a', '#7ad890'],
+  ['#4a2a7a', '#7a4ac0', '#b48aff'],
+];
+export const COAT_COLORS: string[][] = [
+  ['#4a2a18', '#6e4226', '#8e5a34', '#b07a48'], ['#23381e', '#335230', '#4a7040', '#6a9058'], ['#1a2a5a', '#2a4088', '#3e5cb8', '#7a98e0'],
+  ['#5a1414', '#8a2222', '#b83a32', '#e06a52'], ['#3a1458', '#5a2080', '#8a3ab0', '#b070d8'], ['#141418', '#24242c', '#363642', '#50505e'],
+  ['#6a7a90', '#a8b8c8', '#d8e2ec', '#ffffff'], ['#0e3a3e', '#1a5a5e', '#2a8a88', '#5ac0b0'], ['#6a4a10', '#9a7020', '#c89a30', '#f0cc60'],
+];
+export const SCARF_COLORS: string[][] = [
+  ['#8a1e22', '#c83a32'], ['#2a5a9a', '#4a8ad8'], ['#b08a2a', '#f0c84a'], ['#2e6a2a', '#4aa040'], ['#5a2a8a', '#9a50d0'],
+  ['#b8b8c4', '#ffffff'], ['#1a1a20', '#3a3a44'], ['#c0507a', '#f090b0'], ['#1a6a6a', '#3ab0a8'],
+];
+export const PANTS_COLORS: string[][] = [
+  ['#2a3438', '#3e4c52'], ['#3a2e22', '#54432f'], ['#16161a', '#24242a'], ['#2a3050', '#40486e'], ['#5a5048', '#857868'], ['#3a4a2a', '#56693e'],
+];
+export interface Look { style: number; tone: number; hair: number; coat: number; scarf: number; pants: number }
+export const LOOK_KEYS: (keyof Look)[] = ['style', 'tone', 'hair', 'coat', 'scarf', 'pants'];
+export const NO_LOOK: Look = { style: 0, tone: 0, hair: 0, coat: 0, scarf: 0, pants: 0 };
+/** 这套外观能不能捏：兑换码那几套头部是特殊造型，不让改 */
+export const customizable = (o: Outfit) => !o.head && !o.npc;
+export function splitSkin(id?: string): { base: string; look: Look } {
+  const [base, code = ''] = (id ?? '').split('~');
+  const look = { ...NO_LOOK };
+  LOOK_KEYS.forEach((k, i) => { look[k] = parseInt(code[i] ?? '0', 36) || 0; });
+  return { base, look };
+}
+export function joinSkin(base: string, look: Look) {
+  const code = LOOK_KEYS.map((k) => look[k].toString(36)).join('');
+  return /^0+$/.test(code) ? base : `${base}~${code}`;
+}
+const pick = <T,>(list: T[], i: number) => (i > 0 ? list[i - 1] : undefined);
+const custom = new Map<string, Outfit>();
+export function outfitOf(id?: string): Outfit {
+  const { base, look } = splitSkin(id);
+  const o = OUTFITS.find((x) => x.id === base) ?? OUTFITS[0];
+  if (!id?.includes('~') || !customizable(o)) return o;
+  let c = custom.get(id);
+  if (!c) {
+    c = {
+      ...o, id,
+      hairStyle: Math.min(look.style, HAIR_STYLES.length - 1),
+      skin: pick(SKIN_TONES, look.tone) ?? o.skin, hair: pick(HAIR_COLORS, look.hair) ?? o.hair,
+      coat: pick(COAT_COLORS, look.coat) ?? o.coat, scarf: pick(SCARF_COLORS, look.scarf) ?? o.scarf, pants: pick(PANTS_COLORS, look.pants) ?? o.pants,
+    };
+    custom.set(id, c);
+  }
+  return c;
+}
 const GOLD = ['#8a5a1a', '#c8902a', '#f0c050', '#fff0a0'];
 const EYE = '#20141c';
 const WOOD = ['#3a2414', '#6a4426', '#9a6a3c'];
@@ -519,6 +578,75 @@ function rampsOf(o: Outfit): Ramps {
   return r;
 }
 
+/**
+ * 发型多出来的部分（马尾、长发、刺、发髻）：在头发主体之前画，脸和头顶会盖住重叠的地方。
+ * 正面时垂到肩上的头发压在身体上面，背面时盖住背包上沿
+ */
+function drawHairStyle(p: Pix, style: number, HR: string[], cx: number, cy: number, pose: Pose) {
+  const { dir } = pose;
+  const side = dir === 'side';
+  const up = dir === 'up';
+  const wave = pose.cape ?? 0;
+  const tie = HR[0];
+  if (style === 1) {
+    // 马尾：后脑扎起，垂到肩下，走路时甩动
+    if (side) {
+      capsule(p, cx - 4, cy - 1.6, cx - 6.4 - wave * 0.4, cy + 2.6 + wave * 0.6, 1.5, HR, 1);
+      capsule(p, cx - 6.4 - wave * 0.4, cy + 2.6 + wave * 0.6, cx - 6.8 - wave * 0.8, cy + 5.6, 1, HR, 1);
+      p.set(cx - 4.6, cy - 1.4, tie);
+    } else if (up) {
+      // 先垫一圈暗边，免得和同色的背包糊在一起
+      capsule(p, cx, cy - 1, cx + wave * 0.3, cy + 8, 2.1, [tie, tie, tie, tie, tie]);
+      capsule(p, cx, cy - 1, cx + wave * 0.3, cy + 7.4, 1.4, HR);
+      p.set(cx, cy, tie);
+      p.set(cx - 1, cy, tie);
+    } else {
+      ball(p, cx + 4.6, cy + 2.4, 1.2, 2.4, HR, 1);
+    }
+  } else if (style === 2) {
+    // 长发：披到肩背
+    if (side) {
+      capsule(p, cx - 2.6, cy - 0.5, cx - 4 - wave * 0.4, cy + 6.2, 2.4, HR, 1);
+    } else if (up) {
+      for (const d of [-1, 1]) capsule(p, cx + d * 1.8, cy, cx + d * 2.3 + wave * 0.2, cy + 7.4, 3.2, [tie, tie, tie, tie, tie]);
+      for (const d of [-1, 1]) capsule(p, cx + d * 1.8, cy, cx + d * 2.3 + wave * 0.2, cy + 6.8, 2.6, HR);
+      for (let x = -3; x <= 3; x += 2) p.set(cx + x, cy + 7.6, HR[1]);
+    } else {
+      for (const d of [-1, 1]) capsule(p, cx + d * 4, cy, cx + d * 4.3, cy + 6.4, 1.4, HR, d > 0 ? 1 : 0);
+    }
+  } else if (style === 3) {
+    // 刺猬头：头顶一圈往外翘的尖刺，侧面往后脑偏
+    const n = side ? 4 : 5;
+    const [a0, a1] = side ? [-0.98, -0.42] : [-0.86, -0.14];
+    for (let i = 0; i < n; i++) {
+      const ang = Math.PI * (a0 + ((a1 - a0) * i) / (n - 1));
+      const len = 7 + ((i * 7) % 3) * 0.5;
+      const bx = cx + Math.cos(ang) * 3.2;
+      const by = cy - 0.3 + Math.sin(ang) * 3;
+      const mx = cx + Math.cos(ang) * 5.4;
+      const my = cy - 0.3 + Math.sin(ang) * 5.2;
+      capsule(p, bx, by, mx, my, 1.6, HR);
+      p.line(mx, my, cx + Math.cos(ang) * len, cy - 0.3 + Math.sin(ang) * len * 0.95, HR[up ? 2 : 3]);
+    }
+  } else if (style === 4) {
+    // 丸子头：头顶一个发髻
+    const bx = side ? cx - 1.6 : cx;
+    ball(p, bx, cy - 5.4, 2.4, 2, HR);
+    p.line(bx - 1.6, cy - 4, bx + 1.6, cy - 4, tie);
+  } else if (style === 5) {
+    // 双马尾：两侧各扎一束
+    if (side) {
+      capsule(p, cx - 3.2, cy - 2.4, cx - 5.8 - wave * 0.4, cy + 4.2 + wave * 0.5, 1.3, HR, 1);
+      p.set(cx - 3.6, cy - 2.2, tie);
+    } else {
+      for (const d of [-1, 1]) {
+        capsule(p, cx + d * 4.6, cy - 2.2, cx + d * (6 + wave * 0.2), cy + 4.6, 1.3, HR, up ? 0 : d > 0 ? 1 : 0);
+        p.set(cx + d * 4.6, cy - 2.4, tie);
+      }
+    }
+  }
+}
+
 /** 刘海的锯齿：每一列往下垂多少 */
 const BANGS = [1.4, 0.4, 0.9, 1.6, 0.5, 1.2, 0.3, 1.0, 1.5, 0.6, 1.1];
 
@@ -530,6 +658,7 @@ function drawHead(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose: Pos
   const hood = !!o.hood;
   const HR = hood ? R.coat : R.hair;
   const hx = side ? cx + 0.5 : cx;
+  if (!hood) drawHairStyle(p, o.hairStyle ?? 0, R.hair, cx, cy, pose);
   // 头发 / 兜帽的整体
   if (side) {
     if (hood) capsule(p, cx - 3.8, cy - 2.2, cx - 6.2, cy + 0.4 + wave * 0.4, 1.3, HR, 1);
@@ -832,10 +961,11 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
     for (const sx of side ? [cx + 0.8] : [cx - 4.3, cx + 4.3]) ball(p, sx, sy + 0.6, 2, 1.5, R.shirt);
   }
 
+  // 背面的睡袋卷先画，头和垂下来的头发（马尾、长发）压在上面
+  if (up && !bare) capsule(p, cx - 4.3, sy - 0.2, cx + 4.3, sy - 0.2, 1.5, R.roll);
+
   // ---- 头 ----
   drawHead(p, o, R, cx, headY, pose);
-
-  if (up && !bare) capsule(p, cx - 4.3, sy - 0.2, cx + 4.3, sy - 0.2, 1.5, R.roll);
 
   // ---- 前面的手臂和工具 ----
   if (side) {

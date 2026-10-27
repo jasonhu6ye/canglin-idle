@@ -862,4 +862,9 @@ export const EN_TEXT: Record<string, string> = {
   "新手指引重写：每页加了物品配图，写进了城门口的新手点位、云存档、品质、寻路、好友组队公会这些新内容，去掉了过时的说法。": "The beginner guide is rewritten: each page has item art, it covers the starter spots at the town gates, cloud saves, gear quality, pathfinding, friends, parties and guilds, and outdated tips are gone.",
   "攻略手册目录加了搜索框（标题和正文都能搜），顶上推荐新手先看的三篇。": "The Handbook index has a search box (titles and article text) and recommends three articles for new players at the top.",
   "新文章「新手任务一览」（全部任务、奖励和提示）、「邮箱和设置」；「第一个小时怎么玩」、操作说明、寻路、存档、常见问题都更新了。": "New articles: Starter Quest List (every quest, reward and tip) and Mail and Settings. Your First Hour, Controls, travel, saves and the FAQ are all updated.",
+  "衣橱可以自定义造型了": "Customize your look in the Wardrobe",
+  "「更多 → 衣橱」里选一套外观后，可以换发型（短发、马尾、长发、刺猬头、丸子头、双马尾），再挑发色、肤色、外衣、围巾和裤子的颜色。": "In More → Wardrobe, pick an outfit and then change its hairstyle (short, ponytail, long, spiky, bun or twin tails) and choose colors for your hair, skin, coat, scarf and pants.",
+  "马尾、长发走路时会跟着甩，正面、侧面、背面都画了。好友和队友在地图上看到的也是你捏好的样子。": "Ponytails and long hair sway as you walk, drawn from the front, side and back. Friends and party members see your custom look on the map too.",
+  "兑换码的五套限定外观是特殊造型，暂时不能改。": "The five limited outfits from redeem codes have special designs and can't be customized for now.",
+  "「更多 → 衣橱」换外观：选一套外观后可以自定义发型（6 种）和发色、肤色、外衣、围巾、裤子的颜色，「原」就是这套外观自带的颜色，「恢复原样」一键还原。兑换码的限定外观不能改。": "More → Wardrobe changes your look: after picking an outfit you can choose one of 6 hairstyles and colors for your hair, skin, coat, scarf and pants. \"Def\" keeps the outfit's own color, and Reset restores everything. Limited outfits from redeem codes can't be customized.",
 };

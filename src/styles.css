@@ -369,6 +369,15 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .wardrobe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
 .wardrobe-grid .slot { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; font-size: 12px; }
 .wardrobe-grid .slot.on { box-shadow: 0 0 0 2px var(--gold); }
+.look-editor { padding: 10px 12px; margin: 0 0 10px; display: flex; flex-direction: column; gap: 8px; }
+.look-row { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; }
+.look-row > span { flex: 0 0 2.6em; padding-top: 5px; color: var(--muted, #a89a80); }
+.look-row > div { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.look-row .swatch.on { box-shadow: 0 0 0 2px var(--gold); }
+.look-row .swatch { width: 26px; height: 26px; padding: 0; border: 0; border-radius: 4px; box-shadow: inset 0 0 0 1px #0008; }
+.look-row .swatch.orig { font-size: 11px; background: #2a2420; color: var(--muted); }
+.look-editor > .reset { align-self: flex-start; font-size: 12px; }
 .far-bank { margin: 6px 0; } .far-bank span { flex: 2; font-size: 12px; }
 .sheet p.pad { padding: 10px 12px; }
 .sheet-body { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
