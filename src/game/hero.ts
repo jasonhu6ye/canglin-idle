@@ -1110,7 +1110,8 @@ function drawVoidHood(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose:
   if (side) {
     // 侧面（用户 10-27 参考图）：兜帽往脑后拖出一大截，越往后越细，收成一个尖角；下面顺着脖子披到肩上
     const sag = wave * 0.35;
-    const spine: [number, number, number][] = [[hx - 1.5, cy - 1.6, 4.6], [hx - 5, cy - 2.6 + sag * 0.5, 3.4], [hx - 8.4, cy - 3.4 + sag, 2.2], [hx - 11, cy - 4 + sag * 1.4, 1.1], [hx - 12.6, cy - 4.3 + sag * 1.6, 0.5]];
+    // 末端圆钝，不收成尖（用户 10-27）
+    const spine: [number, number, number][] = [[hx - 1.5, cy - 1.4, 4.8], [hx - 4.6, cy - 2.2 + sag * 0.5, 4.1], [hx - 7.4, cy - 2.8 + sag, 3.3], [hx - 9.2, cy - 3 + sag * 1.2, 2.6]];
     for (let i = 1; i < spine.length; i++) {
       const [x0, y0, r0] = spine[i - 1];
       const [x1, y1, r1] = spine[i];
@@ -1119,7 +1120,7 @@ function drawVoidHood(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose:
     ball(p, hx + 0.2, cy - 0.4, 5.2, 5.3, HD);
     capsule(p, hx - 3.6, cy + 1, hx - 3.2, cy + 4.6, 1.9, HD, 1);
     // 帽子上几道顺着拖尾走的褶子
-    for (let i = 0; i < 4; i++) p.paint(hx - 3 - i * 2.4, cy - 0.2 - i * 0.7, HD[0]);
+    for (let i = 0; i < 3; i++) p.paint(hx - 3 - i * 2.4, cy + 0.2 - i * 0.6, HD[0]);
     p.paint(hx - 4.4, cy + 2, HD[0]);
   } else {
     ball(p, hx, cy - 0.6, 5.5, 5.3, HD);
