@@ -807,7 +807,7 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
   // ---- 正面 / 背面的手臂 ----
   let hands: [number, number][] = [];
   if (!side) {
-    const [l, r] = (o.head === 'voidhood' && pose.cast ? (pose.cast === 'raise' ? [2.6, 2.6] : [1.6, 1.6]) : pose.armLift) ?? [0, 0];
+    const [l, r] = (o.head === 'voidhood' && pose.cast ? (pose.cast === 'raise' ? [2.6, 2.6] : [2.2, 2.2]) : pose.armLift) ?? [0, 0];
     const arm = (x: number, lift: number) => {
       const top = sy + 1.1;
       const end = sy + 6.6 - lift;
@@ -1070,11 +1070,13 @@ function drawVoidHood(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose:
   const HD = R.coat;
   const hx = side ? cx + 0.5 : cx;
   const trim = o.trim ?? GOLD[2];
-  // 尖顶：正面往右弯，侧面往脑后弯
+  // 圆兜帽（用户 10-27：不要尖顶）：罩住整个头，头顶偏后多出一截软塌塌的帽兜垂下来，走路时轻轻晃
   const bend = side ? -1 : 1;
-  const tip: [number, number][] = [[hx, cy - 4.2], [hx + bend * 1.6, cy - 7.4], [hx + bend * (4.2 + wave * 0.3), cy - 9.2], [hx + bend * (7 + wave * 0.6), cy - 8.6 + wave * 0.2]];
-  for (let i = 1; i < tip.length; i++) capsule(p, tip[i - 1][0], tip[i - 1][1], tip[i][0], tip[i][1], 1.9 - i * 0.45, HD);
-  ball(p, hx, cy - 0.3, side ? 5 : 5.3, 5, HD);
+  ball(p, hx, cy - 0.6, side ? 5.2 : 5.5, 5.3, HD);
+  const fold: [number, number][] = [[hx + bend * 1.5, cy - 4.4], [hx + bend * 4.2, cy - 4.2 + wave * 0.15], [hx + bend * (6.2 + wave * 0.3), cy - 2.4 + wave * 0.4], [hx + bend * (6.6 + wave * 0.3), cy + 0.6 + wave * 0.5]];
+  for (let i = 1; i < fold.length; i++) capsule(p, fold[i - 1][0], fold[i - 1][1], fold[i][0], fold[i][1], 2.3 - i * 0.45, HD, i > 1 ? 1 : 0);
+  // 帽兜上的几道褶子
+  for (let i = 0; i < 3; i++) p.paint(hx + bend * (3.2 + i * 1.1), cy - 3.4 + i * 1.5, HD[0]);
   // 帽前两道白翎纹
   const W = '#f4f0f8';
   if (!up) {
@@ -1088,37 +1090,43 @@ function drawVoidHood(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose:
     p.paint(hx + 1, cy - 4.6, W);
   }
   if (up) return;
-  // 帽檐下是一团黑
+  // 帽檐下是一团黑：圆拱形的帽口，几乎占满正脸，顶上圆、下面平
   const VOID = ['#060408', '#060408', '#0a0810', '#0a0810', '#0e0c16'];
-  const fy = cy + 1.1;
-  const fx = side ? hx + 1.2 : hx;
+  const fx = side ? hx + 1.3 : hx;
+  const top = cy - 2.6;
+  const chin = cy + 3.6;
+  const hw = side ? 3.2 : 4;
   const isFace = (x: number, y: number) => {
-    const dx = (x + 0.5 - fx) / (side ? 3.2 : 3.5);
-    const dy = (y + 0.5 - fy) / 3.3;
-    return dx * dx + dy * dy <= 1 && y + 0.5 >= cy - 1.3 && (!side || x + 0.5 > hx - 0.2);
+    const px = x + 0.5, py = y + 0.5;
+    if (py > chin || py < top) return false;
+    if (side && px < hx - 0.4) return false;
+    const r = Math.min(1, (py - top) / hw);
+    const dx = Math.abs(px - fx);
+    // 上半截是半圆，下半截是直边
+    return dx <= (r < 1 ? Math.sqrt(Math.max(0, 1 - (1 - r) * (1 - r))) * hw : hw);
   };
-  ball(p, fx, fy, side ? 3.2 : 3.5, 3.3, VOID, 0, isFace);
-  // 帽口镶金线：黑面周围一圈兜帽像素换成金色
-  for (let y = Math.floor(fy - 4); y <= Math.ceil(fy + 4); y++) {
-    for (let x = Math.floor(fx - 5); x <= Math.ceil(fx + 5); x++) {
+  ball(p, fx, (top + chin) / 2, hw + 1, (chin - top) / 2 + 1, VOID, 0, isFace);
+  // 帽口镶金线：黑洞周围一圈兜帽像素换成金色
+  for (let y = Math.floor(top - 2); y <= Math.ceil(chin + 1); y++) {
+    for (let x = Math.floor(fx - hw - 2); x <= Math.ceil(fx + hw + 2); x++) {
       if (isFace(x, y) || !HD.includes(p.get(x, y) ?? '')) continue;
       if (isFace(x - 1, y) || isFace(x + 1, y) || isFace(x, y + 1)) p.set(x, y, trim);
     }
   }
   if (pose.blink) return;
-  // 眼睛：平时青色；凝聚元素时左红右青；光柱时紫色
-  const cyan = ['#2a90c0', '#5ae0ff'];
-  const red = ['#c02a1a', '#ff6a4a'];
-  const purple = ['#7a3ac8', '#d090ff'];
-  const ey = Math.round(cy + 1.2);
+  // 眼睛：两个小亮点，旁边各带一格暗光；平时青色，凝聚元素时左红右青，光柱时紫色
+  const cyan = ['#1e6a98', '#5ae0ff'];
+  const red = ['#8a2418', '#ff6a4a'];
+  const purple = ['#5a2a98', '#d090ff'];
+  const ey = Math.round(cy + 0.9);
   const eyes: [number, string[]][] = side
     ? [[Math.round(hx + 2.4), pose.cast === 'beam' ? purple : pose.cast === 'raise' ? red : cyan]]
     : [[Math.round(hx - 2), pose.cast === 'beam' ? purple : pose.cast === 'raise' ? red : cyan], [Math.round(hx + 1), pose.cast === 'beam' ? purple : cyan]];
   const bright = flicker(pose, 2) > 0.45;
   for (const [x, c] of eyes) {
     p.set(x, ey, c[1]);
-    p.set(x, ey + 1, bright ? c[1] : c[0]);
-    p.set(x, ey + 2, c[0]);
+    if (bright) p.set(x + (x < hx ? -1 : 1), ey, c[0]);
+    p.set(x, ey + 1, c[0]);
   }
 }
 
@@ -1204,23 +1212,34 @@ function drawFrostfireFx(p: Pix, o: Outfit, pose: Pose, at: { cx: number; sy: nu
     for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (Math.abs(dx) + Math.abs(dy) <= 3) put(mx + dx, my + dy, '#ffffff');
     for (let j = 0; j < 6; j++) empty(mx - 9 + ((j * 5 + seed) % 18), HERO_FEET - 1 - (j % 3), '#ffffff');
   } else {
-    // 紫色光柱：从脚下升到胸口，中间白、两边紫，白色的光点往上走
-    const top = sy + 2.5;
-    const bottom = HERO_FEET - 0.5;
-    const PUR = ['#5a2a9a', '#9a5ae8', '#d8b8ff', '#ffffff'];
-    for (let y = Math.floor(top); y <= bottom; y++) {
-      const k = (y - top) / (bottom - top);
-      const w = k < 0.1 ? 1 : 2;
-      for (let dx = -w; dx <= w - 1; dx++) put(cx + dx, y, Math.abs(dx + 0.5) < 1 ? PUR[3] : PUR[1]);
-      if (k > 0.1) { put(cx - w - 1, y, PUR[0]); put(cx + w, y, PUR[0]); }
+    // 召唤出的光剑：双手握住胸前的剑柄，剑尖朝下插向脚下；剑身白芯紫边，边上几道亮光往下走
+    const PUR = ['#4a1e8a', '#9a5ae8', '#d8b8ff', '#ffffff'];
+    const gy = Math.round(sy + 4.5);
+    const tip = HERO_FEET + 0.5;
+    // 剑柄（握在手里）和金色护手
+    for (let y = gy - 3; y < gy; y++) { put(cx - 1, y, '#3a2a50'); put(cx, y, '#5a4a70'); }
+    put(cx - 0.5, gy - 3.6, GOLD[2]);
+    for (let dx = -3; dx <= 2; dx++) put(cx + dx, gy, dx === -3 || dx === 2 ? GOLD[1] : GOLD[2]);
+    put(cx - 1, gy - 1, GOLD[3]);
+    // 剑身：往下渐窄，尖端一点
+    for (let y = gy + 1; y <= tip; y++) {
+      const k = (y - gy) / (tip - gy);
+      const last = k > 0.93;
+      if (last) { put(cx - 1, y, PUR[2]); continue; }
+      put(cx - 2, y, PUR[0]);
+      put(cx - 1, y, PUR[3]);
+      put(cx, y, k < 0.7 ? PUR[3] : PUR[2]);
+      put(cx + 1, y, PUR[0]);
     }
-    for (let j = 0; j < 5; j++) {
-      const ph = (t * 2.5 + j * 0.2) % 1;
-      const y = bottom - ph * (bottom - top);
-      put(cx + (j % 2 ? 1 : -2), y, PUR[2]);
-      put(cx + (j % 2 ? 2 : -3), y, ph < 0.5 ? PUR[3] : PUR[1]);
+    // 剑身上的光：几点往剑尖滑
+    for (let j = 0; j < 4; j++) {
+      const ph = (t * 2 + j * 0.25) % 1;
+      const y = Math.round(gy + 1 + ph * (tip - gy - 2));
+      put(cx + (j % 2 ? 2 : -3), y, ph < 0.5 ? PUR[2] : PUR[1]);
+      put(cx + (j % 2 ? 3 : -4), y, PUR[0]);
     }
-    for (let j = 0; j < 4; j++) empty(cx - 7 + ((j * 5 + seed * 3) % 14), HERO_FEET - 1 - (j % 2), PUR[2]);
+    // 剑尖插着的地方溅起紫光
+    for (let j = 0; j < 4; j++) empty(cx - 5 + ((j * 3 + seed * 3) % 10), HERO_FEET - (j % 2), PUR[1]);
   }
 }
 
