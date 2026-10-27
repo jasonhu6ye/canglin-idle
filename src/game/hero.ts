@@ -103,7 +103,7 @@ export const OUTFITS: Outfit[] = [
   {
     // 用户 10-27 给的录屏原型：黑袍尖帽的咒师，脸是一团黑只剩两点幽光，左手火右手冰，脚下金色法阵，待机会施法
     id: 'frostfire', name: tl('冰火咒师'), desc: tl('黑袍尖帽，帽檐下是一团看不见脸的黑暗，只剩两点幽光。左手燃火、右手凝冰，脚下一圈金色法阵，站着不动时会施法。'),
-    skin: ['#060408', '#100c14'], hair: ['#1a1620', '#2a2430', '#3c3448'],
+    skin: ['#6a6058', '#a89c90'], hair: ['#1a1620', '#2a2430', '#3c3448'],
     coat: ['#201a28', '#302838', '#443a50', '#5e526c'], shirt: ['#2a2434', '#3a3246'],
     pants: ['#14101a', '#201a28'], boots: ['#3a2a18', '#6a4a28'], scarf: ['#302838', '#443a50'],
     pack: ['#302838', '#443a50', '#5e526c'], roll: '#302838',
@@ -245,8 +245,9 @@ interface Pose {
   bobber?: [number, number];
   /** 眨眼 */
   blink?: boolean;
-  /** 待机施法阶段（冰火咒师用）：举手凝聚元素、白光炸开、紫色光柱 */
-  cast?: 'raise' | 'flash' | 'beam';
+  /** 待机施法阶段（冰火咒师用）：抬手、掌心凝聚元素、白光召剑、握剑、剑散成光点、放下手；castK 是该阶段的进度 0-1 */
+  cast?: 'rise' | 'raise' | 'flash' | 'beam' | 'fade' | 'lower';
+  castK?: number;
   /** 这一帧在动作里的进度 0-1、帧序号（特效闪烁用，生成精灵表时填） */
   t?: number;
   seed?: number;
@@ -807,7 +808,7 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
   // ---- 正面 / 背面的手臂 ----
   let hands: [number, number][] = [];
   if (!side) {
-    const [l, r] = (o.head === 'voidhood' && pose.cast ? (pose.cast === 'raise' ? [2.6, 2.6] : [2.2, 2.2]) : pose.armLift) ?? [0, 0];
+    const [l, r] = pose.armLift ?? [0, 0];
     const arm = (x: number, lift: number) => {
       const top = sy + 1.1;
       const end = sy + 6.6 - lift;
@@ -815,9 +816,30 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
       capsule(p, x, top + 2.8, x, end, 1.25, C);
       if (!up) ball(p, x, end + 0.5, 1.1, 1.05, R.skin);
     };
-    arm(cx - 4.4, l);
-    arm(cx + 4.4, r);
-    hands = [[cx - 4.4, sy + 7.1 - l], [cx + 4.4, sy + 7.1 - r]];
+    if (o.head === 'voidhood' && down && pose.cast) {
+      // 咒师施法（用户 10-27）：聚元素时双臂往两边伸直、掌心朝上；召剑和握剑时双手收到胸前握住剑柄；抬手和放手按进度插值
+      const k = ease(pose.castK ?? 1);
+      // 三种手位：垂着、张开、合在胸前（肘、手的相对位置）
+      const DOWN = { ex: 4.4, ey: 3.9, hx: 4.4, hy: 7.1 };
+      const WIDE = { ex: 6.4, ey: 3.2, hx: 8.2, hy: 1.6 };
+      const HOLD = { ex: 4.8, ey: 4.6, hx: 1.3, hy: 4.8 };
+      const [from, to] = pose.cast === 'rise' ? [DOWN, WIDE] : pose.cast === 'raise' ? [WIDE, WIDE] : pose.cast === 'lower' ? [HOLD, DOWN] : [HOLD, HOLD];
+      const at = (key: keyof typeof DOWN) => lerp(from[key], to[key], k);
+      hands = [];
+      for (const sg of [-1, 1]) {
+        const sx = cx + sg * 4.2, sy0 = sy + 1.3;
+        const ex = cx + sg * at('ex'), ey = sy + at('ey');
+        const hx = cx + sg * at('hx'), hy = sy + at('hy');
+        capsule(p, sx, sy0, ex, ey, 1.35, R.shirt);
+        capsule(p, ex, ey, hx, hy, 1.2, C);
+        ball(p, hx, hy, 1.15, 1.05, R.skin);
+        hands.push([hx, hy]);
+      }
+    } else {
+      arm(cx - 4.4, l);
+      arm(cx + 4.4, r);
+      hands = [[cx - 4.4, sy + 7.1 - l], [cx + 4.4, sy + 7.1 - r]];
+    }
   }
 
   // ---- 背面：披风盖住整个背 ----
@@ -851,6 +873,13 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
   }
   if (o.head === 'paleknight' && !up) {
     for (const sx of side ? [cx + 0.8] : [cx - 4.3, cx + 4.3]) ball(p, sx, sy + 0.6, 2, 1.5, R.shirt);
+  }
+  if (o.head === 'voidhood' && !up) {
+    // 咒师的披肩：肩上一圈厚厚的斗篷，下缘镶金线，肩膀看起来才像披着袍子
+    for (const sx of side ? [cx + 0.4] : [cx - 4.4, cx + 4.4]) {
+      ball(p, sx, sy + 0.8, side ? 3 : 2.4, 1.7, R.coat);
+      p.line(sx - (side ? 2 : 1.6), sy + 2.1, sx + (side ? 2 : 1.6), sy + 2.1, o.trim ?? GOLD[1]);
+    }
   }
 
   // ---- 头 ----
@@ -1073,10 +1102,18 @@ function drawVoidHood(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose:
   // 圆兜帽（用户 10-27：不要尖顶）：罩住整个头，头顶偏后多出一截软塌塌的帽兜垂下来，走路时轻轻晃
   const bend = side ? -1 : 1;
   ball(p, hx, cy - 0.6, side ? 5.2 : 5.5, 5.3, HD);
-  const fold: [number, number][] = [[hx + bend * 1.5, cy - 4.4], [hx + bend * 4.2, cy - 4.2 + wave * 0.15], [hx + bend * (6.2 + wave * 0.3), cy - 2.4 + wave * 0.4], [hx + bend * (6.6 + wave * 0.3), cy + 0.6 + wave * 0.5]];
-  for (let i = 1; i < fold.length; i++) capsule(p, fold[i - 1][0], fold[i - 1][1], fold[i][0], fold[i][1], 2.3 - i * 0.45, HD, i > 1 ? 1 : 0);
-  // 帽兜上的几道褶子
-  for (let i = 0; i < 3; i++) p.paint(hx + bend * (3.2 + i * 1.1), cy - 3.4 + i * 1.5, HD[0]);
+  if (side) {
+    // 侧面：帽兜贴着后脑，顺着脖子披到肩上，像一截风帽
+    capsule(p, hx - 3.6, cy - 3.2, hx - 5.4, cy - 1 + wave * 0.3, 1.6, HD, 1);
+    capsule(p, hx - 3.8, cy + 0.5, hx - 3.4, cy + 4.6, 1.9, HD, 1);
+    p.paint(hx - 4.6, cy - 1.6, HD[0]);
+    p.paint(hx - 4.2, cy + 1.6, HD[0]);
+  } else {
+    const fold: [number, number][] = [[hx + bend * 1.5, cy - 4.4], [hx + bend * 4.2, cy - 4.2 + wave * 0.15], [hx + bend * (6.2 + wave * 0.3), cy - 2.4 + wave * 0.4], [hx + bend * (6.6 + wave * 0.3), cy + 0.6 + wave * 0.5]];
+    for (let i = 1; i < fold.length; i++) capsule(p, fold[i - 1][0], fold[i - 1][1], fold[i][0], fold[i][1], 2.3 - i * 0.45, HD, i > 1 ? 1 : 0);
+    // 帽兜上的几道褶子
+    for (let i = 0; i < 3; i++) p.paint(hx + bend * (3.2 + i * 1.1), cy - 3.4 + i * 1.5, HD[0]);
+  }
   // 帽前两道白翎纹
   const W = '#f4f0f8';
   if (!up) {
@@ -1092,10 +1129,10 @@ function drawVoidHood(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose:
   if (up) return;
   // 帽檐下是一团黑：圆拱形的帽口，几乎占满正脸，顶上圆、下面平
   const VOID = ['#060408', '#060408', '#0a0810', '#0a0810', '#0e0c16'];
-  const fx = side ? hx + 1.3 : hx;
+  const fx = side ? hx + 1.6 : hx;
   const top = cy - 2.6;
   const chin = cy + 3.6;
-  const hw = side ? 3.2 : 4;
+  const hw = side ? 3.6 : 4;
   const isFace = (x: number, y: number) => {
     const px = x + 0.5, py = y + 0.5;
     if (py > chin || py < top) return false;
@@ -1125,7 +1162,8 @@ function drawVoidHood(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose:
   const bright = flicker(pose, 2) > 0.45;
   for (const [x, c] of eyes) {
     p.set(x, ey, c[1]);
-    if (bright) p.set(x + (x < hx ? -1 : 1), ey, c[0]);
+    if (side) p.set(x + 1, ey, bright ? c[1] : c[0]);
+    else if (bright) p.set(x + (x < hx ? -1 : 1), ey, c[0]);
     p.set(x, ey + 1, c[0]);
   }
 }
@@ -1171,75 +1209,99 @@ function drawFrostfireFx(p: Pix, o: Outfit, pose: Pose, at: { cx: number; sy: nu
   }
   if (pose.dir !== 'down' || !pose.cast || hands.length < 2) return;
   const [[lx, ly], [rx2, ry2]] = hands;
-  if (pose.cast === 'raise') {
-    // 左手火苗：三根高低不一的焰舌，随帧摇摆
-    const k = (seed * 7) % 3;
-    const tongues: [number, number][] = [[-1, 3 + k], [0, 5 + ((k + 1) % 3)], [1, 3 + ((k + 2) % 3)]];
+  const k = pose.castK ?? 1;
+  if (pose.cast === 'rise' || pose.cast === 'raise') {
+    // 掌心起火、凝冰：抬手时只有一点火星，抬到位后火越烧越旺、冰晶越长越大
+    const grow = pose.cast === 'rise' ? k * 0.3 : 0.3 + k * 0.7;
+    const h0 = Math.round(2 + grow * 6);
+    const wob = (seed * 7) % 3;
+    const tongues: [number, number][] = [[-1, h0 - 2 + ((wob + 1) % 3)], [0, h0 + (wob % 2)], [1, h0 - 2 + ((wob + 2) % 3)]];
+    if (grow > 0.5) tongues.push([-2, Math.round(h0 * 0.4)], [2, Math.round(h0 * 0.4) + (wob & 1)]);
     for (const [dx, h] of tongues) {
       for (let i = 0; i < h; i++) {
-        const x = lx + dx + (i > 2 ? Math.round(Math.sin(t * TAU * 2 + i + dx)) * 0.5 : 0);
-        put(x, ly - 1 - i, i < 1 ? FIRE[3] : i < h * 0.5 ? FIRE[2] : i < h - 1 ? FIRE[1] : FIRE[0]);
+        const sway = i > 2 ? Math.round(Math.sin(t * TAU * 3 + i * 0.9 + dx)) : 0;
+        put(lx + dx + sway, ly - 1 - i, i < 1 ? FIRE[3] : i < h * 0.45 ? FIRE[2] : i < h - 1 ? FIRE[1] : FIRE[0]);
+      }
+    }
+    for (let j = 0; j < 4; j++) {
+      const ph = (t * 3 + j * 0.25) % 1;
+      if (ph > grow) continue;
+      empty(lx - 2 + j * 1.4 + Math.sin(ph * 8 + j) * 1.2, ly - 2 - h0 - ph * 5, ph < 0.5 ? FIRE[2] : FIRE[0]);
+    }
+    // 右手冰晶：菱形晶体慢慢长大，四角的星光闪烁
+    const ir = 1 + grow * 2.6;
+    const cy0 = ry2 - 1.2 - ir;
+    for (let dy = -Math.ceil(ir); dy <= Math.ceil(ir); dy++) {
+      const w = (ir - Math.abs(dy)) * 0.75;
+      if (w < 0) continue;
+      for (let dx = -Math.floor(w); dx <= Math.floor(w); dx++) {
+        put(rx2 + dx, cy0 + dy, dx === 0 && dy <= 0 ? ICE[3] : Math.abs(dx) + Math.abs(dy) < ir * 0.5 ? ICE[2] : dx < 0 ? ICE[2] : ICE[1]);
+      }
+    }
+    if (grow > 0.4) {
+      const tw = Math.floor(t * 12) % 2;
+      for (const [dx, dy] of tw ? [[-3, -3], [3, 1]] : [[3, -4], [-3, 2]]) {
+        empty(rx2 + dx, cy0 + dy, ICE[3]);
+        empty(rx2 + dx + 1, cy0 + dy, ICE[1]);
+        empty(rx2 + dx - 1, cy0 + dy, ICE[1]);
+        empty(rx2 + dx, cy0 + dy - 1, ICE[1]);
+        empty(rx2 + dx, cy0 + dy + 1, ICE[1]);
       }
     }
     for (let j = 0; j < 3; j++) {
-      const ph = (t * 2 + j * 0.3) % 1;
-      empty(lx - 2 + j * 2 + Math.sin(ph * 8) * 1, ly - 6 - ph * 5, ph < 0.5 ? FIRE[2] : FIRE[0]);
-    }
-    // 右手冰晶：菱形晶体加四角的星光
-    const cy0 = ry2 - 3.5;
-    for (let dy = -3; dy <= 3; dy++) {
-      const w = 2 - Math.abs(dy) * 0.7;
-      for (let dx = -Math.floor(w); dx <= Math.floor(w); dx++) {
-        put(rx2 + dx, cy0 + dy, dx === 0 && dy <= 0 ? ICE[3] : Math.abs(dx) + Math.abs(dy) < 2 ? ICE[2] : dx < 0 ? ICE[2] : ICE[1]);
-      }
-    }
-    const tw = Math.floor(t * 8) % 2;
-    for (const [dx, dy] of tw ? [[-3, -4], [3, 1]] : [[3, -4], [-3, 2]]) {
-      empty(rx2 + dx, cy0 + dy, ICE[3]);
-      empty(rx2 + dx + 1, cy0 + dy, ICE[1]);
-      empty(rx2 + dx - 1, cy0 + dy, ICE[1]);
-      empty(rx2 + dx, cy0 + dy - 1, ICE[1]);
-      empty(rx2 + dx, cy0 + dy + 1, ICE[1]);
+      const ph = (t * 2 + j * 0.33) % 1;
+      if (ph > grow) continue;
+      empty(rx2 - 2 + j * 2, cy0 - ir - 1 - ph * 4, ICE[2]);
     }
   } else if (pose.cast === 'flash') {
-    // 白光炸开：身前一团白加八道放射线
+    // 白光炸开：身前一团白加八道放射线，第二帧放射线更长更散
     const mx = cx, my = sy + 5;
     for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * TAU + (seed % 2) * 0.3;
-      const len = 6 + (i % 2) * 3;
-      for (let r = 1; r <= len; r++) put(mx + Math.cos(a) * r * 1.4, my + Math.sin(a) * r * 0.8, r < len - 1 ? '#ffffff' : '#ffe8ff');
+      const a = (i / 8) * TAU + k * 0.4;
+      const len = 5 + (i % 2) * 3 + k * 4;
+      for (let r = 1; r <= len; r++) put(mx + Math.cos(a) * r * 1.4, my + Math.sin(a) * r * 0.8, r < len - 1 ? '#ffffff' : '#e8d8ff');
     }
     for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (Math.abs(dx) + Math.abs(dy) <= 3) put(mx + dx, my + dy, '#ffffff');
     for (let j = 0; j < 6; j++) empty(mx - 9 + ((j * 5 + seed) % 18), HERO_FEET - 1 - (j % 3), '#ffffff');
-  } else {
-    // 召唤出的光剑：双手握住胸前的剑柄，剑尖朝下插向脚下；剑身白芯紫边，边上几道亮光往下走
+  } else if (pose.cast === 'beam' || pose.cast === 'fade') {
+    // 召唤出的光剑：双手握住胸前的剑柄，剑尖朝下插向脚下；剑身白芯紫边，边上几道亮光往下走。消散时从剑尖开始化成光点
     const PUR = ['#4a1e8a', '#9a5ae8', '#d8b8ff', '#ffffff'];
     const gy = Math.round(sy + 4.5);
     const tip = HERO_FEET + 0.5;
-    // 剑柄（握在手里）和金色护手
-    for (let y = gy - 3; y < gy; y++) { put(cx - 1, y, '#3a2a50'); put(cx, y, '#5a4a70'); }
-    put(cx - 0.5, gy - 3.6, GOLD[2]);
-    for (let dx = -3; dx <= 2; dx++) put(cx + dx, gy, dx === -3 || dx === 2 ? GOLD[1] : GOLD[2]);
-    put(cx - 1, gy - 1, GOLD[3]);
-    // 剑身：往下渐窄，尖端一点
+    const fade = pose.cast === 'fade' ? k : 0;
+    const cut = tip - fade * (tip - gy + 4);
+    if (fade < 0.85) {
+      for (let y = gy - 3; y < gy; y++) { put(cx - 1, y, '#3a2a50'); put(cx, y, '#5a4a70'); }
+      put(cx - 0.5, gy - 3.6, GOLD[2]);
+      for (let dx = -3; dx <= 2; dx++) put(cx + dx, gy, dx === -3 || dx === 2 ? GOLD[1] : GOLD[2]);
+      put(cx - 1, gy - 1, GOLD[3]);
+    }
     for (let y = gy + 1; y <= tip; y++) {
-      const k = (y - gy) / (tip - gy);
-      const last = k > 0.93;
-      if (last) { put(cx - 1, y, PUR[2]); continue; }
+      if (y > cut) continue;
+      const kk = (y - gy) / (tip - gy);
+      if (kk > 0.93) { put(cx - 1, y, PUR[2]); continue; }
       put(cx - 2, y, PUR[0]);
       put(cx - 1, y, PUR[3]);
-      put(cx, y, k < 0.7 ? PUR[3] : PUR[2]);
+      put(cx, y, kk < 0.7 ? PUR[3] : PUR[2]);
       put(cx + 1, y, PUR[0]);
     }
-    // 剑身上的光：几点往剑尖滑
-    for (let j = 0; j < 4; j++) {
-      const ph = (t * 2 + j * 0.25) % 1;
-      const y = Math.round(gy + 1 + ph * (tip - gy - 2));
-      put(cx + (j % 2 ? 2 : -3), y, ph < 0.5 ? PUR[2] : PUR[1]);
-      put(cx + (j % 2 ? 3 : -4), y, PUR[0]);
+    if (!fade) {
+      for (let j = 0; j < 4; j++) {
+        const ph = (t * 2 + j * 0.25) % 1;
+        const y = Math.round(gy + 1 + ph * (tip - gy - 2));
+        put(cx + (j % 2 ? 2 : -3), y, ph < 0.5 ? PUR[2] : PUR[1]);
+        put(cx + (j % 2 ? 3 : -4), y, PUR[0]);
+      }
+      for (let j = 0; j < 4; j++) empty(cx - 5 + ((j * 3 + seed * 3) % 10), HERO_FEET - (j % 2), PUR[1]);
+    } else {
+      // 剑化成的光点：从断口处往上飘散
+      for (let j = 0; j < 8; j++) {
+        const ph = (fade * 1.2 + j * 0.13) % 1;
+        const x = cx - 1 + Math.round(Math.sin(j * 2.1 + fade * 6) * (2 + ph * 4));
+        const y = cut - ph * 8 + (j % 3);
+        empty(x, y, ph < 0.4 ? PUR[3] : ph < 0.7 ? PUR[2] : PUR[1]);
+      }
     }
-    // 剑尖插着的地方溅起紫光
-    for (let j = 0; j < 4; j++) empty(cx - 5 + ((j * 3 + seed * 3) % 10), HERO_FEET - (j % 2), PUR[1]);
   }
 }
 
@@ -1250,13 +1312,13 @@ function drawCloak(p: Pix, o: Outfit, cx: number, sy: number, hipY: number, pose
   const up = pose.dir === 'up';
   // 咒师的袍子：下摆撑得更开，像一只钟
   const bell = o.head === 'voidhood';
-  const bottom = hipY + (up ? 4.5 : bell ? 5 : 4);
+  const bottom = hipY + (up ? 4.5 : bell && !side ? 5 : 4);
   for (let y = Math.floor(sy - 0.5); y <= Math.ceil(bottom); y++) {
     const k = (y - sy) / (bottom - sy);
     let l: number, r: number;
     if (side) {
-      l = cx - 2.4 - k * (3.4 + wave * 0.9 + (bell ? 1.2 : 0));
-      r = cx + 0.8 - k * 1.2 + (bell ? k * 3.2 : 0);
+      l = cx - 2.4 - k * (3.4 + wave * 0.9 + (bell ? 0.4 : 0));
+      r = cx + 0.8 - k * 1.2 + (bell ? k * 2.6 : 0);
     } else {
       const hw = 4.2 + k * (up ? 1.8 : 1.6) + (bell ? k * 2.2 : 0);
       l = cx - hw;
@@ -1420,15 +1482,25 @@ const walk = (dir: HeroDir): HeroAnim => ({
   },
 });
 
-/** 待机 24 帧（4 秒一圈，呼吸 3 次）：后 16 帧是冰火咒师的施法段，普通外观看不出区别 */
+/**
+ * 待机 48 帧、8 帧每秒（6 秒一圈，呼吸 4 次）。普通外观只是呼吸眨眼；冰火咒师在这一圈里施法（用户 10-27 要十几帧以上的动作展示）：
+ * 0-9 站立，10-13 抬手，14-25 掌心聚火凝冰，26-27 白光召剑，28-37 握剑，38-43 剑散成光点，44-47 放下手
+ */
+const CAST_PHASES: [number, Pose['cast']][] = [[10, undefined], [14, 'rise'], [26, 'raise'], [28, 'flash'], [38, 'beam'], [44, 'fade'], [48, 'lower']];
 const idle = (dir: HeroDir): HeroAnim => ({
-  key: `idle-${dir}`, frames: 24, rate: 6,
+  key: `idle-${dir}`, frames: 48, rate: 8,
   pose: (t, i) => {
-    const b = Math.sin(t * TAU * 3);
+    const b = Math.sin(t * TAU * 4);
+    let from = 0;
+    let cast: Pose['cast'];
+    let castK = 1;
+    for (const [end, c] of CAST_PHASES) {
+      if (i < end) { cast = c; castK = (i - from + 0.5) / (end - from); break; }
+      from = end;
+    }
     return {
       dir, bob: b > 0.3 ? 1 : 0, legF: 0.12, legB: -0.1, armF: 0.1 + b * 0.05, armB: -0.1,
-      elbowF: 0.25, elbowB: 0.2, cape: Math.round(1 + b), blink: i === 5 || i === 17,
-      cast: i < 8 ? undefined : i < 16 ? 'raise' : i < 18 ? 'flash' : 'beam',
+      elbowF: 0.25, elbowB: 0.2, cape: Math.round(1 + b), blink: i === 5 || i === 31, cast, castK,
     };
   },
 });
