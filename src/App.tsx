@@ -38,6 +38,7 @@ import { WorldMap } from './ui/WorldMap';
 import { HomeHud } from './ui/HomeUI';
 import { homeNode } from './core/home';
 import { tl } from './i18n';
+import { useHudFit } from './ui/hudFit';
 
 type Tab = 'game' | 'char' | 'bag' | 'bank' | 'skills' | 'guild' | 'friends' | 'chat' | 'more';
 /** 电脑端快捷键说明（用户 10-23 要求优化电脑端操作） */
@@ -265,6 +266,7 @@ function Game() {
 
   // 每个页面记住滚动位置，切走再回来停在原处（用户 10-25）
   const asideRef = useRef<HTMLElement>(null);
+  const hudRef = useHudFit<HTMLDivElement>();
   const viewKey = worldMap ? 'map' : tab === 'game' ? (monster ? `m:${monster}` : node ? `n:${node}` : 'nodes') : tab;
   const viewRef = useRef(viewKey);
   viewRef.current = viewKey;
@@ -309,7 +311,7 @@ function Game() {
       <main>
         <GameCanvas onNodeClick={openNode} />
         <div className={`region-tint ${region}`} />
-        <div className="hud">
+        <div className="hud" ref={hudRef}>
           <div className="top-left">
             <HomeHud s={s} />
             <DungeonHud s={s} />

@@ -785,4 +785,8 @@ export const EN_TEXT: Record<string, string> = {
   "把全图 239 个地点之间的 717 条路线都跑了一遍：以前有走不到的、绕一倍远的，现在全部走得到，路线基本都是最短的。": "We ran all 717 routes between the 239 locations on the map. Some used to be unreachable or twice as long as needed; now every one is reachable and routes are close to the shortest.",
   "远路改成沿最短的走廊精确找路，遇到窄河、成排的石头过不去会自己记住、换一条走廊。": "Long routes now search precisely along the shortest corridor; if a narrow river or a row of rocks blocks it, the game remembers and picks another corridor.",
   "找路快了很多：一般路线零点几秒就算好，点了寻路不会再卡住好几秒。": "Route finding is much faster: most routes take a fraction of a second, so the game no longer freezes for seconds when you auto-walk.",
+  "手机端界面缩放、浏览器里不再挤": "Mobile UI scale and a roomier browser layout",
+  "「更多 → 设置」新增界面缩放（70%～120%），只对手机生效。用手机浏览器玩觉得挤，调到 80%～90% 就宽松多了。": "New UI scale option under More → Settings (70%–120%), phones only. If it feels cramped in a mobile browser, 80%–90% gives you a lot more room.",
+  "地图矮的时候（浏览器有地址栏和工具栏）左边的副本信息、队友框会自动收紧；离线队友只占一行。": "When the map area is short (browser address bar and toolbar), the dungeon info and party frames on the left tighten up automatically; offline party members take a single line.",
+  "左上和左下的面板放不下时，左上那一摞可以上下滑动，不会再互相盖住。": "If the top-left and bottom-left panels don't both fit, the top-left stack scrolls instead of covering the other one.",
 };

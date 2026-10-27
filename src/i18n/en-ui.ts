@@ -910,4 +910,8 @@ export const EN_UI: Record<string, string> = {
   "{0}（{1}）离你最近": "{0} ({1}) is nearest",
   " · 已击败 {0}": " · defeated {0}",
   "还有 {0} 种，搜索名字或筛选缩小范围。": "{0} more. Search or filter to narrow it down.",
+  "同洞队友 {0} 人：怪物 +{1}%、血量 +{2}%": "{0} cavemate(s): monsters +{1}%, HP +{2}%",
+  "界面": "Interface",
+  "界面缩放 {0}%": "UI scale {0}%",
+  "只对手机等窄屏生效，只保存在这台设备上。在手机浏览器里玩觉得地图上的面板太挤，就调到 80%～90%；看不清字就调大。": "Only affects phones and other narrow screens, and is saved on this device only. If the panels over the map feel cramped in a mobile browser, try 80%–90%; turn it up if the text is too small.",
 };

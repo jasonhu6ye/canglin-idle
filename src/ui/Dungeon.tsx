@@ -285,8 +285,9 @@ export function DungeonHud({ s }: { s: GameState }) {
       <b>{tl`T${run.gate.tier + 1} ${dgName(run.gate.kind)} · 第 ${run.floor + 1}/${run.gate.floors} 层`}</b>
       <span className="bar wide"><i style={{ width: `${(run.kills / Math.max(1, total)) * 100}%` }} /></span>
       <small>{tl`已清 ${run.kills}/${total} 只`} · {status}</small>
-      {(run.phase === 'walk' || run.phase === 'fight') && <small className="muted">{tl('自动打怪中：会自己清完每层、下楼，退出游戏也接着打')}</small>}
-      {dgCrew() > 0 && <small className="warn">{tl`同洞队友 ${dgCrew()} 人：怪物全属性 +${Math.round(mobBuff(1 + dgCrew()) * 100)}%、血量 +${dgCrew() * 75}%，大家的伤害打在同一只怪上`}</small>}
+      {(run.phase === 'walk' || run.phase === 'fight') && <small className="muted dg-hint">{tl('自动打怪中：会自己清完每层、下楼，退出游戏也接着打')}</small>}
+      {dgCrew() > 0 && <small className="warn dg-long">{tl`同洞队友 ${dgCrew()} 人：怪物全属性 +${Math.round(mobBuff(1 + dgCrew()) * 100)}%、血量 +${dgCrew() * 75}%，大家的伤害打在同一只怪上`}</small>}
+      {dgCrew() > 0 && <small className="warn dg-short">{tl`同洞队友 ${dgCrew()} 人：怪物 +${Math.round(mobBuff(1 + dgCrew()) * 100)}%、血量 +${dgCrew() * 75}%`}</small>}
       {mates > 0 && <small className="gold">{tl`队友协战 ${mates} 人：伤害 +${Math.round(COOP_DMG * mates * 100)}%，受伤 -${Math.round(COOP_DEF * mates * 100)}%`}</small>}
       {run.phase === 'chest' && <button className="pill primary" onClick={openChest}>{tl('打开宝箱')}</button>}
       {run.phase === 'open' && run.loot && (

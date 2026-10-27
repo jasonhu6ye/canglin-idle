@@ -1,3 +1,4 @@
+import { UI_SCALES, useUiScale } from './uiScale';
 import { qClass } from '../core/quality';
 import { useSticky } from './sticky';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -652,6 +653,8 @@ function SettingsPage({ s, onClose }: { s: GameState; onClose: () => void }) {
         ))}
       </div>
       <p className="muted small-note">{tl('只有打怪前才会回仓库拿食物和药水；走路、寻路去队友身边、采集和制作都不会带。选「不带」就完全不回仓库拿。')}</p>
+      <h3>{tl('界面')}</h3>
+      <UiScaleSetting />
       <h3>{tl('账号')}</h3>
       <AccountSettings />
       <h3>{tl('存档备份')}</h3>
@@ -665,6 +668,22 @@ function SettingsPage({ s, onClose }: { s: GameState; onClose: () => void }) {
         <button className="danger" onClick={() => setConfirming(true)}>{tl('删除存档，重新开始')}</button>
       )}
     </div>
+  );
+}
+
+/** 手机端界面缩放：用浏览器玩时地址栏占掉高度，界面挤就调小 */
+function UiScaleSetting() {
+  const [pct, setPct] = useUiScale();
+  return (
+    <>
+      <div className="opts ui-scale">
+        <span className="lbl">{tl`界面缩放 ${pct}%`}</span>
+        <input type="range" min={0} max={UI_SCALES.length - 1} step={1} value={UI_SCALES.indexOf(pct)}
+          onChange={(e) => setPct(UI_SCALES[Number(e.target.value)])} />
+        <button className={pct === 100 ? 'on' : ''} onClick={() => setPct(100)}>{tl('默认')}</button>
+      </div>
+      <p className="muted small-note">{tl('只对手机等窄屏生效，只保存在这台设备上。在手机浏览器里玩觉得地图上的面板太挤，就调到 80%～90%；看不清字就调大。')}</p>
+    </>
   );
 }
 

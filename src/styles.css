@@ -1044,3 +1044,39 @@ h2.dg-blue { color: #6ab4ff; }
 .mon-rows .mon-go { padding: 4px 8px; flex: 0 0 auto; }
 .mon-rows .rank-elite { color: #9ad0e0; }
 .mon-rows .rank-boss { color: #e8883a; }
+
+/* 手机：离线队友只占一行；地图矮（浏览器里玩）时左边浮层整体收紧，两摞放不下时左上那摞可滑动 */
+.dg-short { display: none; }
+@media (max-width: 899px) {
+  .party-frame.off { padding: 1px 8px 1px 2px; min-width: 0; }
+  .party-frame.off .avatar { width: 20px; height: 20px; }
+  .party-frame.off .avatar img { width: 16px; height: 16px; }
+  .party-frame.off .pf-body { flex-direction: row; align-items: baseline; gap: 6px; }
+  .party-frame.off .pf-hp { font-size: 10px; }
+}
+.hud.tight .top-left { gap: 4px; max-width: 64%; }
+.hud.tight .chips { gap: 4px; }
+.hud.tight .chip { padding: 4px 7px; font-size: 11px; }
+.hud.tight .dg-hud { width: 210px; gap: 2px; padding: 4px 7px; }
+.hud.tight .dg-hud > b { font-size: 12px; }
+.hud.tight .dg-hint, .hud.tight .dg-long { display: none; }
+.hud.tight .dg-short { display: block; }
+.hud.tight .dg-hud button { padding: 3px 8px; min-height: 26px; }
+.hud.tight .party-frames { gap: 2px; }
+.hud.tight .party-frame { padding: 1px 6px 1px 2px; min-width: 128px; }
+.hud.tight .party-frame .avatar { width: 22px; height: 22px; }
+.hud.tight .party-frame .avatar img { width: 18px; height: 18px; }
+.hud.tight .party-frame .bar { height: 4px; }
+.hud.tight .pf-name { font-size: 11px; }
+.hud.tight .pf-hp { font-size: 9px; }
+.hud.tight .pf-rally { font-size: 11px; padding: 3px 8px; min-height: 26px; }
+.hud.tight .quest-tip { display: none; }
+.hud.tight .chip.quest button { min-height: 22px; }
+.hud.crowded .top-left { max-height: var(--top-room); overflow-y: auto; overflow-x: hidden; scrollbar-width: none; overscroll-behavior: contain; padding-bottom: 2px; }
+.hud.crowded .top-left::-webkit-scrollbar { display: none; }
+/* 手机端界面缩放（设置页，uiScale.ts 写 --ui-zoom） */
+@media (max-width: 899px) {
+  .topbar, .tabbar, .hud .top-left, .hud .chips, .hud .map-buttons, .day-clock { zoom: var(--ui-zoom, 1); }
+}
+.ui-scale input[type=range] { flex: 1; min-width: 120px; accent-color: var(--gold); }
+.ui-scale button { flex: 0 0 auto; padding: 7px 12px; }

@@ -93,7 +93,7 @@ export function PartyFrames({ onPick }: { onPick: (playerId: string) => void }) 
                 {m.name}
                 {p?.combat != null && <small> Lv{p.combat}</small>}
               </span>
-              <span className="bar"><i style={{ width: `${pct}%` }} /></span>
+              {p && <span className="bar"><i style={{ width: `${pct}%` }} /></span>}
               <small className="pf-hp">{p ? (max > 0 ? `${p.hp ?? max}/${max}` : '') : tl('不在线')}</small>
             </span>
           </button>
