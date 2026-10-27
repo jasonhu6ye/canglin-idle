@@ -865,4 +865,8 @@ export const EN_TEXT: Record<string, string> = {
   "新手指引重写：每页加了物品配图，写进了城门口的新手点位、云存档、品质、寻路、好友组队公会这些新内容，去掉了过时的说法。": "The beginner guide is rewritten: each page has item art, it covers the starter spots at the town gates, cloud saves, gear quality, pathfinding, friends, parties and guilds, and outdated tips are gone.",
   "攻略手册目录加了搜索框（标题和正文都能搜），顶上推荐新手先看的三篇。": "The Handbook index has a search box (titles and article text) and recommends three articles for new players at the top.",
   "新文章「新手任务一览」（全部任务、奖励和提示）、「邮箱和设置」；「第一个小时怎么玩」、操作说明、寻路、存档、常见问题都更新了。": "New articles: Starter Quest List (every quest, reward and tip) and Mail and Settings. Your First Hour, Controls, travel, saves and the FAQ are all updated.",
+  "新外观「冰火咒师」亮相": "New outfit preview: Frostfire Warlock",
+  "衣橱里多了一套「冰火咒师」：深紫兜帽长袍镶金线，帽檐下只有两点幽光；脚下常驻一圈金色法阵，身边飘着火星和冰晶。": "The Wardrobe has a new outfit, the Frostfire Warlock: a deep purple hooded robe trimmed in gold with nothing but two glowing eyes under the hood, a golden magic circle always underfoot, and embers and ice crystals drifting around it.",
+  "站着不动时会施法：抬手聚火凝冰、合掌汇成双色法球、白光召出光剑、举剑砸地放冲击波，12 秒一整套。走路、干活、打架、骑狼时特效都在。": "Stand still and it casts: fire and ice gather in each palm, merge into a two-colored orb, a flash summons a glowing sword, and a slam into the ground sends out shockwaves, a full 12-second routine. The effects stay on while walking, working, fighting and riding the wolf.",
+  "这套外观暂未开放获取，先到衣橱里看看效果。": "There is no way to obtain it yet; check it out in the Wardrobe for now.",
 };

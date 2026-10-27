@@ -62,6 +62,8 @@ export interface Outfit {
   harlequin?: boolean;
   /** 要用这个兑换码解锁 */
   code?: string;
+  /** 暂未开放：衣橱里能看，谁都穿不上（用户 10-27：冰火咒师先不能解锁） */
+  sealed?: boolean;
 }
 
 export const OUTFITS: Outfit[] = [
@@ -108,7 +110,7 @@ export const OUTFITS: Outfit[] = [
     pants: ['#14101e', '#1e1830'], boots: ['#3a2a18', '#6a4a28'], scarf: ['#2a2248', '#3a3062'],
     pack: ['#2a2248', '#3a3062', '#564a88'], roll: '#2a2248',
     head: 'voidhood', noPack: true, cloak: ['#181430', '#262040', '#38305a'], trim: '#e0a030',
-    glow: ['#1a6ab0', '#4ad0ff', '#e0ffff'], fx: 'frostfire',
+    glow: ['#1a6ab0', '#4ad0ff', '#e0ffff'], fx: 'frostfire', sealed: true,
   },
   // ---- 兑换码「为爱发电」解锁的五套（用户 10-23 给的参考图和录屏，按本作画法重画） ----
   {
@@ -198,7 +200,7 @@ export const NPC_OUTFITS: Record<string, Outfit> = {
     pack: ['#6a4a1a', '#9a6a2a', '#c8903a'], roll: '#8a3ab0',
   },
 };
-export const outfitOf = (id?: string) => OUTFITS.find((o) => o.id === id) ?? OUTFITS[0];
+export const outfitOf = (id?: string) => { const o = OUTFITS.find((o) => o.id === id); return o && !o.sealed ? o : OUTFITS[0]; };
 const GOLD = ['#8a5a1a', '#c8902a', '#f0c050', '#fff0a0'];
 const EYE = '#20141c';
 const WOOD = ['#3a2414', '#6a4426', '#9a6a3c'];

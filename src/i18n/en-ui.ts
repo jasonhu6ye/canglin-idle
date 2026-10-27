@@ -110,6 +110,8 @@ export const EN_UI: Record<string, string> = {
   '红黑两色的分叉小丑帽挂着银铃，白面具上画着红泪痕；菱格衣服，走到哪都撒红色的纸花。': 'A forked red-and-black jester\'s cap hung with silver bells, a white mask painted with red tears, and a diamond-patterned suit that scatters red confetti everywhere.',
   '骸骨术士': 'Bone Sorcerer',
   '冰火咒师': 'Frostfire Warlock',
+  '这套外观还没开放获取途径，先看看效果': 'There is no way to obtain this outfit yet. Have a look at it for now.',
+  '🔒 暂未开放': '🔒 Not open yet',
   '黑袍尖帽，帽檐下是一团看不见脸的黑暗，只剩两点幽光。左手燃火、右手凝冰，脚下一圈金色法阵，站着不动时会施法。': 'A black robe and pointed hood with nothing but darkness and two glowing eyes beneath. Fire in the left hand, ice in the right, a golden magic circle underfoot, and a casting routine whenever you stand still.',
   '戴着兽骨头盔、肩披骨甲，眼窝里燃着青色的魂火，身边飘着点点灵光。': 'A beast-skull helm and bone pauldrons, teal soulfire burning in the eye sockets, and motes of spirit light drifting all around.',
   '村民': 'Villager',

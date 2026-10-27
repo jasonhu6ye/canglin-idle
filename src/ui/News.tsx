@@ -8,6 +8,14 @@ import { tl } from '../i18n';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-10-27-e', date: tl('10 月 27 日'), title: tl("新外观「冰火咒师」亮相"),
+    lines: [
+      tl("衣橱里多了一套「冰火咒师」：深紫兜帽长袍镶金线，帽檐下只有两点幽光；脚下常驻一圈金色法阵，身边飘着火星和冰晶。"),
+      tl("站着不动时会施法：抬手聚火凝冰、合掌汇成双色法球、白光召出光剑、举剑砸地放冲击波，12 秒一整套。走路、干活、打架、骑狼时特效都在。"),
+      tl("这套外观暂未开放获取，先到衣橱里看看效果。"),
+    ],
+  },
+  {
     id: '2026-10-27-en', date: tl('10 月 27 日'), title: tl('英文版翻译润色'),
     lines: [
       tl('英文版整体润色：名字和说法更像英文游戏，不再逐字直译，比如福袋改叫 Pouch、硬木锭改叫 Hardwood Billet、回城卷轴改叫 Recall Scroll，一批怪物和地点也换了更地道的英文名。'),
