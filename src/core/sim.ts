@@ -241,6 +241,36 @@ export function emptySummary(): Summary {
   return { elapsedMs: 0, xp: {}, items: {}, levelUps: [], kills: {}, deaths: 0, foodEaten: 0, ammoUsed: 0, bankTrips: 0, taskEnds: [] };
 }
 
+/** 两段结算合成一段（离开期间分好几次结算，回来时合成一个离线收获弹窗） */
+export function mergeSummary(a: Summary, b: Summary): Summary {
+  const add = <K extends string>(x: Partial<Record<K, number>>, y: Partial<Record<K, number>>) => {
+    const o: Partial<Record<K, number>> = { ...x };
+    for (const [k, v] of Object.entries(y) as [K, number][]) o[k] = (o[k] ?? 0) + v;
+    return o;
+  };
+  const ups = new Map<SkillId, number>();
+  for (const u of [...a.levelUps, ...b.levelUps]) ups.set(u.skill, Math.max(ups.get(u.skill) ?? 0, u.level));
+  const log = [...(a.log ?? []), ...(b.log ?? [])].slice(-LOG_CAP);
+  const quests = [...(a.quests ?? []), ...(b.quests ?? [])];
+  const stones = [...(a.waystones ?? []), ...(b.waystones ?? [])];
+  return {
+    elapsedMs: a.elapsedMs + b.elapsedMs,
+    xp: add(a.xp, b.xp),
+    items: add(a.items, b.items) as Record<string, number>,
+    levelUps: [...ups].map(([skill, level]) => ({ skill, level })),
+    kills: add(a.kills, b.kills) as Record<string, number>,
+    deaths: a.deaths + b.deaths,
+    foodEaten: a.foodEaten + b.foodEaten,
+    bankTrips: a.bankTrips + b.bankTrips,
+    ammoUsed: a.ammoUsed + b.ammoUsed,
+    taskEnds: [...a.taskEnds, ...b.taskEnds],
+    ...(quests.length && { quests }),
+    ...(log.length && { log }),
+    ...(stones.length && { waystones: stones }),
+    ...((a.dungeon || b.dungeon) && { dungeon: { ...a.dungeon, ...b.dungeon } }),
+  };
+}
+
 export const level = (s: GameState, skill: SkillId) => levelForXp(s.xp[skill]);
 /** 身上所有装备某项加成之和（饰品的生命、经验、掉率、暴击、闪避、干活速度，火把和项链的攻速，灯笼的吸血） */
 export function gearSum(s: GameState, k: 'hp' | 'xp' | 'luck' | 'crit' | 'dodge' | 'work' | 'haste' | 'leech' | 'defPct' | 'dmgPct') {

@@ -1998,7 +1998,8 @@ export class MapScene extends Phaser.Scene {
     return out;
   }
 
-  private walker?: { pts: { x: number; y: number }[]; i: number; speed: number; done: () => void };
+  /** endAt / rest：按存档行程走时什么时候该走到（Date.now 毫秒）、每个路点之后还剩多长（像素） */
+  private walker?: { pts: { x: number; y: number }[]; i: number; speed: number; done: () => void; endAt?: number; rest?: number[] };
 
   /** 沿路径匀速走：每帧按经过的时间移动，不再一格一个补间 */
   private walkPath(path: { x: number; y: number }[], done: () => void, speed?: number) {
@@ -2006,17 +2007,33 @@ export class MapScene extends Phaser.Scene {
     if (!path.length) return done();
     const tps = speed ?? WALK_TILES_PER_SEC * speedMultiplier;
     this.working = false;
-    this.walker = {
-      pts: this.smoothPath(path).map((p) => ({ x: p.x * T + T / 2, y: p.y * T + T / 2 })),
-      i: 0, speed: tps * T, done,
-    };
+    const pts = this.smoothPath(path).map((p) => ({ x: p.x * T + T / 2, y: p.y * T + T / 2 }));
+    this.walker = { pts, i: 0, speed: tps * T, done };
+    // 按存档里的行程走（10-27）：定好到达时刻，每帧按剩下的路和剩下的时间调快慢。
+    // 以前按固定速度走，画面掉帧时角色落在存档后面，平滑后的路又比格子路短，常常早到或晚到一两秒
+    if (speed) {
+      let len = 0;
+      let prev = this.playerTile();
+      for (const p of path) { len += Math.hypot(p.x - prev.x, p.y - prev.y); prev = p; }
+      const rest = new Array<number>(pts.length).fill(0);
+      for (let k = pts.length - 2; k >= 0; k--) rest[k] = rest[k + 1] + Math.hypot(pts[k + 1].x - pts[k].x, pts[k + 1].y - pts[k].y);
+      this.walker.endAt = Date.now() + (len / speed) * 1000;
+      this.walker.rest = rest;
+    }
   }
 
   private stepWalker(delta: number) {
     const w = this.walker;
     // 上下坐骑的动作做完之前原地不动（用户 10-23）
     if (!w || this.mountBusy) return;
-    let move = (w.speed * Math.min(delta, 100)) / 1000;
+    let v = w.speed;
+    if (w.endAt && w.rest && w.i < w.pts.length) {
+      const t = w.pts[w.i];
+      const remain = Math.hypot(t.x - this.player.x, t.y - this.player.y) + w.rest[w.i];
+      const left = w.endAt - Date.now();
+      v = Math.max(w.speed * 0.5, Math.min(w.speed * 3, left > 50 ? (remain / left) * 1000 : w.speed * 3));
+    }
+    let move = (v * Math.min(delta, w.endAt ? 250 : 100)) / 1000;
     let dx = 0;
     let dy = 0;
     while (move > 0 && w.i < w.pts.length) {
