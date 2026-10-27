@@ -6,9 +6,9 @@ import { RANCH } from '../core/ranch';
 import { SalvageSheet } from './Salvage';
 import { MonsterDetail, MonsterIcon, TraitChips } from './Bestiary';
 import { useEffect, useRef, useState } from 'react';
-import { ACTIONS, nodeOfAction, ITEMS, MONSTERS, NODES, REGIONS, SEED_PRICE, SEED_SHOP, SKILLS, tierName } from '../core/data';
+import { ACTIONS, nodeOfAction, ITEMS, MONSTERS, NODES, REGIONS, SEED_SHOP, seedLevel, seedPrice, SKILLS, tierName } from '../core/data';
 import {
-  actionDuration, atMarket, bestFood, buySeed, combatEstimate, combatStats, enqueue, level, MAX_QUEUE, moveSpeed, nearNode, setSettings, startNow, weaponStyle, xpPerHour,
+  actionDuration, atMarket, bestFood, buySeed, seedLocked, combatEstimate, combatStats, enqueue, level, MAX_QUEUE, moveSpeed, nearNode, setSettings, startNow, weaponStyle, xpPerHour,
 } from '../core/sim';
 import type { ActionDef, GameState, SkillAction, TaskMode } from '../core/types';
 import type { MapNode } from '../core/data';
@@ -240,21 +240,24 @@ export function jumpTo(action: string, node: string) {
   openNodeSheet(node);
 }
 
-/** 集市的种子摊：T1-T2 种子，金币从仓库扣、种子进仓库 */
+/** 集市的种子摊：种植等级够了的种子都能买（10-27），再列出接下来两种还没解锁的；金币从仓库扣、种子进仓库 */
 function SeedShop({ s }: { s: GameState }) {
   const here = atMarket(s);
   const coins = s.bank.coins ?? 0;
+  const open = SEED_SHOP.filter((id) => !seedLocked(s, id));
+  const next = SEED_SHOP.filter((id) => seedLocked(s, id)).slice(0, 2);
   return (
     <div className="seed-shop">
       <h3>{tl('种子摊 ')}<small className="muted">{tl`金币 ${fmtNum(coins)}`}{!here && tl(' · 要走到集市旁边才能买')}</small></h3>
       <ul>
-        {SEED_SHOP.map((id) => {
-          const price = ITEMS[id].value * SEED_PRICE;
+        {[...open].reverse().concat(next).map((id) => {
+          const price = seedPrice(id);
+          const locked = seedLocked(s, id);
           return (
-            <li key={id}>
+            <li key={id} className={locked ? 'locked' : ''}>
               <Icon item={id} size={26} />
-              <span className="grow">{ITEMS[id].name}<small className="muted">{tl` 单价 ${price} · 仓库有 ${fmtNum(s.bank[id] ?? 0)}`}</small></span>
-              {[1, 10].map((n) => (
+              <span className="grow">{ITEMS[id].name}<small className="muted">{locked ? tl` 种植 ${seedLevel(id)} 级才能买` : tl` 单价 ${fmtNum(price)} · 仓库有 ${fmtNum(s.bank[id] ?? 0)}`}</small></span>
+              {!locked && [1, 10].map((n) => (
                 <button key={n} disabled={!here || coins < price * n} onClick={() => store.dispatch((g) => buySeed(g, id, n))}>{tl`买 ${n}`}</button>
               ))}
             </li>

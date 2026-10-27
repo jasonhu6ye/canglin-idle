@@ -1,10 +1,10 @@
 import { partyXpPct } from './party';
 import { cleanGm, gmPct, setGmClock } from './gm';
-import { GUILD_MAX_LV, cleanTech, guildPct } from './guild';
+import { GUILD_MAX_LV, cleanTech, guildPct, utcDay } from './guild';
 import { APT_MAX, APT_MIN, FOAL, growMs, HORSE_XP, horseItem, RANCH, RANCH_PENS } from './ranch';
 import { baseOf, qid, QUALITY_VALUE, rollQuality } from './quality';
 import { HW_POINT, HW_TIERS, hwFight, hwOpen, hwTierOf, hwWait } from './halloween';
-import { OLD_JEWELS, BAR_VALUE, inTownArea, KEY_SHOP, keyOf, OLD_ENH, SCROLL_TOWN, SHARD_PER_STONE, TIERS, ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAP_W, MID_BOX, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, SEED_PRICE, SEED_SHOP, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, fastest, planRoute, travelMs, type MapNode } from './data';
+import { OLD_JEWELS, BAR_VALUE, inTownArea, KEY_SHOP, keyOf, OLD_ENH, SCROLL_TOWN, SHARD_PER_STONE, TIERS, ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAP_W, MID_BOX, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, MAT_DAILY, MAT_PRICE, MAT_SHOP, SCROLL_DAILY, SCROLL_PRICE, SEED_SHOP, seedLevel, seedPrice, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, fastest, planRoute, travelMs, type MapNode } from './data';
 import { nextRandom } from './rng';
 import { buffMob, coopMates, COOP_DEF, COOP_DMG, dungeonFloor, GATE_AFTER_CLEAR, GATE_CD, GATE_MAX, GATE_MS, GATE_REACH, legMs, rollChest, rollChestQuality, rollFloors, teamChest, teamChestQuality, type TeamMember } from './dungeon';
 import { partySize } from './party';
@@ -179,6 +179,7 @@ export function migrate(raw: unknown): GameState | null {
     gmBuffs: cleanGm(s.gmBuffs),
     guildLv: Number.isInteger(s.guildLv) && s.guildLv! > 0 ? Math.min(GUILD_MAX_LV, s.guildLv!) : undefined,
     guildTech: cleanTech(s.guildTech),
+    shopBuys: obj(s.shopBuys) && typeof s.shopBuys!.day === 'string' ? { day: s.shopBuys!.day, n: Object.fromEntries(Object.entries(obj<Record<string, number>>(s.shopBuys!.n) ?? {}).filter(([, q]) => Number.isFinite(q) && q > 0)) } : undefined,
     buffs: Object.fromEntries(Object.entries(obj<GameState['buffs']>(s.buffs) ?? {}).filter(([, b]) => b && Number.isFinite(b.pct) && Number.isFinite(b.ms) && b.ms > 0)),
     mounted: !!s.mounted && !!equipment.mount,
     redeemed: arr<string>(s.redeemed).filter((c) => typeof c === 'string'),
@@ -1646,10 +1647,14 @@ export function sell(prev: GameState, item: string, qty: number): GameState {
   return s;
 }
 
+export const seedLocked = (s: GameState, id: string) => seedLevel(id) >= 20 && level(s, 'farming') < seedLevel(id);
+
 /** 集市种子摊：花仓库里的金币买种子，买到的直接进仓库（种田会从仓库扣种子） */
 export function buySeed(prev: GameState, item: string, qty: number): GameState {
-  const cost = ITEMS[item]?.value * SEED_PRICE * qty;
+  const cost = seedPrice(item) * qty;
   if (!SEED_SHOP.includes(item) || !Number.isInteger(qty) || qty <= 0 || !atMarket(prev) || (prev.bank.coins ?? 0) < cost) return prev;
+  // T3 起的种子要种植等级够了才能买（T1-T2 一直能买）
+  if (seedLocked(prev, item)) return prev;
   const s = clone(prev);
   s.bank.coins -= cost;
   s.bank[item] = (s.bank[item] ?? 0) + qty;
@@ -1982,6 +1987,35 @@ export function openDungeonChest(prev: GameState, now = Date.now()): [GameState,
 /** 站在商人旁边才能买 */
 export const SHOP_NODES = NODES.filter((n) => n.shop);
 export const atShop = (s: GameState) => within(s, SHOP_NODES);
+
+/** 商人今天已经卖给你多少（按 UTC 日期换天） */
+export function shopBought(s: GameState, item: string, now = Date.now()) {
+  return s.shopBuys?.day === utcDay(now) ? s.shopBuys.n[item] ?? 0 : 0;
+}
+/** 商人每样东西的单价和每天限购 */
+export function shopRow(item: string): [number, number] | null {
+  if (item === SCROLL_TOWN) return [SCROLL_PRICE, SCROLL_DAILY];
+  if (MAT_SHOP.includes(item)) return [ITEMS[item].value * MAT_PRICE, MAT_DAILY];
+  return null;
+}
+/** 在商人那里买材料、回城卷轴（10-27 经济优化）：金币从仓库扣，东西进仓库，每天限购 */
+export function buyGoods(prev: GameState, item: string, qty: number, now = Date.now()): GameState {
+  const row = shopRow(item);
+  const n = cleanQty(qty);
+  if (!row || n <= 0 || !atShop(prev)) return prev;
+  const [price, daily] = row;
+  const left = daily - shopBought(prev, item, now);
+  if (n > left || (prev.bank.coins ?? 0) < price * n) return prev;
+  const s = clone(prev);
+  s.bank.coins -= price * n;
+  s.bank[item] = (s.bank[item] ?? 0) + n;
+  s.seen[item] = 1;
+  const day = utcDay(now);
+  const counts = s.shopBuys?.day === day ? { ...s.shopBuys.n } : {};
+  counts[item] = (counts[item] ?? 0) + n;
+  s.shopBuys = { day, n: counts };
+  return s;
+}
 export function buyKey(prev: GameState, key: string, qty = 1): GameState {
   const row = KEY_SHOP.find(([id]) => id === key);
   const n = cleanQty(qty);
