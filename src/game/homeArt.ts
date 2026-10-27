@@ -23,6 +23,8 @@ export const UP: Record<string, number> = {
   painting: 10, candle: 6, teddy: 2, books: 2, tea_set: 0, music_box: 2, crystal_ball: 4, bonsai: 4, paper_lantern: 12, hourglass: 4,
   ship_model: 6, gem_case: 8, pumpkin_lamp: 2, plush_cat: 2, trophy_cup: 6,
   bunk_bed: 10, bookcase_tall: 16, counter: 6, round_table: 2, throne: 14, bed_royal: 10,
+  cupboard: 16, wine_rack: 12, coffee_table: 2, canopy_bed: 18, bar_counter: 6, bar_stool: 2, bookshelf_low: 6, grand_piano: 6, harp: 14, sewing_table: 8,
+  folding_screen: 16, potted_tree: 16, wash_basin: 6, rocking_chair: 8, chess_table: 2, bird_cage: 12, coat_rack: 14,
   apple_tree: 26, gazebo: 26, swing: 16, maple_tree: 26, palm_tree: 30, boat: 0, coop: 12, telescope: 10, totem: 22, flower_cart: 6,
 };
 
@@ -492,8 +494,375 @@ function paintHD(id: string, p: Pix, W: number, H: number): boolean {
     if (knob) { p.set(x + Math.floor(w / 2), y + Math.floor(h / 2), knob); p.set(x + Math.floor(w / 2), y + Math.floor(h / 2) + 1, mix(knob, '#000000', 0.4)); }
   };
   const plate = (x: number, y: number, food: string) => { p.rect(x, y, 5, 3, '#e8e2d4'); p.rect(x + 1, y, 3, 1, '#ffffff'); p.set(x + 2, y + 1, food); p.set(x + 1, y + 2, '#b8b0a0'); p.set(x + 3, y + 2, '#b8b0a0'); };
+  /** 圆柱（木桶、花盆、罐子）：身子左亮右暗，顶上一个椭圆朝上的面，底边是弧形 */
+  const cyl = (ccx: number, y0: number, y1: number, rx: number, pal: string[], ry = Math.max(1.5, rx * 0.4), lid?: string) => {
+    for (let x = Math.ceil(ccx - rx); x <= Math.floor(ccx + rx); x++) {
+      const t = (x - (ccx - rx)) / (2 * rx);
+      const dx = (x - ccx) / rx;
+      const curve = (1 - Math.sqrt(Math.max(0, 1 - dx * dx))) * ry;
+      const col = t < 0.18 ? pal[3] : t < 0.55 ? pal[2] : t < 0.85 ? pal[1] : pal[0];
+      for (let y = Math.round(y0); y <= y1 - curve; y++) p.set(x, y, col);
+    }
+    for (let y = Math.floor(y0 - ry); y <= y0 + ry; y++) for (let x = Math.ceil(ccx - rx); x <= Math.floor(ccx + rx); x++) {
+      const d = Math.hypot((x - ccx) / rx, (y - y0) / ry);
+      if (d > 1) continue;
+      p.set(x, y, d > 0.78 ? pal[4] : lid ?? mix(pal[3], pal[2], 0.3));
+    }
+  };
+  /** 带深度的柜格：两侧板、顶板朝上的面，格子里面是暗的背板 */
+  const shelfBox = (x: number, y: number, w: number, h: number, pal: string[], rows: number) => {
+    top(x, y, w, 3, pal, false);
+    front(x, y + 3, w, h - 3, pal);
+    const rh = Math.floor((h - 5) / rows);
+    for (let r = 0; r < rows; r++) {
+      const ry0 = y + 4 + r * rh;
+      for (let j = 0; j < rh - 2; j++) for (let i = 2; i < w - 2; i++) p.set(x + i, ry0 + j, j === 0 ? pal[0] : mix(pal[0], pal[1], j / rh));
+      for (let i = 2; i < w - 2; i++) { p.set(x + i, ry0 + rh - 2, pal[3]); p.set(x + i, ry0 + rh - 1, pal[1]); }
+    }
+    return { rh, y0: y + 4 };
+  };
+  const books = (x0: number, x1: number, yb: number, hmax: number, seed: number) => {
+    const cols = ['#b03a3a', '#3a6ab0', '#3a9a5a', '#d8a040', '#8a4ab0', '#e0e0d0', '#4a8a8a', '#c86a3a'];
+    for (let x = x0; x < x1 - 1; x += 2) {
+      if (phash(x, seed, 91) < 0.1) continue;
+      const c = cols[Math.floor(phash(x, seed, 92) * cols.length)];
+      const hh = hmax - Math.floor(phash(x, seed, 93) * 3);
+      for (let y = yb - hh; y < yb; y++) { p.set(x, y, y === yb - hh ? mix(c, '#ffffff', 0.35) : c); p.set(x + 1, y, mix(c, '#000000', 0.35)); }
+      if (hh > 3) p.set(x, yb - hh + 2, '#f0d890');
+    }
+  };
   const mug = (x: number, y: number) => { p.rect(x, y, 3, 4, '#d8d0c0'); p.set(x, y, '#ffffff'); p.set(x + 1, y, '#6a3a1a'); p.set(x + 3, y + 1, '#d8d0c0'); p.set(x + 3, y + 2, '#b8b0a0'); };
   switch (id) {
+    // ───── 10-27 第二批重画：书架、灯、盆栽、桶罐、户外小件 ─────
+    case 'shelf':
+    case 'bookcase_tall': {
+      const pal = id === 'shelf' ? DARKWOOD : WOOD;
+      const rows = id === 'shelf' ? 3 : 4;
+      const { rh, y0 } = shelfBox(0, 0, W, H, pal, rows);
+      for (let r = 0; r < rows; r++) books(3, W - 3, y0 + r * rh + rh - 2, rh - 3, r + (id === 'shelf' ? 0 : 7));
+      if (id === 'bookcase_tall') { p.rect(W - 9, y0 + rh * 2 - 6, 4, 4, '#3a8ab0'); p.set(W - 8, y0 + rh * 2 - 6, '#8ad0f0'); }
+      return true;
+    }
+    case 'lamp':
+      // 落地灯：圆底座、细杆、布灯罩（下口看得见里面亮着）
+      cyl(8, H - 3, H - 1, 4, IRON, 1.5);
+      for (let y = 11; y < H - 3; y++) { p.set(7, y, IRON[3]); p.set(8, y, IRON[1]); }
+      for (let y = 1; y < 11; y++) {
+        const half = 3 + (y - 1) * 0.45;
+        for (let x = Math.ceil(8 - half); x < 8 + half; x++) p.set(x, y, x < 8 - half + 2 ? '#fff4d0' : x > 8 + half - 3 ? '#d8b060' : '#f4d890');
+      }
+      for (let x = 4; x < 12; x++) p.set(x, 11, '#fff8c0');
+      p.rect(5, 0, 6, 1, '#c89848');
+      return true;
+    case 'plant_pot':
+      cyl(8, H - 8, H - 1, 4.5, ['#6a2a14', '#a04a26', '#c8643a', '#e08a5a', '#f0b080'], 1.5, '#4a3020');
+      p.blob(8, H - 13, 5.5, 5, LEAF, 3);
+      p.blob(5, H - 10, 3, 2.5, LEAF, 4);
+      p.blob(11.5, H - 11, 3, 2.5, LEAF, 5);
+      return true;
+    case 'barrel':
+    case 'water_barrel': {
+      const water = id === 'water_barrel';
+      cyl(8, H - (water ? 15 : 17), H - 1, 6, WOOD, 2.2, water ? WATER[2] : WOOD[2]);
+      for (let x = 2; x <= 14; x++) for (const yy of water ? [H - 12, H - 5] : [H - 14, H - 6]) { const dx = (x - 8) / 6; p.set(x, yy + Math.round((1 - Math.sqrt(Math.max(0, 1 - dx * dx))) * -1.2), x < 5 ? IRON[3] : IRON[1]); }
+      for (let x = 4; x < 13; x += 3) for (let y = H - (water ? 13 : 15); y < H - 2; y++) if (phash(x, y, 95) < 0.6) p.set(x, y, WOOD[1]);
+      if (water) { p.set(6, H - 16, WATER[4]); p.set(9, H - 15, WATER[4]); p.rect(13, H - 7, 2, 1, IRON[3]); p.set(14, H - 6, WATER[3]); }
+      else { p.rect(7, H - 18, 2, 1, WOOD[1]); }
+      return true;
+    }
+    case 'vase':
+      for (let y = H - 13; y < H; y++) {
+        const k = (y - (H - 13)) / 13;
+        const half = k < 0.15 ? 2 : 2 + Math.sin(((k - 0.15) / 0.85) * Math.PI) * 3.5;
+        for (let x = Math.ceil(8 - half); x < 8 + half; x++) {
+          const t = (x - (8 - half)) / (2 * half);
+          p.set(x, y, y === H - 7 || y === H - 6 ? '#e8c050' : t < 0.25 ? '#8ab8f0' : t < 0.7 ? '#3a6ab0' : '#24447a');
+        }
+      }
+      p.rect(6, H - 14, 4, 1, '#5a8ad0');
+      for (const [fx, fy, c] of [[6, H - 17, '#ff8aaa'], [9, H - 19, '#ffffff'], [11, H - 16, '#f0c850'], [4, H - 15, '#e84a6a']] as [number, number, string][]) { p.line(8, H - 14, fx, fy + 1, LEAF[2]); p.rect(fx - 1, fy - 1, 2, 2, c); p.set(fx, fy, mix(c, '#ffffff', 0.5)); }
+      return true;
+    case 'fishtank':
+      // 玻璃缸：能看到水面、水草、鱼，木头柜子垫着
+      top(0, H - 8, W, 2, DARKWOOD, false); front(0, H - 6, W, 6, DARKWOOD);
+      for (let y = 0; y < H - 8; y++) for (let x = 1; x < W - 1; x++) {
+        const rim = x === 1 || x === W - 2 || y === 0;
+        p.set(x, y, rim ? '#d8eef8' : y < 4 ? (y === 1 ? '#c8ecff' : '#8ac8f0') : y > H - 11 ? '#c8b088' : (x + y * 3) % 17 === 0 ? '#a8dcff' : '#3a8ac8');
+      }
+      for (const wx of [5, 24]) for (let y = H - 15; y < H - 10; y++) p.set(wx + (y % 2), y, LEAF[3]);
+      for (const [fx, fy, c] of [[11, 8, '#f08a2a'], [19, 11, '#e8c040'], [14, 14, '#e84a6a']] as [number, number, string][]) { p.rect(fx, fy, 3, 2, c); p.set(fx - 1, fy, c); p.set(fx + 2, fy, '#141010'); }
+      p.set(8, 6, '#ffffff'); p.set(8, 5, '#d8f0ff'); p.set(22, 7, '#ffffff');
+      return true;
+    case 'mirror':
+      leg(3, H - 4, H, WOOD); leg(11, H - 4, H, WOOD);
+      for (let y = 0; y < H - 3; y++) for (let x = 2; x < 14; x++) {
+        const d = Math.hypot((x - 7.5) / 6, (y - (H - 3) / 2) / ((H - 3) / 2));
+        if (d > 1) continue;
+        p.set(x, y, d > 0.82 ? (x < 8 ? GOLD[4] : GOLD[2]) : (x - y + 40) % 8 === 0 || (x - y + 41) % 8 === 0 ? '#ffffff' : y < (H - 3) / 2 ? '#d0ecff' : '#9cc4dc');
+      }
+      return true;
+    case 'clock':
+      top(2, 0, 12, 2, DARKWOOD, false); front(2, 2, 12, H - 2, DARKWOOD);
+      for (let y = 4; y < 14; y++) for (let x = 4; x < 12; x++) { const d = Math.hypot(x - 7.5, y - 8.5); if (d < 4.2) p.set(x, y, d > 3.4 ? GOLD[3] : '#f4ecd8'); }
+      p.line(8, 8, 8, 5, '#1a1a1a'); p.line(8, 8, 10, 9, '#1a1a1a');
+      for (let y = 16; y < H - 4; y++) for (let x = 5; x < 11; x++) p.set(x, y, x === 5 || x === 10 ? DARKWOOD[0] : '#2a1a10');
+      p.line(8, 16, 7, H - 9, GOLD[2]); p.rect(6, H - 9, 3, 3, GOLD[3]); p.set(6, H - 9, GOLD[4]);
+      return true;
+    case 'globe':
+      cyl(8, H - 3, H - 1, 4, WOOD, 1.3);
+      for (let y = 11; y < H - 3; y++) { p.set(8, y, WOOD[2]); p.set(9, y, WOOD[0]); }
+      for (let y = 0; y < 12; y++) for (let x = 2; x < 14; x++) {
+        const d = Math.hypot(x - 7.5, y - 6);
+        if (d > 5.4) continue;
+        const land = phash(x >> 1, y >> 1, 96) < 0.38;
+        let c = land ? (x < 7 ? '#7ac860' : '#4a9a3a') : x < 7 && y < 6 ? '#7ab8f0' : '#3a6ab0';
+        if (d > 4.6) c = mix(c, '#000000', 0.25);
+        p.set(x, y, c);
+      }
+      for (let a = 0; a < 20; a++) p.set(8 + Math.cos(a / 20 * Math.PI) * 6.5, 6 - Math.sin(a / 20 * Math.PI) * 6.5, GOLD[3]);
+      p.set(5, 3, '#ffffff');
+      return true;
+    case 'beehive':
+      // 蜂箱：一层层木头抽屉叠起来，斜顶，蜜蜂绕着飞
+      top(1, 1, 14, 3, WOOD, false);
+      for (let k = 0; k < 3; k++) front(2, 4 + k * 4, 12, 4, HAY);
+      for (let x = 2; x < 14; x++) p.set(x, 4, WOOD[2]);
+      p.rect(6, H - 9, 4, 1, '#2a1a08');
+      leg(3, H - 5, H, WOOD); leg(11, H - 5, H, WOOD);
+      for (const [x, y] of [[0, 6], [15, 10], [13, 0], [2, 13]]) { p.set(x, y, '#f0c850'); p.set(x + 1, y, '#1a1a1a'); }
+      return true;
+    case 'flowerbed':
+    case 'garden_bed': {
+      const flowers = id === 'flowerbed';
+      const by = H - 9;
+      top(0, by, W, 3, flowers ? STONE : WOOD, false); front(0, by + 3, W, 6, flowers ? STONE : WOOD);
+      for (let y = by + 1; y < by + 3; y++) for (let x = 2; x < W - 2; x++) p.set(x, y, phash(x, y, 97) < 0.3 ? '#3a2414' : '#5a3a20');
+      if (flowers) {
+        const cols = ['#e84a6a', '#f0c850', '#ffffff', '#a070e0', '#ff8a3a'];
+        for (let x = 2; x < W - 2; x += 3) {
+          const hh = 3 + Math.floor(phash(x, 2, 6) * 4);
+          for (let y = by + 1 - hh; y < by + 2; y++) p.set(x, y, LEAF[2]);
+          p.set(x - 1, by - hh, LEAF[3]);
+          const c = cols[x % cols.length];
+          p.rect(x, by - hh - 1, 2, 2, c); p.set(x, by - hh - 1, mix(c, '#ffffff', 0.5));
+        }
+      } else for (let x = 3; x < W - 3; x += 4) { p.blob(x + 1, by, 2, 1.6, LEAF, x); p.set(x + 1, by + 1, '#c8803a'); }
+      return true;
+    }
+    case 'birdbath':
+      cyl(8, H - 3, H - 1, 4, STONE, 1.2);
+      for (let y = H - 9; y < H - 3; y++) { p.set(7, y, STONE[3]); p.set(8, y, STONE[2]); p.set(9, y, STONE[1]); }
+      cyl(8, H - 12, H - 9, 7, STONE, 2.6, WATER[2]);
+      p.set(5, H - 13, WATER[4]); p.set(10, H - 12, WATER[4]);
+      p.set(12, H - 16, '#5a8ad0'); p.set(13, H - 16, '#5a8ad0'); p.set(14, H - 17, '#f0a030'); p.set(12, H - 15, '#3a6ab0');
+      return true;
+    case 'st_smithy':
+      // 树墩上一块铁砧，旁边一桶淬火水和锤子
+      cyl(14, H - 8, H - 1, 7, WOOD, 2.2, '#c8a070');
+      for (let a = 0; a < 3; a++) for (let x = 9; x < 20; x++) if (Math.hypot((x - 14) / (2 + a * 2), 0) < 1) p.set(x, H - 8, '#a07a4a');
+      top(7, H - 16, 16, 3, IRON, false); front(9, H - 13, 12, 3, IRON);
+      for (let x = 2; x < 8; x++) { p.set(x, H - 16 + Math.floor((8 - x) / 3), IRON[3]); p.set(x, H - 15 + Math.floor((8 - x) / 3), IRON[1]); }
+      p.rect(11, H - 10, 6, 2, IRON[1]);
+      cyl(27, H - 7, H - 1, 3.5, WOOD, 1.3, WATER[2]);
+      p.line(20, H - 18, 25, H - 22, WOOD[3]); p.rect(24, H - 24, 4, 3, IRON[3]);
+      return true;
+    case 'round_table': {
+      for (let y = 0; y < H - 10; y++) for (let x = 0; x < W; x++) {
+        const d = Math.hypot((x - (W - 1) / 2) / (W / 2 - 1), (y - (H - 12) / 2) / ((H - 12) / 2));
+        if (d > 1) continue;
+        p.set(x, y, d > 0.9 ? WOOD[1] : d > 0.84 ? WOOD[4] : phash(x >> 2, y, 50) < 0.12 ? WOOD[2] : (x < W / 3 && y < H / 3) ? mix(WOOD[3], WOOD[4], 0.3) : WOOD[3]);
+      }
+      for (let x = 2; x < W - 2; x++) { const dx = (x - (W - 1) / 2) / (W / 2 - 2); if (Math.abs(dx) <= 1) for (let y = H - 13 + Math.round((1 - Math.sqrt(1 - dx * dx)) * -3); y < H - 10; y++) p.set(x, y, x < W / 3 ? WOOD[2] : WOOD[1]); }
+      cyl(cx, H - 10, H - 3, 2, WOOD, 0.8); cyl(cx, H - 2, H - 1, 7, WOOD, 1.2);
+      plate(cx - 3, 6, '#c86a3a'); mug(cx + 7, 9); plate(cx - 12, 11, '#7ab04a');
+      return true;
+    }
+    case 'bunk_bed': {
+      for (const lx of [0, W - 2]) for (let y = 0; y < H; y++) { p.set(lx, y, WOOD[3]); p.set(lx + 1, y, WOOD[1]); }
+      for (const by of [3, H - 16]) {
+        top(2, by, W - 4, 2, WOOD, false);
+        for (let y = by + 2; y < by + 10; y++) for (let x = 2; x < W - 2; x++) p.set(x, y, y < by + 5 ? (y === by + 2 ? '#ffffff' : '#ece6d6') : (x + y) % 5 === 0 ? CLOTH_B[2] : y === by + 5 ? CLOTH_B[4] : CLOTH_B[3]);
+        front(2, by + 10, W - 4, 3, WOOD);
+      }
+      for (let y = 6; y < H - 16; y += 3) { p.set(W - 5, y, WOOD[4]); p.set(W - 4, y, WOOD[2]); }
+      return true;
+    }
+    case 'throne':
+      for (let y = 0; y < 14; y++) for (let x = 2; x < 14; x++) p.set(x, y, y < 2 ? GOLD[4] : x < 4 || x > 11 ? GOLD[2] : (x + y) % 6 === 0 ? VELVET[1] : mix(VELVET[3], VELVET[2], y / 14));
+      for (const sx of [2, 7, 12]) { p.rect(sx, 0, 2, 2, GOLD[4]); p.set(sx, -1, GOLD[3]); }
+      p.rect(7, 5, 2, 3, '#e83a4a'); p.set(7, 5, '#ff9aa0');
+      top(1, 13, 14, 5, VELVET, false); front(1, 18, 14, 3, GOLD);
+      for (const ax of [0, 13]) { top(ax, 9, 3, 2, GOLD, false); front(ax, 11, 3, 10, GOLD); }
+      leg(1, 21, H, GOLD); leg(13, 21, H, GOLD);
+      return true;
+    case 'streetlamp':
+    case 'stone_lantern':
+      if (id === 'streetlamp') {
+        cyl(8, H - 4, H - 1, 4, IRON, 1.3);
+        for (let y = 8; y < H - 4; y++) { p.set(7, y, IRON[3]); p.set(8, y, IRON[1]); }
+        top(3, 0, 10, 2, IRON, false);
+        for (let y = 2; y < 8; y++) for (let x = 4; x < 12; x++) p.set(x, y, x === 4 || x === 11 ? IRON[1] : y < 4 ? '#fffbe0' : '#ffe890');
+        p.rect(5, 8, 6, 1, IRON[2]);
+      } else {
+        top(3, H - 4, 10, 2, STONE, false); front(4, H - 2, 8, 2, STONE);
+        for (let y = H - 10; y < H - 4; y++) { p.set(6, y, STONE[3]); p.set(7, y, STONE[2]); p.set(8, y, STONE[2]); p.set(9, y, STONE[1]); }
+        top(2, H - 13, 12, 2, STONE, false);
+        for (let y = H - 11; y < H - 9; y++) for (let x = 4; x < 12; x++) p.set(x, y, x === 4 || x === 11 ? STONE[1] : '#ffe890');
+        // 宝塔式的石顶：翘角的宽檐，顶上一颗宝珠
+        for (let y = H - 18; y < H - 13; y++) { const half = 3 + (y - (H - 18)) * 1.4; for (let x = Math.ceil(8 - half); x < 8 + half; x++) p.set(x, y, y === H - 14 ? STONE[1] : x < 8 ? STONE[4] : STONE[2]); }
+        p.set(1, H - 15, STONE[3]); p.set(14, H - 15, STONE[2]);
+        p.rect(7, H - 21, 2, 3, STONE[3]); p.set(7, H - 21, STONE[4]);
+      }
+      return true;
+    case 'compost':
+      top(1, H - 13, 14, 3, WOOD, false); front(1, H - 10, 14, 10, WOOD);
+      for (let y = H - 9; y < H; y += 3) for (let x = 2; x < 14; x++) p.set(x, y, WOOD[0]);
+      for (let x = 3; x < 13; x++) { p.set(x, H - 12, phash(x, 1, 33) < 0.5 ? LEAF[2] : '#5a3e22'); if (x % 3 === 0) p.set(x, H - 13, LEAF[3]); if (x % 4 === 1) p.set(x, H - 14, '#c88a3a'); }
+      return true;
+    // ───── 10-27 新家具 ─────
+    case 'cupboard': {
+      const { rh, y0 } = shelfBox(0, 0, W, H - 8, WOOD, 2);
+      for (let r = 0; r < 2; r++) for (let x = 3; x < W - 4; x += 5) { const yb = y0 + r * rh + rh - 3; for (let j = 0; j < 5; j++) p.set(x + 2, yb - j, j === 4 ? '#ffffff' : '#e8e2d4'); p.set(x + 1, yb - 1, '#c8c0b0'); p.set(x + 3, yb - 1, '#c8c0b0'); p.set(x + 2, yb - 2, '#3a6ab0'); }
+      front(0, H - 8, W, 8, WOOD); panel(2, H - 7, 13, 6, WOOD); panel(17, H - 7, 13, 6, WOOD);
+      return true;
+    }
+    case 'wine_rack': {
+      top(0, 0, W, 3, DARKWOOD, false); front(0, 3, W, H - 3, DARKWOOD);
+      for (let y = 5; y < H - 3; y += 5) for (let x = 2; x < W - 3; x += 5) {
+        for (let j = 0; j < 4; j++) for (let i = 0; i < 4; i++) p.set(x + i, y + j, '#140a08');
+        const c = phash(x, y, 98) < 0.5 ? '#6a1420' : '#2a4a1a';
+        p.rect(x + 1, y + 1, 2, 2, c); p.set(x + 1, y + 1, mix(c, '#ffffff', 0.5));
+      }
+      return true;
+    }
+    case 'coffee_table':
+      top(1, H - 12, W - 2, 6, DARKWOOD); front(1, H - 6, W - 2, 2, DARKWOOD);
+      leg(2, H - 4, H, DARKWOOD); leg(W - 4, H - 4, H, DARKWOOD);
+      p.rect(5, H - 11, 7, 4, '#3a6ab0'); p.rect(5, H - 11, 7, 1, '#7ab0e8'); mug(19, H - 12); p.rect(14, H - 10, 3, 2, '#e8c050');
+      return true;
+    case 'canopy_bed': {
+      // 四柱帐床：四根柱子顶着帐顶，两边垂着帘子
+      for (const lx of [0, W - 2]) for (let y = 0; y < H; y++) { p.set(lx, y, WOOD[3]); p.set(lx + 1, y, WOOD[1]); }
+      top(0, 0, W, 4, VELVET, false);
+      for (let x = 0; x < W; x += 3) p.set(x, 4, VELVET[4]);
+      for (const cxx of [2, W - 6]) for (let y = 5; y < H - 10; y++) for (let i = 0; i < 4; i++) p.set(cxx + i, y, (i + Math.floor(y / 3)) % 3 === 0 ? VELVET[1] : i === 0 ? VELVET[3] : VELVET[2]);
+      for (let y = 10; y < H - 5; y++) for (let x = 6; x < W - 6; x++) p.set(x, y, y < 16 ? (y === 10 ? '#ffffff' : '#ece6d6') : y === 16 ? GOLD[3] : (x + y) % 7 === 0 ? VELVET[2] : VELVET[3]);
+      for (const px of [8, cx + 1]) for (let y = 11; y < 15; y++) for (let x = px; x < px + 8; x++) p.set(x, y, y === 11 ? '#ffffff' : '#e8e2d4');
+      front(0, H - 5, W, 4, WOOD);
+      return true;
+    }
+    case 'bar_counter':
+      top(0, 4, W, 6, DARKWOOD); front(0, 10, W, H - 10, WOOD);
+      for (let x = 2; x < W - 2; x += 6) for (let y = 12; y < H - 2; y++) p.set(x, y, WOOD[1]);
+      for (let x = 0; x < W; x++) p.set(x, H - 3, GOLD[2]);
+      for (const bx of [6, 14, 34]) { p.rect(bx, 0, 2, 6, '#3a6a2a'); p.set(bx, 0, '#8ac870'); p.rect(bx, -1, 2, 1, '#8a5a2a'); }
+      mug(22, 4); mug(28, 5);
+      return true;
+    case 'bar_stool':
+      cyl(8, H - 11, H - 9, 5, CLOTH_R, 2);
+      for (let y = H - 8; y < H; y++) { p.set(7, y, IRON[3]); p.set(8, y, IRON[1]); }
+      cyl(8, H - 2, H - 1, 4, IRON, 1);
+      for (let x = 5; x < 12; x++) p.set(x, H - 5, IRON[2]);
+      return true;
+    case 'bookshelf_low': {
+      const { rh, y0 } = shelfBox(0, 4, W, H - 4, WOOD, 2);
+      for (let r = 0; r < 2; r++) books(3, W - 3, y0 + r * rh + rh - 2, rh - 3, r + 20);
+      p.rect(4, 0, 4, 4, '#c8643a'); p.blob(6, 0, 3, 2, LEAF, 12); p.rect(20, 1, 6, 3, '#e8c050'); p.set(22, 0, '#f4ead0');
+      return true;
+    }
+    case 'grand_piano': {
+      const K = ['#08080c', '#14141a', '#22222a', '#3a3a46', '#5a5a6a'];
+      // 三角钢琴：掀开的琴盖，琴身弧形，前面一排键
+      for (let y = 0; y < H - 12; y++) for (let x = 0; x < W; x++) {
+        const k = y / (H - 12);
+        const right = W - 2 - Math.round(Math.sin(k * Math.PI * 0.5) * 8);
+        if (x < 1 || x > right) continue;
+        p.set(x, y, y < 2 ? K[4] : x < 3 ? K[3] : (x + y) % 11 === 0 ? K[3] : K[1]);
+      }
+      p.line(2, 2, W - 6, 10, K[4]); p.line(2, 3, W - 6, 11, K[2]);
+      for (let j = 0; j < 4; j++) for (let i = 1; i < W - 1; i++) p.set(i, H - 12 + j, j === 3 ? K[0] : i % 3 === 0 && j < 2 ? '#14141a' : j === 0 ? '#ffffff' : '#e8e4dc');
+      front(1, H - 8, W - 2, 3, K);
+      leg(2, H - 5, H, K); leg(W - 4, H - 5, H, K); leg(cx, H - 5, H, K);
+      p.rect(cx - 2, 6, 4, 3, '#f4ead0');
+      return true;
+    }
+    case 'harp':
+      cyl(8, H - 3, H - 1, 5, GOLD, 1.3);
+      for (let y = 1; y < H - 3; y++) { p.set(2 + Math.round((y / H) * 2), y, GOLD[3]); p.set(3 + Math.round((y / H) * 2), y, GOLD[1]); }
+      for (let x = 3; x < 14; x++) p.set(x, 1 + Math.round(Math.sin(((x - 3) / 10) * Math.PI) * -1) + Math.round((x - 3) * 0.6), GOLD[4]);
+      for (let x = 5; x < 13; x += 2) for (let y = 3 + Math.round((x - 3) * 0.6); y < H - 4; y++) p.set(x, y, '#f4ecd8');
+      for (let y = 6; y < H - 3; y++) { p.set(13, y, GOLD[2]); p.set(14, y, GOLD[0]); }
+      return true;
+    case 'sewing_table':
+      top(0, H - 16, W, 7, WOOD); front(0, H - 9, W, 3, WOOD);
+      leg(1, H - 6, H, IRON); leg(W - 3, H - 6, H, IRON);
+      for (let x = 3; x < W - 3; x += 2) p.set(x, H - 3, IRON[2]);
+      // 缝纫机、线轴、一块布
+      p.rect(4, H - 22, 12, 4, IRON[1]); p.rect(4, H - 22, 12, 1, IRON[3]); p.rect(13, H - 18, 3, 4, IRON[1]); p.rect(5, H - 18, 2, 3, IRON[2]); p.set(14, H - 21, GOLD[3]);
+      p.rect(19, H - 15, 8, 5, CLOTH_R[3]); p.rect(19, H - 15, 8, 1, CLOTH_R[4]);
+      for (const [tx, c] of [[20, '#3a6ab0'], [24, '#e8c050'], [27, '#3a9a5a']] as [number, string][]) { p.rect(tx, H - 19, 2, 3, c); p.set(tx, H - 20, WOOD[3]); }
+      return true;
+    case 'folding_screen':
+      // 三扇屏风，折起来一扇亮一扇暗，上面画着樱花
+      for (let k = 0; k < 3; k++) {
+        const x0 = 1 + k * 10;
+        const lit = k % 2 === 0;
+        for (let y = 2; y < H - 2; y++) for (let x = x0; x < x0 + 10; x++) {
+          const edge = x === x0 || x === x0 + 9 || y === 2 || y === H - 3;
+          p.set(x, y, edge ? DARKWOOD[lit ? 3 : 1] : lit ? '#f4ecd8' : '#d8ccb0');
+        }
+        for (let i = 0; i < 4; i++) { const bx = x0 + 2 + Math.floor(phash(k, i, 99) * 6), byy = 6 + Math.floor(phash(i, k, 99) * (H - 14)); p.set(bx, byy, SAKURA[2]); p.set(bx + 1, byy, SAKURA[3]); p.set(bx, byy + 1, SAKURA[1]); }
+        p.line(x0 + 1, H - 6, x0 + 8, H - 10, '#5a3a2a');
+      }
+      for (const lx of [2, W - 4]) p.rect(lx, H - 2, 2, 2, DARKWOOD[1]);
+      return true;
+    case 'potted_tree':
+      cyl(8, H - 7, H - 1, 5, ['#3a3a42', '#5a5a64', '#7a7a86', '#9a9aa6', '#c0c0ca'], 1.6, '#4a3020');
+      p.trunk(8, H - 16, H - 7, 2, WOOD);
+      p.blob(8, H - 22, 6.5, 6.5, PINE, 101);
+      p.blob(4.5, H - 16, 3, 2.5, PINE, 102);
+      p.blob(11.5, H - 17, 3, 2.5, PINE, 103);
+      return true;
+    case 'wash_basin':
+      leg(3, H - 9, H, WOOD); leg(11, H - 9, H, WOOD);
+      for (let x = 4; x < 12; x++) p.set(x, H - 4, WOOD[2]);
+      cyl(8, H - 12, H - 9, 6.5, ['#9aa4b0', '#c0c8d2', '#e0e6ee', '#f4f8fc', '#ffffff'], 2.4, WATER[3]);
+      p.rect(7, H - 18, 3, 4, '#e0e6ee'); p.set(7, H - 18, '#ffffff'); p.rect(4, H - 16, 3, 2, '#f4f0e6');
+      p.set(6, H - 12, '#ffffff');
+      return true;
+    case 'rocking_chair':
+      for (let y = 1; y < 12; y++) for (const lx of [3, 11]) { p.set(lx, y, WOOD[3]); p.set(lx + 1, y, WOOD[1]); }
+      for (let x = 3; x < 13; x++) { p.set(x, 1, WOOD[4]); p.set(x, 2, WOOD[2]); }
+      for (let y = 3; y < 11; y++) for (let x = 5; x < 11; x++) p.set(x, y, (x + y) % 4 === 0 ? CLOTH_G[1] : CLOTH_G[2]);
+      top(2, 10, 12, 4, WOOD); front(2, 14, 12, 2, WOOD);
+      leg(3, 16, H - 2, WOOD); leg(11, 16, H - 2, WOOD);
+      for (let x = 0; x < 16; x++) { const y = H - 2 + Math.round(((x - 7.5) / 8) ** 2 * -2.5); p.set(x, y, WOOD[3]); p.set(x, y + 1, WOOD[1]); }
+      return true;
+    case 'chess_table':
+      top(1, H - 15, 14, 9, WOOD, false);
+      for (let y = 0; y < 8; y++) for (let x = 0; x < 12; x++) p.set(2 + x, H - 14 + y, (Math.floor(x / 1.5) + y) % 2 ? '#2a2420' : '#ece4d0');
+      front(1, H - 6, 14, 2, WOOD); cyl(8, H - 4, H - 1, 2, WOOD, 0.8);
+      for (const [px, py, c] of [[4, H - 16, '#ffffff'], [6, H - 17, '#ffffff'], [10, H - 16, '#1a1a1a'], [12, H - 15, '#1a1a1a']] as [number, number, string][]) { p.rect(px, py, 1, 3, c); p.set(px, py - 1, c); }
+      return true;
+    case 'bird_cage':
+      cyl(8, H - 3, H - 1, 4, WOOD, 1.2);
+      for (let y = H - 9; y < H - 3; y++) p.set(8, y, GOLD[2]);
+      for (let y = 2; y < H - 9; y++) for (let x = 3; x < 14; x++) {
+        const dome = y < 6 ? Math.abs(x - 8) > (y - 2) * 1.6 + 1 : false;
+        if (dome) continue;
+        if ((x - 3) % 3 === 0 || y === H - 10 || y === 6) p.set(x, y, x < 7 ? GOLD[4] : GOLD[2]);
+      }
+      p.set(8, 0, GOLD[3]); p.set(8, 1, GOLD[3]);
+      p.rect(7, 10, 3, 3, '#e8c040'); p.set(9, 10, '#f08a2a'); p.set(7, 10, '#141010'); p.line(4, 14, 12, 14, WOOD[2]);
+      return true;
+    case 'coat_rack':
+      cyl(8, H - 2, H - 1, 4, DARKWOOD, 1.2);
+      for (let y = 2; y < H - 2; y++) { p.set(7, y, DARKWOOD[3]); p.set(8, y, DARKWOOD[1]); }
+      for (const [dx, dy] of [[-4, 4], [4, 3], [-3, 7], [3, 8]]) p.line(8, dy + 2, 8 + dx, dy, DARKWOOD[2]);
+      // 挂着一件斗篷和一顶帽子
+      for (let y = 5; y < H - 8; y++) { const half = 1 + (y - 5) * 0.35; for (let x = Math.ceil(5 - half); x < 5 + half; x++) p.set(x, y, x < 4 ? CLOTH_B[3] : CLOTH_B[2]); }
+      p.rect(9, 1, 6, 2, '#6a3a1a'); p.rect(10, -1, 4, 2, '#8a5a2a'); p.rect(10, 0, 4, 1, '#c84a3a');
+      return true;
     case 'bed':
     case 'bed_double': {
       const cloth = id === 'bed' ? ['#5a1a1e', '#8a2a2e', '#b03a3e', '#d05a5a', '#ee9a90'] : ['#1a264e', '#2a3a7a', '#3a5aa8', '#5a7ac8', '#9ab4ec'];
