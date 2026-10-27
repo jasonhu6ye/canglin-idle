@@ -1,0 +1,60 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>苍岭放置 宣传长图</title>
+<style>
+  :root { --gold: #ffd25a; --gold2: #e8862a; --ink: #f2ead6; --dim: #b9c0d8; --bg: #0c0e1e; --card: #161a32; --line: #3a3466; }
+  html, body { margin: 0; background: var(--bg); }
+  body { width: 1080px; color: var(--ink); font-family: "WenQuanYi Zen Hei", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  body.en { font-family: "WenQuanYi Zen Hei", "Segoe UI", Arial, sans-serif; }
+  img, canvas { image-rendering: pixelated; display: block; }
+  .hero { position: relative; }
+  .hero .title { position: absolute; left: 0; right: 0; top: 70px; text-align: center; }
+  .t1 { font-size: 150px; font-weight: bold; line-height: 1; letter-spacing: 8px;
+    background: linear-gradient(#fff6c8, #ffd25a 50%, #e8862a); -webkit-background-clip: text; color: transparent;
+    -webkit-text-stroke: 3px #2a1006; filter: drop-shadow(8px 8px 0 #3a1408); }
+  body.en .t1 { font-size: 112px; letter-spacing: 2px; }
+  .t2 { margin-top: 26px; display: inline-block; padding: 10px 30px; font-size: 38px; font-weight: bold; color: #0c0e1e; background: var(--gold); box-shadow: 6px 6px 0 #6a3410; letter-spacing: 2px; }
+  .t3 { margin-top: 22px; font-size: 30px; color: #fff; text-shadow: 0 3px 0 #000, 0 0 12px #000; }
+  section { padding: 70px 60px 30px; }
+  h2 { margin: 0 0 8px; font-size: 54px; color: var(--gold); text-shadow: 5px 5px 0 #3a1408; display: flex; align-items: center; gap: 18px; }
+  h2::before { content: ''; width: 18px; height: 54px; background: var(--gold); box-shadow: 5px 5px 0 #3a1408; }
+  .lead { font-size: 29px; line-height: 1.75; color: var(--ink); margin: 18px 0 26px; }
+  .lead b { color: var(--gold); }
+  .sub { font-size: 25px; line-height: 1.65; color: var(--dim); }
+  .card { background: var(--card); border: 4px solid var(--line); box-shadow: 8px 8px 0 #05060e; padding: 22px; }
+  .grid { display: grid; gap: 18px; }
+  .g2 { grid-template-columns: 1fr 1fr; } .g3 { grid-template-columns: 1fr 1fr 1fr; } .g4 { grid-template-columns: repeat(4, 1fr); } .g5 { grid-template-columns: repeat(5, 1fr); }
+  .tile { background: var(--card); border: 4px solid var(--line); box-shadow: 6px 6px 0 #05060e; text-align: center; padding: 10px 8px 14px; }
+  .tile canvas, .tile img { margin: 0 auto 10px; max-width: 100%; height: auto !important; }
+  .tile .n { font-size: 27px; font-weight: bold; color: var(--gold); }
+  .tile .d { font-size: 21px; color: var(--dim); margin-top: 6px; line-height: 1.45; }
+  .badges { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; }
+  .badge { background: linear-gradient(#22264a, #161a32); border: 4px solid var(--gold); padding: 22px 16px; text-align: center; box-shadow: 6px 6px 0 #05060e; }
+  .badge .k { font-size: 31px; font-weight: bold; color: var(--gold); }
+  .badge .v { font-size: 22px; color: var(--dim); margin-top: 10px; line-height: 1.5; }
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+  .chip { font-size: 23px; padding: 6px 14px; border: 3px solid var(--line); background: #10132a; }
+  .chip.g { border-color: #4a8a4a; } .chip.p { border-color: #8a6a2a; } .chip.c { border-color: #8a3a3a; }
+  .row { display: flex; justify-content: center; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+  .shot { border: 6px solid var(--line); box-shadow: 10px 10px 0 #05060e; width: 100%; }
+  .stat { display: flex; gap: 18px; margin: 22px 0; }
+  .stat div { flex: 1; text-align: center; background: #10132a; border: 3px solid var(--line); padding: 14px 6px; }
+  .stat b { display: block; font-size: 46px; color: var(--gold); }
+  .stat span { font-size: 21px; color: var(--dim); }
+  .q { display: inline-block; width: 22px; height: 22px; vertical-align: -3px; margin-right: 6px; }
+  .tl { position: relative; padding-left: 70px; }
+  .tl::before { content: ''; position: absolute; left: 22px; top: 10px; bottom: 10px; width: 8px; background: repeating-linear-gradient(var(--gold) 0 16px, transparent 16px 26px); }
+  .step { position: relative; margin-bottom: 56px; }
+  .step::before { content: attr(data-n); position: absolute; left: -70px; top: 0; width: 52px; height: 52px; background: var(--gold); color: #0c0e1e; font-size: 30px; font-weight: bold; text-align: center; line-height: 52px; box-shadow: 4px 4px 0 #3a1408; }
+  .step h3 { margin: 6px 0 4px; font-size: 38px; color: #fff; }
+  .step .size { font-size: 24px; color: var(--gold); margin-bottom: 14px; }
+  .step img { width: 100%; border: 6px solid var(--line); box-shadow: 10px 10px 0 #05060e; margin-top: 18px; image-rendering: auto; }
+  .grow { display: flex; align-items: flex-end; gap: 12px; margin: 26px 0 10px; height: 230px; }
+  .grow div { background: var(--gold); box-shadow: 5px 5px 0 #3a1408; position: relative; }
+  .grow div span { position: absolute; bottom: -40px; left: 50%; transform: translateX(-50%); font-size: 22px; color: var(--dim); white-space: nowrap; }
+  .end { position: relative; margin-top: 50px; }
+  .end .box { position: absolute; left: 0; right: 0; top: 70px; text-align: center; }
+  .end .big { display: inline-block; font-size: 64px; font-weight: bold; color: #fff; background: rgba(10,14,30,0.88); border: 6px solid var(--gold); padding: 24px 44px; box-shadow: 10px 10px 0 #05060e; }
+  .end .big small { display: block; font-size: 30px; color: var(--gold); margin-top: 12px; font-weight: normal; }
+  .end .tag { margin-top: 24px; font-size: 28px; color: #fff; text-shadow: 0 3px 0 #000, 0 0 10px #000; }
+</style></head>
+<body><div id="app"></div><script type="module" src="./long.ts"></script></body></html>
