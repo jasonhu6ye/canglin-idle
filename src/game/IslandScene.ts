@@ -157,6 +157,24 @@ export class IslandScene extends Phaser.Scene {
     if (!this.textures.exists(key)) this.textures.addCanvas(key, paintThing(id, d.w, d.h));
     return key;
   }
+  /** 软一点的椭圆影子：中间深、边上浅（像素画的两层透明度） */
+  private shadowTex() {
+    const key = 'home-shadow';
+    if (!this.textures.exists(key)) {
+      const c = document.createElement('canvas');
+      c.width = 24;
+      c.height = 8;
+      const g = c.getContext('2d')!;
+      for (let y = 0; y < 8; y++) for (let x = 0; x < 24; x++) {
+        const d = Math.hypot((x - 11.5) / 12, (y - 3.5) / 4);
+        if (d > 1) continue;
+        g.fillStyle = d > 0.7 ? 'rgba(10,6,20,0.16)' : 'rgba(10,6,20,0.3)';
+        g.fillRect(x, y, 1, 1);
+      }
+      this.textures.addCanvas(key, c);
+    }
+    return key;
+  }
   /** 战利品摆件：石座上放物品图标（图标是界面那边画好的 data URL） */
   private trophyTex(itemId: string, url: string | undefined, then: () => void) {
     const key = `htr-${itemId}`;
@@ -319,6 +337,11 @@ export class IslandScene extends Phaser.Scene {
     const bx = t.x * T;
     const by = (t.y + d.h) * T;
     let img: Phaser.GameObjects.Image;
+    // 落地的影子（用户 10-27：摆件要像立在地上，不像贴上去的）
+    if (!d.floor && !d.plot && !d.wall && UP[t.id] !== 0) {
+      const sw = Math.max(10, d.w * T - 2);
+      this.objs.push(this.add.image(bx + (d.w * T) / 2 + 1, by - 1, this.shadowTex()).setDisplaySize(sw, Math.min(10, 4 + d.w * 2)).setDepth(-2));
+    }
     if (d.wall) {
       const same = (x: number, y: number) => walls.has(k(x, y));
       const mask = (same(t.x, t.y - 1) ? 1 : 0) | (same(t.x + 1, t.y) ? 2 : 0) | (same(t.x, t.y + 1) ? 4 : 0) | (same(t.x - 1, t.y) ? 8 : 0);

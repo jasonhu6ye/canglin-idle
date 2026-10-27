@@ -3,7 +3,7 @@ import { store } from '../store';
 import { useEffect, useRef } from 'react';
 import { DPR, setDpr } from '../game/dpr';
 import { dprFor, gfxLevel, gfxTick, onGfx } from '../game/gfx';
-import { BOSS_BANNER, GATE_CLICK, GATE_OPENED, MapScene, NODE_CLICK, PLAYER_CLICK, REGION_CHANGE } from '../game/MapScene';
+import { BOSS_BANNER, GATE_CLICK, GATE_OPENED, MANUAL_MOVE, MapScene, NODE_CLICK, PLAYER_CLICK, REGION_CHANGE } from '../game/MapScene';
 import { HOME_CLICK, HOME_MSG, HOME_TOOL, IslandScene } from '../game/IslandScene';
 import { DG_CHEST, DG_MSG, DungeonScene } from '../game/DungeonScene';
 
@@ -53,6 +53,7 @@ export function GameCanvas({ onNodeClick }: { onNodeClick: (nodeId: string) => v
     const g = game;
     g.events.on(REGION_CHANGE, relay(REGION_CHANGE));
     g.events.on(BOSS_BANNER, relay(BOSS_BANNER));
+    g.events.on(MANUAL_MOVE, relay(MANUAL_MOVE));
     g.events.on(PLAYER_CLICK, relay(PLAYER_CLICK));
     g.events.on(HOME_MSG, relay(HOME_MSG));
     g.events.on(HOME_TOOL, relay(HOME_TOOL));

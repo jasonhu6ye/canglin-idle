@@ -15,6 +15,10 @@ import { syncSocial } from './social';
 const OWNER_KEY = 'canglin-save-owner';
 const SYNCED_KEY = 'canglin-save-synced';
 const PUSH_EVERY_MS = 60_000;
+/** 传失败了多久后重试 */
+const RETRY_MS = 15_000;
+/** 别的设备这么久没再传存档，就当它已经不玩了：这边直接读它的存档接着玩（不用手动点） */
+const OTHER_IDLE_MS = 3 * 60_000;
 
 export type Phase =
   | 'loading'
@@ -69,13 +73,23 @@ export async function pushNow() {
     // 别的设备（或别的浏览器）在这之后传过存档：这边停下，别拿旧进度盖掉它（用户 10-25 离线收益丢了）
     const cloud = await online.cloudHead();
     if (cloud && cloud.device && cloud.device !== deviceId() && cloud.tick > Number(ls.get(SYNCED_KEY) ?? 0) + 1000) {
+      // 10-27：手机放在后台一晚、期间在电脑上玩过，回来时以前会停在「别的设备在玩」，
+      // 这边刚算出来的离线收益也作废，看起来像离线没收益。别的设备已经停了一阵就直接读它的存档，
+      // 刷新后从它最后的进度算离线收益
+      if (Date.now() - cloud.tick > OTHER_IDLE_MS && document.visibilityState === 'visible') {
+        const save = await online.pullSave();
+        if (save) return adoptSave(save, me.id);
+      }
       store.stop('device');
       return;
     }
     const s = store.state;
     await online.pushSave(s, deviceId());
     ls.set(SYNCED_KEY, String(s.lastTick));
-  } catch { /* 连不上就下次再传 */ }
+  } catch {
+    // 连不上：过一会儿就重试，不用等满一分钟
+    lastPush = Date.now() - PUSH_EVERY_MS + RETRY_MS;
+  }
 }
 
 /** 换成这份存档（会刷新页面） */

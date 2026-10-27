@@ -1186,3 +1186,18 @@ describe('野外组队同打一只怪（10-27）', () => {
     expect(state.combat?.crew).toBeUndefined();
   });
 });
+
+describe('离开期间的收获合并（10-27）', () => {
+  it('物品、击杀、经验相加，同一技能升级只留最高等级', async () => {
+    const { mergeSummary, emptySummary } = await import('./sim');
+    const a = { ...emptySummary(), elapsedMs: 1000, items: { stone: 3 }, kills: { rabbit: 1 }, xp: { mining: 10 }, levelUps: [{ skill: 'mining' as const, level: 5 }] };
+    const b = { ...emptySummary(), elapsedMs: 2000, items: { stone: 2, copper_ore: 1 }, kills: { rabbit: 2 }, xp: { mining: 5 }, levelUps: [{ skill: 'mining' as const, level: 6 }], deaths: 1 };
+    const m = mergeSummary(a, b);
+    expect(m.elapsedMs).toBe(3000);
+    expect(m.items).toEqual({ stone: 5, copper_ore: 1 });
+    expect(m.kills).toEqual({ rabbit: 3 });
+    expect(m.xp).toEqual({ mining: 15 });
+    expect(m.levelUps).toEqual([{ skill: 'mining', level: 6 }]);
+    expect(m.deaths).toBe(1);
+  });
+});
