@@ -46,7 +46,15 @@ export interface Guild {
   takeMin: number;
   /** 公会贡献值：成员兑换、交任务时和公会经验一起涨，会长和副会长花（开私人仓库） */
   points: number;
+  /** 公会科技等级（10-27） */
+  tech: Partial<Record<import('../core/guild').TechId, number>>;
+  /** 普通成员每天最多从公共仓库取多少金币价值的东西（0 = 不限） */
+  takeDay: number;
 }
+/** 公会动态（10-27）：kind = join/leave/role/level/tech/vault/task */
+export interface GuildEvent { kind: string; name: string; detail: string; at: number }
+/** 自己今天兑换了多少贡献、从公共仓库取了多少金币价值、签到没有 */
+export interface GuildDay { exchanged: number; took: number; checkedIn: boolean }
 /** 私人仓库（vault 1-3）：allow 是能进的成员，officers = 副会长都能进；会长总能进 */
 export interface GuildVault { idx: number; name: string; allow: string[]; officers: boolean }
 export interface GuildMember {
@@ -59,9 +67,8 @@ export interface GuildMember {
   week?: string;
   /** 累计贡献 */
   contrib: number;
-  /** 今天（UTC）兑换了多少贡献、是哪天 */
-  donated?: number;
-  donatedDay?: string;
+  /** 在公会商店花掉的贡献（可用 = contrib - spent） */
+  spent: number;
   lastSeen: number;
 }
 /** 公会仓库流水：qty 正数存入、负数取出 */
@@ -216,8 +223,16 @@ export interface OnlineApi {
   ensureGuildTasks(tasks: import('../core/guild').TaskSpec[]): Promise<void>;
   /** 上交物品：本地先扣，服务器记账，返回实际收下的数量（多的退回） */
   contribute(taskId: string, qty: number): Promise<number>;
-  /** 物品兑换贡献：value 是单价（物品价值），本地先扣，返回实际收下的数量（每天有上限） */
-  exchangeItems(item: string, qty: number, value: number): Promise<number>;
+  /** 物品兑换贡献：价格按服务器上的价格表，本地先扣，返回实际收下的数量（每天有上限） */
+  exchangeItems(item: string, qty: number): Promise<number>;
+  /** 10-27：今天的兑换/取物/签到、每日签到（返回得到的贡献）、公会商店（返回买到的数量）、升级科技（返回新等级）、公会动态 */
+  guildDay(): Promise<GuildDay>;
+  guildCheckin(): Promise<number>;
+  buyGuildItem(item: string, qty: number): Promise<number>;
+  upgradeTech(kind: string): Promise<number>;
+  guildEvents(): Promise<GuildEvent[]>;
+  /** 会长：普通成员每天从公共仓库取物的价值上限 */
+  setTakeDay(value: number): Promise<void>;
   /**
    * 公会仓库（10-26）：vault 0 = 公共仓库，1-3 = 私人仓库。返回按显示顺序排好的 [物品 id, 数量]；
    * 存取记录（自己能进的仓库的）、存（本地先扣）、取（返回实际取到的）、整理（按给的顺序重排）

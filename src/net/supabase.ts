@@ -1,6 +1,6 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js';
 import type { GameState, GmBuff } from '../core/types';
-import type { GmInput, GmMail, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
+import type { GmInput, GmMail, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildDay, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { levelSnapshot } from './api';
 import type { TaskSpec } from '../core/guild';
 import { fastOf, readFast, slowKey, withMove, type Fast } from './presenceSync';
@@ -11,7 +11,7 @@ import { tl } from '../i18n';
 type Row = Record<string, any>;
 const toGuild = (g: Row, members = 0): Guild => ({
   id: g.id, name: g.name, tag: g.tag, notice: g.notice, level: g.level, xp: Number(g.xp),
-  members, maxMembers: g.max_members, open: g.open, takeMin: g.take_min ?? 0, points: Number(g.points ?? 0),
+  members, maxMembers: g.max_members, open: g.open, takeMin: g.take_min ?? 0, points: Number(g.points ?? 0), tech: g.tech ?? {}, takeDay: g.take_day ?? 0,
 });
 const toRank = (r: Row): RankRow => ({
   rank: Number(r.rank), playerId: r.player_id, name: r.name, guildTag: r.guild_tag ?? undefined,
@@ -195,11 +195,11 @@ export class SupabaseApi implements OnlineApi {
   }
   async guildMembers(id: string): Promise<GuildMember[]> {
     const rows = ok(await this.sb.from('guild_members')
-      .select('player_id, role, weekly, week, contrib, donated, donated_day, profiles(name, last_seen, ranks(total))')
+      .select('player_id, role, weekly, week, contrib, spent, profiles(name, last_seen, ranks(total))')
       .eq('guild_id', id)) as Row[];
     return rows.map((m) => ({
       playerId: m.player_id, role: m.role, weekly: Number(m.weekly), week: m.week ?? undefined,
-      contrib: Number(m.contrib ?? 0), donated: Number(m.donated ?? 0), donatedDay: m.donated_day ?? undefined,
+      contrib: Number(m.contrib ?? 0), spent: Number(m.spent ?? 0),
       name: m.profiles?.name ?? '?', lastSeen: Date.parse(m.profiles?.last_seen ?? 0),
       totalLevel: m.profiles?.ranks?.total ?? 0,
     }));
@@ -213,7 +213,21 @@ export class SupabaseApi implements OnlineApi {
   }
   async ensureGuildTasks(tasks: TaskSpec[]) { ok(await this.sb.rpc('ensure_guild_tasks', { p_tasks: tasks })); }
   async contribute(taskId: string, qty: number) { return Number(ok(await this.sb.rpc('contribute', { p_task: taskId, p_qty: qty })) ?? 0); }
-  async exchangeItems(item: string, qty: number, value: number) { return Number(ok(await this.sb.rpc('exchange_items', { p_item: item, p_qty: qty, p_value: value })) ?? 0); }
+  async exchangeItems(item: string, qty: number) { return Number(ok(await this.sb.rpc('exchange_items', { p_item: item, p_qty: qty })) ?? 0); }
+  async guildDay(): Promise<GuildDay> {
+    const r = (ok(await this.sb.rpc('my_guild_day')) as Row[])[0];
+    return { exchanged: Number(r?.exchanged ?? 0), took: Number(r?.took ?? 0), checkedIn: !!r?.checked_in };
+  }
+  async guildCheckin() { return Number(ok(await this.sb.rpc('guild_checkin')) ?? 0); }
+  async buyGuildItem(item: string, qty: number) { return Number(ok(await this.sb.rpc('buy_guild_item', { p_item: item, p_qty: qty })) ?? 0); }
+  async upgradeTech(kind: string) { return Number(ok(await this.sb.rpc('upgrade_tech', { p_kind: kind })) ?? 0); }
+  async setTakeDay(value: number) { ok(await this.sb.rpc('set_take_day', { p_value: value })); }
+  async guildEvents(): Promise<GuildEvent[]> {
+    const gid = this.need().guildId;
+    if (!gid) return [];
+    const rows = ok(await this.sb.from('guild_events').select('kind, name, detail, at').eq('guild_id', gid).order('at', { ascending: false }).limit(100)) as Row[];
+    return rows.map((r) => ({ kind: r.kind, name: r.name, detail: r.detail, at: Date.parse(r.at) }));
+  }
   async guildBank(vault: number): Promise<[string, number][]> {
     const gid = this.need().guildId;
     if (!gid) return [];
