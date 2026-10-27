@@ -59,3 +59,16 @@ export function takeMateHits(key: string): number {
   if (n) mateHits.delete(key);
   return n;
 }
+
+/*
+ * 野外组队同打一只怪（用户 10-27）：和副本一样，队友打出的伤害也记到自己这边的怪身上，
+ * 怪的血量按正一起打的队友人数加厚（每人 +60%，伤害是叠加的，所以组队打得更快、更安全）。
+ * fieldCrew 由联机层每半秒更新；离线补算、隔了很久的大段结算一律按单人算。
+ */
+let field = 0;
+export function setFieldCrew(n: number) {
+  field = Math.max(0, Math.min(4, Math.floor(n)));
+}
+export const fieldCrew = () => field;
+/** 野外的怪按动作区分（同一个点的同一种怪） */
+export const fieldKey = (action: string) => `field:${action}`;

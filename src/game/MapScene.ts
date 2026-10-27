@@ -21,14 +21,17 @@ import { FIGHT, FIGHT_RANGE, fightWeapon, FRAME_H, FRAME_W, HERO_ANIMS, HERO_FEE
 import type { MonsterDef, RegionId, Summary } from '../core/types';
 import { store } from '../store';
 import { Ambience, D_FLOAT, D_GLOW, D_LABEL, D_PARTICLE, D_SMOKE } from './ambience';
-import { paintArrow, paintBolt, paintCrop, paintHit, paintSlash } from './fxArt';
+import { paintArrow, paintBolt, paintHit, paintSlash } from './fxArt';
+import { cropTex, glintTex, soilTex } from './farmArt';
 import { paintBuilding, paintCave, paintDot, paintGlow, paintProp, paintWindmillBlades, PROP_GLOW } from './art';
 import { DPR } from './dpr';
+import { fxScale, gfxLevel } from './gfx';
 import { paintResNode, resGlow, resOf, type ResKind } from './resArt';
 import { baseOf } from '../core/quality';
 import { NODE_MARKER, paintSprite, SPRITE_VARIANTS, SPRITES } from './sprites';
-import { OtherPlayers } from './others';
+import { MATE_COLORS, onFieldHit, OtherPlayers } from './others';
 import { online } from '../net';
+import type { FieldMateHit } from '../net/social';
 import { animateTileset, liquidIndex, paintTileset, T, TILESET, tileIndex, VARIANTS } from './tiles';
 import {
   BUILDINGS, CHUNK, FIELDS, findPath, GROUNDS, groundIndex, hash, isWalkable, LIQUIDS, propsInChunk, reachableNear, regionAt, SPAWN, standTile,
@@ -99,6 +102,8 @@ function trackSpot(monsterId: string, exact = exactTrack(monsterId)): { x: numbe
 export const REGION_CHANGE = 'region-change';
 /** 开打首领时在屏幕上打出名字 */
 export const BOSS_BANNER = 'boss-banner';
+/** 场景 → 界面：玩家自己点地图、按方向键走动了（跟随队长会断开） */
+export const MANUAL_MOVE = 'manual-move';
 
 /** 角色当前所在格子，世界地图要用 */
 export const playerPos = { x: SPAWN.x, y: SPAWN.y };
@@ -167,6 +172,7 @@ export class MapScene extends Phaser.Scene {
   private tilesetCanvas!: HTMLCanvasElement;
   private tilesetTex!: Phaser.Textures.CanvasTexture;
   private chunks = new Map<number, { destroy(): void }[]>();
+  private liquidSkip = 0;
   private glows: { img: Phaser.GameObjects.Image; phase: number; base: number }[] = [];
   private particles: Particle[] = [];
   private region: RegionId = 'town';
@@ -287,7 +293,17 @@ export class MapScene extends Phaser.Scene {
     this.unsub.push(() => this.game.events.off('waystone', onStone));
     this.time.addEvent({ delay: 300, loop: true, callback: () => this.checkStones() });
     // 空闲时一点点建步行距离图，建好以后寻路估时、比较走路和石碑都按真实绕路距离算
-    const nav = this.time.addEvent({ delay: 50, loop: true, callback: () => { if (warmNav(10)) { nav.remove(); store.emit(); } } });
+    // 放到浏览器空闲时做（画完一帧以后），每次只做几毫秒，不挤占游戏帧（10-27：以前在帧里每次做 10 毫秒，走路会一顿一顿）
+    let navDone = false;
+    type Idle = (cb: (d: { timeRemaining(): number }) => void, o?: { timeout: number }) => number;
+    const ric = (window as unknown as { requestIdleCallback?: Idle }).requestIdleCallback;
+    const navStep = (d?: { timeRemaining(): number }) => {
+      if (navDone) return;
+      if (warmNav(Math.min(8, Math.max(2, d ? d.timeRemaining() - 1 : 3)))) { navDone = true; store.emit(); return; }
+      if (ric) ric(navStep, { timeout: 500 }); else setTimeout(navStep, 40);
+    };
+    navStep();
+    this.unsub.push(() => { navDone = true; });
     const onTeleport = awake((id: string) => this.teleport(id));
     this.game.events.on('teleport', onTeleport);
     this.unsub.push(() => this.game.events.off('teleport', onTeleport));
@@ -319,19 +335,21 @@ export class MapScene extends Phaser.Scene {
     });
     this.game.events.on('walkto', onWalkTo);
     // 走到某个格子旁边（去找队友、队长召集；用户 10-25），远路一样顺路用石碑
-    const onWalkTile = awake((x: number, y: number) => {
+    // follow：跟随队长时传 true，目标格本身能站就站那（各人的站位格不一样，不挤到同一格），也不画点击标记
+    const onWalkTile = awake((x: number, y: number, follow = false) => {
       const at = { x: Math.round(x), y: Math.round(y) };
-      const dest = [{ x: at.x + 1, y: at.y }, { x: at.x - 1, y: at.y }, { x: at.x, y: at.y + 1 }, { x: at.x, y: at.y - 1 }, at]
-        .find((t) => isWalkable(t.x, t.y));
+      const near = [{ x: at.x + 1, y: at.y }, { x: at.x - 1, y: at.y }, { x: at.x, y: at.y + 1 }, { x: at.x, y: at.y - 1 }];
+      const dest = (follow ? [at, ...near] : [...near, at]).find((t) => isWalkable(t.x, t.y));
       if (!dest) return;
       const r: Route = planRoute(store.state.waystones, this.playerTile(), dest, moveSpeed(store.state));
       if (r.via) {
-        this.viaStones(r.via, () => this.moveTo(dest.x, dest.y));
+        this.viaStones(r.via, () => this.moveTo(dest.x, dest.y, !follow));
         return;
       }
-      this.moveTo(dest.x, dest.y);
+      this.moveTo(dest.x, dest.y, !follow);
     });
     this.game.events.on('walktile', onWalkTile);
+    this.unsub.push(onFieldHit((h) => this.mateHit(h)));
     this.unsub.push(() => this.game.events.off('walktile', onWalkTile));
     this.takeWalk = () => {
       const id = store.pendingWalk;
@@ -361,6 +379,8 @@ export class MapScene extends Phaser.Scene {
     // 水面和岩浆动画：重画图集里的液体格子
     this.time.addEvent({
       delay: 220, loop: true, callback: () => {
+        // 低画质：水面隔一拍才动一下（重画图集、上传贴图是这里最费的）
+        if (gfxLevel() === 0 && ++this.liquidSkip % 2) return;
         animateTileset(this.tilesetCanvas, ++this.frame);
         this.tilesetTex.refresh();
       },
@@ -516,78 +536,9 @@ export class MapScene extends Phaser.Scene {
   private plots: { id: string; field: string; x: number; y: number; soil: Phaser.GameObjects.Image; crop: Phaser.GameObjects.Image; glint: Phaser.GameObjects.Image; key: string }[] = [];
   private plotAt = new Map<number, string>();
 
-  private cropTex(crop: string, stage: number) {
-    const key = `crop-${crop}-${stage}`;
-    if (!this.textures.exists(key)) {
-      const c = CROPS.find((x) => x[0] === crop)!;
-      this.textures.addCanvas(key, paintCrop(c[3], c[5], stage));
-    }
-    return key;
-  }
-
-  /**
-   * 地块的土（用户 10-23：种上种子田要有变化）：
-   * 空地 = 平整的浅色松土，四角插着小木桩；种下 = 翻成一条条土垄，中间一个埋了种子的小土包；
-   * 浇过水 = 土色变深、垄沟里有一点水光
-   */
-  private soilTex(kind: 'empty' | 'dry' | 'wet') {
-    const key = `plot-${kind}`;
-    if (!this.textures.exists(key)) {
-      const c = document.createElement('canvas');
-      c.width = T;
-      c.height = T;
-      const g = c.getContext('2d')!;
-      const px = (x: number, y: number, col: string) => { g.fillStyle = col; g.fillRect(x, y, 1, 1); };
-      if (kind === 'empty') {
-        g.fillStyle = '#6e5232';
-        g.fillRect(1, 1, T - 2, T - 2);
-        g.fillStyle = '#86663e';
-        g.fillRect(2, 2, T - 4, T - 4);
-        // 松土的颗粒
-        for (let i = 0; i < 18; i++) px(2 + ((i * 7) % (T - 4)), 2 + ((i * 5 + (i >> 2)) % (T - 4)), i % 3 ? '#9a7848' : '#6a4e2e');
-        // 四角的小木桩
-        for (const [x, y] of [[1, 1], [T - 2, 1], [1, T - 2], [T - 2, T - 2]]) { px(x, y, '#c8a060'); px(x, y + (y < 8 ? 1 : -1), '#7a5a30'); }
-      } else {
-        const wet = kind === 'wet';
-        const [edge, base, ridge, lit] = wet ? ['#1e120a', '#352010', '#4a2c18', '#7a8ca8'] : ['#3a2616', '#563a20', '#6e4a2a', '#94693a'];
-        g.fillStyle = edge;
-        g.fillRect(1, 1, T - 2, T - 2);
-        g.fillStyle = base;
-        g.fillRect(2, 2, T - 4, T - 4);
-        // 三条土垄：上沿亮、下沿暗
-        for (const y of [4, 8, 12]) {
-          g.fillStyle = ridge;
-          g.fillRect(3, y, T - 6, 1);
-          g.fillStyle = edge;
-          g.fillRect(3, y + 1, T - 6, 1);
-          for (let x = 3 + (y % 3); x < T - 3; x += 4) px(x, y - 1, lit);
-        }
-        // 中间埋种子的小土包
-        g.fillStyle = wet ? '#4a2c18' : '#7a5430';
-        g.fillRect(6, 9, 4, 2);
-        g.fillRect(7, 8, 2, 1);
-        if (wet) { px(4, 13, '#a8c8e8'); px(11, 5, '#a8c8e8'); }
-      }
-      this.textures.addCanvas(key, c);
-    }
-    return key;
-  }
-
-  private glintTex() {
-    if (!this.textures.exists('plot-glint')) {
-      const c = document.createElement('canvas');
-      c.width = 5;
-      c.height = 5;
-      const g = c.getContext('2d')!;
-      g.fillStyle = '#fff3a0';
-      g.fillRect(2, 0, 1, 5);
-      g.fillRect(0, 2, 5, 1);
-      g.fillStyle = '#ffffff';
-      g.fillRect(2, 2, 1, 1);
-      this.textures.addCanvas('plot-glint', c);
-    }
-    return 'plot-glint';
-  }
+  private cropTex(crop: string, stage: number) { return cropTex(this, crop, stage); }
+  private soilTex(kind: 'empty' | 'dry' | 'wet') { return soilTex(this, kind); }
+  private glintTex() { return glintTex(this); }
 
   /** 田里：能种的地块按存档画；其余耕地上隔一格种一株装饰作物（这块田最低阶的作物，长势随机） */
   private buildFields() {
@@ -894,6 +845,7 @@ export class MapScene extends Phaser.Scene {
     if (time < this.nextKeyStep) return;
     this.nextKeyStep = time + 280;
     store.tracking = null;
+    this.game.events.emit(MANUAL_MOVE);
     const p = this.playerTile();
     for (const r of [4, 3, 2, 1]) {
       if (isWalkable(p.x + dx * r, p.y + dy * r)) { this.moveTo(p.x + dx * r, p.y + dy * r, false); return; }
@@ -917,6 +869,7 @@ export class MapScene extends Phaser.Scene {
     const d = Math.hypot(tx - me.x, ty - me.y);
     if (d < 1) return;
     store.tracking = null;
+    this.game.events.emit(MANUAL_MOVE);
     const k = Math.min(1, 5 / d);
     for (const f of [1, 0.6, 0.3]) {
       const x = Math.round(me.x + (tx - me.x) * k * f);
@@ -951,6 +904,11 @@ export class MapScene extends Phaser.Scene {
     if (px !== playerPos.x || py !== playerPos.y) this.fadeNearLabel(px, py);
     playerPos.x = px;
     playerPos.y = py;
+    // 野外组队（10-27）：一起打这只怪的人围着它站
+    const fa = this.currentAction ? ACTIONS[this.currentAction] : undefined;
+    this.others.fight = this.foe?.active && this.working && fa?.kind === 'combat'
+      ? { action: this.currentAction!, x: this.foe.getData('hx'), y: this.foe.getData('hy'), melee: this.foe.getData('melee'), weapon: fightWeapon(baseOf(store.state.equipment.weapon ?? '')) }
+      : undefined;
     this.others.step(delta, playerPos);
     // 正在干活就把当前的动作动画发给别人（挖矿、砍树、打怪…）
     const cur = this.working && !this.manual && !this.mountBusy ? this.playerBody.anims.currentAnim?.key : undefined;
@@ -987,7 +945,7 @@ export class MapScene extends Phaser.Scene {
   private updateParticles() {
     const kind = AMBIENT[this.region];
     const v = this.cameras.main.worldView;
-    if (kind && this.particles.length < (kind === 'snow' ? 70 : 34) && Math.random() < 0.5) {
+    if (kind && this.particles.length < (kind === 'snow' ? 70 : 34) * fxScale() && Math.random() < 0.5) {
       const img = this.add.image(v.x + Math.random() * v.width, v.y + Math.random() * v.height, `p-${kind}`).setDepth(D_PARTICLE);
       if (kind === 'firefly' || kind === 'ember' || kind === 'spore') img.setBlendMode(Phaser.BlendModes.ADD);
       const max = 2000 + Math.random() * 3000;
@@ -1638,6 +1596,7 @@ export class MapScene extends Phaser.Scene {
       if (mouse && p.button === 2) {
         store.tracking = null;
         const wp = cam.getWorldPoint(p.x, p.y);
+        this.game.events.emit(MANUAL_MOVE);
         this.moveTo(Math.floor(wp.x / T), Math.floor(wp.y / T));
         return;
       }
@@ -1666,6 +1625,7 @@ export class MapScene extends Phaser.Scene {
       if (mouse) return; // 电脑端左键点空地不走路
       store.tracking = null;
       const wp = cam.getWorldPoint(p.x, p.y);
+      this.game.events.emit(MANUAL_MOVE);
       this.moveTo(Math.floor(wp.x / T), Math.floor(wp.y / T));
     });
 
@@ -2038,7 +1998,8 @@ export class MapScene extends Phaser.Scene {
     return out;
   }
 
-  private walker?: { pts: { x: number; y: number }[]; i: number; speed: number; done: () => void };
+  /** endAt / rest：按存档行程走时什么时候该走到（Date.now 毫秒）、每个路点之后还剩多长（像素） */
+  private walker?: { pts: { x: number; y: number }[]; i: number; speed: number; done: () => void; endAt?: number; rest?: number[] };
 
   /** 沿路径匀速走：每帧按经过的时间移动，不再一格一个补间 */
   private walkPath(path: { x: number; y: number }[], done: () => void, speed?: number) {
@@ -2046,17 +2007,33 @@ export class MapScene extends Phaser.Scene {
     if (!path.length) return done();
     const tps = speed ?? WALK_TILES_PER_SEC * speedMultiplier;
     this.working = false;
-    this.walker = {
-      pts: this.smoothPath(path).map((p) => ({ x: p.x * T + T / 2, y: p.y * T + T / 2 })),
-      i: 0, speed: tps * T, done,
-    };
+    const pts = this.smoothPath(path).map((p) => ({ x: p.x * T + T / 2, y: p.y * T + T / 2 }));
+    this.walker = { pts, i: 0, speed: tps * T, done };
+    // 按存档里的行程走（10-27）：定好到达时刻，每帧按剩下的路和剩下的时间调快慢。
+    // 以前按固定速度走，画面掉帧时角色落在存档后面，平滑后的路又比格子路短，常常早到或晚到一两秒
+    if (speed) {
+      let len = 0;
+      let prev = this.playerTile();
+      for (const p of path) { len += Math.hypot(p.x - prev.x, p.y - prev.y); prev = p; }
+      const rest = new Array<number>(pts.length).fill(0);
+      for (let k = pts.length - 2; k >= 0; k--) rest[k] = rest[k + 1] + Math.hypot(pts[k + 1].x - pts[k].x, pts[k + 1].y - pts[k].y);
+      this.walker.endAt = Date.now() + (len / speed) * 1000;
+      this.walker.rest = rest;
+    }
   }
 
   private stepWalker(delta: number) {
     const w = this.walker;
     // 上下坐骑的动作做完之前原地不动（用户 10-23）
     if (!w || this.mountBusy) return;
-    let move = (w.speed * Math.min(delta, 100)) / 1000;
+    let v = w.speed;
+    if (w.endAt && w.rest && w.i < w.pts.length) {
+      const t = w.pts[w.i];
+      const remain = Math.hypot(t.x - this.player.x, t.y - this.player.y) + w.rest[w.i];
+      const left = w.endAt - Date.now();
+      v = Math.max(w.speed * 0.5, Math.min(w.speed * 3, left > 50 ? (remain / left) * 1000 : w.speed * 3));
+    }
+    let move = (v * Math.min(delta, w.endAt ? 250 : 100)) / 1000;
     let dx = 0;
     let dy = 0;
     while (move > 0 && w.i < w.pts.length) {
@@ -2154,7 +2131,7 @@ export class MapScene extends Phaser.Scene {
       // 首领的血条和名字压在所有东西上面，远处也看得清
       const depth = b.label ? D_LABEL - 1 : b.spr.depth + 1;
       b.bg.setPosition(b.spr.x, top).setDepth(depth).setAlpha(b.spr.alpha);
-      const ratio = b.live && c ? (c.respawnMs > 0 ? 0 : Math.max(0, c.monsterHp / b.m.hp)) : 1;
+      const ratio = b.live && c ? (c.respawnMs > 0 ? 0 : Math.max(0, c.monsterHp / (c.monsterMax ?? b.m.hp))) : 1;
       b.fill.setPosition(b.spr.x - b.w / 2, top - 1).setDepth(depth).setAlpha(b.spr.alpha).setScale(ratio, 1);
       b.shown = ratio >= b.shown ? ratio : Math.max(ratio, b.shown - this.game.loop.delta / 900);
       b.trail.setPosition(b.spr.x - b.w / 2, top - 1).setDepth(depth).setAlpha(b.spr.alpha * 0.85).setScale(b.shown, 1);
@@ -2461,6 +2438,21 @@ export class MapScene extends Phaser.Scene {
     const x0 = spr.getData('x0') ?? spr.x;
     spr.setData('x0', x0);
     this.tweens.add({ targets: spr, x: x0 + dir * 2, duration: 50, yoyo: true, onComplete: () => spr.active && spr.setX(x0) });
+  }
+
+  /** 野外组队：队友打中了我也在打的怪，队友出手、怪闪一下、用队友的颜色飘数字 */
+  private mateHit(h: FieldMateHit) {
+    const foe = this.foe;
+    if (!foe?.active) return;
+    const hitIn = Math.max(0, this.others.swing(h.id));
+    this.time.delayedCall(hitIn, () => {
+      if (this.foe !== foe || !foe.active) return;
+      this.hitFlash(foe, 1);
+      const m = this.currentAction ? MONSTERS[(ACTIONS[this.currentAction] as { monster?: string }).monster ?? ''] : undefined;
+      const S = m ? monsterFrameSize(m) * foe.scaleY : 24;
+      const color = MATE_COLORS[h.i % MATE_COLORS.length];
+      this.popText(foe.x - 8, foe.y - S * 0.5, h.crit ? tl`${h.name} 暴击 ${h.dmg}!` : `${h.name} ${h.dmg}`, color, h.crit ? 9 : 7);
+    });
   }
 
   /** 弹跳的伤害数字：先往上蹦，再落一点淡出 */
@@ -2836,6 +2828,7 @@ export class MapScene extends Phaser.Scene {
       const reach = FIGHT_RANGE[fightWeapon(baseOf(store.state.equipment.weapon ?? ''))] * T;
       this.foe = this.monSprite(m, this.player.x + melee + reach, this.player.y + 7).setFlipX(true);
       this.foe.setData('reach', reach);
+      this.foe.setData('hx', this.foe.x).setData('hy', this.foe.y).setData('melee', melee);
       this.foe.setDepth(this.foe.y + 1000);
       this.foeSeen = undefined;
       // 普通怪平时不挂血条，正在打的这只也挂一条，看得出还剩多少血

@@ -1,5 +1,6 @@
 import { partyXpPct } from './party';
-import { CROP_DEFS, cropsOfField, FARM_NODES, ITEMS, PLOT_BY_ID, plotsOf, WATER_SPEEDUP } from './data';
+import { CROP_DEFS, CROPS, cropsOfField, FARM_NODES, ITEMS, PLOT_BY_ID, plotsOf, WATER_SPEEDUP, type CropDef } from './data';
+import { homeBarrel, homePlotCells, homePlots, homeFieldId, isHomeField } from './home';
 import { isRaining } from './weather';
 import { stepQuests } from './quests';
 import { nextRandom } from './rng';
@@ -14,8 +15,24 @@ import type { CombatLogEntry, GameState, Plot, Summary } from './types';
  */
 export type FarmResult = { state: GameState; summary: Summary };
 
-/** 站在田里（不在走路）才能动手；田左右各 8 格、上下各 3 格 */
+// ───── 城里的田和家园农田（10-27）共用一套规则：下面这几个函数把两种田统一起来 ─────
+/** 一格地属于哪块田 */
+export function fieldOfPlot(plotId: string): string | undefined {
+  return PLOT_BY_ID[plotId]?.field ?? /^(hfield\d+):\d+$/.exec(plotId)?.[1];
+}
+/** 一块田的所有地块 id（家园农田要看存档里这块田还在不在） */
+export function fieldPlotIds(s: GameState, field: string): string[] {
+  if (!isHomeField(field)) return plotsOf(field).map((p) => p.id);
+  const t = homePlots(s).find((x) => homeFieldId(x.n!) === field);
+  return t ? homePlotCells(t).map((c) => c.id) : [];
+}
+/** 这块田能种的作物：家园农田什么都能种（只看种植等级），城里的田按阶级分 */
+const ALL_CROPS = (): CropDef[] => CROPS.map((c) => CROP_DEFS[c[0]]);
+export const fieldCrops = (field: string): CropDef[] => (isHomeField(field) ? ALL_CROPS() : cropsOfField(field));
+
+/** 站在田里（不在走路）才能动手；田左右各 8 格、上下各 3 格。家园农田：人在岛上就行 */
 export function nearField(s: GameState, field: string): boolean {
+  if (isHomeField(field)) return !!s.home?.inside && fieldPlotIds(s, field).length > 0;
   const n = FARM_NODES.find((x) => x.id === field);
   return !!n && !s.travel && !s.walk && Math.abs(s.loc.x - n.x) <= 10 && Math.abs(s.loc.y - n.y) <= 5;
 }
@@ -43,13 +60,13 @@ export function plotPhase(p: Plot | undefined, now: number): PlotPhase {
 export const plotGrowth = (p: Plot, now: number) => Math.max(0, Math.min(1, (now - p.at) / Math.max(1, p.ripe - p.at)));
 
 export const canPlantCrop = (s: GameState, field: string, crop: string) =>
-  !!CROP_DEFS[crop] && cropsOfField(field).some((c) => c.id === crop) && level(s, 'farming') >= CROP_DEFS[crop].level;
+  !!CROP_DEFS[crop] && fieldCrops(field).some((c) => c.id === crop) && level(s, 'farming') >= CROP_DEFS[crop].level;
 
 /** 点空地种什么：这块田选好的种子；没选或种子用完了，就挑有种子的里面等级最高的 */
 export function pickSeed(s: GameState, field: string): string | undefined {
   const want = s.settings.farmSeed?.[field];
   if (want && canPlantCrop(s, field, want) && seedCount(s, want) > 0) return want;
-  return cropsOfField(field).filter((c) => canPlantCrop(s, field, c.id) && seedCount(s, c.id) > 0).pop()?.id;
+  return fieldCrops(field).filter((c) => canPlantCrop(s, field, c.id) && seedCount(s, c.id) > 0).pop()?.id;
 }
 
 /** 在一份可改的存档上操作，最后统一结算新手任务 */
@@ -84,14 +101,14 @@ function useOne(s: GameState, id: string): boolean {
 
 function plantAt(s: GameState, plotId: string, crop: string, t: number): boolean {
   if ((s.farm ??= {})[plotId] || !useSeed(s, crop)) return false;
-  const field = PLOT_BY_ID[plotId]?.field;
+  const field = fieldOfPlot(plotId);
   // 选了肥料、手上还有就施一份
   const want = field ? s.settings.farmFert?.[field] : undefined;
   const fert = want && useOne(s, want) ? (want === 'fert_rich' ? 2 : 1) : 0;
   const p: Plot = { crop, at: t, ripe: t + growMs(s, crop, fert), ...(fert ? { fert: fert as 1 | 2 } : {}) };
   s.farm[plotId] = p;
   // 装了洒水器的田，种下就浇好水
-  if (field && s.sprinklers?.includes(field)) waterAt(s, plotId, t);
+  if (field && (s.sprinklers?.includes(field) || (isHomeField(field) && homeBarrel(s)))) waterAt(s, plotId, t);
   return true;
 }
 
@@ -101,7 +118,7 @@ export function installSprinkler(prev: GameState, field: string, now: number): F
     if (!nearField(s, field) || s.sprinklers?.includes(field) || !useOne(s, 'sprinkler')) return;
     s.sprinklers = [...(s.sprinklers ?? []), field];
     // 已经种着的也顺手浇一遍
-    for (const p of plotsOf(field)) waterAt(s, p.id, now);
+    for (const id of fieldPlotIds(s, field)) waterAt(s, id, now);
   });
 }
 
@@ -183,9 +200,10 @@ function waterAt(s: GameState, plotId: string, now: number): boolean {
 
 /** 点一格地：空地种下、长着的浇水、熟了的收获 */
 export function tendPlot(prev: GameState, plotId: string, crop: string | undefined, now: number): FarmResult {
-  const plot = PLOT_BY_ID[plotId];
+  const field = fieldOfPlot(plotId);
+  const plot = field ? { field } : undefined;
   return run(prev, (s, sum) => {
-    if (!plot || !nearField(s, plot.field)) return;
+    if (!plot || !nearField(s, plot.field) || !fieldPlotIds(s, plot.field).includes(plotId)) return;
     const p = s.farm?.[plotId];
     const ph = plotPhase(p, now);
     if (ph === 'ripe') {
@@ -202,14 +220,14 @@ export function tendPlot(prev: GameState, plotId: string, crop: string | undefin
 export function plantAll(prev: GameState, field: string, crop: string, now: number): FarmResult {
   return run(prev, (s) => {
     if (!nearField(s, field) || !canPlantCrop(s, field, crop)) return;
-    for (const p of plotsOf(field)) if (!plantAt(s, p.id, crop, now) && seedCount(s, crop) === 0) break;
+    for (const id of fieldPlotIds(s, field)) if (!plantAt(s, id, crop, now) && seedCount(s, crop) === 0) break;
   });
 }
 
 export function waterAll(prev: GameState, field: string, now: number): FarmResult {
   return run(prev, (s) => {
     if (!nearField(s, field)) return;
-    for (const p of plotsOf(field)) waterAt(s, p.id, now);
+    for (const id of fieldPlotIds(s, field)) waterAt(s, id, now);
   });
 }
 
@@ -217,10 +235,10 @@ export function harvestAll(prev: GameState, field: string, now: number): FarmRes
   return run(prev, (s, sum) => {
     if (!nearField(s, field)) return;
     const auto = !!s.settings.autoFarm?.[field];
-    for (const p of plotsOf(field)) {
-      const crop = s.farm?.[p.id]?.crop;
-      if (!harvestAt(s, sum, p.id, now, false)) continue;
-      if (auto && crop && canPlantCrop(s, field, crop)) plantAt(s, p.id, crop, now);
+    for (const id of fieldPlotIds(s, field)) {
+      const crop = s.farm?.[id]?.crop;
+      if (!harvestAt(s, sum, id, now, false)) continue;
+      if (auto && crop && canPlantCrop(s, field, crop)) plantAt(s, id, crop, now);
     }
   });
 }
@@ -228,8 +246,8 @@ export function harvestAll(prev: GameState, field: string, now: number): FarmRes
 /** 田里各种状态的格数 */
 export function fieldCounts(s: GameState, field: string, now: number) {
   const n = { empty: 0, growing: 0, ripe: 0, dry: 0, total: 0, next: Infinity };
-  for (const p of plotsOf(field)) {
-    const plot = s.farm?.[p.id];
+  for (const id of fieldPlotIds(s, field)) {
+    const plot = s.farm?.[id];
     const ph = plotPhase(plot, now);
     n[ph]++;
     n.total++;
@@ -253,13 +271,13 @@ export function stepAutoFarm(s: GameState, sum: Summary, floor: number, now: num
     let id: string | undefined;
     let best = Infinity;
     for (const [k, p] of Object.entries(s.farm)) {
-      const field = PLOT_BY_ID[k]?.field;
+      const field = fieldOfPlot(k);
       if (!field || !auto[field] || p.ripe > now) continue;
       const t = Math.max(p.ripe, floor);
       if (t < best || (t === best && k < id!)) { best = t; id = k; }
     }
     if (!id) return;
-    const field = PLOT_BY_ID[id].field;
+    const field = fieldOfPlot(id)!;
     const crop = s.farm[id].crop;
     harvestAt(s, sum, id, best, true);
     if (ITEMS[seedOf(crop)] && canPlantCrop(s, field, crop)) plantAt(s, id, crop, best);

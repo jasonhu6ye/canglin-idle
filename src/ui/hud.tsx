@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from 'react';
-import { ACTIONS, ITEMS, MONSTERS, nodeOfAction, nearestVariant, NODES, SKILLS } from '../core/data';
+import { useMemo, useState, type ReactNode } from 'react';
+import { ACTIONS, ITEMS, MONSTERS, nodeOfAction, nearestVariant, navStamp, NODES, SKILLS } from '../core/data';
 import { QUESTS, questProgress, questText } from '../core/quests';
 import { actionDuration, beltSlotOf, combatEstimate, combatLevel, dismissStop, enqueue, rainBonus, isBankId, level, maxHp, moveSpeed, removeTask, resumeWork, toggleMount, weaponStyle } from '../core/sim';
 import { jumpTo, producerOf } from './ActionSheet';
@@ -71,12 +71,13 @@ export function BossBar({ s }: { s: GameState }) {
   const m = MONSTERS[a.monster];
   if (m.rank !== 'boss') return null;
   const hp = s.combat.respawnMs > 0 ? 0 : Math.max(0, s.combat.monsterHp);
-  const pct = (hp / m.hp) * 100;
+  const full = s.combat.monsterMax ?? m.hp;
+  const pct = (hp / full) * 100;
   return (
     <div className="boss-bar">
       <div className="name"><small>{m.event ? tl('万圣节限定') : m.world ? tl('世界首领') : tl('首领')}</small>{m.name}<span>Lv{m.level}</span></div>
       <div className="track"><i className="trail" style={{ width: `${pct}%` }} /><i className="fill" style={{ width: `${pct}%` }} />
-      <div className="num">{s.combat.respawnMs > 0 ? tl`重新出现中… ${Math.ceil(s.combat.respawnMs / 1000)} 秒` : `${Math.ceil(hp)} / ${m.hp}`}</div></div>
+      <div className="num">{s.combat.respawnMs > 0 ? tl`重新出现中… ${Math.ceil(s.combat.respawnMs / 1000)} 秒` : `${Math.ceil(hp)} / ${full}`}</div></div>
     </div>
   );
 }
@@ -165,7 +166,8 @@ export function StatusChips({ s, extra, log, chat }: { s: GameState; extra?: Rea
     );
   } else if (a?.kind === 'combat') {
     const m = MONSTERS[a.monster];
-    const hp = s.combat?.monsterHp ?? m.hp;
+    const full = s.combat?.monsterMax ?? m.hp;
+    const hp = s.combat?.monsterHp ?? full;
     const style = weaponStyle(s);
     const respawn = s.combat?.respawnMs ?? 0;
     const max = maxHp(s);
@@ -176,8 +178,8 @@ export function StatusChips({ s, extra, log, chat }: { s: GameState; extra?: Rea
     body = (
       <>
         <SkillIcon skill={style} size={14} /> <b style={{ color: SKILLS[style].color }}>{SKILLS[style].name}</b> · {m.name}
-        <span className="bar wide foe"><i style={{ width: `${respawn ? 0 : (Math.max(0, hp) / m.hp) * 100}%` }} /></span>
-        {respawn ? <em>{tl`下一只 ${Math.ceil(respawn / 1000)} 秒后出现`}</em> : <em>{Math.max(0, hp)}/{m.hp}</em>}
+        <span className="bar wide foe"><i style={{ width: `${respawn ? 0 : (Math.max(0, hp) / full) * 100}%` }} /></span>
+        {respawn ? <em>{tl`下一只 ${Math.ceil(respawn / 1000)} 秒后出现`}</em> : <em>{Math.max(0, hp)}/{full}</em>}
         <span className="fight-me">
           <b>{tl('你')}</b>
           <span className={`bar me ${me < 0.3 ? 'low' : me < 0.6 ? 'mid' : ''}`}><i style={{ width: `${me * 100}%` }} /></span>
@@ -229,9 +231,15 @@ export function QuestCard({ s, onGo }: { s: GameState; onGo: (nodeId: string) =>
     try { localStorage.setItem('canglin-quest-fold', open ? '1' : '0'); } catch { /* 存不了就算了 */ }
   };
   const p = questProgress(s);
+  const hint = p?.q.hint;
+  const speed = moveSpeed(s);
+  // 找最近的同类点位要遍历所有动作、算寻路，界面每次刷新都算会掉帧：位置、石碑、速度没变就用上次的
+  const { near, node } = useMemo(() => {
+    if (!hint) return { near: undefined, node: undefined };
+    const v = nearestVariant(hint, s.loc, s.waystones, speed);
+    return { near: v, node: NODES.find((n) => n.id === hint) ?? v?.node ?? nodeOfAction(hint, s.loc, s.waystones, speed) };
+  }, [hint, s.loc.x, s.loc.y, s.waystones?.length, speed, navStamp()]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!p) return null;
-  const near = nearestVariant(p.q.hint, s.loc, s.waystones, moveSpeed(s));
-  const node = NODES.find((n) => n.id === p.q.hint) ?? near?.node ?? nodeOfAction(p.q.hint, s.loc, s.waystones, moveSpeed(s));
   const act = near?.action ?? p.q.hint;
   const idx = (s.quest?.i ?? 0) + 1;
   return (

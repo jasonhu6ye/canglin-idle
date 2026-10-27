@@ -245,6 +245,8 @@ export interface CombatState {
   pTotal?: number;
   monsterMax?: number;
   crew?: number;
+  /** 野外（10-27）：这是第几只（刷新一只加一），队友按它分辨伤害打在哪一只上 */
+  copy?: number;
   /** 怪物最近一次出手：elite / boss 大招，enrage 刚进入狂怒 */
   mArt?: string;
   /** 首领已经狂怒了 */
@@ -297,7 +299,9 @@ export interface Plot {
 }
 
 /** 家园岛屿上摆的一件东西：左上角所在的格子 */
-export interface HomeThing { id: string; x: number; y: number }
+/** n：家园农田的编号（1-8），田里每格地的 id 是 hfield<n>:<格> */
+/** at：会产出东西的建筑（鸡舍、蜂箱……）上次收取的时刻，从这一刻起攒产出 */
+export interface HomeThing { id: string; x: number; y: number; n?: number; at?: number }
 
 export interface GameState {
   version: 3;
@@ -327,6 +331,8 @@ export interface GameState {
   gmBuffs?: GmBuff[];
   /** 所在公会的等级（公会加成用，登录后从服务器同步；没加公会是空） */
   guildLv?: number;
+  /** 公会科技等级（10-27） */
+  guildTech?: Partial<Record<'xp' | 'speed' | 'coins' | 'drop', number>>;
   /** 新手任务：第几个、当前进度 */
   quest?: { i: number; n: number };
   bestiary?: Record<string, number>;

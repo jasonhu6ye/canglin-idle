@@ -5,7 +5,7 @@ import { QUESTS, questText } from '../core/quests';
 import { bagRoomFor, bagSlots } from '../core/sim';
 import type { GameState, Mail } from '../core/types';
 import { store } from '../store';
-import { tl } from '../i18n';
+import { tl, tlc } from '../i18n';
 import { fmtNum } from './format';
 import { Icon, TplIcon } from './icons';
 import { showLoot } from './itemOpen';
@@ -64,7 +64,7 @@ function claim(id: number | 'all', from: string) {
 export function MailButton({ s }: { s: GameState }) {
   const n = unreadMail(s);
   return (
-    <button className="mail-btn" title={tl('邮箱')} onClick={openMailbox}>
+    <button className="mail-btn" title={tlc('mail', '邮箱')} onClick={openMailbox}>
       <TplIcon tpl="mail" tint="#e8d8b0" size={18} />
       {n > 0 && <i className="mail-dot">{n > 99 ? '99+' : n}</i>}
     </button>
@@ -89,9 +89,9 @@ export function Mailbox({ s }: { s: GameState }) {
   return (
     <div className="item-popup" onClick={() => setOpen(false)}>
       <div className="item-popup-body frame mailbox" onClick={(e) => e.stopPropagation()}>
-        <h2 className="gold">{tl('邮箱')} <small className="muted">{tl`${mail.length} 封`}</small></h2>
+        <h2 className="gold">{tlc('mail', '邮箱')} <small className="muted">{tl`${mail.length} 封`}</small></h2>
         <div className="mail-actions">
-          <button className="primary" disabled={!claimable.length} onClick={() => claim('all', tl('邮箱'))}>{tl`一键领取（${claimable.length}）`}</button>
+          <button className="primary" disabled={!claimable.length} onClick={() => claim('all', tlc('mail', '邮箱'))}>{tl`一键领取（${claimable.length}）`}</button>
           <button className="pill" disabled={!mail.some((m) => m.claimed || (!m.items.length && m.read))} onClick={() => store.dispatch(clearMail)}>{tl('删除已领取')}</button>
         </div>
         {!mail.length && <p className="muted">{tl('邮箱是空的。游戏送的奖励（新手任务、兑换码、活动礼物）都会发到这里。')}</p>}

@@ -1,8 +1,8 @@
 import { setPartySize } from '../core/party';
-import { setAggroMates, setDgCrew, threatOf } from '../core/aggro';
+import { fieldKey, pushMateHit, setAggroMates, setDgCrew, setFieldCrew, threatOf } from '../core/aggro';
 import type { GameState } from '../core/types';
 import { useEffect, useState } from 'react';
-import { online, type DungeonPresence, type ChatChannel, type ChatMsg, type Friend, type Party, type PartyInvite, type Trade } from './index';
+import { online, type DungeonPresence, type Presence, type ChatChannel, type ChatMsg, type Friend, type Party, type PartyInvite, type Trade } from './index';
 import { ACTIONS, ITEMS } from '../core/data';
 import { store } from '../store';
 import { setGmBuffs } from '../core/gm';
@@ -189,7 +189,10 @@ export function updateAggro(s: GameState, x: number, y: number, fighting: boolea
     const p = online.presenceOf(m.id);
     return !!p && now - p.at < 30_000 && p.dg?.gate === run.gate.id;
   }).length : 0);
-  if (!me || !st.party || !inFight) return setAggroMates([]);
+  if (!me || !st.party || !inFight) {
+    setFieldCrew(0);
+    return setAggroMates([]);
+  }
   const out: number[] = [];
   for (const m of st.party.members) {
     if (m.playerId === me.id) continue;
@@ -201,4 +204,40 @@ export function updateAggro(s: GameState, x: number, y: number, fighting: boolea
     if (same) out.push(threatOf(p.equip ?? {}));
   }
   setAggroMates(out);
+  setFieldCrew(dg ? 0 : out.length);
+}
+
+/** 每个队友上次报的野外伤害：哪个点、第几只、累计多少 */
+const fieldSeen = new Map<string, { k: string; n: number; dmg: number }>();
+/**
+ * 野外组队（10-27）：队友对同一个点的怪新打了多少伤害，记到自己这边的怪上，返回给画面飘字用。
+ * 队友换了一只（n 变了）就从 0 算起。
+ */
+export interface FieldMateHit { id: string; name: string; i: number; dmg: number; crit: boolean }
+export function takeFieldHits(all: Presence[]): FieldMateHit[] {
+  const me = online.me();
+  const s = store.state;
+  const action = s.paused ? undefined : s.queue[0]?.action;
+  const out: FieldMateHit[] = [];
+  if (!me || !st.party || !action || ACTIONS[action]?.kind !== 'combat' || s.dungeon) return out;
+  for (const [i, m] of st.party.members.entries()) {
+    if (m.playerId === me.id) continue;
+    const p = all.find((q) => q.playerId === m.playerId);
+    const f = p?.fd;
+    if (!p) continue;
+    // 队友没在打（或打的别处）：记成空账，等他开打时从第一下算起
+    if (!f || p.dg || f.k !== action) {
+      fieldSeen.set(p.playerId, { k: '', n: 0, dmg: 0 });
+      continue;
+    }
+    const last = fieldSeen.get(p.playerId);
+    const same = last && last.k === f.k && last.n === f.n;
+    const delta = same ? f.dmg - last.dmg : f.dmg;
+    fieldSeen.set(p.playerId, { k: f.k, n: f.n, dmg: same ? Math.max(f.dmg, last.dmg) : f.dmg });
+    // 自己这只还在刷新、或者是第一次看到这个队友（以前打的旧账）就不记
+    if (!last || delta <= 0 || !s.combat || s.combat.respawnMs > 0 || !s.combat.crew) continue;
+    pushMateHit(fieldKey(action), delta);
+    out.push({ id: p.playerId, name: m.name, i, dmg: delta, crit: !!f.crit });
+  }
+  return out;
 }

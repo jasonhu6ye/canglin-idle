@@ -1,8 +1,9 @@
 import type { GameState } from '../core/types';
-import type { GmInput, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
+import type { GmInput, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { GUILD_MAX, levelSnapshot } from './api';
 import { tl } from '../i18n';
-import { EXCHANGE_DAY_MAX, VAULT_COST, VAULT_SLOTS, exchangeGain, guildLevelOf, guildMembersCap, guildSlots, utcDay, utcWeek, type TaskSpec } from '../core/guild';
+import { ITEMS } from '../core/data';
+import { GUILD_SHOP, GUILD_TECH, checkinGain, techCap, techCost, EXCHANGE_DAY_MAX, VAULT_COST, VAULT_SLOTS, exchangeGain, guildLevelOf, guildMembersCap, guildSlots, utcDay, utcWeek, type TaskSpec } from '../core/guild';
 
 /**
  * 本地假后端：数据放 localStorage，只有你自己。用来在后端接好前把排行榜和公会界面做出来、跑测试。
@@ -21,6 +22,10 @@ interface Db {
   /** 公会仓库（键「公会 id:仓库编号」，键的顺序就是显示顺序）、私人仓库、流水（按公会 id） */
   bank?: Record<string, Record<string, number>>;
   vaults?: Record<string, GuildVault[]>;
+  /** 10-27：自己今天的计数、商店购买（键「日期:物品」）、公会动态 */
+  day?: { day: string; exchanged: number; took: number; checkin: boolean };
+  buys?: Record<string, number>;
+  events?: Record<string, GuildEvent[]>;
   bankLog?: Record<string, GuildBankLog[]>;
   chat: ChatMsg[];
   gm?: GmRow[];
@@ -94,9 +99,9 @@ export class LocalApi implements OnlineApi {
   async createGuild(name: string, tag: string) {
     const me = this.need();
     if (me.guildId) throw new Error(tl('已经在公会里了'));
-    const g: Guild = { id: uid(), name, tag, notice: '', level: 1, xp: 0, members: 1, maxMembers: GUILD_MAX, open: true, takeMin: 0, points: 0 };
+    const g: Guild = { id: uid(), name, tag, notice: '', level: 1, xp: 0, members: 1, maxMembers: GUILD_MAX, open: true, takeMin: 0, points: 0, tech: {}, takeDay: 0 };
     this.db.guilds.push(g);
-    this.db.members[g.id] = [{ playerId: me.id, name: me.name, role: 'leader', totalLevel: this.db.snap?.total ?? 0, weekly: 0, contrib: 0, lastSeen: Date.now() }];
+    this.db.members[g.id] = [{ playerId: me.id, name: me.name, role: 'leader', totalLevel: this.db.snap?.total ?? 0, weekly: 0, contrib: 0, spent: 0, lastSeen: Date.now() }];
     me.guildId = g.id;
     me.guildTag = tag;
     this.flush();
@@ -107,7 +112,7 @@ export class LocalApi implements OnlineApi {
     const g = this.db.guilds.find((x) => x.id === id);
     if (!g) throw new Error(tl('公会不存在'));
     if (g.members >= g.maxMembers) throw new Error(tl('公会满员了'));
-    (this.db.members[id] ??= []).push({ playerId: me.id, name: me.name, role: 'member', totalLevel: this.db.snap?.total ?? 0, weekly: 0, contrib: 0, lastSeen: Date.now() });
+    (this.db.members[id] ??= []).push({ playerId: me.id, name: me.name, role: 'member', totalLevel: this.db.snap?.total ?? 0, weekly: 0, contrib: 0, spent: 0, lastSeen: Date.now() });
     g.members++;
     me.guildId = id;
     me.guildTag = g.tag;
@@ -116,11 +121,16 @@ export class LocalApi implements OnlineApi {
   async leaveGuild() {
     const me = this.need(), g = this.myGuild();
     this.db.members[g.id] = (this.db.members[g.id] ?? []).filter((m) => m.playerId !== me.id);
+    this.unlist(g.id, me.id);
     g.members--;
     if (g.members <= 0) this.db.guilds = this.db.guilds.filter((x) => x !== g);
     me.guildId = null;
     me.guildTag = undefined;
     this.flush();
+  }
+  /** 离开公会的人从私人仓库名单里删掉（和服务器触发器一样） */
+  private unlist(gid: string, playerId: string) {
+    for (const v of this.db.vaults?.[gid] ?? []) v.allow = v.allow.filter((a) => a !== playerId);
   }
   async guildMembers(id: string) { return this.db.members[id] ?? []; }
   async setRole(playerId: string, role: GuildRole) {
@@ -131,6 +141,7 @@ export class LocalApi implements OnlineApi {
   async kick(playerId: string) {
     const g = this.myGuild();
     this.db.members[g.id] = (this.db.members[g.id] ?? []).filter((m) => m.playerId !== playerId);
+    this.unlist(g.id, playerId);
     g.members = this.db.members[g.id].length;
     this.flush();
   }
@@ -176,22 +187,74 @@ export class LocalApi implements OnlineApi {
     this.flush();
     return add;
   }
-  async exchangeItems(item: string, qty: number, value: number) {
+  /** 今天的兑换、取物、签到（记在玩家身上，和服务器一样退会重进不会清零） */
+  private today() {
+    const d = utcDay();
+    if (this.db.day?.day !== d) this.db.day = { day: d, exchanged: 0, took: 0, checkin: false };
+    return this.db.day;
+  }
+  private event(kind: string, name: string, detail: string) {
+    ((this.db.events ??= {})[this.myGuild().id] ??= []).unshift({ kind, name, detail, at: Date.now() });
+  }
+  async exchangeItems(item: string, qty: number) {
     if (item === 'coins') throw new Error(tl('金币不能兑换贡献'));
-    const { m } = this.meMember();
-    const today = utcDay();
-    const left = EXCHANGE_DAY_MAX - (m.donatedDay === today ? m.donated ?? 0 : 0);
+    this.meMember();
+    const v = ITEMS[item]?.value;
+    if (!v) throw new Error(tl('这个东西不能兑换'));
+    const day = this.today();
+    const left = EXCHANGE_DAY_MAX - day.exchanged;
     if (left <= 0) throw new Error(tl('今天的兑换已经满了'));
-    const v = Math.max(1, Math.min(100000, Math.floor(value)));
     const q = Math.max(0, Math.min(qty, Math.floor((left * 10) / v)));
     const n = exchangeGain(v, q);
     if (q <= 0 || n <= 0) throw new Error(tl('数量太少，换不到 1 点贡献'));
-    m.donated = EXCHANGE_DAY_MAX - left + n;
-    m.donatedDay = today;
+    day.exchanged += n;
     this.addContrib(n);
     this.flush();
     return q;
   }
+  async guildDay() { const d = this.today(); return { exchanged: d.exchanged, took: d.took, checkedIn: d.checkin }; }
+  async guildCheckin() {
+    const { g } = this.meMember();
+    const d = this.today();
+    if (d.checkin) throw new Error(tl('今天已经签到过了'));
+    d.checkin = true;
+    const n = checkinGain(g.level);
+    this.addContrib(n);
+    this.flush();
+    return n;
+  }
+  async buyGuildItem(item: string, qty: number) {
+    const { g, m } = this.meMember();
+    const sh = GUILD_SHOP.find((x) => x.item === item);
+    if (!sh) throw new Error(tl('商店里没有这个'));
+    if (g.level < sh.lv) throw new Error(tl('公会等级不够'));
+    const key = `${utcDay()}:${item}`;
+    const buys = (this.db.buys ??= {});
+    let q = Math.min(qty, sh.daily - (buys[key] ?? 0));
+    if (q <= 0) throw new Error(tl('今天已经买到上限了'));
+    q = Math.min(q, Math.floor((m.contrib - (m.spent ?? 0)) / sh.price));
+    if (q <= 0) throw new Error(tl('贡献不够'));
+    m.spent = (m.spent ?? 0) + q * sh.price;
+    buys[key] = (buys[key] ?? 0) + q;
+    this.flush();
+    return q;
+  }
+  async upgradeTech(kind: string) {
+    const { g, m } = this.meMember();
+    if (!GUILD_TECH.some((t) => t.id === kind)) throw new Error(tl('没有这项科技'));
+    if (m.role === 'member') throw new Error(tl('只有会长和副会长能升级科技'));
+    const tech = (g.tech ??= {}) as Record<string, number>;
+    const cur = tech[kind] ?? 0;
+    if (cur >= techCap(g.level)) throw new Error(tl('已经到上限了，公会升级后才能继续'));
+    if (g.points < techCost(cur)) throw new Error(tl('公会贡献值不够'));
+    g.points -= techCost(cur);
+    tech[kind] = cur + 1;
+    this.event('tech', m.name, `${kind}:${cur + 1}`);
+    this.flush();
+    return cur + 1;
+  }
+  async guildEvents() { return (this.db.events?.[this.myGuild().id] ?? []).slice(0, 100); }
+  async setTakeDay(value: number) { this.myGuild().takeDay = Math.max(0, Math.floor(value)); this.flush(); }
   private canVault(vault: number) {
     const { g, m } = this.meMember();
     if (vault === 0) return true;
@@ -223,8 +286,14 @@ export class LocalApi implements OnlineApi {
     const { g, m } = this.meMember();
     const bank = this.box(vault);
     if (!vault && m.role === 'member' && (g.takeMin < 0 || m.contrib < g.takeMin)) throw new Error(tl('贡献不够，不能从公会仓库取东西'));
-    const n = Math.max(0, Math.min(qty, bank[item] ?? 0));
+    let n = Math.max(0, Math.min(qty, bank[item] ?? 0));
     if (!n) return 0;
+    if (!vault && m.role === 'member' && g.takeDay > 0) {
+      const d = this.today(), v = Math.max(1, ITEMS[item]?.value ?? 1);
+      n = Math.min(n, Math.floor((g.takeDay - d.took) / v));
+      if (n <= 0) throw new Error(tl('今天从公会仓库取的东西已经到上限了'));
+      d.took += n * v;
+    }
     bank[item] -= n;
     if (!bank[item]) delete bank[item];
     this.log(vault, item, -n);

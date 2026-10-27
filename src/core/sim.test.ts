@@ -1157,3 +1157,47 @@ describe('副手和新武器（10-25）', () => {
     expect(s.bag.wood_greatshield).toBe(1);
   });
 });
+
+describe('野外组队同打一只怪（10-27）', () => {
+  it('队友在一起打时怪血加厚，队友的伤害记到同一只怪上，打死了一起算击杀', async () => {
+    const { fieldKey, pushMateHit, setFieldCrew } = await import('./aggro');
+    setFieldCrew(1);
+    let s = startHere(newGame(T0, 7), 'fight_rabbit', { type: 'infinite' });
+    let t = T0;
+    s = advance(s, (t += 10)).state;
+    const m = MONSTERS[(ACTIONS.fight_rabbit as { monster: string }).monster];
+    expect(s.combat!.crew).toBe(1);
+    expect(s.combat!.monsterMax).toBe(Math.round(m.hp * 1.6));
+    const kills = s.stats.kills;
+    pushMateHit(fieldKey('fight_rabbit'), s.combat!.monsterHp + 3);
+    s = advance(s, (t += 10)).state;
+    expect(s.stats.kills).toBe(kills + 1);
+    expect(s.combat!.respawnMs).toBeGreaterThan(0);
+    setFieldCrew(0);
+  });
+
+  it('离线补算按单人算，不受队友人数影响', async () => {
+    const { setFieldCrew } = await import('./aggro');
+    setFieldCrew(3);
+    const s = startHere(newGame(T0, 7), 'fight_rabbit', { type: 'time', ms: HOUR });
+    const { summary, state } = advance(s, T0 + HOUR);
+    setFieldCrew(0);
+    expect(summary.kills.rabbit).toBeGreaterThan(60);
+    expect(state.combat?.crew).toBeUndefined();
+  });
+});
+
+describe('离开期间的收获合并（10-27）', () => {
+  it('物品、击杀、经验相加，同一技能升级只留最高等级', async () => {
+    const { mergeSummary, emptySummary } = await import('./sim');
+    const a = { ...emptySummary(), elapsedMs: 1000, items: { stone: 3 }, kills: { rabbit: 1 }, xp: { mining: 10 }, levelUps: [{ skill: 'mining' as const, level: 5 }] };
+    const b = { ...emptySummary(), elapsedMs: 2000, items: { stone: 2, copper_ore: 1 }, kills: { rabbit: 2 }, xp: { mining: 5 }, levelUps: [{ skill: 'mining' as const, level: 6 }], deaths: 1 };
+    const m = mergeSummary(a, b);
+    expect(m.elapsedMs).toBe(3000);
+    expect(m.items).toEqual({ stone: 5, copper_ore: 1 });
+    expect(m.kills).toEqual({ rabbit: 3 });
+    expect(m.xp).toEqual({ mining: 15 });
+    expect(m.levelUps).toEqual([{ skill: 'mining', level: 6 }]);
+    expect(m.deaths).toBe(1);
+  });
+});

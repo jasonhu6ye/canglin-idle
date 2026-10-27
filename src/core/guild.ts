@@ -1,10 +1,12 @@
 import type { GameState } from './types';
-import { ITEMS, TIERS } from './data';
+import { ITEMS, SCROLL_TOWN, TIERS } from './data';
+import { tl } from '../i18n';
 import { nextRandom } from './rng';
 
 /*
- * 公会等级、贡献、每日任务（用户 10-26）。服务器只记账（supabase/schema.sql 的 donate_coins / contribute / guild_deposit），
- * 等级表和任务生成在这里，两边的数要对得上：GUILD_XP 改了要同步改 SQL 里的 guild_xp_table()。
+ * 公会等级、贡献、每日任务（用户 10-26）、科技和商店（10-27）。服务器记账（supabase/schema.sql 的 exchange_items / contribute / guild_deposit…），
+ * 等级表和任务生成在这里，两边的数要对得上：GUILD_XP 改了要同步改 SQL 里的 guild_xp_table()；
+ * 物品价格和商店在 supabase/guild-data.sql，由 guildSql.ts 生成（guild.test 会检查是不是最新的）。
  */
 
 /** 升到第 n 级要的累计公会经验（下标 0 = 1 级），最高 10 级 */
@@ -33,14 +35,61 @@ export function guildPerks(lv: number): Record<GuildPerk, number> {
   const n = Math.max(0, Math.min(GUILD_MAX_LV, lv) - 1);
   return { xp: n * 0.01, coins: n * 0.02, speed: Math.floor(n / 2) * 0.01 };
 }
-/** 存档里记的公会等级对应的加成（没加公会是 0） */
-export const guildPct = (s: GameState, k: string) => (s.guildLv ? guildPerks(s.guildLv)[k as GuildPerk] ?? 0 : 0);
-
-/** 换成服务器最新的公会等级（退会了传 0） */
-export function setGuildLv(s: GameState, lv: number): GameState {
-  const v = Math.max(0, Math.min(GUILD_MAX_LV, Math.floor(lv) || 0));
-  return (s.guildLv ?? 0) === v ? s : { ...s, guildLv: v || undefined };
+/**
+ * 公会科技（10-27）：会长和副会长花公会贡献值升级，每项最高 5 级、不超过公会等级的一半。
+ * 第 n 级花 3000×2^(n-1)，和 SQL upgrade_tech 一致
+ */
+export type TechId = 'xp' | 'speed' | 'coins' | 'drop';
+export const GUILD_TECH: { id: TechId; name: string; desc: string; per: number }[] = [
+  { id: 'xp', name: tl('经验研习'), desc: tl('所有技能获得的经验'), per: 0.01 },
+  { id: 'speed', name: tl('工艺精进'), desc: tl('采集和制作的速度'), per: 0.01 },
+  { id: 'coins', name: tl('商路拓展'), desc: tl('打怪掉的金币'), per: 0.02 },
+  { id: 'drop', name: tl('寻宝秘术'), desc: tl('几率掉落物的掉率'), per: 0.02 },
+];
+export const TECH_MAX = 5;
+export const techCap = (guildLv: number) => Math.min(TECH_MAX, Math.floor(guildLv / 2));
+export const techCost = (cur: number) => 3000 * 2 ** cur;
+/** 存档里记的科技等级（只留认识的、0-5） */
+export function cleanTech(t: unknown): Partial<Record<TechId, number>> | undefined {
+  if (!t || typeof t !== 'object') return undefined;
+  const out: Partial<Record<TechId, number>> = {};
+  for (const k of GUILD_TECH) {
+    const v = Math.floor(Number((t as Record<string, unknown>)[k.id]));
+    if (v > 0) out[k.id] = Math.min(TECH_MAX, v);
+  }
+  return Object.keys(out).length ? out : undefined;
 }
+
+/** 存档里记的公会等级、科技对应的加成（没加公会是 0） */
+export function guildPct(s: GameState, k: string) {
+  if (!s.guildLv) return 0;
+  const tech = GUILD_TECH.find((t) => t.id === k);
+  return (guildPerks(s.guildLv)[k as GuildPerk] ?? 0) + (tech ? (s.guildTech?.[tech.id] ?? 0) * tech.per : 0);
+}
+
+/** 换成服务器最新的公会等级和科技（退会了传 0） */
+export function setGuildLv(s: GameState, lv: number, tech?: unknown): GameState {
+  const v = Math.max(0, Math.min(GUILD_MAX_LV, Math.floor(lv) || 0));
+  const t = v ? cleanTech(tech) : undefined;
+  if ((s.guildLv ?? 0) === v && JSON.stringify(s.guildTech ?? null) === JSON.stringify(t ?? null)) return s;
+  return { ...s, guildLv: v || undefined, guildTech: t };
+}
+
+/** 每日签到给的贡献 */
+export const checkinGain = (lv: number) => 10 + 5 * lv;
+
+/**
+ * 公会商店（10-27）：花自己的可用贡献（累计 - 已花）买，按公会等级解锁，每样每天限购。
+ * 价格 = 价值 × 1.5 ÷ 10（比兑换贵，买了再换回去会亏），和 guild-data.sql 一致
+ */
+export interface ShopItem { item: string; lv: number; daily: number; price: number }
+export const GUILD_SHOP: ShopItem[] = [
+  { item: SCROLL_TOWN, lv: 1, daily: 5 },
+  ...Array.from({ length: 8 }, (_, i) => ({ item: `luckybag_${i + 1}`, lv: i + 1, daily: 3 })),
+  ...Array.from({ length: 8 }, (_, i) => ({ item: `enhstone_${i + 1}`, lv: i + 2, daily: 3 })),
+  ...[4, 5, 6, 7, 8].map((t) => ({ item: `dkey_g${t}`, lv: t - 1, daily: 1 })),
+  ...[4, 5, 6, 7, 8].map((t) => ({ item: `dkey_b${t}`, lv: t + 2, daily: 1 })),
+].filter((x) => ITEMS[x.item]).map((x) => ({ ...x, price: Math.max(10, Math.ceil((ITEMS[x.item].value * 1.5) / VALUE_PER_CONTRIB)) }));
 
 /** UTC 日期（每日任务和每日捐献按这个换天），和每周一 0 点的那天（每周贡献清零） */
 export const utcDay = (t = Date.now()) => new Date(t).toISOString().slice(0, 10);
@@ -51,7 +100,7 @@ export function utcWeek(t = Date.now()) {
 }
 
 /** 每日任务能出的物品：每阶的矿、木头、锭、板材、棉花、兽皮、皮革、布料、烤兽肉 */
-function pool(tier: number) {
+export function taskPool(tier: number) {
   const T = TIERS[tier], n = tier + 1;
   return [T.ore, `${T.wood}_log`, `${T.id}_bar`, `plank_${n}`, `cotton_${n}`, `hide_${n}`, `leather_${n}`, `cloth_${n}`, `steak_${n}`].filter((id) => ITEMS[id]);
 }
@@ -71,7 +120,7 @@ export function dailyTasks(guildId: string, day: string, lv: number): TaskSpec[]
   const out: TaskSpec[] = [];
   for (let i = 0; out.length < 3 && i < 20; i++) {
     const tier = Math.floor(rnd() * (top + 1));
-    const list = pool(tier);
+    const list = taskPool(tier);
     const target = list[Math.floor(rnd() * list.length)];
     if (out.some((t) => t.target === target)) continue;
     const value = ITEMS[target].value;

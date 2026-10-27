@@ -1,3 +1,4 @@
+import { homeItemIconUrl } from '../game/homeArt';
 import { baseOf } from '../core/quality';
 import { HW_BOX, HW_POINT } from '../core/halloween';
 import { pumpkinBoxUrl, pumpkinPointUrl } from '../game/halloweenArt';
@@ -1053,7 +1054,7 @@ export function itemImageUrl(item: string): string | undefined {
   if (item === FOAL) return foalIconUrl();
   if (item.startsWith('mount_')) return mountIconUrl(item);
   if (item === HW_POINT) return pumpkinPointUrl();
-  const res = resIconUrl(item) ?? equipUrl(item) ?? lootUrl(item);
+  const res = resIconUrl(item) ?? homeItemIconUrl(item) ?? equipUrl(item) ?? lootUrl(item);
   if (res) return res;
   const [tpl, tint] = itemIcon(baseOf(item));
   return iconUrl(tpl, tint);
@@ -1071,7 +1072,7 @@ function PlainIcon({ item, size }: { item: string; size: number }) {
   if (item === HW_BOX || item === HW_POINT) return <img className="icon" src={item === HW_BOX ? pumpkinBoxUrl() : pumpkinPointUrl()} width={size} height={size} alt="" draggable={false} />;
   if (item.startsWith('mount_')) return <img className="icon" src={mountIconUrl(item)} width={size} height={size} alt="" draggable={false} />;
   if (item === FOAL) return <img className="icon" src={foalIconUrl()} width={size} height={size} alt="" draggable={false} />;
-  const res = resIconUrl(item) ?? equipUrl(item) ?? lootUrl(item);
+  const res = resIconUrl(item) ?? homeItemIconUrl(item) ?? equipUrl(item) ?? lootUrl(item);
   if (res) {
     const tier = ITEMS[item].tier;
     if (tier === undefined) return <img className="icon" src={res} width={size} height={size} alt="" draggable={false} />;

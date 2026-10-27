@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { CROP_DEFS, cropsOfField, NODES, plotsOf, REGIONS, tierName, WATER_SPEEDUP } from '../core/data';
-import { canPlantCrop, FERT_SPEEDUP, fertCount, fieldCounts, growMs, harvestAll, installSprinkler, nearField, pickSeed, plantAll, plotGrowth, plotPhase, seedCount, waterAll } from '../core/farm';
+import { CROP_DEFS, NODES, REGIONS, tierName, WATER_SPEEDUP } from '../core/data';
+import { homeBarrel, homeNode, isHomeField } from '../core/home';
+import { canPlantCrop, FERT_SPEEDUP, fertCount, fieldCounts, fieldCrops, fieldPlotIds, growMs, harvestAll, installSprinkler, nearField, pickSeed, plantAll, plotGrowth, plotPhase, seedCount, waterAll } from '../core/farm';
 import { isRaining } from '../core/weather';
 import { ITEMS } from '../core/data';
 import { level, setSettings } from '../core/sim';
@@ -20,17 +21,18 @@ const dur = (ms: number) => {
 };
 
 export function FarmSheet({ s, nodeId, onClose }: { s: GameState; nodeId: string; onClose: () => void }) {
-  const node = NODES.find((n) => n.id === nodeId)!;
+  const node = (NODES.find((n) => n.id === nodeId) ?? homeNode(nodeId))!;
+  const home = isHomeField(nodeId);
   const now = Date.now();
   const near = nearField(s, nodeId);
-  const crops = cropsOfField(nodeId);
+  const crops = fieldCrops(nodeId);
   const chosen = s.settings.farmSeed?.[nodeId] ?? pickSeed(s, nodeId);
   const n = fieldCounts(s, nodeId, now);
   const auto = !!s.settings.autoFarm?.[nodeId];
   const seeds = chosen ? seedCount(s, chosen) : 0;
   const farmLv = level(s, 'farming');
-  const plots = plotsOf(nodeId);
-  const cols = Math.ceil(plots.length / 4);
+  const plots = fieldPlotIds(s, nodeId).map((id) => ({ id }));
+  const cols = home ? 4 : Math.ceil(plots.length / 4);
   const [pick, setPick] = useState<string | null>(null);
   const choose = (id: string) => store.dispatch((g) => setSettings(g, { farmSeed: { ...g.settings.farmSeed, [nodeId]: id } }));
 
@@ -39,7 +41,7 @@ export function FarmSheet({ s, nodeId, onClose }: { s: GameState; nodeId: string
       <div className="sheet-head">
         <button className="back" onClick={onClose}>{tl('‹ 返回')}</button>
         <h2>{node.name}</h2>
-        <small className="muted">{tl`${REGIONS[node.region].name} · ${node.farm!.map(tierName).join(tl('、'))} 作物 · ${plots.length} 格地`}</small>
+        <small className="muted">{home ? tl`家园岛屿 · 全部作物 · ${plots.length} 格地` : tl`${REGIONS[node.region].name} · ${node.farm!.map(tierName).join(tl('、'))} 作物 · ${plots.length} 格地`}</small>
       </div>
 
       <div className="farm-grid" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
@@ -63,7 +65,8 @@ export function FarmSheet({ s, nodeId, onClose }: { s: GameState; nodeId: string
         {n.next < Infinity && <span className="muted">{tl` · 下一格约 ${dur(n.next)}后熟`}</span>}
       </p>
 
-      {!near && (
+      {!near && home && <p className="go far-bank muted">{tl('要在家园岛屿上才能种地（作物不在旁边也照样长）')}</p>}
+      {!near && !home && (
         <div className="go far-bank">
           <span className="muted">{tl('要站在田里才能种地（作物不在旁边也照样长）')}</span>
           <button onClick={() => { store.requestWalk(nodeId); onClose(); }}>{tl`寻路去${node.name}`}</button>
@@ -124,8 +127,8 @@ function PlotDetail({ s, id, now }: { s: GameState; id: string; now: number }) {
 /** 这块田里种了哪些作物：每种几格、熟了几格、最快还要多久（用户 10-23 要求农田页显示种植物信息） */
 function FieldCrops({ s, nodeId, now }: { s: GameState; nodeId: string; now: number }) {
   const by = new Map<string, { n: number; ripe: number; dry: number; next: number }>();
-  for (const p of plotsOf(nodeId)) {
-    const plot = s.farm?.[p.id];
+  for (const id of fieldPlotIds(s, nodeId)) {
+    const plot = s.farm?.[id];
     if (!plot) continue;
     const e = by.get(plot.crop) ?? { n: 0, ripe: 0, dry: 0, next: Infinity };
     e.n++;
@@ -164,10 +167,11 @@ const fertLv = (s: GameState, nodeId: string) => {
 
 /** 施肥和洒水器（用户 10-23 要求增加农耕玩法） */
 function FarmGear({ s, nodeId, near }: { s: GameState; nodeId: string; near: boolean }) {
-  const node = NODES.find((n) => n.id === nodeId)!;
+  const node = (NODES.find((n) => n.id === nodeId) ?? homeNode(nodeId))!;
   const fert = s.settings.farmFert?.[nodeId] ?? '';
   const setFert = (id: string) => store.dispatch((g) => setSettings(g, { farmFert: { ...g.settings.farmFert, [nodeId]: id } }));
-  const has = s.sprinklers?.includes(nodeId);
+  const barrel = isHomeField(nodeId) && homeBarrel(s);
+  const has = s.sprinklers?.includes(nodeId) || barrel;
   const kits = fertCount(s, 'sprinkler');
   const rain = isRaining(node.region);
   return (
@@ -185,7 +189,7 @@ function FarmGear({ s, nodeId, near }: { s: GameState; nodeId: string; near: boo
       {fert && !fertCount(s, fert) && <p className="warn small">{tl`${ITEMS[fert].name}用完了，种下的不会施肥。在工坊能做。`}</p>}
       <div className="row-fert">
         <span>{tl('洒水器')}</span>
-        {has ? <b className="gold">{tl('已安装 · 新种的自动浇水')}</b> : (
+        {has ? <b className="gold">{barrel && !s.sprinklers?.includes(nodeId) ? tl('岛上有雨水桶 · 新种的自动浇水') : tl('已安装 · 新种的自动浇水')}</b> : (
           <>
             <button className="pill" disabled={!near || !kits} onClick={() => store.farm((g, t) => installSprinkler(g, nodeId, t))}>
               <Icon item="sprinkler" size={14} />{tl(' 安装 ')}<small>{tl`有 ${kits} 个`}</small>

@@ -24,8 +24,8 @@ export const homeSize = (s: GameState) => HOME_SIZES[homeLevel(s)];
 /** 岛上的传送门（3×2，占着不能盖东西），进岛后站在它下面 */
 export const HOME_PORTAL = { x: ISLAND_C - 1, y: ISLAND_C + 6, w: 3, h: 2 };
 export const HOME_SPAWN = { x: ISLAND_C, y: ISLAND_C + 9 };
-/** 城里的两个传送门 */
-export const PORTAL_IDS = ['portal_home', 'portal_home2'];
+/** 城里的家园传送门：两座主城和几座外圈城镇都有（以前只认两座主城的，外圈城的进不去） */
+export const PORTAL_IDS = NODES.filter((n) => n.portal).map((n) => n.id);
 
 function hash(x: number, y: number, salt = 0) {
   let h = (x * 374761393 + y * 668265263 + salt * 2147483647) | 0;
@@ -66,10 +66,11 @@ export const isHomeLand = (x: number, y: number, size: number) => {
   return g === 'grass' || g === 'sand';
 };
 
-export type BuildCat = 'struct' | 'floor' | 'furniture' | 'station' | 'outdoor' | 'trophy';
+export type BuildCat = 'struct' | 'floor' | 'furniture' | 'decor' | 'station' | 'farm' | 'outdoor' | 'trophy';
 export const BUILD_CATS: { id: BuildCat; name: string }[] = [
   { id: 'struct', name: tl('墙和门') }, { id: 'floor', name: tl('地板') }, { id: 'furniture', name: tl('家具') },
-  { id: 'station', name: tl('制作台') }, { id: 'outdoor', name: tl('户外') }, { id: 'trophy', name: tl('战利品') },
+  { id: 'decor', name: tl('饰品') }, { id: 'station', name: tl('制作台') }, { id: 'farm', name: tl('农田') },
+  { id: 'outdoor', name: tl('户外') }, { id: 'trophy', name: tl('战利品') },
 ];
 
 export interface BuildDef {
@@ -91,6 +92,12 @@ export interface BuildDef {
   chest?: boolean;
   /** 晚上会亮 */
   light?: boolean;
+  /** 家园农田：一块 4×4 的地，能种所有已解锁的作物，最多 8 块 */
+  plot?: boolean;
+  /** 舒适度（不写就按种类给默认值，见 comfortOf） */
+  comfort?: number;
+  /** 会自己产出东西：每 min 分钟一个 item，最多攒 cap 个（人不在、离线也攒） */
+  produce?: { item: string; min: number; cap: number };
   desc?: string;
 }
 
@@ -191,12 +198,49 @@ export const BUILDS: BuildDef[] = [
   b('torch', tl('火把'), 'outdoor', 1, 1, [c('plain_log', 1), c('cloth_1', 1)], { light: true }),
   b('stone_lantern', tl('石灯笼'), 'outdoor', 1, 1, [c('stone', 12)], { light: true }),
   b('tent', tl('帐篷'), 'outdoor', 2, 2, [c('plank_1', 6), c('cloth_2', 12)]),
-  b('beehive', tl('蜂箱'), 'outdoor', 1, 1, [c('plank_2', 4)]),
+  b('beehive', tl('蜂箱'), 'outdoor', 1, 1, [c('plank_2', 4)], { produce: { item: 'honey', min: 30, cap: 8 }, desc: tl('每 30 分钟产 1 份蜂蜜，最多攒 8 份。岛上每有一个花坛或花车，产蜜快 10%（最多快 50%）。') }),
   b('dog_house', tl('狗屋'), 'outdoor', 2, 1, [c('plank_2', 8)]),
   b('birdbath', tl('鸟浴盆'), 'outdoor', 1, 1, [c('stone', 10)]),
   b('garden_bed', tl('菜畦'), 'outdoor', 2, 1, [c('plank_1', 4), c('seed_potato', 2)]),
   b('windmill', tl('小风车'), 'outdoor', 2, 2, [c('plank_3', 20), c('cloth_3', 6)]),
   b('st_atelier', tl('珍材台'), 'station', 2, 1, [c('plank_4', 10), c('crystal_1', 5)], { station: 'atelier' }),
+  // ───── 10-27 新增：农田、饰品、家具、户外 ─────
+  b('farm_plot', tl('家园农田'), 'farm', 4, 4, [c('plank_2', 16), c('stone', 30), c('fert_basic', 4)], {
+    plot: true, comfort: 2, desc: tl('一块 4×4 的田，能种所有已经解锁的作物（不分阶级），岛上任何地方都能打理，也能开自动补种、施肥、装洒水器。最多 8 块。'),
+  }),
+  b('water_barrel', tl('雨水桶'), 'farm', 1, 1, [c('plank_1', 4), c('iron_bar', 1)], { desc: tl('岛上有雨水桶，家园农田新种下的作物自动浇水（和洒水器一样）。') }),
+  b('compost', tl('堆肥箱'), 'farm', 1, 1, [c('plank_1', 6), c('green_herb', 4)], { produce: { item: 'fert_basic', min: 60, cap: 6 }, desc: tl('每 60 分钟堆出 1 份普通肥料，最多攒 6 份。') }),
+  b('painting', tl('风景画'), 'decor', 1, 1, [c('plank_1', 2), c('cloth_1', 2), c('green_herb', 2)]),
+  b('candle', tl('烛火'), 'decor', 1, 1, [c('copper_bar', 1), c('wheat', 2)], { light: true }),
+  b('teddy', tl('布偶熊'), 'decor', 1, 1, [c('cloth_2', 3), c('hide_1', 2)]),
+  b('books', tl('书堆'), 'decor', 1, 1, [c('plank_1', 1), c('cloth_1', 2)]),
+  b('tea_set', tl('茶具'), 'decor', 1, 1, [c('stone', 4), c('tin_bar', 1)]),
+  b('music_box', tl('八音盒'), 'decor', 1, 1, [c('plank_3', 2), c('copper_bar', 2), c('sapphire', 1)], { comfort: 8 }),
+  b('crystal_ball', tl('水晶球'), 'decor', 1, 1, [c('crystal_2', 4), c('tin_bar', 1)], { light: true, comfort: 8 }),
+  b('bonsai', tl('盆景'), 'decor', 1, 1, [c('stone', 3), c('pine_log', 2)]),
+  b('paper_lantern', tl('纸灯笼'), 'decor', 1, 1, [c('cloth_1', 2), c('plank_1', 1)], { light: true }),
+  b('hourglass', tl('沙漏'), 'decor', 1, 1, [c('plank_2', 2), c('tin_bar', 2)]),
+  b('ship_model', tl('帆船模型'), 'decor', 1, 1, [c('plank_3', 3), c('cloth_2', 2)], { comfort: 7 }),
+  b('gem_case', tl('宝石展柜'), 'decor', 1, 1, [c('plank_4', 3), c('ruby', 1), c('sapphire', 1)], { comfort: 10 }),
+  b('pumpkin_lamp', tl('南瓜灯'), 'decor', 1, 1, [c('pumpkin', 3)], { light: true }),
+  b('plush_cat', tl('猫咪玩偶'), 'decor', 1, 1, [c('cloth_3', 3)]),
+  b('trophy_cup', tl('金奖杯'), 'decor', 1, 1, [c('runic_bar', 2), c('plank_4', 1)], { comfort: 12 }),
+  b('bunk_bed', tl('上下铺'), 'furniture', 1, 2, [c('plank_2', 10), c('cloth_2', 6)]),
+  b('bookcase_tall', tl('大书柜'), 'furniture', 2, 1, [c('plank_3', 12), c('cloth_2', 4)], { comfort: 7 }),
+  b('counter', tl('料理台'), 'furniture', 2, 1, [c('plank_2', 6), c('stone', 8)]),
+  b('round_table', tl('圆桌'), 'furniture', 2, 2, [c('plank_3', 10)]),
+  b('throne', tl('王座'), 'furniture', 1, 1, [c('plank_5', 8), c('cloth_5', 6), c('runic_bar', 2)], { comfort: 14 }),
+  b('bed_royal', tl('华丽大床'), 'furniture', 2, 2, [c('plank_5', 14), c('cloth_5', 12), c('titanium_bar', 2)], { comfort: 14 }),
+  b('gazebo', tl('凉亭'), 'outdoor', 3, 3, [c('plank_3', 30), c('stone', 40)], { comfort: 14 }),
+  b('swing', tl('秋千'), 'outdoor', 2, 1, [c('plank_2', 8), c('iron_bar', 2)], { comfort: 6 }),
+  b('maple_tree', tl('枫树'), 'outdoor', 1, 1, [c('oak_log', 5), c('green_herb', 2)]),
+  b('palm_tree', tl('椰子树'), 'outdoor', 1, 1, [c('cedar_log', 5)]),
+  b('boat', tl('小木船'), 'outdoor', 3, 1, [c('plank_3', 16), c('cloth_2', 4)], { comfort: 6 }),
+  b('coop', tl('鸡舍'), 'outdoor', 2, 2, [c('plank_2', 14), c('wheat', 10)], { comfort: 6, produce: { item: 'egg', min: 20, cap: 12 }, desc: tl('每 20 分钟下 1 个鸡蛋，最多攒 12 个。鸡蛋能在灶台做煎蛋、蜂蜜蛋糕。') }),
+  b('apple_tree', tl('苹果树'), 'outdoor', 1, 1, [c('oak_log', 6), c('green_herb', 4), c('fert_basic', 2)], { produce: { item: 'apple', min: 40, cap: 6 }, desc: tl('每 40 分钟结 1 个苹果，最多挂 6 个。苹果能在灶台烤苹果派。') }),
+  b('telescope', tl('望远镜'), 'outdoor', 1, 1, [c('iron_bar', 4), c('sapphire', 1)], { comfort: 7 }),
+  b('totem', tl('图腾柱'), 'outdoor', 1, 1, [c('oak_log', 6), c('ruby', 1)], { comfort: 7 }),
+  b('flower_cart', tl('花车'), 'outdoor', 2, 1, [c('plank_2', 8), c('green_herb', 6)]),
 ];
 for (const d of BUILDS) if (d.station && !d.desc) d.desc = tl`能做${NODES.find((n) => n.id === d.station)?.name.replace(tl('落霞城·'), '')}里的所有东西，站在岛上就能直接干活。`;
 export const BUILD_BY_ID: Record<string, BuildDef> = Object.fromEntries(BUILDS.map((d) => [d.id, d]));
@@ -215,14 +259,22 @@ export const isTrophy = (itemId: string) => ITEMS[itemId]?.category === 'deco' |
 const key = (x: number, y: number) => `${x},${y}`;
 const emptyHome = (): NonNullable<GameState['home']> => ({ lv: 0, floors: {}, things: [] });
 
-/** 每一格上摆的是哪件东西（things 的下标） */
-export function thingGrid(home: GameState['home']): Map<string, number> {
+/**
+ * 地毯这类「铺在地上的家具」（floor 标记但不是地板）在下层，桌椅床在上层：上面能压着地毯摆家具（10-27 修）。
+ * 农田也算下层：田上不能摆东西，田和地毯也不能叠。
+ */
+export const underLayer = (d: BuildDef) => !!d.floor || !!d.plot;
+
+/** 每一格上摆的是哪件东西（things 的下标）；layer 不写 = 两层都算，上层优先 */
+export function thingGrid(home: GameState['home'], layer?: 'top' | 'under'): Map<string, number> {
   const m = new Map<string, number>();
-  (home?.things ?? []).forEach((t, i) => {
+  const put = (under: boolean) => (home?.things ?? []).forEach((t, i) => {
     const d = buildDef(t.id);
-    if (!d) return;
+    if (!d || underLayer(d) !== under) return;
     for (let dy = 0; dy < d.h; dy++) for (let dx = 0; dx < d.w; dx++) m.set(key(t.x + dx, t.y + dy), i);
   });
+  if (layer !== 'top') put(true);
+  if (layer !== 'under') put(false);
   return m;
 }
 
@@ -234,19 +286,34 @@ const have = (s: GameState, item: string) => (s.bag[item] ?? 0) + (s.bank[item] 
 export const affordable = (s: GameState, cost: ItemStack[]) => cost.every((i) => have(s, i.item) >= i.qty);
 
 /** 能不能在 (x, y) 放这件东西；不能就返回原因 */
-export function canPlace(s: GameState, id: string, x: number, y: number, grid = thingGrid(s.home)): string | null {
+export function canPlace(s: GameState, id: string, x: number, y: number): string | null {
   const d = buildDef(id);
   if (!d) return tl('没有这种东西');
   if (!s.home?.inside) return tl('要在岛上才能建造');
+  if (d.plot && homePlots(s).length >= HOME_PLOT_MAX) return tl`农田最多 ${HOME_PLOT_MAX} 块`;
   const size = homeSize(s);
+  const top = thingGrid(s.home, 'top');
+  const under = thingGrid(s.home, 'under');
+  const things = s.home.things;
   for (let dy = 0; dy < d.h; dy++) for (let dx = 0; dx < d.w; dx++) {
     const cx = x + dx;
     const cy = y + dy;
+    const k = key(cx, cy);
     if (!isHomeLand(cx, cy, size)) return tl('只能盖在陆地上');
     if (inPortal(cx, cy)) return tl('传送门旁边要留出来');
-    if (d.floor && d.cat === 'floor') {
-      if (s.home.floors[key(cx, cy)] === id) return tl('已经铺过了');
-    } else if (grid.has(key(cx, cy))) return tl('这里已经有东西了');
+    if (d.cat === 'floor') {
+      if (s.home.floors[k] === id) return tl('已经铺过了');
+      const u = under.get(k);
+      if (u !== undefined && buildDef(things[u].id)?.plot) return tl('田里不能铺地板');
+    } else if (d.plot) {
+      if (top.has(k) || under.has(k)) return tl('这里已经有东西了');
+    } else if (underLayer(d)) {
+      if (under.has(k)) return tl('这里已经有东西了');
+    } else {
+      if (top.has(k)) return tl('这里已经有东西了');
+      const u = under.get(k);
+      if (u !== undefined && buildDef(things[u].id)?.plot) return tl('田里不能摆东西');
+    }
   }
   if (!affordable(s, d.cost)) return tl('材料不够');
   return null;
@@ -269,7 +336,7 @@ function refund(s: GameState, cost: ItemStack[]) {
 const clone = (s: GameState): GameState => JSON.parse(JSON.stringify(s));
 
 /** 放一件东西：材料先扣仓库再扣背包。地板铺在别的地板上就换掉，旧的退料 */
-export function placeBuild(prev: GameState, id: string, x: number, y: number): GameState {
+export function placeBuild(prev: GameState, id: string, x: number, y: number, now = Date.now()): GameState {
   if (canPlace(prev, id, x, y)) return prev;
   const s = clone(prev);
   const home = (s.home ??= emptyHome());
@@ -279,14 +346,21 @@ export function placeBuild(prev: GameState, id: string, x: number, y: number): G
     const old = home.floors[key(x, y)];
     if (old) refund(s, BUILD_BY_ID[old]?.cost ?? []);
     home.floors[key(x, y)] = id;
-  } else home.things.push({ id, x, y });
+  } else if (d.plot) {
+    // 田的编号 1-8：拆了的号空出来给下一块用
+    const used = new Set(homePlots(s).map((t) => t.n));
+    let n = 1;
+    while (used.has(n)) n++;
+    home.things.push({ id, x, y, n });
+  } else home.things.push({ id, x, y, ...(d.produce ? { at: now } : {}) });
   return s;
 }
 
 /** 拆掉一格上的东西：先拆家具和墙，没有再拆地板；材料全退回仓库 */
 export function removeAt(prev: GameState, x: number, y: number): GameState {
   if (!prev.home?.inside) return prev;
-  const i = thingGrid(prev.home).get(key(x, y));
+  // 先拆上层（家具），再拆下层（地毯、农田），最后拆地板
+  const i = thingGrid(prev.home, 'top').get(key(x, y)) ?? thingGrid(prev.home, 'under').get(key(x, y));
   const floor = prev.home.floors[key(x, y)];
   if (i === undefined && !floor) return prev;
   const s = clone(prev);
@@ -294,6 +368,7 @@ export function removeAt(prev: GameState, x: number, y: number): GameState {
   if (i !== undefined) {
     const t = home.things.splice(i, 1)[0];
     refund(s, buildDef(t.id)?.cost ?? []);
+    if (t.n) clearPlot(s, t.n);
   } else {
     delete home.floors[key(x, y)];
     refund(s, BUILD_BY_ID[floor]?.cost ?? []);
@@ -362,6 +437,100 @@ export function leaveHome(prev: GameState): GameState {
 }
 const ACTIONS_AT_HOME = (action: string) => BUILDS.some((d) => d.station && NODES.find((n) => n.id === d.station)?.actions.includes(action));
 
+// ───────── 家园农田（10-27） ─────────
+export const HOME_PLOT_MAX = 8;
+export const PLOT_W = 4;
+export const PLOT_H = 4;
+export const HOME_FIELD = 'hfield';
+/** 第 n 块家园农田的「田」id，和城里的田一样用来记设置（种子、自动补种、肥料、洒水器） */
+export const homeFieldId = (n: number) => `${HOME_FIELD}${n}`;
+export const isHomeField = (field: string) => /^hfield\d+$/.test(field);
+export const homePlots = (s: GameState) => (s.home?.things ?? []).filter((t) => t.n && buildDef(t.id)?.plot);
+/** 一块家园农田的每格地：id 和岛上的坐标 */
+export function homePlotCells(t: HomeThing): { id: string; x: number; y: number }[] {
+  const out: { id: string; x: number; y: number }[] = [];
+  for (let k = 0; k < PLOT_W * PLOT_H; k++) out.push({ id: `${homeFieldId(t.n!)}:${k}`, x: t.x + (k % PLOT_W), y: t.y + Math.floor(k / PLOT_W) });
+  return out;
+}
+/** 拆田：种着的作物退回种子，装的洒水器退回仓库，设置清掉 */
+function clearPlot(s: GameState, n: number) {
+  const field = homeFieldId(n);
+  for (const [id, p] of Object.entries(s.farm ?? {})) {
+    if (!id.startsWith(`${field}:`)) continue;
+    delete s.farm![id];
+    const seed = `seed_${p.crop}`;
+    if (ITEMS[seed]) s.bank[seed] = (s.bank[seed] ?? 0) + 1;
+  }
+  if (s.sprinklers?.includes(field)) {
+    s.sprinklers = s.sprinklers.filter((f) => f !== field);
+    s.bank.sprinkler = (s.bank.sprinkler ?? 0) + 1;
+  }
+  for (const k of ['farmSeed', 'farmFert', 'autoFarm'] as const) {
+    const m = s.settings[k] as Record<string, unknown> | undefined;
+    if (m && field in m) { const next = { ...m }; delete next[field]; (s.settings as unknown as Record<string, unknown>)[k] = next; }
+  }
+}
+
+// ───────── 舒适度（10-27 家园玩法） ─────────
+/** 默认舒适度：家具 4、饰品 5、户外 3、战利品 10，墙地板和制作台不算 */
+export function comfortOf(d: BuildDef): number {
+  if (d.comfort !== undefined) return d.comfort;
+  if (d.cat === 'trophy') return 10;
+  if (d.cat === 'decor') return 5;
+  if (d.cat === 'furniture') return d.chest ? 1 : d.floor ? 3 : 4;
+  if (d.cat === 'outdoor') return 3;
+  return 0;
+}
+/** 每档舒适度要多少分；档数 = 加成等级 */
+export const COMFORT_STEPS = [15, 40, 75, 120, 180, 250, 340, 450, 580, 750];
+/** 每档：经验 +0.5%、干活速度 +0.3%（最高 10 档 +5% / +3%） */
+export const COMFORT_XP = 0.01;
+export const COMFORT_SPEED = 0.005;
+/**
+ * 岛上摆设的舒适度：同一种东西摆得越多加得越少（第 2 件一半、第 3 件四分之一……最多算 6 件），
+ * 鼓励多摆不同的东西；地板每格 0.05 分，最多 30 分
+ */
+export function homeComfort(home: GameState['home']): number {
+  if (!home) return 0;
+  const count = new Map<string, number>();
+  for (const t of home.things) count.set(t.id, (count.get(t.id) ?? 0) + 1);
+  let sum = 0;
+  for (const [id, n] of count) {
+    const d = buildDef(id);
+    if (!d) continue;
+    const base = comfortOf(d);
+    for (let i = 0; i < Math.min(n, 6); i++) sum += base * 0.5 ** i;
+  }
+  sum += Math.min(30, Object.keys(home.floors).length * 0.05);
+  return Math.round(sum);
+}
+export const comfortLevel = (score: number) => COMFORT_STEPS.filter((x) => score >= x).length;
+/** 舒适度加成：岛上摆得越舒服，经验和干活速度越高（不管人在不在岛上，离线也算） */
+const comfortCache = { home: undefined as GameState['home'], lv: 0 };
+export function homePct(s: GameState, kind: string): number {
+  if (!s.home) return 0;
+  if (comfortCache.home !== s.home) { comfortCache.home = s.home; comfortCache.lv = comfortLevel(homeComfort(s.home)); }
+  const lv = comfortCache.lv;
+  return kind === 'xp' ? lv * COMFORT_XP : kind === 'speed' ? lv * COMFORT_SPEED : 0;
+}
+
+/** 读档时给农田排号：编号坏了或重复就补一个空号，超过 8 块的丢掉 */
+function plotNumbers() {
+  const used = new Set<number>();
+  const fix: HomeThing[] = [];
+  return (t: HomeThing) => {
+    if (!buildDef(t.id)?.plot) return true;
+    if (Number.isInteger(t.n) && t.n! >= 1 && t.n! <= HOME_PLOT_MAX && !used.has(t.n!)) { used.add(t.n!); return true; }
+    let n = 1;
+    while (used.has(n)) n++;
+    if (n > HOME_PLOT_MAX) return false;
+    used.add(n);
+    t.n = n;
+    fix.push(t);
+    return true;
+  };
+}
+
 /** 读档：清掉改过名或删掉的东西 */
 export function migrateHome(h: GameState['home']): GameState['home'] {
   if (!h) return undefined;
@@ -369,7 +538,9 @@ export function migrateHome(h: GameState['home']): GameState['home'] {
   return {
     lv,
     floors: Object.fromEntries(Object.entries(h.floors ?? {}).filter(([, id]) => BUILD_BY_ID[id]?.cat === 'floor')),
-    things: (h.things ?? []).filter((t: HomeThing) => t && buildDef(t.id) && Number.isFinite(t.x) && Number.isFinite(t.y)),
+    things: (h.things ?? []).filter((t: HomeThing) => t && buildDef(t.id) && Number.isFinite(t.x) && Number.isFinite(t.y))
+      .map((t: HomeThing) => ({ id: t.id, x: t.x, y: t.y, ...(buildDef(t.id)?.plot ? { n: t.n } : {}), ...(buildDef(t.id)?.produce ? { at: Number.isFinite(t.at) ? t.at : Date.now() } : {}) }))
+      .filter(plotNumbers()),
     inside: !!h.inside,
     ...(h.from && PORTAL_IDS.includes(h.from) ? { from: h.from } : {}),
   };
@@ -387,4 +558,61 @@ export const HOME_NODES: MapNode[] = BUILDS.filter((d) => d.station || d.chest).
     ...(d.chest ? { opens: 'bank' as const } : {}),
   };
 });
-export const homeNode = (id: string) => HOME_NODES.find((n) => n.id === id);
+/** 家园农田的「地点」：打开田地面板用，什么阶级的作物都能种 */
+const homeFieldNode = (id: string): MapNode | undefined => {
+  if (!isHomeField(id)) return undefined;
+  return { id, name: tl`家园农田 ${id.slice(HOME_FIELD.length)}`, x: -1, y: -1, region: 'town', lv: [1, 1], sprite: 'farm', actions: [], farm: [0, 1, 2, 3, 4, 5, 6, 7] };
+};
+export const homeNode = (id: string) => HOME_NODES.find((n) => n.id === id) ?? homeFieldNode(id);
+
+// ───────── 家园产出（10-27）：鸡舍下蛋、蜂箱产蜜、苹果树结果、堆肥箱出肥料 ─────────
+const FLOWERS = new Set(['flowerbed', 'flower_cart']);
+/** 一件产出建筑多久出一个（毫秒）：蜂箱看岛上有几个花坛 */
+export function produceMs(home: GameState['home'], id: string): number {
+  const p = buildDef(id)?.produce;
+  if (!p) return Infinity;
+  let k = 1;
+  if (id === 'beehive') k += Math.min(0.5, 0.1 * (home?.things.filter((t) => FLOWERS.has(t.id)).length ?? 0));
+  return (p.min * 60_000) / k;
+}
+/** 这件东西现在攒了几个 */
+export function produceReady(home: GameState['home'], t: HomeThing, now: number): number {
+  const p = buildDef(t.id)?.produce;
+  if (!p || t.at === undefined) return 0;
+  return Math.max(0, Math.min(p.cap, Math.floor((now - t.at) / produceMs(home, t.id))));
+}
+/** 岛上一共攒了多少（按物品） */
+export function homeProduce(home: GameState['home'], now: number): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const t of home?.things ?? []) {
+    const n = produceReady(home, t, now);
+    if (n) out[buildDef(t.id)!.produce!.item] = (out[buildDef(t.id)!.produce!.item] ?? 0) + n;
+  }
+  return out;
+}
+/**
+ * 收取产出，进仓库。at 填了就只收那一格上的那件。没攒满的零头接着算，攒满了从现在重新算。
+ * 返回收到的东西（没收到就原样返回存档）
+ */
+export function collectHome(prev: GameState, now: number, at?: { x: number; y: number }): { state: GameState; got: Record<string, number> } {
+  const got: Record<string, number> = {};
+  if (!prev.home?.inside) return { state: prev, got };
+  const only = at ? thingGrid(prev.home, 'top').get(key(at.x, at.y)) : undefined;
+  if (at && only === undefined) return { state: prev, got };
+  const s = clone(prev);
+  const home = s.home!;
+  home.things = home.things.map((t, i) => {
+    if (only !== undefined && i !== only) return t;
+    const n = produceReady(prev.home, t, now);
+    if (!n) return t;
+    const p = buildDef(t.id)!.produce!;
+    got[p.item] = (got[p.item] ?? 0) + n;
+    return { ...t, at: n >= p.cap ? now : t.at! + n * produceMs(prev.home, t.id) };
+  });
+  if (!Object.keys(got).length) return { state: prev, got };
+  for (const [item, n] of Object.entries(got)) s.bank[item] = (s.bank[item] ?? 0) + n;
+  return { state: s, got };
+}
+/** 岛上有雨水桶：家园农田新种的自动浇水 */
+export const homeBarrel = (s: GameState) => !!s.home?.things.some((t) => t.id === 'water_barrel');
+

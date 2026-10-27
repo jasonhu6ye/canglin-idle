@@ -1558,7 +1558,8 @@ const NAV_DY = [0, 0, 1, -1, 1, -1, 1, -1];
 /** 每个粗格子往 8 个方向能不能走（位掩码），和粗寻路的规则一样 */
 function* navMasks(m: Uint8Array) {
   for (let y = 0; y < CH; y++) {
-    if (!(y & 7)) yield;
+    // 每行都让一下：一行里每格都要查河，8 行一停时单步要 50 毫秒，画面会顿一下
+    yield;
     for (let x = 0; x < CW; x++) {
     const i = y * CW + x;
     if (!coarseOpen[i]) continue;
@@ -1587,10 +1588,12 @@ function* buildNav() {
   const sy: number[] = [];
   const cnt: number[] = [];
   const stack: number[] = [];
-  const order: number[] = [];
-  const members: number[] = [];
+  // 两百多万格：用定长数组，普通数组一路 push 扩容时整段复制，会卡几十毫秒
+  const order = new Int32Array(CW * CH);
+  const members = new Int32Array(CW * CH);
+  let filled = 0;
   for (let by = 0; by < CH; by += NB) for (let bx = 0; bx < CW; bx += NB) {
-    if (!bx) yield;
+    if (!(bx & 63)) yield;
     for (let y = by; y < Math.min(CH, by + NB); y++) for (let x = bx; x < Math.min(CW, bx + NB); x++) {
       const c0 = y * CW + x;
       if (!coarseOpen[c0] || comp[c0] >= 0) continue;
@@ -1602,8 +1605,8 @@ function* buildNav() {
       stack.push(c0);
       while (stack.length) {
         const c = stack.pop()!;
-        order.push(id);
-        members.push(c);
+        order[filled] = id;
+        members[filled++] = c;
         cnt[id]++;
         sx[id] += (c % CW) * C + C / 2;
         sy[id] += ((c / CW) | 0) * C + C / 2;
@@ -1632,9 +1635,9 @@ function* buildNav() {
   const outStart = new Int32Array(n + 1);
   const outCells: number[] = [];
   for (let k = 0, c = 0; k < n; k++) {
-    if (!(k & 4095)) yield;
+    if (!(k & 511)) yield;
     outStart[k] = outCells.length;
-    for (; c < order.length && order[c] === k; c++) {
+    for (; c < filled && order[c] === k; c++) {
       const cell = members[c];
       for (let d = 0; d < 8; d++) {
         if (!(mask[cell] & (1 << d))) continue;
@@ -1648,7 +1651,7 @@ function* buildNav() {
   const adj: number[] = [];
   navStart = new Int32Array(n + 1);
   for (let k = 0; k < n; k++) {
-    if (!(k & 4095)) yield;
+    if (!(k & 511)) yield;
     navStart[k] = adj.length;
     for (let e = outStart[k]; e < outStart[k + 1]; e++) {
       const b = comp[outCells[e]];
@@ -1662,6 +1665,7 @@ function* buildNav() {
   navAdj = Int32Array.from(adj);
   navW = new Float32Array(adj.length);
   for (let k = 0; k < n; k++) for (let e = navStart[k]; e < navStart[k + 1]; e++) {
+    if (e === navStart[k] && !(k & 2047)) yield;
     const b = navAdj[e];
     navW[e] = Math.hypot(navX[b] - navX[k], navY[b] - navY[k]);
   }
