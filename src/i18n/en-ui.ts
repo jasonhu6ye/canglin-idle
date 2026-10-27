@@ -919,4 +919,10 @@ export const EN_UI: Record<string, string> = {
   "界面": "Interface",
   "界面缩放 {0}%": "UI scale {0}%",
   "只对手机等窄屏生效，只保存在这台设备上。在手机浏览器里玩觉得地图上的面板太挤，就调到 80%～90%；看不清字就调大。": "Only affects phones and other narrow screens, and is saved on this device only. If the panels over the map feel cramped in a mobile browser, try 80%–90%; turn it up if the text is too small.",
+  "移动速度 +200%": "+200% movement speed",
+  " {0} 南瓜积分": " {0} Pumpkin Points",
+  "已兑换，在仓库里": "Claimed. It's in your bank",
+  "还差 {0} 积分": "{0} more points needed",
+  "万圣节活动已经在 11 月 1 日结束，南瓜王回去了。手里的南瓜积分还可以在上面兑换。": "The Halloween event ended on November 1 and the Pumpkin King has gone home. You can still spend your Pumpkin Points above.",
+  "冷却 {0} 小时从召唤那一刻开始算。": "The {0}-hour cooldown starts the moment you summon.",
 };

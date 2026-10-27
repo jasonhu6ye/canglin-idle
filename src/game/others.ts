@@ -6,6 +6,7 @@ import { maxHp } from '../core/sim';
 import type { GameState } from '../core/types';
 import { FIGHT, FIGHT_RANGE, FRAME_H, FRAME_W, HERO_ANIMS, type FightWeapon, HERO_FEET, HERO_PAD, outfitOf, paintHeroSheet } from './hero';
 import { besideXOf, ensureMountTex, mountKindOf, saddleBob, seatOf } from './mounts';
+import { PumpkinFx } from './pumpkinFx';
 import { T } from './tiles';
 import { WOLF_FEET, WOLF_H } from './wolfArt';
 
@@ -126,6 +127,8 @@ interface Other {
   movedAt: number;
   hp?: number;
   maxHp?: number;
+  /** 骑南瓜坐骑时的特效 */
+  fx?: PumpkinFx;
 }
 
 export class OtherPlayers {
@@ -142,7 +145,7 @@ export class OtherPlayers {
 
   destroy() {
     this.off();
-    this.others.forEach((o) => o.box.destroy());
+    this.others.forEach((o) => { o.box.destroy(); o.fx?.destroy(); });
     this.others.clear();
   }
 
@@ -206,7 +209,9 @@ export class OtherPlayers {
   private setMount(o: Other, mk: string | undefined) {
     if (o.mk === mk) return;
     o.back?.destroy(); o.front?.destroy();
+    o.fx?.destroy();
     o.back = o.front = undefined;
+    o.fx = mk === 'pumpkin' ? new PumpkinFx(this.scene) : undefined;
     o.mk = mk;
     if (!mk) return;
     ensureMountTex(this.scene, mk);
@@ -299,7 +304,7 @@ export class OtherPlayers {
       const tx = at.x, ty = at.y;
       const key = this.sheet(p.outfit);
       let o = this.others.get(p.playerId);
-      if (o && o.key !== key) { o.box.destroy(); o = undefined; }
+      if (o && o.key !== key) { o.box.destroy(); o.fx?.destroy(); o = undefined; }
       if (!o) {
         const body = this.scene.add.sprite(0, 0, key).setOrigin(0.5, (HERO_FEET + HERO_PAD.t) / FRAME_H);
         // 点别的玩家弹出菜单（查看信息、装备、加好友、交易…）
@@ -326,7 +331,7 @@ export class OtherPlayers {
       if (o.anim) o.flip = !!at.flip;
     }
     for (const [id, o] of this.others) {
-      if (!seen.has(id)) { o.box.destroy(); this.others.delete(id); continue; }
+      if (!seen.has(id)) { o.box.destroy(); o.fx?.destroy(); this.others.delete(id); continue; }
       const dx = o.tx - o.box.x, dy = o.ty - o.box.y;
       const d = Math.hypot(dx, dy);
       let moving = false;
@@ -349,6 +354,7 @@ export class OtherPlayers {
       this.pose(o, moving);
       if (this.place) this.drawBar(o);
       o.box.setDepth(o.box.y + 999);
+      o.fx?.step(now, { x: o.box.x + (o.back?.x ?? 0), y: o.box.y + (o.back?.y ?? 0), moving: moving && !o.anim, dir: o.dir === 'side' ? (o.flip ? -1 : 1) : 0, depth: o.box.depth, lite: true });
     }
   }
 }

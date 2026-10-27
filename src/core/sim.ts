@@ -3,7 +3,7 @@ import { cleanGm, gmPct, setGmClock } from './gm';
 import { GUILD_MAX_LV, cleanTech, guildPct, utcDay } from './guild';
 import { APT_MAX, APT_MIN, FOAL, growMs, HORSE_XP, horseItem, RANCH, RANCH_PENS } from './ranch';
 import { baseOf, qid, QUALITY_VALUE, rollQuality } from './quality';
-import { HW_POINT, HW_TIERS, hwFight, hwOpen, hwTierOf, hwWait } from './halloween';
+import { HW_MOUNT, HW_MOUNT_COST, HW_POINT, HW_TIERS, hwFight, hwOpen, hwShopOpen, hwTierOf, hwWait } from './halloween';
 import { OLD_JEWELS, BAR_VALUE, inTownArea, KEY_SHOP, keyOf, OLD_ENH, SCROLL_TOWN, SHARD_PER_STONE, TIERS, ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAP_W, MID_BOX, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, MAT_DAILY, MAT_PRICE, MAT_SHOP, SCROLL_DAILY, SCROLL_PRICE, SEED_SHOP, seedLevel, seedPrice, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, fastest, planRoute, travelMs, type MapNode } from './data';
 import { nextRandom } from './rng';
 import { buffMob, coopMates, COOP_DEF, COOP_DMG, dungeonFloor, GATE_AFTER_CLEAR, GATE_CD, GATE_MAX, GATE_MS, GATE_REACH, legMs, rollChest, rollChestQuality, rollFloors, teamChest, teamChestQuality, type TeamMember } from './dungeon';
@@ -1732,8 +1732,20 @@ export function openContainer(prev: GameState, id: string, from: 'bag' | 'bank',
 export function summonPumpkin(prev: GameState, d: number, now: number): GameState {
   if (!hwOpen(now) || !HW_TIERS[d] || hwWait(prev.halloween?.last, now) > 0) return prev;
   const s = startNow(prev, hwFight(d), { type: 'count', count: 1 });
-  s.halloween = { summoned: d, last: now };
+  s.halloween = { ...s.halloween, summoned: d, last: now };
   s.lastStop = null;
+  return s;
+}
+
+/** 用南瓜积分兑换南瓜坐骑：公开以后才能换，每个存档一只，直接放进仓库 */
+export function buyPumpkinMount(prev: GameState, now: number): GameState {
+  if (!hwShopOpen(now) || prev.halloween?.mount || (prev.bank[HW_POINT] ?? 0) < HW_MOUNT_COST) return prev;
+  const s = clone(prev);
+  s.bank[HW_POINT] -= HW_MOUNT_COST;
+  if (!s.bank[HW_POINT]) delete s.bank[HW_POINT];
+  s.bank[HW_MOUNT] = (s.bank[HW_MOUNT] ?? 0) + 1;
+  s.seen[HW_MOUNT] = 1;
+  s.halloween = { ...s.halloween, mount: true };
   return s;
 }
 

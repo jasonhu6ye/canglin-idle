@@ -1,7 +1,7 @@
-import { actionDuration, advance, buySeed, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour, openContainer, redeemCode, toggleMount, moveSpeed, rainBonus, summonPumpkin, placeFoal, collectHorse, RANCH_NODE, bagRoomFor, playerAttackMs, playerBonuses, salvage, salvageValue, sortBank, SALVAGE_NODES, SALVAGE_BONUS, startAt } from './sim';
+import { actionDuration, advance, buySeed, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour, openContainer, redeemCode, toggleMount, moveSpeed, rainBonus, summonPumpkin, buyPumpkinMount, placeFoal, collectHorse, RANCH_NODE, bagRoomFor, playerAttackMs, playerBonuses, salvage, salvageValue, sortBank, SALVAGE_NODES, SALVAGE_BONUS, startAt } from './sim';
 import { baseOf, qid, qualityOdds, rollQuality } from './quality';
 import { claimMail, clearMail, GIFTS, HW_DAILY_BOXES, stepMail, unreadMail } from './mail';
-import { HW_BOX, HW_END, HW_POINT, HW_TIERS, hwFight } from './halloween';
+import { HW_BOX, HW_END, HW_MOUNT, HW_MOUNT_COST, HW_POINT, HW_REVEAL, HW_TIERS, hwFight } from './halloween';
 import { APT_MAX, APT_MIN, aptOf, FOAL, FOAL_MS, growMs, HORSE_XP } from './ranch';
 import { SPECIES } from './bestiary';
 import { levelForXp, speedForLevel, XP_TABLE } from './xp';
@@ -906,6 +906,26 @@ describe('万圣节南瓜王', () => {
     expect(summonPumpkin(s, 1, T0 + HOUR - 1)).toBe(s);
     expect(summonPumpkin(s, 1, T0 + HOUR).halloween?.summoned).toBe(1);
     expect(summonPumpkin(strong(), 0, HW_END)).toEqual(strong());
+  });
+  it('南瓜坐骑：公开前换不了，公开后积分够才能换，每个存档一只，移速 +200%', () => {
+    const s = strong();
+    s.bank[HW_POINT] = HW_MOUNT_COST + 5;
+    expect(buyPumpkinMount(s, HW_REVEAL - 1)).toBe(s);
+    const a = buyPumpkinMount(s, HW_REVEAL);
+    expect(a.bank[HW_MOUNT]).toBe(1);
+    expect(a.bank[HW_POINT]).toBe(5);
+    expect(a.halloween?.mount).toBe(true);
+    a.bank[HW_POINT] = HW_MOUNT_COST;
+    expect(buyPumpkinMount(a, HW_END + 1)).toBe(a);
+    const poor = strong();
+    poor.bank[HW_POINT] = HW_MOUNT_COST - 1;
+    expect(buyPumpkinMount(poor, HW_REVEAL)).toBe(poor);
+    // 召唤南瓜王不会把兑换记录冲掉
+    expect(summonPumpkin(a, 0, T0).halloween?.mount).toBe(true);
+    a.bag[HW_MOUNT] = 1;
+    let r = equip(a, HW_MOUNT);
+    r = toggleMount(r, true);
+    expect(moveSpeed(r)).toBeCloseTo(moveSpeed(strong()) * 3);
   });
   it('打赢一次就离开，掉对应数量的礼盒；礼盒开出的积分直接进仓库', () => {
     let s = summonPumpkin(strong(), 0, T0);

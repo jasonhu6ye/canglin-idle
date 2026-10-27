@@ -1106,3 +1106,8 @@ h2.dg-blue { color: #6ab4ff; }
 .hb-first > b { display: block; margin-bottom: 6px; color: var(--gold); font-size: 13px; }
 .guild .guild-list li > span:first-child { flex: 1; min-width: 0; }
 .guild .guild-list .row-tools small, .guild .guild-list .row-tools button { white-space: nowrap; }
+/* 南瓜积分兑换（10-27） */
+.hw-shop { display: flex; gap: 10px; align-items: center; margin: 8px 12px; padding: 8px 10px; border: 1px solid #c86a1a; border-radius: 8px; background: linear-gradient(135deg, rgba(120, 40, 10, 0.45), rgba(60, 20, 80, 0.45)); box-shadow: 0 0 12px rgba(255, 140, 40, 0.25) inset; }
+.hw-shop-icon { width: 56px; height: 56px; image-rendering: pixelated; flex: none; filter: drop-shadow(0 0 6px rgba(255, 160, 50, 0.7)); }
+.hw-shop b { color: #ffb050; }
+.hw-shop-row { display: flex; gap: 10px; align-items: center; justify-content: space-between; margin-top: 6px; flex-wrap: wrap; }

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { MONSTERS, NODES } from '../core/data';
-import { HW_ALTAR, HW_BOX, HW_COOLDOWN, HW_END, HW_POINT, HW_TIERS, hwBossId, hwFight, hwOpen, hwWait } from '../core/halloween';
-import { combatEstimate, combatLevel, startNow, summonPumpkin } from '../core/sim';
+import { ITEMS, MONSTERS, NODES } from '../core/data';
+import { HW_ALTAR, HW_BOX, HW_COOLDOWN, HW_END, HW_MOUNT, HW_MOUNT_COST, HW_POINT, HW_TIERS, hwBossId, hwFight, hwOpen, hwShopOpen, hwWait } from '../core/halloween';
+import { buyPumpkinMount, combatEstimate, combatLevel, startNow, summonPumpkin } from '../core/sim';
+import { pumpkinMountIconUrl } from '../game/pumpkinArt';
 import type { GameState } from '../core/types';
 import type { MapNode } from '../core/data';
 import { kingFrames, posterAltarUrl, posterBannerUrl, posterRewardUrl, pumpkinBoxUrl, pumpkinPointUrl } from '../game/halloweenArt';
@@ -61,6 +62,30 @@ function KingAnim({ d, size = 96 }: { d: number; size?: number }) {
   return <canvas ref={ref} width={96} height={96} className="hw-king" style={{ width: size, height: size }} />;
 }
 
+/** 南瓜积分兑换（10-27）：南瓜坐骑，10 月 31 日以前不显示 */
+function PumpkinShop({ s, now }: { s: GameState; now: number }) {
+  if (!hwShopOpen(now)) return null;
+  const pts = s.bank[HW_POINT] ?? 0;
+  const got = !!s.halloween?.mount;
+  const it = ITEMS[HW_MOUNT];
+  return (
+    <div className="hw-shop">
+      <img className="hw-shop-icon" src={pumpkinMountIconUrl()} alt="" />
+      <div>
+        <b>{it.name}</b> <span className="good">{tl('移动速度 +200%')}</span>
+        <div className="muted small">{it.desc}</div>
+        <div className="hw-shop-row">
+          <span><img src={pumpkinPointUrl()} alt="" className="inline-icon" />{tl` ${fmtNum(HW_MOUNT_COST)} 南瓜积分`}</span>
+          {got ? <span className="good">{tl('已兑换，在仓库里')}</span>
+            : <button className="primary" disabled={pts < HW_MOUNT_COST} onClick={() => store.dispatch((g) => buyPumpkinMount(g, Date.now()))}>
+              {pts < HW_MOUNT_COST ? tl`还差 ${fmtNum(HW_MOUNT_COST - pts)} 积分` : tl('兑换')}
+            </button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** 祭坛面板：选难度召唤南瓜王 */
 export function AltarSheet({ s, node, onClose }: { s: GameState; node: MapNode; onClose: () => void }) {
   const now = useNow();
@@ -97,8 +122,9 @@ export function AltarSheet({ s, node, onClose }: { s: GameState; node: MapNode; 
         <span><img src={pumpkinBoxUrl()} alt="" />{tl(' 未开礼盒 ')}<b>{fmtNum(have(s, HW_BOX))}</b></span>
         <button className="link" onClick={openHalloween}>{tl('活动说明 ›')}</button>
       </div>
+      <PumpkinShop s={s} now={now} />
       {!open ? (
-        <p className="pad muted">{tl('万圣节活动已经在 11 月 1 日结束，南瓜王回去了。手里的南瓜积分请留着，兑换商店开放后可以使用。')}</p>
+        <p className="pad muted">{tl('万圣节活动已经在 11 月 1 日结束，南瓜王回去了。手里的南瓜积分还可以在上面兑换。')}</p>
       ) : summoned !== undefined ? (
         <div className="hw-summoned">
           <KingAnim d={summoned} size={72} />
@@ -135,7 +161,7 @@ export function AltarSheet({ s, node, onClose }: { s: GameState; node: MapNode; 
           </div>
         </>
       )}
-      <p className="pad muted small">{tl`南瓜积分在活动结束前可以兑换限定物品，兑换商店即将开放。冷却 ${HW_COOLDOWN / 3_600_000} 小时从召唤那一刻开始算。`}</p>
+      <p className="pad muted small">{hwShopOpen(now) ? tl`冷却 ${HW_COOLDOWN / 3_600_000} 小时从召唤那一刻开始算。` : tl`南瓜积分在活动结束前可以兑换限定物品，兑换商店即将开放。冷却 ${HW_COOLDOWN / 3_600_000} 小时从召唤那一刻开始算。`}</p>
     </div>
   );
 }

@@ -906,4 +906,6 @@ export const EN_CORE: Record<string, string> = {
   "城东碎石坡": "East Gate Rubble",
   "城北小水塘": "North Gate Pond",
   "副本宝箱会开出来，公会商店也能换。": " Found in dungeon chests, or from the guild shop.",
+  "南瓜灵驹": "Jack o' Lantern Steed",
+  "万圣节限定坐骑。会蹦会跳的巨型南瓜灯，肚子里的鬼火从刻出来的眼睛和嘴里透出光，跑起来一路洒下火星和幽紫鬼火。骑乘时移动速度 +200%。用南瓜积分兑换。": "A Halloween-exclusive mount: a giant, bouncing jack-o'-lantern. The ghostfire inside shines out through its carved eyes and grin, and it leaves a trail of embers and violet wisps wherever it hops. +200% movement speed while riding. Exchanged for Pumpkin Points.",
 };

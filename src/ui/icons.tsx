@@ -1,6 +1,7 @@
 import { homeItemIconUrl } from '../game/homeArt';
 import { baseOf } from '../core/quality';
-import { HW_BOX, HW_POINT } from '../core/halloween';
+import { HW_BOX, HW_MOUNT, HW_POINT } from '../core/halloween';
+import { pumpkinMountIconUrl } from '../game/pumpkinArt';
 import { pumpkinBoxUrl, pumpkinPointUrl } from '../game/halloweenArt';
 import { CROPS, ITEMS, MONSTERS, TIERS, tierName } from '../core/data';
 
@@ -15,7 +16,7 @@ import { foalIconUrl, horseIconUrl } from '../game/horseArt';
 import { aptOf, coatOf, FOAL } from '../core/ranch';
 
 /** 坐骑图标：马按毛色画，别的是狼 */
-export const mountIconUrl = (id: string) => (aptOf(id) ? horseIconUrl(coatOf(aptOf(id))) : wolfIconUrl());
+export const mountIconUrl = (id: string) => (id === HW_MOUNT ? pumpkinMountIconUrl() : aptOf(id) ? horseIconUrl(coatOf(aptOf(id))) : wolfIconUrl());
 import type { SkillId } from '../core/types';
 
 /*

@@ -29,6 +29,16 @@ export const hwTierOf = (monsterId: string) => {
   return m ? Number(m[1]) - 1 : -1;
 };
 
+/**
+ * 南瓜坐骑（用户 10-27）：用南瓜积分兑换，移速 +200%。
+ * 先不公布：10 月 31 日 0 点（本地，活动最后一天）以前界面上看不到它和价格，之后才显示、才能换；
+ * 活动结束后积分还能拿来换。每个存档限一只。
+ */
+export const HW_MOUNT = 'mount_pumpkin';
+export const HW_MOUNT_COST = 1000;
+export const HW_REVEAL = new Date(2026, 9, 31).getTime();
+export const hwShopOpen = (now: number) => now >= HW_REVEAL;
+
 export const hwOpen = (now: number) => now < HW_END;
 /** 还要等多久才能再召唤（毫秒，0 表示现在就行） */
 export const hwWait = (last: number | undefined, now: number) => (last === undefined ? 0 : Math.max(0, last + HW_COOLDOWN - now));

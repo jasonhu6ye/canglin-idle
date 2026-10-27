@@ -13,7 +13,7 @@ import { doorOf, FACILITY_NAME, townAt, TOWNS, type Facility, type TownDef } fro
 export { MAP_W, MAP_H, MID_BOX, OLD_BOX, at, atW, atF } from './geo';
 import { MAP_W, MAP_H, MID_BOX, OLD_BOX, at, atW, atF } from './geo';
 import { APT_MAX, APT_MIN, COAT_NAME, coatOf, FOAL, FOAL_CHANCE, horseItem, RANCH } from './ranch';
-import { HW_ALTAR, HW_BOX, HW_POINT, HW_TIERS, hwTierOf } from './halloween';
+import { HW_ALTAR, HW_BOX, HW_MOUNT, HW_POINT, HW_TIERS, hwTierOf } from './halloween';
 import { isEn, tl, tlc } from '../i18n';
 
 /** soon：占位技能，还没有内容（养殖，用户 10-23） */
@@ -565,6 +565,11 @@ for (let apt = APT_MIN; apt <= APT_MAX; apt++) {
 item('mount_danmark', 'Chinese can fly', 'gear', 0, {
   desc: tl('黑毛银鬃的巨狼，红眼，身上有旧伤疤。骑乘时移动速度 +160%。在「更多」页输入兑换码获得。'),
   equip: { slot: 'mount', skill: 'hitpoints', level: 1, attack: 0, strength: 0, defence: 0, move: 1.6 },
+});
+// 南瓜坐骑（用户 10-27）：万圣节南瓜积分兑换，见 halloween.ts
+item(HW_MOUNT, tl('南瓜灵驹'), 'gear', 0, {
+  desc: tl('万圣节限定坐骑。会蹦会跳的巨型南瓜灯，肚子里的鬼火从刻出来的眼睛和嘴里透出光，跑起来一路洒下火星和幽紫鬼火。骑乘时移动速度 +200%。用南瓜积分兑换。'),
+  equip: { slot: 'mount', skill: 'hitpoints', level: 1, attack: 0, strength: 0, defence: 0, move: 2 },
 });
 
 const HERB_FOR_TIER = ['green_herb', 'fire_bloom', 'moon_herb', 'silver_leaf', 'flame_heart', 'frost_lotus', 'frost_lotus', 'frost_lotus'];

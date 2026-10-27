@@ -1602,6 +1602,7 @@ insert into public.item_values (id, value, task_tier) values
 ('mount_horse_97',0,null),
 ('mount_horse_98',0,null),
 ('mount_horse_99',0,null),
+('mount_pumpkin',0,null),
 ('oak_log',25,3),
 ('onion',10,null),
 ('pack_1',56,null),
