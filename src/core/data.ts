@@ -334,12 +334,12 @@ KEY_TIERS.forEach((t) => {
   item(keyId('green', t), tl`T${t + 1} 绿洞副本钥匙`, 'misc', BAR_VALUE[t] * 15, {
     tier: t,
     desc: tl`绿洞（单人地下副本）钥匙。在地表使用，身边会开出一个 T${t + 1} 绿洞洞口，30 分钟后消失。绿洞 1-4 层随机，一个人或组队都能进。` +
-      (shop('green') ? tl('城镇商人有卖，副本宝箱也会开出来。') : tl('只能从副本宝箱里开出来。')),
+      (shop('green') ? tl('城镇商人有卖，副本宝箱也会开出来。') : tl('副本宝箱会开出来，公会商店也能换。')),
   });
   item(keyId('blue', t), tl`T${t + 1} 蓝洞副本钥匙`, 'misc', BAR_VALUE[t] * 30, {
     tier: t,
     desc: tl`蓝洞（多人地下副本）钥匙。在地表使用，身边会开出一个 T${t + 1} 蓝洞洞口，30 分钟后消失。蓝洞 2-7 层随机，怪更强，必须组队才能进。` +
-      (shop('blue') ? tl('城镇商人有卖，副本宝箱也会开出来。') : tl('只能从副本宝箱里开出来。')),
+      (shop('blue') ? tl('城镇商人有卖，副本宝箱也会开出来。') : tl('副本宝箱会开出来，公会商店也能换。')),
   });
 });
 export const SCROLL_TOWN = 'scroll_town';
@@ -1661,7 +1661,8 @@ export const cropsOfField = (field: string) => {
 };
 
 const NODES_OF: Record<string, MapNode[]> = {};
-for (const n of NODES) if (!n.sea) for (const a of n.actions) (NODES_OF[a] ??= []).push(n);
+// 海岛（航行没开放）和暂未开放的地点（强化台）不算：做不了的动作不能排进队列，「去做」也不会跳过去
+for (const n of NODES) if (!n.sea && !n.closed) for (const a of n.actions) (NODES_OF[a] ??= []).push(n);
 /** 能做这个动作的所有地点（两座城的同类建筑会重复） */
 export const nodesOfAction = (id: string | undefined): MapNode[] => (id ? NODES_OF[id] ?? [] : []);
 /** 动作所在地点；给了位置就挑过去最快的那个（按真实步行距离，给了石碑就把传送也算上） */
@@ -1678,7 +1679,7 @@ export function nearestVariant(hint: string, near: { x: number; y: number }, sto
   const ids = Object.keys(ACTIONS).filter((id) => id === hint || id.startsWith(`${hint}_`));
   if (!ids.length) return undefined;
   const byNode = new Map<MapNode, string>();
-  for (const id of ids) for (const n of nodesOfAction(id)) if (!byNode.has(n) && !n.closed) byNode.set(n, id);
+  for (const id of ids) for (const n of nodesOfAction(id)) if (!byNode.has(n) && !n.closed && !n.sea) byNode.set(n, id);
   const best = fastest([...byNode.keys()], near, stones, speed);
   return best && { action: byNode.get(best.node)!, node: best.node };
 }

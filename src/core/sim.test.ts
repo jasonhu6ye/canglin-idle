@@ -6,7 +6,7 @@ import { APT_MAX, APT_MIN, aptOf, FOAL, FOAL_MS, growMs, HORSE_XP } from './ranc
 import { SPECIES } from './bestiary';
 import { levelForXp, speedForLevel, XP_TABLE } from './xp';
 import type { GameState, SkillAction, TaskMode } from './types';
-import { MONSTERS, ACTIONS, ITEMS, CROP_DEFS, FARM_NODES, nodeOfAction, nodesOfAction, plotsOf, standOf, travelMs, WATER_SPEEDUP } from './data';
+import { MONSTERS, ACTIONS, ITEMS, CROP_DEFS, FARM_NODES, NODES, nodeOfAction, nodesOfAction, plotsOf, standOf, travelMs, WATER_SPEEDUP } from './data';
 import { fieldCounts, harvestAll, installSprinkler, plantAll, stepRain, tendPlot, waterAll } from './farm';
 import { isRaining } from './weather';
 
@@ -130,6 +130,26 @@ describe('战斗', () => {
     expect(summary.deaths).toBe(MAX_DEATH_STREAK);
     expect(summary.taskEnds[0].reason).toBe('death');
     expect(state.queue).toHaveLength(0);
+  });
+
+  it('阵亡后在离得最近的城镇复活（10-27 以前总回苍岭城）', () => {
+    const bank2 = NODES.find((n) => n.id === 'bank2')!;
+    const strong = (id: string) => { const a = ACTIONS[id]; return a.kind === 'combat' && MONSTERS[a.monster].level >= 40 && !MONSTERS[a.monster].event; };
+    const near = NODES.filter((n) => n.actions.some(strong) && !n.sea)
+      .sort((a, b) => Math.hypot(a.x - bank2.x, a.y - bank2.y) - Math.hypot(b.x - bank2.x, b.y - bank2.y))[0];
+    const fight = near.actions.find(strong)!;
+    let s = newGame(T0, 3);
+    s.bank = {};
+    s.hp = 1;
+    s = startAt(s, fight, near.id);
+    s.loc = standOf(near);
+    s.travel = null;
+    let t = T0;
+    while (s.stats.deaths === 0 && t < T0 + HOUR) { t += 1000; s = advance(s, t).state; s.hp = Math.min(s.hp, 1); }
+    expect(s.stats.deaths).toBe(1);
+    const banks = NODES.filter((n) => n.opens === 'bank').sort((a, b) => travelMs(standOf(near), standOf(a)) - travelMs(standOf(near), standOf(b)));
+    expect(banks[0].id).not.toBe('bank');
+    expect(s.loc).toEqual(standOf(banks[0]));
   });
 
   it('经验/小时估算和实际同一数量级', () => {

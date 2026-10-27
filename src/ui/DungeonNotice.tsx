@@ -78,7 +78,7 @@ export function DungeonNotice() {
               <div className="dg-keys">
                 {KEY_SHOP.map(([id, price]) => <span key={id}><Icon item={id} size={28} /><small>{fmtNum(price)}</small></span>)}
               </div>
-              <figcaption><b>{tl('⑥ 副本商人')}</b>{tl('苍岭城和落霞城仓库旁有副本商人，用金币买 T4-T6 钥匙。更高阶的钥匙只能从宝箱里开。')}</figcaption>
+              <figcaption><b>{tl('⑥ 副本商人')}</b>{tl('苍岭城和落霞城仓库旁有副本商人，用金币买 T4-T6 钥匙。T7、T8 的钥匙要从副本宝箱里开，或者用公会贡献在公会商店换。')}</figcaption>
             </figure>
           </div>
           <h3>{tl('绿洞和蓝洞')}</h3>

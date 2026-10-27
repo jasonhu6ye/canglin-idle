@@ -971,7 +971,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         return true;
       }
       s.combat = null;
-      s.loc = { ...SPAWN_TILE };
+      s.loc = reviveAt(s);
       s.travel = null;
       task.stocked = false;
       return true;
@@ -1135,7 +1135,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       keepDungeon(s);
       s.dungeon = null;
       s.combat = null;
-      s.loc = { ...SPAWN_TILE };
+      s.loc = reviveAt(s);
       return true;
     };
     /** 怪倒下：自己打过它才有掉落；记下最后一击给画面用 */
@@ -1509,6 +1509,8 @@ export function equip(prev: GameState, item: string): GameState {
 export const BANK_REACH = 5;
 /** 所有仓库和集市（两座城各有一个，存的是同一份仓库） */
 const BANKS = NODES.filter((n) => n.opens === 'bank');
+/** 阵亡复活的地方：离阵亡处最近的城镇仓库前（10-27 以前总是回苍岭城，在落霞城附近死了要跑大半张地图） */
+const reviveAt = (s: GameState) => standOf(nearestBank(s.loc, s.waystones, moveSpeed(s)));
 const MARKETS = NODES.filter((n) => n.sprite === 'market');
 const BANK_IDS = new Set(BANKS.map((n) => n.id));
 export const isBankId = (id: string | undefined) => !!id && BANK_IDS.has(id);

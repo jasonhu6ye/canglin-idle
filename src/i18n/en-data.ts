@@ -905,4 +905,5 @@ export const EN_CORE: Record<string, string> = {
   "城西小树林": "West Gate Copse",
   "城东碎石坡": "East Gate Rubble",
   "城北小水塘": "North Gate Pond",
+  "副本宝箱会开出来，公会商店也能换。": " Found in dungeon chests, or from the guild shop.",
 };

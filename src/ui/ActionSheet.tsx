@@ -6,7 +6,7 @@ import { RANCH } from '../core/ranch';
 import { SalvageSheet } from './Salvage';
 import { MonsterDetail, MonsterIcon, TraitChips } from './Bestiary';
 import { useEffect, useRef, useState } from 'react';
-import { ACTIONS, nodeOfAction, ITEMS, MONSTERS, NODES, REGIONS, SEED_SHOP, seedLevel, seedPrice, SKILLS, tierName } from '../core/data';
+import { ACTIONS, nodeOfAction, nodesOfAction, ITEMS, MONSTERS, NODES, REGIONS, SEED_SHOP, seedLevel, seedPrice, SKILLS, tierName } from '../core/data';
 import {
   actionDuration, atMarket, bestFood, buySeed, seedLocked, combatEstimate, combatStats, enqueue, level, MAX_QUEUE, moveSpeed, nearNode, setSettings, startNow, weaponStyle, xpPerHour,
 } from '../core/sim';
@@ -227,7 +227,9 @@ function Recipe({ s, a }: { s: GameState; a: SkillAction }) {
  * 产出它的动作里，先挑等级够的、再挑等级最低的；地点挑离角色最近的那一处
  */
 export function producerOf(s: GameState, item: string): { action: string; node: string } | undefined {
-  const all = Object.values(ACTIONS).filter((x): x is SkillAction => x.kind === 'skill' && x.outputs.some((o) => o.item === item && o.chance === undefined));
+  const all = Object.values(ACTIONS).filter((x): x is SkillAction => x.kind === 'skill' && x.outputs.some((o) => o.item === item && o.chance === undefined)
+    // 只在没开放的地点（强化台、海岛）做的不算，免得「去做」跳到去不了的地方
+    && nodesOfAction(x.id).some((n) => !n.closed && !n.sea));
   if (!all.length) return undefined;
   const best = all.sort((x, y) => Number(level(s, y.skill) >= y.level) - Number(level(s, x.skill) >= x.level) || x.level - y.level)[0];
   const node = nodeOfAction(best.id, s.loc, s.waystones, moveSpeed(s));

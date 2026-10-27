@@ -1751,7 +1751,9 @@ export class MapScene extends Phaser.Scene {
         this.stopWorking();
         this.walker = undefined;
         this.clearRoute();
-        this.player.setPosition(SPAWN.x * T + T / 2, SPAWN.y * T + T / 2);
+        // 复活在最近的城镇（存档里已经算好位置）
+        const at = store.state.loc;
+        this.player.setPosition(at.x * T + T / 2, at.y * T + T / 2);
         this.float(tl('阵亡，回城复活'), '#ff7a6a', true);
         if (!this.following) this.recenterCameraOnly();
         this.travelTo = undefined;

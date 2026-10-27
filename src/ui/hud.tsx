@@ -20,6 +20,12 @@ const portraits = new Map<string, string>();
  * 每小时击杀数（用户 10-25 要求替换总击杀）：按日志里最近一小时的击杀实测；
  * 刚开打击杀太少算不准时，正在打怪就用战前评估，不在打怪显示 0。
  */
+/** 最近 1 小时阵亡几次（以前显示累计总数，永远不清零；清空日志后也跟着清零） */
+const recentDeaths = () => {
+  const now = Date.now();
+  return store.combatLog.filter((e) => e.kind === 'death' && now - e.t < 3_600_000).length;
+};
+
 function killsPerHour(s: GameState): string {
   const now = Date.now();
   const kills = store.combatLog.filter((e) => e.kind === 'kill' && now - e.t < 3_600_000);
@@ -196,7 +202,7 @@ export function StatusChips({ s, extra, log, chat }: { s: GameState; extra?: Rea
       {extra}
       {(!task || s.lastStop?.reason !== 'complete') && <StopChip s={s} />}
       {body && <div className="chip">{body}</div>}
-      {log || <button className="chip dim log-chip" title={tl("日志 (L)")} onClick={openCombatLog}>{tl`⚔ 每小时击杀 ${killsPerHour(s)} · 阵亡 ${s.stats.deaths} · `}<u>{tl('展开日志 ▸')}</u></button>}
+      {log || <button className="chip dim log-chip" title={tl("日志 (L)")} onClick={openCombatLog}>{tl`⚔ 每小时击杀 ${killsPerHour(s)} · 近 1 小时阵亡 ${recentDeaths()} · `}<u>{tl('展开日志 ▸')}</u></button>}
       {chat}
     </div>
   );

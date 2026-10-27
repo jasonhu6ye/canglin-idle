@@ -331,7 +331,7 @@ export function ShopSheet({ s, node, onClose }: { s: GameState; node: MapNode; o
       </div>
       {/* 内容放进能滚动的区域（10-27：以前整页不能往下滑，下面的材料看不到） */}
       <div className="sheet-body">
-      <p className="muted pad">{tl('用仓库里的金币买副本钥匙、回城卷轴和 T1-T6 的基础材料，买到的东西进仓库。T7、T8 的钥匙只能从副本宝箱里开出来。')}</p>
+      <p className="muted pad">{tl('用仓库里的金币买副本钥匙、回城卷轴和 T1-T6 的基础材料，买到的东西进仓库。T7、T8 的钥匙要从副本宝箱里开，或者在公会商店换。')}</p>
       <div className="ranch-stats">
         <span>{tl('仓库金币 ')}<b>{fmtNum(s.bank.coins ?? 0)}</b></span>
         {!near && <button className="primary" onClick={() => { store.requestWalk(node.id); onClose(); }}>{tl('寻路到商人')}</button>}
@@ -388,9 +388,12 @@ export function ShopSheet({ s, node, onClose }: { s: GameState; node: MapNode; o
 export function TownScrollPicker({ onClose }: { onClose: () => void }) {
   const towns = TOWN_BANKS.map((b) => ({ b, name: townName(b) }));
   const go = (id: string) => {
+    const n = (g: typeof store.state) => (g.bag[SCROLL_TOWN] ?? 0) + (g.bank[SCROLL_TOWN] ?? 0);
+    const before = n(store.state);
     store.dispatch((g) => useTownScroll(g, id));
-    // 在大地图上：直接把角色挪过去；在副本里离开后大地图醒来会自己站到位置上
-    emitToGame('teleport', id);
+    // 在大地图上：直接把角色挪过去；在副本里离开后大地图醒来会自己站到位置上。
+    // 卷轴没用成（没有卷轴、在岛上）就不挪，不然等于白送一次传送
+    if (n(store.state) < before) emitToGame('teleport', id);
     onClose();
   };
   return (
