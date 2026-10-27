@@ -12,7 +12,7 @@ import { aggroMates, dgCrew, fieldCrew, fieldKey, stopKey, takeMateHits, targetC
 import { stepQuests } from './quests';
 import { migrateMail, sendMail } from './mail';
 import { stepAutoFarm, stepRain } from './farm';
-import { homeCan, homeChest, homePct, migrateHome } from './home';
+import { homeCan, homeCellIds, homeChest, homePct, migrateHome } from './home';
 import { isRaining, RAIN_FISH } from './weather';
 import { BONUS_PER_LEVEL, levelForXp, speedForLevel, XP_TABLE } from './xp';
 import type {
@@ -143,6 +143,10 @@ export function migrate(raw: unknown): GameState | null {
   if (bagIn.coins) { bankIn.coins = (bankIn.coins ?? 0) + bagIn.coins; delete bagIn.coins; }
   const seenIn = obj<Record<string, 1>>(s.seen);
   const farmIn = obj<GameState['farm']>(s.farm);
+  const homeIn = migrateHome(obj(s.home));
+  // 家园农田（10-27）的地块不在 PLOT_BY_ID 里，按存档里摆着的田算：不然一读档家园田里的庄稼就没了
+  const homeCells = homeCellIds(homeIn);
+  const okPlot = (id: string) => !!PLOT_BY_ID[id] || homeCells.has(id);
   const oldSize = num(s.mapSize, 1080) > 0 ? num(s.mapSize, 1080) : 1080;
   const sameMap = oldSize === MAP_W;
   const travel = obj<NonNullable<GameState['travel']>>(s.travel);
@@ -156,7 +160,7 @@ export function migrate(raw: unknown): GameState | null {
     xp,
     hp: Math.min(hpMax, Math.max(1, num(s.hp, hpMax))),
     // 种植改成要种子：旧存档送 10 颗土豆种子
-    bank: farmRefund(farmIn, seenIn?.seed_potato ? bankIn : { ...bankIn, seed_potato: (bankIn.seed_potato ?? 0) + 10 }),
+    bank: farmRefund(farmIn, okPlot, seenIn?.seed_potato ? bankIn : { ...bankIn, seed_potato: (bankIn.seed_potato ?? 0) + 10 }),
     bag: bagIn,
     equipment,
     queue,
@@ -186,16 +190,16 @@ export function migrate(raw: unknown): GameState | null {
     mail: migrateMail(s.mail),
     mailKeys: arr<string>(s.mailKeys).filter((k) => typeof k === 'string'),
     mailSeq: Math.max(0, num(s.mailSeq, 0), ...migrateMail(s.mail).map((m) => m.id)),
-    home: migrateHome(obj(s.home)),
+    home: homeIn,
     gates: arr<DungeonGate>(s.gates).filter((g) => obj(g) && (g.kind === 'green' || g.kind === 'blue') && TIERS[g.tier] && Number.isFinite(g.expires) && Number.isFinite(g.seed) && g.floors >= 1 && g.floors <= 7),
     gatesUsed: arr<string>(s.gatesUsed).filter((id) => typeof id === 'string').slice(-50),
     lastGateAt: Number.isFinite(s.lastGateAt) ? s.lastGateAt : undefined,
     dgResume: arr<DungeonRun>(s.dgResume).filter((r) => r && r.gate && typeof r.gate.id === 'string' && Number.isFinite(r.floor) && Number.isFinite(r.idx)).slice(-5),
     dungeon: migrateRun(obj<DungeonRun>(s.dungeon)),
-    sprinklers: arr<string>(s.sprinklers).filter((id) => FARM_NODES.some((n) => n.id === id)),
+    sprinklers: arr<string>(s.sprinklers).filter((id) => FARM_NODES.some((n) => n.id === id) || [...homeCells].some((c) => c.startsWith(`${id}:`))),
     waystones: [...new Set([WAYSTONE_HOME, ...arr<string>(s.waystones).filter((id) => WAYSTONES.some((n) => n.id === id))])],
     // 地块里种的作物改过名或删掉了就清掉
-    farm: Object.fromEntries(Object.entries(farmIn ?? {}).filter(([id, p]) => PLOT_BY_ID[id] && obj(p) && CROP_DEFS[p.crop] && Number.isFinite(p.at) && Number.isFinite(p.ripe))),
+    farm: Object.fromEntries(Object.entries(farmIn ?? {}).filter(([id, p]) => okPlot(id) && obj(p) && CROP_DEFS[p.crop] && Number.isFinite(p.at) && Number.isFinite(p.ripe))),
     // 栏位里的东西改过名或删掉了就丢掉，免得界面读不到物品
     belt: Object.fromEntries(Object.entries(obj<NonNullable<GameState['belt']>>(s.belt) ?? {}).filter(([slot, b]) => b && ITEMS[b.id] && beltSlotOf(b.id) === slot && Number.isInteger(b.qty) && b.qty > 0)),
     // 现在拥有的东西都算获得过（旧存档、导入的存档图鉴里可能漏了）
@@ -229,9 +233,9 @@ function ammoRefund(bank: Record<string, number>, olds: (Record<string, number> 
   return bank;
 }
 
-function farmRefund(farm: GameState['farm'], bank: Record<string, number>): Record<string, number> {
+function farmRefund(farm: GameState['farm'], okPlot: (id: string) => boolean, bank: Record<string, number>): Record<string, number> {
   for (const [id, p] of Object.entries(farm ?? {})) {
-    if (PLOT_BY_ID[id] || !p || !CROP_DEFS[p.crop]) continue;
+    if (okPlot(id) || !p || !CROP_DEFS[p.crop]) continue;
     bank[p.crop] = (bank[p.crop] ?? 0) + 2;
     bank[`seed_${p.crop}`] = (bank[`seed_${p.crop}`] ?? 0) + 1;
   }

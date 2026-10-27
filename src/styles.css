@@ -624,6 +624,10 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .home-fields { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 4px; }
 .home-fields li { display: flex; flex-direction: column; padding: 6px 8px; border-radius: 6px; background: rgba(255, 255, 255, 0.06); cursor: pointer; }
 .home-fields li:hover { background: rgba(255, 255, 255, 0.12); }
+.home-build-mini { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; max-height: none; }
+.home-build-mini .hb-mini-name { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; font-size: 12px; }
+.home-build-mini .hb-mini-name img { width: 28px; height: 28px; object-fit: contain; image-rendering: pixelated; }
+.home-build-mini .hb-mini-btns { display: flex; gap: 6px; margin-left: auto; }
 .home-build .pill.danger.on { background: #8a2a1e; border-color: #e05a3a; }
 .build-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px; }
 .build-list li { display: flex; gap: 6px; align-items: center; padding: 4px; border: 1px solid #4a3a28; border-radius: 3px; cursor: pointer; background: rgba(60, 40, 24, 0.5); }

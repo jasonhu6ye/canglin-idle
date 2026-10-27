@@ -368,6 +368,10 @@ export function removeAt(prev: GameState, x: number, y: number): GameState {
   if (i !== undefined) {
     const t = home.things.splice(i, 1)[0];
     refund(s, buildDef(t.id)?.cost ?? []);
+    // 拆鸡舍、蜂箱这类：攒着的东西一起收进仓库，不白白丢掉
+    const p = buildDef(t.id)?.produce;
+    const ready = p ? produceReady(prev.home, t, Date.now()) : 0;
+    if (p && ready) s.bank[p.item] = (s.bank[p.item] ?? 0) + ready;
     if (t.n) clearPlot(s, t.n);
   } else {
     delete home.floors[key(x, y)];
@@ -615,4 +619,11 @@ export function collectHome(prev: GameState, now: number, at?: { x: number; y: n
 }
 /** 岛上有雨水桶：家园农田新种的自动浇水 */
 export const homeBarrel = (s: GameState) => !!s.home?.things.some((t) => t.id === 'water_barrel');
+
+/** 存档里家园农田现有的全部地块 id（读档时校验 state.farm、洒水器用） */
+export function homeCellIds(home: GameState['home']): Set<string> {
+  const out = new Set<string>();
+  for (const t of home?.things ?? []) if (buildDef(t.id)?.plot && t.n) for (const c of homePlotCells(t)) out.add(c.id);
+  return out;
+}
 

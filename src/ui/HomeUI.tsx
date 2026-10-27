@@ -72,7 +72,9 @@ export function HomeHud({ s }: { s: GameState }) {
   const [tool, setToolRaw] = useState<HomeTool>(null);
   const [msg, setMsg] = useState('');
   const [info, setInfo] = useState<'comfort' | 'farm' | null>(null);
-  const setTool = (t: HomeTool) => { setToolRaw(t); emitToGame(HOME_TOOL, t); };
+  const [full, setFull] = useState(false);
+  const narrow = typeof window !== 'undefined' && window.innerWidth < 700;
+  const setTool = (t: HomeTool) => { setToolRaw(t); setFull(false); emitToGame(HOME_TOOL, t); };
   // 场景里右键退出建造时同步按钮状态
   useEffect(() => onGameEvent(HOME_TOOL, (t: HomeTool) => setToolRaw(t)), []);
   useEffect(() => onGameEvent(HOME_MSG, (m: string) => { setMsg(m); setTimeout(() => setMsg(''), 1600); }), []);
@@ -125,7 +127,26 @@ export function HomeHud({ s }: { s: GameState }) {
           <div className="go"><button onClick={() => setInfo(null)}>{tl('关闭')}</button></div>
         </div>
       )}
-      {open && (
+      {open && tool && narrow && !full && (
+        // 手机上选好要放的东西后，面板缩成一条，不挡住岛（10-27 全面检查：面板盖住下半屏，放东西要先拖镜头）
+        <div className="home-build home-build-mini frame">
+          {tool.kind === 'demolish' ? <span className="hb-mini-name">{tl('拆除：点要拆的东西，材料退回仓库')}</span> : (() => {
+            const d = buildDef(tool.id);
+            return d && (
+              <span className="hb-mini-name">
+                <img src={preview(d)} alt="" draggable={false} />
+                <b>{d.name}</b>
+                <span className="bl-cost">{d.cost.map((c) => <span key={c.item} className={have(s, c.item) >= c.qty ? '' : 'warn'}><Icon item={c.item} size={14} info={false} />{c.qty}<small>/{fmtNum(have(s, c.item))}</small></span>)}</span>
+              </span>
+            );
+          })()}
+          <span className="hb-mini-btns">
+            <button className="pill" onClick={() => setFull(true)}>{tl('换一件')}</button>
+            <button className="pill on" onClick={close}>{tl('完成')}</button>
+          </span>
+        </div>
+      )}
+      {open && (!tool || !narrow || full) && (
         <div className="home-build frame">
           <div className="chips-row">
             {BUILD_CATS.map((c) => <button key={c.id} className={`pill ${cat === c.id ? 'on' : ''}`} onClick={() => setCat(c.id)}>{c.name}</button>)}

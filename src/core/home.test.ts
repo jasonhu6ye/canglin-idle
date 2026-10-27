@@ -4,8 +4,8 @@ import {
   BUILDS, collectHome, homeProduce, produceMs, comfortLevel, homeComfort, homePct, homePlots, homePlotCells, HOME_PLOT_MAX, PORTAL_IDS, homeNode,
 } from './home';
 import { ITEMS } from './data';
-import { fieldCounts, fieldCrops, harvestAll, nearField, plantAll, tendPlot } from './farm';
-import { advance } from './sim';
+import { fieldCounts, fieldCrops, harvestAll, installSprinkler, nearField, plantAll, tendPlot } from './farm';
+import { advance, migrate } from './sim';
 import { NODES, standOf } from './data';
 import { atBank, atMarket, nearNode, newGame } from './sim';
 import type { GameState } from './types';
@@ -260,6 +260,37 @@ describe('家园产出（10-27）', () => {
     s = placeBuild(s, 'water_barrel', X + 6, Y + 3, T0);
     const r = plantAll(s, 'hfield1', 'potato', T0);
     expect(Object.values(r.state.farm ?? {}).every((p) => p.water)).toBe(true);
+  });
+});
+
+describe('家园读档（10-27 全面检查）', () => {
+  it('读档后家园农田里的庄稼、洒水器、自动补种都还在，不会被当成旧田退掉', () => {
+    let s = onIsland();
+    s.bank = { ...s.bank, plank_2: 500, stone: 999, fert_basic: 10, seed_potato: 20, sprinkler: 1 };
+    s = placeBuild(s, 'farm_plot', X, Y + 3);
+    s.settings.autoFarm = { hfield1: true };
+    const now = 1_700_000_000_000;
+    s = plantAll(s, 'hfield1', 'potato', now).state;
+    s = installSprinkler(s, 'hfield1', now).state;
+    const seeds = s.bank.seed_potato;
+    const back = migrate(JSON.parse(JSON.stringify(s)))!;
+    expect(Object.keys(back.farm ?? {}).filter((k) => k.startsWith('hfield1:'))).toHaveLength(16);
+    expect(back.bank.seed_potato).toBe(seeds);
+    expect(back.bank.potato ?? 0).toBe(s.bank.potato ?? 0);
+    expect(back.sprinklers).toContain('hfield1');
+    expect(back.settings.autoFarm?.hfield1).toBe(true);
+    // 田拆了以后剩下的地块记录读档时清掉并退回
+    const orphan = { ...s, home: { ...s.home!, things: [] } };
+    const b2 = migrate(JSON.parse(JSON.stringify(orphan)))!;
+    expect(Object.keys(b2.farm ?? {}).filter((k) => k.startsWith('hfield'))).toHaveLength(0);
+    expect(b2.sprinklers ?? []).not.toContain('hfield1');
+  });
+  it('读档保留产出建筑的计时', () => {
+    let s = onIsland();
+    s.bank = { ...s.bank, plank_2: 500, wheat: 100 };
+    s = placeBuild(s, 'coop', X, Y, 1_700_000_000_000);
+    const back = migrate(JSON.parse(JSON.stringify(s)))!;
+    expect(back.home!.things.find((t) => t.id === 'coop')!.at).toBe(1_700_000_000_000);
   });
 });
 

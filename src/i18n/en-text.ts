@@ -1048,4 +1048,10 @@ export const EN_TEXT: Record<string, string> = {
   "用仓库里的金币买副本钥匙、回城卷轴和 T1-T6 的基础材料，买到的东西进仓库。T7、T8 的钥匙只能从副本宝箱里开出来。": "Buy dungeon keys, Recall Scrolls and T1–T6 basic materials with coins from your bank; purchases go to your bank. T7 and T8 keys only come from dungeon chests.",
   "钥匙 T4-T8，绿洞和蓝洞各一套。苍岭城和落霞城仓库旁的「副本商人」用金币卖 T4-T6 的绿洞和蓝洞钥匙，T7、T8 的钥匙只能从副本宝箱里开出来。商人还卖回城卷轴和 T1-T6 的矿石、原木、棉花、兽皮（价格是卖价的 7 倍，每样每天限购），金币多了可以直接买材料练制作。": "Keys come in T4–T8, one set each for green and blue dungeons. The Dungeon Merchant next to the banks in Canglin and Duskhaven sells T4–T6 green and blue keys for coins; T7 and T8 keys only come from dungeon chests. The merchant also sells Recall Scrolls and T1–T6 ore, logs, cotton and hides (7× the sell price, daily limit per item), so you can spend spare coins on materials to train crafting.",
   "副本钥匙商人加了 T6 绿洞钥匙（T7、T8 钥匙仍然只能从宝箱里开）。": "The dungeon key merchant now also sells the T6 green key (T7 and T8 keys still only come from chests).",
+  "拆除：点要拆的东西，材料退回仓库": "Remove: tap something to remove it; materials go back to your bank",
+  "换一件": "Pick another",
+  "家园岛屿修复": "Home island fixes",
+  "修复：刷新页面或重新登录后，家园农田里种着的庄稼、装的洒水器会消失（庄稼被当成旧田折成作物退回仓库）。现在都会保留。": "Fixed: after refreshing or logging in again, crops and sprinklers in home farm plots disappeared (the crops were mistaken for an old field and refunded to your bank). They now stay put.",
+  "修复：拆掉鸡舍、蜂箱、苹果树、堆肥箱时，已经攒着没收的东西会丢；现在拆的时候一起收进仓库。": "Fixed: removing a chicken coop, beehive, apple tree or compost bin lost anything it had stored. It's now collected into your bank when you remove it.",
+  "手机上建造更顺手：选好要放的东西后，建造面板缩成底部一条，不再挡住半个岛；点「换一件」再展开。": "Easier building on phones: once you pick something to place, the build menu shrinks to a strip at the bottom instead of covering half the island. Tap Pick another to expand it again.",
 };
