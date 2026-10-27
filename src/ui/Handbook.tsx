@@ -2,7 +2,7 @@ import { openDungeonNotice } from './DungeonNotice';
 import { useSticky } from './sticky';
 import { GUILD_COST } from '../net/api';
 import { EXCHANGE_DAY_MAX, GUILD_MAX_LV, VALUE_PER_CONTRIB, VAULT_COST, VAULT_SLOTS } from '../core/guild';
-import { useMemo, useState, type ReactNode } from 'react';
+import { isValidElement, useMemo, useState, type ReactNode } from 'react';
 import { MONSTERS, NODES, REGIONS, SKILLS, nodesOfAction } from '../core/data';
 import { SPECIES, TRAITS, WORLD_SKILL } from '../core/bestiary';
 import { FACILITY_NAME, TOWNS } from '../core/towns';
@@ -11,6 +11,7 @@ import type { RegionId, SkillId } from '../core/types';
 import { FINE_POINTER } from './itemOpen';
 import { HW_TIERS } from '../core/halloween';
 import { tl, tlc } from '../i18n';
+import { QUESTS, questText } from '../core/quests';
 
 /*
  * 攻略手册（用户 10-24：所有系统都要有教程和攻略文章，新人要看得懂）。
@@ -50,15 +51,25 @@ const ARTICLES: Article[] = [
   {
     id: 'start', cat: tl('新手入门'), title: tl('第一个小时怎么玩'),
     body: () => <>
-      <P>{tl('苍岭是放置游戏：你给角色安排任务，它会一直自己干，关掉网页也会继续（离线最多结算 24 小时）。前期跟着左下角的「新手任务」走就不会迷路。')}</P>
+      <P>{tl('苍岭是放置游戏：你给角色安排任务，它会一直自己干，关掉网页也会继续（离线最多结算 24 小时）。前期跟着左下角的「新手任务」走就不会迷路，每一步完成都有金币奖励，发到顶栏的信封里。')}</P>
       <Steps items={[
-        <>{tl`在苍岭城附近砍原木、挖铜矿和锡矿。${click}地图上的树或矿点，选「立即开始」，角色会自己走过去。`}</>,
-        tl('去熔炉把铜矿和锡矿炼成青铜锭，再去铁匠铺打一把铜镐、一把铜斧。工具会让采集变快。'),
-        tl('去湖边钓几条鱼，到灶台做成烤鱼。烤鱼放进角色页的「食物栏」，打架时会自己吃。'),
-        tl('打一把木剑或青铜剑，到城外打兔子、野鸡这些低级生物，练近战、防御和生命。'),
-        tl('技能到 10 级左右，去落霞城或凤麦镇附近的新区域，点亮那里的传说石碑。'),
+        tl('城西小树林砍原木，城东碎石坡挖石头，城北小水塘钓银鱼。这三个新手点位都在苍岭城门口，走二十秒就到。'),
+        tl('到灶台把银鱼烤熟。熟食放进角色页的「食物栏」，打架时血少了会自己吃。'),
+        tl('采矿练到 10 级去挖铜矿，到熔炉炼成铜锭，再去铁匠铺打一把铜镐换上。工具会让采集明显变快。'),
+        tl('打一把铜剑，去城西小树林打野兔，练近战、防御和生命。打怪前看一眼战前评估。'),
+        tl('技能到 10-20 级，去金穗草原、落霞城一带的新区域，沿路点亮传说石碑，以后跑图可以传送。'),
       ]} />
-      <Tip>{tl('等级越高动作越快。前 50 级升得很快，后面会慢下来，这时候靠更好的工具和装备提速。')}</Tip>
+      <Tip>{tl('等级越高动作越快。前 50 级升得很快，后面会慢下来，这时候靠更好的工具、装备和更高阶的资源提速。')}</Tip>
+      <Tip>{tl('全部新手任务和每一步的提示，在「新手任务一览」里能看到。')}</Tip>
+    </>,
+  },
+  {
+    id: 'quests', cat: tl('新手入门'), title: tl('新手任务一览'),
+    body: () => <>
+      <P>{tl('新手任务一步一步解锁，完成一步才出现下一步。点地图上任务卡的「去做」，会打开离你最近的对应地点并选好动作。')}</P>
+      <ol className="hb-steps">
+        {QUESTS.map((q, i) => <li key={i}><b>{questText(q)}</b>{tl` · 奖励 ${q.reward} 金币`}<br /><small className="muted">{q.tip}</small></li>)}
+      </ol>
     </>,
   },
   {
@@ -70,7 +81,8 @@ const ARTICLES: Article[] = [
         <P>{tl('物品：左键看详情，右键直接使用（穿上、放进补给栏、打开宝箱）。')}</P>
       </> : <>
         <P>{tl('点地面角色就走过去，按住不放会一直朝手指方向走；双指缩放地图。点地点、生物、镇民查看信息并开始干活。')}</P>
-        <P>{tl('底部栏切换面板：游戏、角色、背包、仓库、技能、公会、更多。右下角的按钮打开世界地图、上下坐骑。')}</P>
+        <P>{tl('底部栏切换面板：游戏、角色、背包、仓库、技能、公会、好友、聊天、更多。右下角的按钮打开世界地图、上下坐骑、缩放地图。')}</P>
+        <P>{tl('用手机浏览器玩时地址栏和工具栏会占掉一些高度，觉得界面挤就到「更多 → 设置 → 界面」把界面缩放调小（80%～90% 比较合适）；字太小就调大。')}</P>
       </>}
       <P>{tl`${walk}只是走路，不会打断已经排好的任务；要换任务就在地点里重新选「立即开始」。`}</P>
     </>,
@@ -176,6 +188,8 @@ const ARTICLES: Article[] = [
     body: () => <>
       <P>{tl('每座城镇、每个野外区域、每处有首领的特色地点都有一座传说石碑。第一次要走到旁边点亮，之后站在任意一座点亮的石碑旁，就能传送到其它点亮的石碑。')}</P>
       <P>{tl('在世界地图上选一个地点就会自动寻路过去，退出游戏也会继续走。如果走到石碑传送更快，寻路会自己顺路传送，所以石碑点得越多跑图越快。')}</P>
+      <P>{tl('同一种资源、同一种怪往往有好几个地点。地点页、技能页、物品详情的「来源」、怪物图鉴都会标出离你最近的那个，并写上大概多久能走到；开始干活时角色也会自动去最近的那个。')}</P>
+      <P>{tl('地点页的「怪物」分页列出全部能打的怪，可以搜名字、按等级或距离排序、只看适合自己等级的，点一下就寻路过去开打。')}</P>
       <P>{tl`坐骑放进角色页的坐骑栏后，${FINE_POINTER ? tl('按 R 或') : tl('点')}地图右下角的按钮上下坐骑，骑着移动速度大幅提升。`}</P>
     </>,
   },
@@ -198,7 +212,8 @@ const ARTICLES: Article[] = [
     id: 'offline', cat: tl('地图与出行'), title: tl('离线收益和存档'),
     body: () => <>
       <P>{tl('离开超过一分钟再回来，会弹出总结：得了哪些经验和物品、阵亡几次、哪个任务为什么停了。离线最多结算 24 小时。')}</P>
-      <P>{tl('存档只保存在这个浏览器里。在「更多」页能导出存档码或下载存档文件，换设备时再导入。同时只能开一个游戏页面，多开的页面会自动暂停。')}</P>
+      <P>{tl('存档跟着账号走：每分钟自动上传到云端，关页面时也会传。换设备登录同一个账号就会用最新的那份；连不上服务器时可以先离线玩，连上后再补传。')}</P>
+      <P>{tl('「更多 → 设置 → 存档备份」还能导出存档码或下载存档文件，自己留一份备份。同时只能开一个游戏页面，多开的页面会自动暂停。')}</P>
       <Tip>{tl('把系统时间往回调不会多结算收益。')}</Tip>
     </>,
   },
@@ -315,6 +330,14 @@ const ARTICLES: Article[] = [
     </ul>,
   },
   {
+    id: 'mail', cat: tl('新手入门'), title: tl('邮箱和设置'),
+    body: () => <>
+      <P>{tl('顶栏右上角的信封是邮箱，有新邮件会亮红点。新手任务奖励、兑换码奖励、上线礼物、活动奖励都发在这里，附件点「领取」放进背包，背包满了自动放进仓库，也可以一键全部领取。')}</P>
+      <P>{tl('「更多 → 设置」里能改：开战时自动从仓库带多少食物、要不要带药水；手机端的界面缩放；账号（改名、退出登录）；存档备份。')}</P>
+      <P>{tl('「更多 → 兑换码」输入兑换码领取奖励，每个存档每个码只能领一次。')}</P>
+    </>,
+  },
+  {
     id: 'faq', cat: tl('常见问题'), title: tl('常见问题'),
     body: () => <>
       <P><b>{tl('角色站着不动？')}</b>{tl('看屏幕上的提示条，一般是材料不够、等级不够或者队列做完了。也可能是另一个页面开着游戏，这个页面被暂停了。')}</P>
@@ -322,15 +345,49 @@ const ARTICLES: Article[] = [
       <P><b>{tl('打不过怪？')}</b>{tl('看怪物页的战前评估，掉血太多就换高一阶的护甲、带食物，或者先去打等级低一点的。')}</P>
       <P><b>{tl('走不到某个地方？')}</b>{tl('标「未开放」的是洞窟或海岛，要等以后更新。')}</P>
       <P><b>{tl('手机上看不到游戏？')}</b>{tl('用 Safari 或 Chrome 打开游戏网址，第一次生成地图要几秒钟。')}</P>
+      <P><b>{tl('手机浏览器里界面太挤？')}</b>{tl('到「更多 → 设置 → 界面」把界面缩放调到 80%～90%。')}</P>
+      <P><b>{tl('新手任务的金币没到账？')}</b>{tl('奖励发在邮箱里，点顶栏右上角的信封领取，可以一键全部领取。')}</P>
+      <P><b>{tl('怎么加好友？')}</b>{tl('「好友」页顶上有你的数字 UID，把它发给朋友；输入对方的 UID 发申请，对方同意就加上了。地图上点别的玩家也能直接加。')}</P>
+      <P><b>{tl('找不到某种怪或资源？')}</b>{tl('地点页的「怪物」分页能搜所有怪；在任意物品的详情里看「来源」，会列出最近的地点，点一下就寻路过去。')}</P>
+      <P><b>{tl('怎么换设备玩？')}</b>{tl('在新设备上登录同一个账号，云存档会自动读最新的那份。')}</P>
     </>,
   },
 ];
 
 const CATS = [...new Set(ARTICLES.map((a) => a.cat))];
+const FIRST = ['start', 'quests', 'controls'];
+
+/** 文章正文的纯文字（搜索用），第一次搜的时候算好缓存 */
+const TEXT = new Map<string, string>();
+function textOf(a: Article): string {
+  let t = TEXT.get(a.id);
+  if (t === undefined) {
+    const out: string[] = [];
+    const walk = (n: unknown): void => {
+      if (n == null || typeof n === 'boolean') return;
+      if (typeof n === 'string' || typeof n === 'number') { out.push(String(n)); return; }
+      if (Array.isArray(n)) { n.forEach(walk); return; }
+      if (isValidElement(n)) {
+        const props = n.props as { children?: unknown; items?: unknown };
+        // 自己写的小组件（P、Steps、Tip）直接看 props，不用真的渲染
+        walk(props.items);
+        walk(props.children);
+      }
+    };
+    try { walk(a.body()); } catch { /* 算不出来就只搜标题 */ }
+    t = out.join(' ').toLowerCase();
+    TEXT.set(a.id, t);
+  }
+  return t;
+}
 
 export function Handbook({ onClose }: { onClose: () => void }) {
   const [sel, setSel] = useSticky<string | null>('book.sel', null);
   const art = useMemo(() => ARTICLES.find((a) => a.id === sel), [sel]);
+  const [q, setQ] = useState('');
+  const key = q.trim().toLowerCase();
+  // 标题和文章里的文字都搜：正文是现算的，打开目录时才渲染成文字比一次
+  const match = (a: Article) => !key || a.title.toLowerCase().includes(key) || textOf(a).includes(key);
   if (art) {
     return (
       <div className="page handbook">
@@ -349,14 +406,28 @@ export function Handbook({ onClose }: { onClose: () => void }) {
         <h2>{tl('攻略手册')}</h2>
         <small className="muted">{tl`${ARTICLES.length} 篇`}</small>
       </div>
-      {CATS.map((c) => (
-        <div key={c}>
-          <h3 className="hb-cat">{c}</h3>
+      <input className="hb-search" placeholder={tl('搜索文章，如：副本、背包、组队')} value={q} onChange={(e) => setQ(e.target.value)} />
+      {!key && (
+        <div className="hb-first">
+          <b>{tl('刚开始玩？先看这三篇：')}</b>
           <div className="hb-index">
-            {ARTICLES.filter((a) => a.cat === c).map((a) => <button key={a.id} onClick={() => setSel(a.id)}>{a.title}</button>)}
+            {FIRST.map((id) => ARTICLES.find((a) => a.id === id)!).map((a) => <button key={a.id} onClick={() => setSel(a.id)}>{a.title}</button>)}
           </div>
         </div>
-      ))}
+      )}
+      {CATS.map((c) => {
+        const list = ARTICLES.filter((a) => a.cat === c && match(a));
+        if (!list.length) return null;
+        return (
+          <div key={c}>
+            <h3 className="hb-cat">{c}</h3>
+            <div className="hb-index">
+              {list.map((a) => <button key={a.id} onClick={() => setSel(a.id)}>{a.title}</button>)}
+            </div>
+          </div>
+        );
+      })}
+      {key && !ARTICLES.some(match) && <p className="muted">{tl('没有找到相关文章，换个词试试。')}</p>}
     </div>
   );
 }

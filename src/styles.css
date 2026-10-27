@@ -1083,3 +1083,8 @@ h2.dg-blue { color: #6ab4ff; }
 .gm-quality { margin: 2px 0; }
 .gm-quality .pill { padding: 4px 10px; font-weight: bold; }
 .gm-attach select { background: #1b120c; color: #fff3c4; border: 1px solid var(--edge); border-radius: 2px; padding: 4px; font: inherit; font-size: 13px; }
+.guide-art { display: flex; justify-content: center; gap: 10px; margin: 10px 0 2px; }
+.guide-art > * { padding: 4px; background: #1b120c; border: 1px solid var(--edge); border-radius: 3px; }
+.hb-search { width: 100%; margin: 6px 0 4px; min-height: 36px; padding: 6px 10px; font: inherit; font-size: 16px; color: #fff3c4; background: #1b120c; border: 1px solid var(--edge); border-radius: 2px; }
+.hb-first { margin: 8px 0 4px; padding: 8px; border: 1px solid #7a5a2a; background: #2a1c10; border-radius: 3px; }
+.hb-first > b { display: block; margin-bottom: 6px; color: var(--gold); font-size: 13px; }

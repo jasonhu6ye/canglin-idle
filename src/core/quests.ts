@@ -42,7 +42,7 @@ export const QUESTS: QuestDef[] = [
   { hint: 'fight_rabbit', reward: 150, goal: { kind: 'kills', n: 5 },
     tip: tl('点地图上的生物可以查看信息并开打。战斗前会自动从仓库带上食物，血少了会自己吃。') },
   { hint: 'hunt_1', reward: 80, goal: { kind: 'gain', item: 'hide_1', n: 5 },
-    tip: tl('狩猎能拿到兽皮，兽皮做成皮革，可以缝制远程职业的皮甲。') },
+    tip: tl('狩猎能拿到兽皮，兽皮在工坊鞣成皮革，可以做皮甲。皮甲加闪避，能和板甲、布甲随意混搭。') },
   { hint: 'fight_rabbit', reward: 80, goal: { kind: 'gain', item: 'meat_1', n: 5 },
     tip: tl('打动物会掉兽肉，打怪物会掉魔核。精英和首领还会掉福袋、宝箱。') },
   { hint: 'cook_meat_1', reward: 100, goal: { kind: 'gain', item: 'steak_1', n: 5 },
