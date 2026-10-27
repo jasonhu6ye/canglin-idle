@@ -106,7 +106,14 @@ export function Guide() {
       if (showing) { showing = false; closed.forEach((f) => f()); }
       return;
     }
-    try { localStorage.setItem('canglin-guide-seen', '1'); } catch { /* 无痕模式存不了就算了 */ }
+    try {
+      // 第一次进游戏只看新手指引：副本（T4 起）和万圣节（30 级起）的大公告对新号没用，不再接着连弹
+      if (!localStorage.getItem('canglin-guide-seen')) {
+        localStorage.setItem('canglin-dg-notice', '1');
+        localStorage.setItem('canglin-hw-notice', '1');
+      }
+      localStorage.setItem('canglin-guide-seen', '1');
+    } catch { /* 无痕模式存不了就算了 */ }
   }, [open]);
   const [page, setPage] = useState(0);
   useEffect(() => {

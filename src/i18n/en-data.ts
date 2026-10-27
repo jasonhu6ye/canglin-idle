@@ -902,4 +902,7 @@ export const EN_CORE: Record<string, string> = {
   "背在身上，背包多 {0} 格。": "Worn on your back: +{0} bag slots.",
   "洞察者背包": "Seer's Pack",
   "所有技能获得的经验 +{0}%，但每多拿 1 点经验要从仓库扣 1 金币，金币不够时不加成。不加背包格子。": "+{0}% XP for all skills, but every extra XP point costs 1 coin from your bank; no bonus when you run out of coins. Adds no bag slots.",
+  "城西小树林": "West Gate Copse",
+  "城东碎石坡": "East Gate Rubble",
+  "城北小水塘": "North Gate Pond",
 };

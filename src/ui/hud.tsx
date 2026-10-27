@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { ACTIONS, ITEMS, MONSTERS, nodeOfAction, NODES, SKILLS } from '../core/data';
+import { ACTIONS, ITEMS, MONSTERS, nodeOfAction, nearestVariant, NODES, SKILLS } from '../core/data';
 import { QUESTS, questProgress, questText } from '../core/quests';
 import { actionDuration, beltSlotOf, combatEstimate, combatLevel, dismissStop, enqueue, rainBonus, isBankId, level, maxHp, moveSpeed, removeTask, resumeWork, toggleMount, weaponStyle } from '../core/sim';
 import { jumpTo, producerOf } from './ActionSheet';
@@ -230,7 +230,9 @@ export function QuestCard({ s, onGo }: { s: GameState; onGo: (nodeId: string) =>
   };
   const p = questProgress(s);
   if (!p) return null;
-  const node = NODES.find((n) => n.id === p.q.hint) ?? nodeOfAction(p.q.hint, s.loc, s.waystones, moveSpeed(s));
+  const near = nearestVariant(p.q.hint, s.loc, s.waystones, moveSpeed(s));
+  const node = NODES.find((n) => n.id === p.q.hint) ?? near?.node ?? nodeOfAction(p.q.hint, s.loc, s.waystones, moveSpeed(s));
+  const act = near?.action ?? p.q.hint;
   const idx = (s.quest?.i ?? 0) + 1;
   return (
     <div className={`chip quest ${open ? '' : 'folded'}`}>
@@ -240,7 +242,7 @@ export function QuestCard({ s, onGo }: { s: GameState; onGo: (nodeId: string) =>
       {!open && <span className="muted"> {p.have}/{p.q.goal.n}</span>}
       {node && <button className="pill" onClick={() => {
         // 提示是个动作就直接选中它，打开页面点「立即开始」就行
-        if (ACTIONS[p.q.hint]) store.focusAction = p.q.hint;
+        if (ACTIONS[act]) store.focusAction = act;
         onGo(node.id);
       }}>{tl('去做')}</button>}
       {open && <div className="quest-tip">💡 {p.q.tip}</div>}

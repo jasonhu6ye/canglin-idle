@@ -1171,6 +1171,8 @@ export interface MapNode {
   town?: boolean;
   /** 钓鱼点在北边挖一片水 */
   pond?: boolean;
+  /** 主城门外的新手点位：不分配野外怪物 */
+  starter?: boolean;
   /** 打开仓库而不是任务列表 */
   opens?: 'bank';
   /** 分解台：分解仓库里的装备换金币 */
@@ -1346,6 +1348,10 @@ export const NODES: MapNode[] = [
   // 城郊
   wild('orchard', tl('城郊果园'), 0.56, 0.55, 'town', 'camp', [chop(0, '_orchard'), cotton(0, '_orchard'), herb('green_herb', '_orchard'), mat('spice', 0), mat('resin', 0)]),
   wild('old_pit', tl('老矿坑'), 0.45, 0.40, 'town', 'ore', [mine(0, '_pit'), mine(1, '_pit'), mat('crystal', 0)]),
+  // 新手点位（10-27）：主城一出门就到，新手任务不用一开始就走好几分钟
+  { ...wild('starter_grove', tl('城西小树林'), 0, 0, 'town', 'camp', [chop(0, '_grove0'), hunt(0, '_grove0'), herb('green_herb', '_grove0')]), ...townXY(108, 178), starter: true },
+  { ...wild('starter_rocks', tl('城东碎石坡'), 0, 0, 'town', 'ore', [mine(0, '_rocks0'), mine(1, '_rocks0')]), ...townXY(225, 155), starter: true },
+  { ...wild('starter_pond', tl('城北小水塘'), 0, 0, 'town', 'fish', [fishAt('minnow', '_pond0')], true), ...townXY(181, 118), starter: true },
   // 巨木森林
   wild('mushroom_grove', tl('苔光蘑菇林'), 0.20, 0.30, 'giantwood', 'herb', [herb('moon_herb', '_grove'), chop(3, '_grove'), cotton(4, '_grove')]),
   wild('root_cave', tl('古根洞穴'), 0.05, 0.05, 'giantwood', 'ore', [mine(5, '_root'), chop(5, '_root')]),
@@ -1546,7 +1552,7 @@ for (const b of NODES.filter((n) => SHOP_SPOTS[n.id])) {
       home.actions.push(fight(sp.id));
       continue;
     }
-    const pool = NODES.filter((n) => !n.town && !n.site && !n.cave && n.region === sp.region);
+    const pool = NODES.filter((n) => !n.town && !n.site && !n.cave && !n.starter && n.region === sp.region);
     const best = pool.reduce((a, b) => {
       const cost = (n: MapNode) => Math.abs(mid(n) - sp.level) + (load.get(n) ?? 0) * 6;
       return cost(b) < cost(a) ? b : a;
@@ -1554,6 +1560,8 @@ for (const b of NODES.filter((n) => SHOP_SPOTS[n.id])) {
     best.actions.push(fight(sp.id));
     load.set(best, (load.get(best) ?? 0) + 1);
   }
+  // 新手树林也刷野兔（野兔本来住在幽苔水洼，那边照旧）
+  NODES.find((n) => n.id === 'starter_grove')?.actions.push('fight_rabbit');
   for (const n of NODES) {
     if (n.town || !n.actions.length) continue;
     const lvls = n.actions.map((a) => actionList.find((x) => x.id === a)!.level);
@@ -1636,6 +1644,18 @@ export function nodeOfAction(id: string | undefined, near?: { x: number; y: numb
   const all = nodesOfAction(id);
   if (!near || all.length < 2) return all[0];
   return fastest(all, near, stones, speed)?.node;
+}
+/**
+ * 新手任务的「去做」：同一种资源在不同地点是不同的动作 id（chop_plain、chop_plain_orchard…），
+ * 把带后缀的同类动作都算上，挑走过去最快的地点和它对应的动作。
+ */
+export function nearestVariant(hint: string, near: { x: number; y: number }, stones?: string[], speed?: number): { action: string; node: MapNode } | undefined {
+  const ids = Object.keys(ACTIONS).filter((id) => id === hint || id.startsWith(`${hint}_`));
+  if (!ids.length) return undefined;
+  const byNode = new Map<MapNode, string>();
+  for (const id of ids) for (const n of nodesOfAction(id)) if (!byNode.has(n) && !n.closed) byNode.set(n, id);
+  const best = fastest([...byNode.keys()], near, stones, speed);
+  return best && { action: byNode.get(best.node)!, node: best.node };
 }
 /** 一组地点里从 from 过去最快的那个，和要走多久 */
 export function fastest(nodes: MapNode[], from: { x: number; y: number }, stones?: string[], speed = WALK_TILES_PER_SEC): { node: MapNode; route: Route } | undefined {

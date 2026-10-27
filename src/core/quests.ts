@@ -47,7 +47,7 @@ export const QUESTS: QuestDef[] = [
     tip: tl('打动物会掉兽肉，打怪物会掉魔核。精英和首领还会掉福袋、宝箱。') },
   { hint: 'cook_meat_1', reward: 100, goal: { kind: 'gain', item: 'steak_1', n: 5 },
     tip: tl('烤兽肉比同阶的鱼回血更多。装备栏里有食物栏和药水栏，不占背包。') },
-  { hint: 'gather_green_herb_orchard', reward: 80, goal: { kind: 'gain', item: 'green_herb', n: 5 },
+  { hint: 'gather_green_herb', reward: 80, goal: { kind: 'gain', item: 'green_herb', n: 5 },
     tip: tl('采集能拿到草药，草药在药剂铺做成药水，战斗时血量低会先喝药水。') },
   { hint: 'farm', reward: 100, goal: { kind: 'gain', item: 'potato', n: 6 },
     tip: tl('去城镇农田点空地种土豆（也能一键种满），浇水长得快，熟了再点一下收获。离线也会长，收获时会多收回种子。') },

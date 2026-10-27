@@ -789,4 +789,8 @@ export const EN_TEXT: Record<string, string> = {
   "「更多 → 设置」新增界面缩放（70%～120%），只对手机生效。用手机浏览器玩觉得挤，调到 80%～90% 就宽松多了。": "New UI scale option under More → Settings (70%–120%), phones only. If it feels cramped in a mobile browser, 80%–90% gives you a lot more room.",
   "地图矮的时候（浏览器有地址栏和工具栏）左边的副本信息、队友框会自动收紧；离线队友只占一行。": "When the map area is short (browser address bar and toolbar), the dungeon info and party frames on the left tighten up automatically; offline party members take a single line.",
   "左上和左下的面板放不下时，左上那一摞可以上下滑动，不会再互相盖住。": "If the top-left and bottom-left panels don't both fit, the top-left stack scrolls instead of covering the other one.",
+  "新手开局更顺：主城门外就有树林、碎石坡和水塘": "Smoother start: a copse, rubble and a pond right outside Canglin",
+  "主城门外新加了三个新手点位：城西小树林（原木、兽皮、绿叶草、野兔）、城东碎石坡（石头、铜矿）、城北小水塘（银鱼），出城走 20 秒左右就到。": "Three new starter spots just outside Canglin: West Gate Copse (logs, hides, green herbs, rabbits), East Gate Rubble (stone, copper) and North Gate Pond (minnows), about 20 seconds from town.",
+  "新手任务的「去做」会找离你最近的同类资源点。以前第一个任务就要走七八分钟，打野兔要走十多分钟，现在都在城门口。": "The starter quest Go button now picks the nearest spot for that resource. The first quest used to be a 7–8 minute walk and rabbits over 10 minutes away; now it's all at the town gates.",
+  "第一次进游戏只弹新手指引，不再接着连弹副本和万圣节的大公告（可以在攻略手册和更多页里随时看）。": "On your first visit only the beginner guide pops up, instead of a chain of dungeon and Halloween announcements (you can still read them in the Handbook and More page).",
 };

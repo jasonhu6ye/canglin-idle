@@ -20,6 +20,8 @@ describe('数据闭环', () => {
       // 两座城的同类建筑可以重复，野外地点的动作只在一处
       const prev = seen.get(id);
       if (prev && NODES.find((x) => x.id === prev)?.town && n.town) continue;
+      // 主城门外的新手树林也刷野兔（10-27）
+      if (prev && n.starter && id === 'fight_rabbit') continue;
       expect(seen.get(id), `${id} 同时在 ${seen.get(id)} 和 ${n.id}`).toBeUndefined();
       seen.set(id, n.id);
     }
