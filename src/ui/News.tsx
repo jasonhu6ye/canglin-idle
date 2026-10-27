@@ -8,6 +8,13 @@ import { tl } from '../i18n';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-10-27-en', date: tl('10 月 27 日'), title: tl('英文版翻译润色'),
+    lines: [
+      tl('英文版整体润色：名字和说法更像英文游戏，不再逐字直译，比如福袋改叫 Pouch、硬木锭改叫 Hardwood Billet、回城卷轴改叫 Recall Scroll，一批怪物和地点也换了更地道的英文名。'),
+      tl('统一了英文用词：金币统一叫 coins，锭统一叫 ingots，物品说明里的等级要求、料理效果、首领战利品的写法都理顺了。'),
+    ],
+  },
+  {
     id: '2026-10-27-d', date: tl('10 月 27 日'), title: tl("新手指引和攻略手册更新"),
     lines: [
       tl("新手指引重写：每页加了物品配图，写进了城门口的新手点位、云存档、品质、寻路、好友组队公会这些新内容，去掉了过时的说法。"),
