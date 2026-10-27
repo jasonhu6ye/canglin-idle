@@ -19,15 +19,15 @@ export function HeroPreview({ outfit, scale = 3 }: { outfit: Outfit; scale?: num
       if (!ctx) return;
       const a = anims[Math.floor(tick / 24) % anims.length];
       const f = sheet.frames.find((x) => x.name === `${a.key}-${tick % a.frames}`)!;
-      ctx.clearRect(0, 0, HERO_W, HERO_H);
-      ctx.drawImage(sheet.canvas, f.x + HERO_PAD.l, f.y + HERO_PAD.t, HERO_W, HERO_H, 0, 0, HERO_W, HERO_H);
+      ctx.clearRect(0, 0, HERO_W * sheet.res, HERO_H * sheet.res);
+      ctx.drawImage(sheet.canvas, f.x + HERO_PAD.l * sheet.res, f.y + HERO_PAD.t * sheet.res, HERO_W * sheet.res, HERO_H * sheet.res, 0, 0, HERO_W * sheet.res, HERO_H * sheet.res);
       tick++;
     };
     draw();
     const id = setInterval(draw, 125);
     return () => clearInterval(id);
   }, [sheet]);
-  return <canvas ref={ref} width={HERO_W} height={HERO_H} className="pix" style={{ width: HERO_W * scale, height: HERO_H * scale }} />;
+  return <canvas ref={ref} width={HERO_W * sheet.res} height={HERO_H * sheet.res} className="pix" style={{ width: HERO_W * scale, height: HERO_H * scale }} />;
 }
 
 export function Wardrobe({ s, onClose }: { s: GameState; onClose: () => void }) {

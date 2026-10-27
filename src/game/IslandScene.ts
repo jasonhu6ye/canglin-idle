@@ -11,7 +11,7 @@ import { gameHour } from '../core/weather';
 import { store } from '../store';
 import { darkness } from './ambience';
 import { DPR } from './dpr';
-import { FRAME_H, HERO_FEET, HERO_PAD, type HeroDir } from './hero';
+import { FRAME_H, HERO_FEET, HERO_PAD, HERO_RES, type HeroDir } from './hero';
 import { paintFloor, paintPedestal, paintPortal, paintPortalSwirl, paintThing, paintWall, PORTAL_H, UP } from './homeArt';
 import { liquidIndex, T, tileIndex, VARIANTS } from './tiles';
 import { GROUNDS, LIQUIDS, type PropKind } from './world';
@@ -86,7 +86,7 @@ export class IslandScene extends Phaser.Scene {
     const start = HOME_SPAWN;
     this.player = this.add.container(start.x * T + T / 2, start.y * T + T / 2);
     const ring = this.add.ellipse(0, 6, 14, 6).setStrokeStyle(1, 0xe8b84a).setFillStyle(0xe8b84a, 0.25);
-    this.body = this.add.sprite(0, 7, 'hero').setOrigin(0.5, (HERO_FEET + HERO_PAD.t) / FRAME_H);
+    this.body = this.add.sprite(0, 7, 'hero').setOrigin(0.5, (HERO_FEET + HERO_PAD.t) / FRAME_H).setScale(1 / HERO_RES);
     this.body.play('idle-down');
     const name = this.add.text(0, 7 - HERO_FEET + 1, tl('[苍岭] 你'), { fontFamily: FONT, fontSize: '7px', color: '#ffffff', stroke: '#000', strokeThickness: 2, resolution: 4 }).setOrigin(0.5);
     this.player.add([ring, this.body, name]).setDepth(this.player.y + 1000);

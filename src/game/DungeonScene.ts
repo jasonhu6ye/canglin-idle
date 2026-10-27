@@ -8,7 +8,7 @@ import { store } from '../store';
 import { tl } from '../i18n';
 import { DPR } from './dpr';
 import { paintDgChest, paintDgDecor, paintDgFloor, paintDgWall, paintStairs, themeAccent, themeFog, type DgThemeId } from './dungeonArt';
-import { FIGHT, FIGHT_RANGE, fightWeapon, FRAME_H, HERO_FEET, HERO_PAD } from './hero';
+import { FIGHT, FIGHT_RANGE, fightWeapon, FRAME_H, HERO_FEET, HERO_PAD, HERO_RES } from './hero';
 import { animsOf, monsterFrameSize, paintMonsterSheet } from './monsterArt';
 import { T } from './tiles';
 import { MATE_COLORS, OtherPlayers, publishSelf } from './others';
@@ -70,7 +70,7 @@ export class DungeonScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#06060a');
     this.player = this.add.container(0, 0);
     const shadow = this.add.ellipse(0, 6, 12, 5, 0x000000, 0.35);
-    this.body = this.add.sprite(0, 7, 'hero').setOrigin(0.5, (HERO_FEET + HERO_PAD.t) / FRAME_H);
+    this.body = this.add.sprite(0, 7, 'hero').setOrigin(0.5, (HERO_FEET + HERO_PAD.t) / FRAME_H).setScale(1 / HERO_RES);
     const name = this.add.text(0, 7 - HERO_FEET + 1, tl('[苍岭] 你'), { fontFamily: FONT, fontSize: '7px', color: '#ffffff', stroke: '#000', strokeThickness: 2, resolution: 4 }).setOrigin(0.5);
     // 角色周围一圈暖光，洞里其他地方暗一些
     const light = this.add.image(0, 0, 'glow').setTint(0xffd8a0).setAlpha(0.18).setScale(1.6).setBlendMode(Phaser.BlendModes.ADD);

@@ -669,86 +669,191 @@ const SIGN_PAL: Record<string, string> = {
   c: '#8ad8ff', C: '#3a8ad0',
 };
 
-function drawWall(p: Pix, x0: number, y0: number, w: number, h: number, kind: HouseStyle['wall']) {
-  for (let y = y0; y < y0 + h; y++) {
-    for (let x = x0; x < x0 + w; x++) {
-      const lx = x - x0;
-      const ly = y - y0;
-      let c: string;
-      if (kind === 'stone') {
-        const row = Math.floor(ly / 4);
-        const off = row % 2 ? 4 : 0;
-        const joint = ly % 4 === 3 || (lx + off) % 8 === 7;
-        const t = hash(Math.floor((lx + off) / 8), row, 3);
-        c = joint ? '#5a564e' : t < 0.3 ? '#8a8478' : t > 0.8 ? '#aaa496' : '#9a9486';
-        if (!joint && ly % 4 === 0) c = '#b4ae9e';
-      } else if (kind === 'whitewash' || kind === 'marble') {
-        // 白墙：珊瑚港的石灰墙、遗都的白石墙（带一点裂纹）
-        c = kind === 'marble' ? (hash(x, y, 6) < 0.1 ? '#c8c4b8' : '#dcd8cc') : hash(x, y, 4) < 0.06 ? '#e4e0d4' : '#f2eee4';
-        if (ly === 0) c = kind === 'marble' ? '#a8a49a' : '#c8c4b8';
-        if (kind === 'marble' && (lx * 3 + ly * 5) % 41 === 0) c = '#8a867c';
-        if (kind === 'whitewash' && ly > h - 5) c = '#5a8ab0';
-      } else if (kind === 'charred') {
-        // 熏黑的木板
-        c = ly % 4 === 3 ? '#1a1412' : hash(0, Math.floor(ly / 4), x0) < 0.5 ? '#3a2c24' : '#4a382c';
-        if (ly % 4 === 0) c = '#5a463a';
-        if (lx === 0 || lx === w - 1) c = '#1a1412';
-        if (hash(x, y, 5) < 0.02) c = '#c84a1a';
-      } else if (kind === 'crystalstone') {
-        // 紫晶砖
-        const row = Math.floor(ly / 5);
-        const off = row % 2 ? 5 : 0;
-        const joint = ly % 5 === 4 || (lx + off) % 10 === 9;
-        c = joint ? '#3a2a6a' : hash(Math.floor((lx + off) / 10), row, 8) < 0.3 ? '#7a62c8' : '#6a54b0';
-        if (!joint && ly % 5 === 0) c = '#a890f0';
-      } else if (kind === 'plaster') {
-        c = '#e6d8b8';
-        if (hash(x, y, 4) < 0.08) c = '#d4c4a0';
-        if (lx % 12 === 0 || lx === w - 1 || ly === 0) c = '#6a4426';
-        if ((lx + ly) % 12 === 0 && ly > 2 && ly < h - 2 && lx % 12 < 6) c = '#6a4426';
-      } else {
-        // 横向木板
-        c = ly % 4 === 3 ? '#5a3a22' : hash(0, Math.floor(ly / 4), x0) < 0.5 ? '#8a6238' : '#9a7044';
-        if (ly % 4 === 0) c = '#a87a4c';
-        if (lx === 0 || lx === w - 1) c = '#5a3a22';
-      }
-      p.set(x, y, c);
+/** 建筑的高清倍数（10-28 画质升级）：画布按 2 倍像素画，显示时缩回原大小，砖缝、木纹、瓦片都能画到半个像素 */
+export const BUILDING_RES = 2;
+
+/**
+ * 按真像素填一块区域：回调拿到逻辑坐标（带小数，步长 1/res）和这个真像素的噪声，返回颜色。
+ * 低清画布上 lx/ly 就是整数，所以同一段画法两种分辨率都能用。
+ */
+function fillArea(p: Pix, x0: number, y0: number, w: number, h: number, f: (lx: number, ly: number, n: number) => string | null) {
+  const r = p.res;
+  for (let sy = 0; sy < h * r; sy++) {
+    for (let sx = 0; sx < w * r; sx++) {
+      const c = f(sx / r, sy / r, phash(sx + x0 * r, sy + y0 * r, 21));
+      if (c) p.sub(sx + x0 * r, sy + y0 * r, c);
     }
   }
+}
+/** 一块砖、一块木板自己的明暗差：同一块里固定，块与块之间不同 */
+const vary = (c: string, k: number) => (k < 0.33 ? mix(c, '#000000', 0.08) : k > 0.75 ? mix(c, '#ffffff', 0.07) : c);
+
+function drawWall(p: Pix, x0: number, y0: number, w: number, h: number, kind: HouseStyle['wall']) {
+  const hd = p.res > 1;
+  /** 真像素的半格 */
+  const q = 1 / p.res;
+  fillArea(p, x0, y0, w, h, (lx, ly, n) => {
+    let c: string;
+    if (kind === 'stone') {
+      // 砌石：每块 8×4，隔行错开；高清时砖缝半格，砖面左上亮边、右下暗边，带一点麻点
+      const row = Math.floor(ly / 4);
+      const off = row % 2 ? 4 : 0;
+      const bx = Math.floor((lx + off) / 8);
+      const ix = (lx + off) % 8;
+      const iy = ly % 4;
+      const joint = iy >= 4 - q || ix >= 8 - q;
+      const t = hash(bx, row, 3);
+      c = joint ? '#5a564e' : vary(t < 0.3 ? '#8a8478' : t > 0.8 ? '#aaa496' : '#9a9486', hash(bx, row, 9));
+      if (!joint && hd) {
+        if (iy < q || ix < q) c = mix(c, '#ffffff', 0.18);
+        else if (iy >= 4 - 2 * q || ix >= 8 - 2 * q) c = mix(c, '#000000', 0.16);
+        else if (n < 0.08) c = mix(c, '#000000', 0.1);
+        else if (n > 0.95) c = mix(c, '#ffffff', 0.1);
+        // 墙脚长一点青苔
+        if (ly > h - 6 && n < 0.05 + (ly - h + 6) * 0.02) c = '#5a7a46';
+      } else if (!joint && iy === 0) c = '#b4ae9e';
+    } else if (kind === 'whitewash' || kind === 'marble') {
+      // 白墙：珊瑚港的石灰墙、遗都的白石墙（带一点裂纹）
+      c = kind === 'marble' ? (n < 0.1 ? '#c8c4b8' : '#dcd8cc') : n < 0.06 ? '#e4e0d4' : '#f2eee4';
+      if (ly < 1) c = kind === 'marble' ? '#a8a49a' : '#c8c4b8';
+      if (kind === 'marble' && hd) {
+        // 大理石：细细的灰纹
+        const vein = Math.sin(lx * 0.9 + Math.sin(ly * 0.6) * 2.5 + ly * 0.35);
+        if (vein > 0.96) c = '#a8a498';
+        else if (vein > 0.9) c = '#c0bcb0';
+      } else if (kind === 'marble' && (Math.floor(lx) * 3 + Math.floor(ly) * 5) % 41 === 0) c = '#8a867c';
+      if (kind === 'whitewash') {
+        if (ly > h - 5) c = ly > h - 5 + q ? '#5a8ab0' : '#4a7aa0';
+        else if (hd && n < 0.04) c = '#d8d0c0';
+        // 灰泥的粗糙感：淡淡的横向刷痕
+        else if (hd && Math.sin(ly * 9 + Math.floor(lx / 5)) > 0.85) c = '#e8e4d8';
+      }
+    } else if (kind === 'charred') {
+      // 熏黑的木板
+      const plank = Math.floor(ly / 4);
+      c = ly % 4 >= 4 - q ? '#1a1412' : hash(0, plank, x0) < 0.5 ? '#3a2c24' : '#4a382c';
+      if (ly % 4 < q) c = '#5a463a';
+      if (hd && Math.sin(lx * 1.7 + plank * 3 + Math.sin(lx * 0.3) * 2) > 0.8) c = mix(c, '#000000', 0.25);
+      if (lx < q || lx >= w - q) c = '#1a1412';
+      if (n < 0.02) c = '#c84a1a';
+      else if (hd && n < 0.035) c = '#8a3a14';
+    } else if (kind === 'crystalstone') {
+      // 紫晶砖
+      const row = Math.floor(ly / 5);
+      const off = row % 2 ? 5 : 0;
+      const bx = Math.floor((lx + off) / 10);
+      const ix = (lx + off) % 10;
+      const iy = ly % 5;
+      const joint = iy >= 5 - q || ix >= 10 - q;
+      c = joint ? '#3a2a6a' : hash(bx, row, 8) < 0.3 ? '#7a62c8' : '#6a54b0';
+      if (!joint && iy < q) c = '#a890f0';
+      else if (!joint && hd) {
+        if (ix < q) c = mix(c, '#c8b8ff', 0.3);
+        else if (iy >= 5 - 2 * q || ix >= 10 - 2 * q) c = mix(c, '#000000', 0.2);
+        // 晶面的斜向反光
+        else if (((ix + iy) * 2) % 7 < 0.6 && n > 0.4) c = mix(c, '#d8ccff', 0.35);
+      }
+    } else if (kind === 'plaster') {
+      // 灰泥墙加木框：竖梁、顶梁、斜撑；高清时梁有亮边，灰泥有颗粒，墙脚泛黄
+      c = n < 0.08 ? '#d4c4a0' : '#e6d8b8';
+      if (hd && ly > h - 7) c = mix(c, '#b89c6a', (ly - h + 7) / 7 * 0.35);
+      const beamW = hd ? 1.5 : 1;
+      const post = lx % 12 < beamW || lx >= w - beamW || ly < beamW;
+      const brace = ((Math.floor(lx) + Math.floor(ly)) % 12 === 0 || (hd && (lx + ly) % 12 < 0.5)) && ly > 2 && ly < h - 2 && lx % 12 < 6;
+      if (post || brace) {
+        c = '#6a4426';
+        if (hd && (lx % 12 < q || ly < q)) c = '#8a5c36';
+        else if (hd && Math.sin(ly * 7 + lx) > 0.7) c = '#5a3820';
+      }
+    } else {
+      // 横向木板：高清时每块板有木纹、偶尔一个木节，板缝半格
+      const plank = Math.floor(ly / 4);
+      const iy = ly % 4;
+      const base = hash(0, plank, x0) < 0.5 ? '#8a6238' : '#9a7044';
+      c = iy >= 4 - q ? '#5a3a22' : base;
+      if (iy < q) c = '#a87a4c';
+      else if (hd && iy < 4 - q) {
+        const grain = Math.sin(lx * 1.4 + plank * 7 + Math.sin(lx * 0.25 + plank) * 2.2 + iy * 1.5);
+        if (grain > 0.82) c = mix(base, '#000000', 0.18);
+        else if (grain < -0.9) c = mix(base, '#ffffff', 0.08);
+        const kx = (hash(plank, Math.floor(lx / 14), x0 + 5) * 10 + 2) + Math.floor(lx / 14) * 14;
+        const d = Math.hypot(lx - kx, (iy - 2) * 1.6);
+        if (hash(plank, Math.floor(lx / 14), x0 + 6) < 0.35 && d < 1.3) c = d < 0.6 ? '#4a2e18' : '#6a4628';
+      }
+      if (lx < q || lx >= w - q) c = '#5a3a22';
+    }
+    return c;
+  });
   // 地基
   p.rect(x0, y0 + h - 2, w, 2, '#5a5650');
   p.rect(x0, y0 + h - 2, w, 1, '#7a766e');
+  if (hd) fillArea(p, x0, y0 + h - 2, w, 2, (lx, ly, n) => (ly < 0.5 ? '#8a867e' : (lx * 2) % 6 < 0.5 ? '#4a4640' : n < 0.1 ? '#6a665e' : null));
 }
 
 function drawRoof(p: Pix, x0: number, y0: number, w: number, h: number, pal: string[]) {
+  const hd = p.res > 1;
+  const q = 1 / p.res;
   const ridge = Math.floor(h * 0.35);
-  for (let y = y0; y < y0 + h; y++) {
-    const ly = y - y0;
+  const thatch = pal === ROOF_THATCH;
+  fillArea(p, x0, y0, w, h, (lx, ly, n) => {
     // 顶部两角收一点，像一个斜屋顶
-    const inset = ly < 3 ? 3 - ly : 0;
-    for (let x = x0 + inset; x < x0 + w - inset; x++) {
-      const lx = x - x0;
-      const upper = ly < ridge;
-      let c = upper ? pal[2] : pal[1];
-      const row = Math.floor(ly / 3);
-      if (ly % 3 === 2) c = upper ? pal[1] : pal[0];
-      else if ((lx + (row % 2) * 3) % 6 === 0) c = upper ? pal[1] : pal[0];
-      if (ly === ridge || ly === ridge - 1) c = pal[3];
-      if (ly === 0) c = pal[3];
-      p.set(x, y, c);
+    const inset = ly < 3 ? 3 - Math.floor(ly) : 0;
+    if (lx < inset || lx >= w - inset) return null;
+    const upper = ly < ridge;
+    let c = upper ? pal[2] : pal[1];
+    const row = Math.floor(ly / 3);
+    const iy = ly % 3;
+    if (thatch && hd) {
+      // 茅草：一缕缕竖着的草茎，每排压着下一排
+      const strand = Math.sin(lx * 5.1 + row * 1.7 + Math.sin(lx * 0.8) * 1.5);
+      c = strand > 0.5 ? pal[upper ? 3 : 2] : strand < -0.6 ? pal[upper ? 1 : 0] : c;
+      if (iy >= 3 - q) c = mix(c, '#000000', 0.3);
+      if (n < 0.03) c = pal[0];
+    } else {
+      const off = (row % 2) * 3;
+      const sx = (lx + off) % 6;
+      const shade = hash(Math.floor((lx + off) / 6), row, 17);
+      c = vary(c, shade);
+      if (iy >= 3 - q) c = upper ? pal[1] : pal[0];
+      else if (sx >= 6 - q) c = upper ? pal[1] : pal[0];
+      else if (hd) {
+        // 瓦片：下沿两角削圆、上沿一道亮边
+        if (iy >= 3 - 2 * q && (sx < q || sx >= 6 - 2 * q)) c = upper ? pal[1] : pal[0];
+        else if (iy < q) c = mix(c, '#ffffff', 0.14);
+        else if (n < 0.04) c = mix(c, '#000000', 0.12);
+      }
     }
-  }
+    if (ly >= ridge - 1 && ly < ridge + 1) c = pal[3];
+    if (ly < 1) c = pal[3];
+    if (hd && ly >= ridge + 1 && ly < ridge + 1 + q) c = pal[0];
+    return c;
+  });
   // 屋檐阴影
   p.rect(x0, y0 + h, w, 2, '#2a1e17');
 }
 
 function drawWindow(p: Pix, x: number, y: number) {
-  p.rect(x, y, 8, 8, '#4a3020');
-  p.rect(x + 1, y + 1, 6, 6, '#ffd87a');
-  p.rect(x + 1, y + 1, 3, 3, '#fff0b8');
-  p.rect(x + 4, y + 1, 1, 6, '#4a3020');
-  p.rect(x + 1, y + 4, 6, 1, '#4a3020');
-  p.rect(x - 1, y + 8, 10, 1, '#6a4a2e');
+  if (p.res < 2) {
+    p.rect(x, y, 8, 8, '#4a3020');
+    p.rect(x + 1, y + 1, 6, 6, '#ffd87a');
+    p.rect(x + 1, y + 1, 3, 3, '#fff0b8');
+    p.rect(x + 4, y + 1, 1, 6, '#4a3020');
+    p.rect(x + 1, y + 4, 6, 1, '#4a3020');
+    p.rect(x - 1, y + 8, 10, 1, '#6a4a2e');
+    return;
+  }
+  // 高清：窗框、四格玻璃（上亮下暖、一道斜的反光）、窗台和窗台下的阴影
+  fillArea(p, x, y, 8, 8, (lx, ly) => {
+    const frame = lx < 1 || ly < 1 || lx >= 7 || ly >= 7 || (lx >= 3.5 && lx < 4.5) || (ly >= 3.5 && ly < 4.5);
+    if (frame) return lx < 0.5 || ly < 0.5 ? '#5a3a28' : '#4a3020';
+    const glow = 1 - ly / 8;
+    let c = mix('#ffb850', '#fff0b8', glow);
+    const d = lx - ly;
+    if (d > 1.5 && d < 2.5) c = mix(c, '#ffffff', 0.55);
+    if (lx < 1.5 || ly < 1.5) c = mix(c, '#ffffff', 0.25);
+    return c;
+  });
+  fillArea(p, x - 1, y + 8, 10, 1.5, (lx, ly) => (ly < 1 ? (ly < 0.5 ? '#8a6a46' : '#6a4a2e') : lx > 0.5 && lx < 9.5 ? '#2a1e17' : null));
 }
 
 function drawDoor(p: Pix, cx: number, bottom: number, kind: HouseStyle['door']) {
@@ -757,11 +862,48 @@ function drawDoor(p: Pix, cx: number, bottom: number, kind: HouseStyle['door']) 
   const x = Math.round(cx - w / 2);
   const y = bottom - h;
   p.rect(x - 1, y - 1, w + 2, h + 1, '#3a2416');
-  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) p.set(x + i, y + j, i % 3 === 0 ? '#5a3a22' : '#7a5232');
-  if (kind === 'arch' || kind === 'double') p.rect(x, y, w, 2, '#3a2416');
-  if (kind === 'double') p.rect(Math.round(cx) - 1, y, 1, h, '#3a2416');
-  p.set(x + w - 3, y + Math.floor(h / 2), '#e8b84a');
+  if (p.res < 2) {
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) p.set(x + i, y + j, i % 3 === 0 ? '#5a3a22' : '#7a5232');
+    if (kind === 'arch' || kind === 'double') p.rect(x, y, w, 2, '#3a2416');
+    if (kind === 'double') p.rect(Math.round(cx) - 1, y, 1, h, '#3a2416');
+    p.set(x + w - 3, y + Math.floor(h / 2), '#e8b84a');
+    p.rect(x - 2, bottom, w + 4, 1, '#7a766e');
+    return;
+  }
+  // 高清：竖木板带木纹、两道铁箍带铆钉、圆门环；拱门顶上削圆
+  fillArea(p, x, y, w, h, (lx, ly, n) => {
+    if (kind === 'arch' || kind === 'double') {
+      const dx = (lx - w / 2) / (w / 2);
+      const top = 2.5 * (1 - Math.sqrt(Math.max(0, 1 - dx * dx)));
+      if (ly < top) return '#3a2416';
+    }
+    const plank = Math.floor(lx / 3);
+    const ix = lx % 3;
+    let c = ix >= 3 - 0.5 ? '#4a2e1a' : hash(plank, 0, x) < 0.5 ? '#7a5232' : '#845a38';
+    if (ix < 0.5 && c !== '#4a2e1a') c = '#8a6040';
+    const grain = Math.sin(ly * 1.6 + plank * 5 + Math.sin(ly * 0.4) * 2);
+    if (ix >= 0.5 && ix < 2.5 && grain > 0.85) c = '#64422a';
+    if (kind === 'double' && lx >= w / 2 - 0.5 && lx < w / 2 + 0.5) c = '#3a2416';
+    // 铁箍
+    const band = (ly >= 3 && ly < 4.5) || (ly >= h - 5 && ly < h - 3.5);
+    if (band) {
+      c = ly % 1 < 0.5 ? '#4a4a52' : '#34343a';
+      if ((lx * 2) % 5 < 0.5 && ly % 1 >= 0.5) c = '#6a6a72';
+    }
+    // 底边的阴影
+    if (ly >= h - 1) c = mix(c, '#000000', 0.3);
+    if (n < 0.03) c = mix(c, '#000000', 0.15);
+    return c;
+  });
+  // 门环：一圈金色，左上高光
+  const kx = x + w - 2.5, ky = y + Math.floor(h / 2) + 0.5;
+  fillArea(p, x + w - 4, y + Math.floor(h / 2) - 1, 3, 3, (lx, ly) => {
+    const d = Math.hypot(x + w - 4 + lx + 0.25 - kx, y + Math.floor(h / 2) - 1 + ly + 0.25 - ky);
+    return d < 1.1 ? (d < 0.5 ? '#5a3a22' : lx + ly < 2.5 ? '#f8d870' : '#c89a30') : null;
+  });
+  // 门槛石
   p.rect(x - 2, bottom, w + 4, 1, '#7a766e');
+  fillArea(p, x - 2, bottom, w + 4, 1, (lx, ly) => (ly < 0.5 ? '#8e8a82' : (lx * 2) % 4 < 0.5 ? '#5a564e' : null));
 }
 
 function drawSign(p: Pix, x: number, y: number, icon: string) {
@@ -769,6 +911,10 @@ function drawSign(p: Pix, x: number, y: number, icon: string) {
   p.rect(x - 1, y, 12, 1, '#3a2416');
   p.rect(x, y + 1, 11, 11, '#3a2416');
   p.rect(x + 1, y + 2, 9, 9, '#c8a068');
+  if (p.res > 1) {
+    // 木牌的纹理和一圈内阴影
+    fillArea(p, x + 1, y + 2, 9, 9, (lx, ly, n) => (lx < 0.5 || ly < 0.5 ? '#dcb880' : lx >= 8.5 || ly >= 8.5 ? '#a8824e' : n < 0.05 ? '#b8905a' : Math.sin(ly * 6 + lx * 0.5) > 0.9 ? '#bc9460' : null));
+  }
   SIGNS[icon].forEach((row, j) => {
     for (let i = 0; i < 8; i++) if (SIGN_PAL[row[i]]) p.set(x + 1.5 + i, y + 2.5 + j, SIGN_PAL[row[i]]);
   });
@@ -778,7 +924,7 @@ function drawSign(p: Pix, x: number, y: number, icon: string) {
 function house(wTiles: number, hTiles: number, s: HouseStyle) {
   const W = wTiles * 16;
   const H = hTiles * 16 + 18;
-  const p = new Pix(W + 2, H);
+  const p = new Pix(W + 2, H, BUILDING_RES);
   const wallH = Math.min(34, Math.round(hTiles * 16 * 0.5));
   const roofH = H - wallH - 2;
   drawWall(p, 2, roofH + 1, W - 2, wallH, s.wall);
@@ -801,6 +947,16 @@ function house(wTiles: number, hTiles: number, s: HouseStyle) {
   if (s.chimney) {
     p.rect(W - 14, 0, 7, 10, '#6a625a');
     p.rect(W - 14, 0, 7, 2, '#3a3632');
+    if (p.res > 1) {
+      // 烟囱：小砖、顶上一圈压顶石、黑黑的烟道口
+      fillArea(p, W - 14, 2, 7, 8, (lx, ly) => {
+        const row = Math.floor(ly / 2);
+        const ix = (lx + (row % 2) * 1.5) % 3;
+        return ly % 2 >= 1.5 || ix >= 2.5 ? '#4a443e' : ix < 0.5 ? '#8a8278' : '#6e665e';
+      });
+      fillArea(p, W - 15, 0, 9, 2, (lx, ly) => (ly < 0.5 ? '#5a5650' : lx < 0.5 || lx >= 8.5 ? '#2a2624' : '#3a3632'));
+      fillArea(p, W - 13, 0.5, 5, 1, () => '#1a1614');
+    }
   }
   const bottom = H - 2;
   const cx = W / 2 + 1;
@@ -812,6 +968,11 @@ function house(wTiles: number, hTiles: number, s: HouseStyle) {
     const k = Math.floor(i / 2) + 1;
     const wx = Math.round(cx + side * (k * 16 + 2) - 4);
     if (wx > 3 && wx < W - 10) drawWindow(p, wx, wy);
+    // 10-28：窄房子以前一扇窗都放不下；高清版把窗挪到门两侧的墙上（有招牌的那边留给招牌）
+    else if (p.res > 1 && k === 1 && !(side > 0 && s.sign)) {
+      const nx = Math.round(cx + side * (W / 2 - 6) - 4);
+      if (nx >= 3 && nx <= W - 9) drawWindow(p, nx, wy);
+    }
   }
   if (s.sign) drawSign(p, Math.round(cx + 9), roofH + 4, s.sign);
   if (s.lanterns) {
@@ -824,7 +985,7 @@ function house(wTiles: number, hTiles: number, s: HouseStyle) {
 }
 
 function tower() {
-  const p = new Pix(50, 112);
+  const p = new Pix(50, 112, BUILDING_RES);
   drawWall(p, 6, 30, 38, 80, 'stone');
   p.rect(4, 26, 42, 6, '#5a564e');
   for (let x = 4; x < 46; x += 6) p.rect(x, 22, 4, 5, '#6a665e');
@@ -842,7 +1003,7 @@ function tower() {
 }
 
 function fountain() {
-  const p = new Pix(64, 64);
+  const p = new Pix(64, 64, BUILDING_RES);
   p.blob(31.5, 36, 30, 22, ['#5a564e', '#7a766e', '#9a968c', '#b8b4a8'], 31);
   p.blob(31.5, 37, 25, 17, ['#2f68b0', '#3c7cc4', '#5a9ad8', '#cfe8ff'], 32);
   p.blob(31.5, 30, 7, 6, ['#5a564e', '#7a766e', '#9a968c', '#b8b4a8'], 33);
@@ -852,7 +1013,7 @@ function fountain() {
 }
 
 function stall(seed: number) {
-  const p = new Pix(48, 44);
+  const p = new Pix(48, 44, BUILDING_RES);
   const stripes = [['#c03a2a', '#f4ead8'], ['#2a5ac0', '#f4ead8'], ['#3a9a4a', '#f4ead8']][seed % 3];
   p.rect(3, 14, 2, 28, '#5a3a22');
   p.rect(43, 14, 2, 28, '#5a3a22');
@@ -866,7 +1027,7 @@ function stall(seed: number) {
 }
 
 function windmill() {
-  const p = new Pix(48, 82);
+  const p = new Pix(48, 82, BUILDING_RES);
   for (let y = 18; y < 80; y++) {
     const half = 12 + (y - 18) * 0.12;
     for (let x = Math.round(24 - half); x <= Math.round(24 + half); x++) {
@@ -881,7 +1042,7 @@ function windmill() {
 }
 
 function windmillBlades() {
-  const p = new Pix(64, 64);
+  const p = new Pix(64, 64, BUILDING_RES);
   for (let a = 0; a < 4; a++) {
     const ang = (a * Math.PI) / 2;
     const cx = Math.cos(ang);
@@ -910,7 +1071,7 @@ function barn() {
 function furnace(wTiles: number, hTiles: number) {
   const W = wTiles * 16;
   const H = hTiles * 16 + 18;
-  const p = new Pix(W + 2, H);
+  const p = new Pix(W + 2, H, BUILDING_RES);
   const bottom = H - 2;
   const cx = W / 2 + 1;
   const BRICK = ['#4a2e26', '#6e4232', '#8a5640', '#a8704e'];
@@ -996,7 +1157,7 @@ function furnace(wTiles: number, hTiles: number) {
 function tent(wTiles: number, hTiles: number, seed: number) {
   const W = wTiles * 16;
   const H = hTiles * 16 + 18;
-  const p = new Pix(W + 2, H);
+  const p = new Pix(W + 2, H, BUILDING_RES);
   const cx = W / 2 + 1;
   const bottom = H - 2;
   const cloth = [['#c8b48a', '#e8d8b0', '#f4e8c8'], ['#a8885a', '#c8a878', '#e0c494']][seed % 2];
@@ -1032,7 +1193,7 @@ export function paintCave(region: string): HTMLCanvasElement {
     jungle: ['#2a3a2a', '#405440', '#587058', '#6aa04a'], tropic: ['#7a7060', '#9a9078', '#b8ae94', '#e8dcc0'],
   };
   const pal = PALS[region] ?? ['#4e4e52', '#6a6a6e', '#86868a', '#a8a8ac'];
-  const p = new Pix(64, 48);
+  const p = new Pix(64, 48, BUILDING_RES);
   p.blob(32, 28, 30, 19, pal, 91);
   p.blob(14, 34, 12, 12, pal, 92);
   p.blob(50, 34, 12, 12, pal, 93);
@@ -1063,7 +1224,7 @@ export function paintCave(region: string): HTMLCanvasElement {
 }
 
 function well() {
-  const p = new Pix(20, 30);
+  const p = new Pix(20, 30, BUILDING_RES);
   p.blob(9.5, 23, 9, 5, ['#5a564e', '#7a766e', '#9a968c', '#b8b4a8'], 41);
   p.blob(9.5, 22, 6, 3, ['#0e1a2a', '#1a2a44', '#22385a', '#3a5a8a'], 42);
   p.rect(2, 6, 2, 16, '#5a3a22');
@@ -1096,7 +1257,7 @@ const THEMES: Record<TownTheme, Partial<HouseStyle>> = {
 
 /** 把一张画好的房子垫高：底下加一排木桩和一架梯子（遗忘哨塔的高脚屋） */
 function onStilts(src: Pix, lift = 10) {
-  const p = new Pix(src.w, src.h + lift);
+  const p = new Pix(src.w, src.h + lift, src.res);
   for (let y = 0; y < src.h; y++) for (let x = 0; x < src.w; x++) { const c = src.get(x, y); if (c) p.set(x, y, c); }
   for (let x = 3; x < src.w - 3; x += 10) p.rect(x, src.h - 2, 3, lift + 2, x % 20 ? '#4a3a2a' : '#5a4632');
   p.rect(1, src.h - 2, src.w - 2, 2, '#3a2a1e');
@@ -1111,7 +1272,7 @@ function onStilts(src: Pix, lift = 10) {
 function keep(wTiles: number, hTiles: number) {
   const W = wTiles * 16;
   const H = hTiles * 16 + 30;
-  const p = new Pix(W + 2, H);
+  const p = new Pix(W + 2, H, BUILDING_RES);
   const bottom = H - 2;
   drawWall(p, 14, 26, W - 26, bottom - 26, 'stone');
   drawRoof(p, 10, 8, W - 18, 20, ROOF_SLATE);
@@ -1134,7 +1295,7 @@ function keep(wTiles: number, hTiles: number) {
 function watchtower(wTiles: number, hTiles: number, stone: boolean) {
   const W = wTiles * 16;
   const H = hTiles * 16 + 22;
-  const p = new Pix(W + 2, H);
+  const p = new Pix(W + 2, H, BUILDING_RES);
   const bottom = H - 2;
   const cx = W / 2 + 1;
   const legW = Math.max(3, Math.round(W * 0.1));
@@ -1152,7 +1313,7 @@ function watchtower(wTiles: number, hTiles: number, stone: boolean) {
 function lanterntower(wTiles: number, hTiles: number) {
   const W = wTiles * 16;
   const H = hTiles * 16 + 22;
-  const p = new Pix(W + 2, H);
+  const p = new Pix(W + 2, H, BUILDING_RES);
   const bottom = H - 2;
   const cx = W / 2 + 1;
   const tiers = 4;
@@ -1175,7 +1336,7 @@ function lanterntower(wTiles: number, hTiles: number) {
 function lighthouse(wTiles: number, hTiles: number) {
   const W = wTiles * 16;
   const H = hTiles * 16 + 24;
-  const p = new Pix(W + 2, H);
+  const p = new Pix(W + 2, H, BUILDING_RES);
   const bottom = H - 2;
   const cx = W / 2 + 1;
   for (let y = 22; y < bottom; y++) {
@@ -1214,7 +1375,7 @@ function warehouse(wTiles: number, hTiles: number) {
 /** 篝火：一圈石头围着交叉的木柴，火苗由场景加动画 */
 function bonfire(wTiles: number) {
   const W = wTiles * 16;
-  const p = new Pix(W + 2, 40);
+  const p = new Pix(W + 2, 40, BUILDING_RES);
   const cx = W / 2 + 1;
   for (let a = 0; a < Math.PI * 2; a += 0.5) p.blob(cx + Math.cos(a) * (W / 2 - 4), 30 + Math.sin(a) * 6, 3, 2.2, ['#3a3a40', '#5a5a62', '#7a7a84', '#9a9aa4'], Math.round(a * 10));
   p.line(cx - 12, 33, cx + 10, 22, '#5a3a22');
@@ -1229,7 +1390,7 @@ function bonfire(wTiles: number) {
 function crystaltower(wTiles: number, hTiles: number) {
   const W = wTiles * 16;
   const H = hTiles * 16 + 30;
-  const p = new Pix(W + 2, H);
+  const p = new Pix(W + 2, H, BUILDING_RES);
   const bottom = H - 2;
   const cx = W / 2 + 1;
   drawWall(p, 6, bottom - 22, W - 10, 22, 'crystalstone');
@@ -1255,7 +1416,7 @@ function crystaltower(wTiles: number, hTiles: number) {
 function ruin(wTiles: number, hTiles: number) {
   const W = wTiles * 16;
   const H = hTiles * 16 + 10;
-  const p = new Pix(W + 2, H);
+  const p = new Pix(W + 2, H, BUILDING_RES);
   const bottom = H - 2;
   drawWall(p, 2, 10, W - 2, bottom - 10, 'marble');
   for (let x = 2; x < W; x++) {
@@ -1271,7 +1432,7 @@ function ruin(wTiles: number, hTiles: number) {
 function temple(wTiles: number, hTiles: number) {
   const W = wTiles * 16;
   const H = hTiles * 16 + 26;
-  const p = new Pix(W + 2, H);
+  const p = new Pix(W + 2, H, BUILDING_RES);
   const bottom = H - 2;
   const cx = W / 2 + 1;
   const pal = ['#8a867c', '#b8b4a8', '#dcd8cc', '#f4f0e8'];

@@ -37,21 +37,49 @@ export class Pix {
   /** 画图坐标的原点偏移：角色帧四周留白时，画法照旧按原来的坐标写（outline、canvas 不受影响） */
   ox = 0;
   oy = 0;
-  constructor(public w: number, public h: number) {
-    this.data = new Array(w * h).fill(null);
+  /** 实际像素宽高 = 逻辑宽高 × res */
+  readonly pw: number;
+  readonly ph: number;
+  /**
+   * res > 1 是「高清」画布（10-28 画质升级）：逻辑坐标、w/h 不变，但每个逻辑像素底下有 res×res 个真像素。
+   * set/rect/line 照旧按整像素画（填满一块），ball/capsule 这类按法线算明暗的形状改用 sub/dot 逐个真像素画，边缘就圆了。
+   */
+  constructor(public w: number, public h: number, public readonly res = 1) {
+    this.pw = w * res;
+    this.ph = h * res;
+    this.data = new Array(this.pw * this.ph).fill(null);
   }
   set(x: number, y: number, c: string | null) {
     x = Math.round(x) + this.ox;
     y = Math.round(y) + this.oy;
-    if (x >= 0 && y >= 0 && x < this.w && y < this.h) this.data[y * this.w + x] = c;
+    if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
+    const r = this.res;
+    if (r === 1) { this.data[y * this.w + x] = c; return; }
+    const x0 = x * r, y0 = y * r;
+    for (let j = 0; j < r; j++) for (let i = 0; i < r; i++) this.data[(y0 + j) * this.pw + x0 + i] = c;
+  }
+  /** 真像素坐标（已含 res，不含 ox/oy 的偏移由这里加） */
+  sub(sx: number, sy: number, c: string | null) {
+    sx += this.ox * this.res;
+    sy += this.oy * this.res;
+    if (sx >= 0 && sy >= 0 && sx < this.pw && sy < this.ph) this.data[sy * this.pw + sx] = c;
+  }
+  /** 逻辑坐标的小数点：落在哪个真像素就画哪个 */
+  dot(fx: number, fy: number, c: string | null) {
+    this.sub(Math.floor(fx * this.res), Math.floor(fy * this.res), c);
+  }
+  getSub(sx: number, sy: number) {
+    sx += this.ox * this.res;
+    sy += this.oy * this.res;
+    return sx >= 0 && sy >= 0 && sx < this.pw && sy < this.ph ? this.data[sy * this.pw + sx] : null;
   }
   get(x: number, y: number) {
-    x += this.ox;
-    y += this.oy;
-    return x >= 0 && y >= 0 && x < this.w && y < this.h ? this.data[y * this.w + x] : null;
+    x = Math.round(x) + this.ox;
+    y = Math.round(y) + this.oy;
+    return x >= 0 && y >= 0 && x < this.w && y < this.h ? this.data[y * this.res * this.pw + x * this.res] : null;
   }
   private raw(x: number, y: number) {
-    return x >= 0 && y >= 0 && x < this.w && y < this.h ? this.data[y * this.w + x] : null;
+    return x >= 0 && y >= 0 && x < this.pw && y < this.ph ? this.data[y * this.pw + x] : null;
   }
   /** 只在已经有颜色的像素上画，用来加花纹 */
   paint(x: number, y: number, c: string) {
@@ -60,17 +88,21 @@ export class Pix {
   rect(x: number, y: number, w: number, h: number, c: string) {
     for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) this.set(x + i, y + j, c);
   }
-  /** 有明暗的团块：左上亮右下暗，边缘带一点噪声 */
+  /** 有明暗的团块：左上亮右下暗，边缘带一点噪声（高清画布上按真像素画，边更圆） */
   blob(cx: number, cy: number, rx: number, ry: number, pal: string[], seed = 0) {
-    for (let y = Math.floor(cy - ry - 1); y <= cy + ry + 1; y++) {
-      for (let x = Math.floor(cx - rx - 1); x <= cx + rx + 1; x++) {
+    const r = this.res;
+    for (let sy = Math.floor((cy - ry - 1) * r); sy <= (cy + ry + 1) * r; sy++) {
+      for (let sx = Math.floor((cx - rx - 1) * r); sx <= (cx + rx + 1) * r; sx++) {
+        const x = r === 1 ? sx : (sx + 0.5) / r;
+        const y = r === 1 ? sy : (sy + 0.5) / r;
         const dx = (x - cx) / rx;
         const dy = (y - cy) / ry;
         const d = dx * dx + dy * dy;
-        const n = phash(x, y, seed);
+        const n = phash(Math.floor(x), Math.floor(y), seed);
         if (d > 1 + (n - 0.5) * 0.35) continue;
         const s = -dx * 0.55 - dy * 0.8 + (n - 0.5) * 0.6;
-        this.set(x, y, s > 0.75 ? pal[3] : s > 0.2 ? pal[2] : s > -0.45 ? pal[1] : pal[0]);
+        const c = s > 0.75 ? pal[3] : s > 0.2 ? pal[2] : s > -0.45 ? pal[1] : pal[0];
+        if (r === 1) this.set(x, y, c); else this.sub(sx, sy, c);
       }
     }
   }
@@ -89,10 +121,10 @@ export class Pix {
   }
   outline(c = OUTLINE) {
     const add: number[] = [];
-    for (let y = 0; y < this.h; y++) {
-      for (let x = 0; x < this.w; x++) {
+    for (let y = 0; y < this.ph; y++) {
+      for (let x = 0; x < this.pw; x++) {
         if (this.raw(x, y)) continue;
-        if (this.raw(x + 1, y) || this.raw(x - 1, y) || this.raw(x, y + 1) || this.raw(x, y - 1)) add.push(y * this.w + x);
+        if (this.raw(x + 1, y) || this.raw(x - 1, y) || this.raw(x, y + 1) || this.raw(x, y - 1)) add.push(y * this.pw + x);
       }
     }
     for (const i of add) this.data[i] = c;
@@ -101,11 +133,11 @@ export class Pix {
   /** 描边颜色跟着旁边像素走（深一号的同色），比统一黑边柔和 */
   outlineTinted(c = OUTLINE, k = 0.72) {
     const add: [number, string][] = [];
-    for (let y = 0; y < this.h; y++) {
-      for (let x = 0; x < this.w; x++) {
+    for (let y = 0; y < this.ph; y++) {
+      for (let x = 0; x < this.pw; x++) {
         if (this.raw(x, y)) continue;
         const n = this.raw(x, y - 1) || this.raw(x - 1, y) || this.raw(x + 1, y) || this.raw(x, y + 1);
-        if (n) add.push([y * this.w + x, mix(n, c, k)]);
+        if (n) add.push([y * this.pw + x, mix(n, c, k)]);
       }
     }
     for (const [i, col] of add) this.data[i] = col;
@@ -113,14 +145,30 @@ export class Pix {
   }
   canvas(): HTMLCanvasElement {
     const c = document.createElement('canvas');
-    c.width = this.w;
-    c.height = this.h;
+    c.width = this.pw;
+    c.height = this.ph;
     const ctx = c.getContext('2d')!;
-    this.data.forEach((col, i) => {
-      if (!col) return;
-      ctx.fillStyle = col;
-      ctx.fillRect(i % this.w, Math.floor(i / this.w), 1, 1);
-    });
+    // 一次性写 ImageData（以前每个像素 fillRect 一次，高清画布像素翻了 4 倍后太慢）
+    const img = ctx.createImageData(this.pw, this.ph);
+    const px = img.data;
+    const cache = new Map<string, number>();
+    for (let i = 0; i < this.data.length; i++) {
+      const col = this.data[i];
+      if (!col) continue;
+      let v = cache.get(col);
+      if (v === undefined) {
+        v = col.length === 7 ? parseInt(col.slice(1), 16) : -1;
+        cache.set(col, v);
+      }
+      const o = i * 4;
+      if (v >= 0) { px[o] = v >> 16; px[o + 1] = (v >> 8) & 255; px[o + 2] = v & 255; px[o + 3] = 255; }
+    }
+    // 有非 #rrggbb 的颜色（极少）就先 put 再让 fillRect 盖上去：顺序反过来
+    ctx.putImageData(img, 0, 0);
+    for (let i = 0; i < this.data.length; i++) {
+      const col = this.data[i];
+      if (col && col.length !== 7) { ctx.fillStyle = col; ctx.fillRect(i % this.pw, Math.floor(i / this.pw), 1, 1); }
+    }
     return c;
   }
 }

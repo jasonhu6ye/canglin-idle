@@ -17,13 +17,13 @@ import { WOLF_FEET, WOLF_H } from './wolfArt';
 import { paintFoal, paintRanch, PADDOCK_SPOTS, RANCH_H, RANCH_W } from './horseArt';
 import { RANCH } from '../core/ranch';
 import { besideXOf, ensureMountTex, mountKindOf, saddleBob, seatOf } from './mounts';
-import { FIGHT, FIGHT_RANGE, fightWeapon, FRAME_H, FRAME_W, HERO_ANIMS, HERO_FEET, HERO_PAD, NPC_ANIMS, NPC_OUTFITS, outfitOf, paintHeroSheet, type HeroDir } from './hero';
+import { FIGHT, FIGHT_RANGE, fightWeapon, FRAME_H, HERO_ANIMS, HERO_FEET, HERO_PAD, HERO_RES, NPC_ANIMS, NPC_OUTFITS, outfitOf, paintHeroSheet, type HeroDir } from './hero';
 import type { MonsterDef, RegionId, Summary } from '../core/types';
 import { store } from '../store';
 import { Ambience, D_FLOAT, D_GLOW, D_LABEL, D_PARTICLE, D_SMOKE } from './ambience';
 import { paintArrow, paintBolt, paintHit, paintSlash } from './fxArt';
 import { cropTex, glintTex, soilTex } from './farmArt';
-import { paintBuilding, paintCave, paintDot, paintGlow, paintProp, paintWindmillBlades, PROP_GLOW } from './art';
+import { BUILDING_RES, paintBuilding, paintCave, paintDot, paintGlow, paintProp, paintWindmillBlades, PROP_GLOW } from './art';
 import { DPR } from './dpr';
 import { fxScale, gfxLevel } from './gfx';
 import { paintResNode, resGlow, resOf, type ResKind } from './resArt';
@@ -201,7 +201,7 @@ export class MapScene extends Phaser.Scene {
     if (!store.state.walk && (start.x !== saved.x || start.y !== saved.y)) store.dispatch((g) => setLoc(g, start.x, start.y));
     this.player = this.add.container(start.x * T + T / 2, start.y * T + T / 2);
     const ring = this.add.ellipse(0, 6, 14, 6).setStrokeStyle(1, 0xe8b84a).setFillStyle(0xe8b84a, 0.25);
-    this.playerBody = this.add.sprite(0, 7, 'hero').setOrigin(0.5, (HERO_FEET + HERO_PAD.t) / FRAME_H);
+    this.playerBody = this.add.sprite(0, 7, 'hero').setOrigin(0.5, (HERO_FEET + HERO_PAD.t) / FRAME_H).setScale(1 / HERO_RES);
     this.playerBody.play('idle-down');
     const name = this.add.text(0, 7 - HERO_FEET + 1, tl('[苍岭] 你'), { fontFamily: FONT, fontSize: '7px', color: '#ffffff', stroke: '#000', strokeThickness: 2, resolution: 4 }).setOrigin(0.5);
     this.wolfBack = this.add.sprite(0, 7, 'mount-wolf').setOrigin(0.5, WOLF_FEET / WOLF_H).setVisible(false);
@@ -417,7 +417,7 @@ export class MapScene extends Phaser.Scene {
     const hero = paintHeroSheet(outfitOf(this.heroSkin));
     this.heroCanvas = hero.canvas;
     const tex = this.heroTex = this.textures.addCanvas('hero', hero.canvas)!;
-    for (const f of hero.frames) tex.add(f.name, 0, f.x, f.y, FRAME_W, FRAME_H);
+    for (const f of hero.frames) tex.add(f.name, 0, f.x, f.y, hero.fw, hero.fh);
     for (const a of HERO_ANIMS) {
       if (this.anims.exists(a.key)) continue;
       this.anims.create({
@@ -434,7 +434,7 @@ export class MapScene extends Phaser.Scene {
       if (this.textures.exists(key)) continue;
       const sheet = paintHeroSheet(o, undefined, NPC_ANIMS);
       const t = this.textures.addCanvas(key, sheet.canvas)!;
-      for (const f of sheet.frames) t.add(f.name, 0, f.x, f.y, FRAME_W, FRAME_H);
+      for (const f of sheet.frames) t.add(f.name, 0, f.x, f.y, sheet.fw, sheet.fh);
       for (const an of NPC_ANIMS) {
         this.anims.create({
           key: `${key}:${an.key}`, frameRate: an.rate * 0.8, repeat: -1,
@@ -501,20 +501,23 @@ export class MapScene extends Phaser.Scene {
       if (!this.textures.exists(key)) this.textures.addCanvas(key, paintBuilding(b.kind, b.w, b.h, i % 3, b.theme));
       const bx = (b.x + b.w / 2) * T;
       const by = (b.y + b.h) * T;
-      const img = this.add.image(bx, by, key).setOrigin(0.5, 1).setDepth(by + 1000);
+      // 高清贴图：按倍数缩回原大小，下面算位置都用 displayWidth/Height
+      const img = this.add.image(bx, by, key).setOrigin(0.5, 1).setScale(1 / BUILDING_RES).setDepth(by + 1000);
+      // 脚下一片淡淡的投影，房子才像落在地上
+      this.add.ellipse(bx + 2, by - 1, img.displayWidth + 6, 9, 0x000000, 0.22).setDepth(by + 999);
       if (b.kind === 'windmill') {
-        const blades = this.add.image(bx, by - img.height + 16, 'windmill-blades').setDepth(by + 1001);
+        const blades = this.add.image(bx, by - img.displayHeight + 16, 'windmill-blades').setScale(1 / BUILDING_RES).setDepth(by + 1001);
         this.tweens.add({ targets: blades, angle: 360, duration: 9000, repeat: -1 });
       }
       if (b.kind === 'fountain') this.sparkle(bx, by - 26, 18);
-      if (b.kind === 'tower') this.addGlow(bx, by - img.height + 12, 0xa070ff, 30);
+      if (b.kind === 'tower') this.addGlow(bx, by - img.displayHeight + 12, 0xa070ff, 30);
       if (b.kind === 'smithy') this.addGlow(bx - 26, by - 10, 0xff7a2a, 26);
       if (b.kind === 'furnace') this.furnaceFx(bx + 1, by - 13);
       if (b.kind === 'bonfire') this.furnaceFx(bx, by - 18);
-      if (b.kind === 'lighthouse') this.addGlow(bx, by - img.height + 14, 0xfff0a0, 46);
-      if (b.kind === 'crystaltower') { this.addGlow(bx, by - img.height * 0.6, 0xa080ff, 50); this.sparkle(bx, by - img.height * 0.6, 20); }
-      if (b.kind === 'lanterntower') this.addGlow(bx, by - img.height + 6, 0xffb060, 30);
-      if (CHIMNEY[b.kind]) this.smoke(bx - img.width / 2 + img.width - 11, by - img.height + 2);
+      if (b.kind === 'lighthouse') this.addGlow(bx, by - img.displayHeight + 14, 0xfff0a0, 46);
+      if (b.kind === 'crystaltower') { this.addGlow(bx, by - img.displayHeight * 0.6, 0xa080ff, 50); this.sparkle(bx, by - img.displayHeight * 0.6, 20); }
+      if (b.kind === 'lanterntower') this.addGlow(bx, by - img.displayHeight + 6, 0xffb060, 30);
+      if (CHIMNEY[b.kind]) this.smoke(bx + img.displayWidth / 2 - 11, by - img.displayHeight + 2);
     });
   }
 
@@ -1239,7 +1242,7 @@ export class MapScene extends Phaser.Scene {
       // 洞窟入口：一座带黑洞口的石山，暂未开放
       const key = `cave-${n.region}`;
       if (!this.textures.exists(key)) this.textures.addCanvas(key, paintCave(n.region));
-      this.add.image(cx, cy + T / 2 - T * 2, key).setOrigin(0.5, 1).setScale(1.3).setDepth(cy + 1000 - T * 2);
+      this.add.image(cx, cy + T / 2 - T * 2, key).setOrigin(0.5, 1).setScale(1.3 / BUILDING_RES).setDepth(cy + 1000 - T * 2);
       this.add.text(cx, cy - 64, tl`${n.name}\n（未开放）`, {
         fontFamily: FONT, fontSize: '8px', color: '#d8c8f0', backgroundColor: '#1b120ccc', padding: { x: 3, y: 1 }, resolution: 4, align: 'center',
       }).setOrigin(0.5, 1).setDepth(D_LABEL);
@@ -1491,7 +1494,7 @@ export class MapScene extends Phaser.Scene {
   /** 镇上的人：走路时按方向播走路动画，停下来播待机 */
   private addVillager(kind: string, x: number, y: number, radius: number) {
     const key = `npc-${kind}`;
-    const spr = this.add.sprite(x * T + T / 2, y * T + T / 2 + 7, key).setOrigin(0.5, (HERO_FEET + HERO_PAD.t) / FRAME_H).setDepth(y * T + 1000);
+    const spr = this.add.sprite(x * T + T / 2, y * T + T / 2 + 7, key).setOrigin(0.5, (HERO_FEET + HERO_PAD.t) / FRAME_H).setScale(1 / HERO_RES).setDepth(y * T + 1000);
     spr.play(`${key}:idle-down`);
     let i = 0;
     const wander = () => {
