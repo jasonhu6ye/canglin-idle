@@ -780,4 +780,9 @@ export const EN_TEXT: Record<string, string> = {
   "金币等数字不到 10 万照常显示，10 万起写成 100K、1.5M、2B、1T。": "Coins and other numbers show in full below 100,000; from 100,000 they show as 100K, 1.5M, 2B, 1T.",
   "队伍、好友、交易每 30 秒自动同步一次，切回页面时也会马上同步，不用刷新才看到变化。": "Party, friends and trades now sync every 30 seconds and right away when you return to the page, with no reload needed.",
   "背包栏（角色页「坐骑与背包」）：普通背包 T1-T8 多给 4-20 格；洞察者背包不加格子，改成经验多拿 5%-32%，每多拿 1 点经验从仓库扣 1 金币，没钱就不加。洞察者背包要用副本宝箱开出的「洞察之瞳」制作。": "Pack slot (Character page, Mount & Pack): regular packs T1-T8 add 4-20 bag slots; a Seer's Pack adds no slots but gives 5%-32% more XP, costing 1 coin from your bank per extra XP point (no bonus without coins). Seer's Packs are crafted with Insight Eyes from dungeon chests.",
+  "自动寻路全面检查": "Auto-walk overhaul",
+  "10 月 27 日": "Oct 27",
+  "把全图 239 个地点之间的 717 条路线都跑了一遍：以前有走不到的、绕一倍远的，现在全部走得到，路线基本都是最短的。": "We ran all 717 routes between the 239 locations on the map. Some used to be unreachable or twice as long as needed; now every one is reachable and routes are close to the shortest.",
+  "远路改成沿最短的走廊精确找路，遇到窄河、成排的石头过不去会自己记住、换一条走廊。": "Long routes now search precisely along the shortest corridor; if a narrow river or a row of rocks blocks it, the game remembers and picks another corridor.",
+  "找路快了很多：一般路线零点几秒就算好，点了寻路不会再卡住好几秒。": "Route finding is much faster: most routes take a fraction of a second, so the game no longer freezes for seconds when you auto-walk.",
 };

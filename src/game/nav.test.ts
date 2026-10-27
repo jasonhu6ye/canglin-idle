@@ -31,6 +31,17 @@ describe('寻路估时', () => {
     }
   }, 300000);
 
+  it('以前走不到、绕一倍远的路线（10-27 全图测试找出来的）：都走得到，长度和估算接近', () => {
+    const N = (id: string) => standTile(NODES.find((n) => n.id === id)!);
+    for (const [f, t, best] of [['stone_swamp', 'whisper_pool', 3292], ['stone_giantwood', 'pine_valley', 586], ['stone_site_obsidian', 'obsidian_pool', 894], ['yandeng_bank', 'stone_highland', 709], ['stone_site_thunder_rift', 'storm_mesa', 0]] as const) {
+      const a = N(f);
+      const b = N(t);
+      const p = findPath(a, b);
+      expect(p, `${f} → ${t}`).not.toBeNull();
+      if (best) expect(len(a, p!), `${f} → ${t}`).toBeLessThan(best * 1.06);
+    }
+  }, 300000);
+
   it('估时不比直线短；石碑路线一定比直接走快', () => {
     const all = WAYSTONES.map((w) => w.id);
     for (let i = 0; i < WAYSTONES.length; i += 3) {

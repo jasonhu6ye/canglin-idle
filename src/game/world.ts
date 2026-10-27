@@ -1,6 +1,9 @@
-import { FARM_RECTS, setNavField, MAP_H, MAP_W, MID_BOX, NODES, OLD_BOX, town2XY, TOWN2_CENTER, townXY, type MapNode } from '../core/data';
+import { FARM_RECTS, setNavField, MAP_H as MAP_H0, MAP_W as MAP_W0, MID_BOX, NODES, OLD_BOX, town2XY, TOWN2_CENTER, townXY, type MapNode } from '../core/data';
 import { TOWNS, type TownDef, type TownTheme } from '../core/towns';
 import type { RegionId } from '../core/types';
+// 地图尺寸抄一份成本地常量：寻路每步都要用，跨模块的导入绑定在测试环境里每次都走 getter，很慢
+const MAP_W = MAP_W0;
+const MAP_H = MAP_H0;
 
 /*
  * 大地图按区域图生成。格子太多（8848 地图有 7800 万格），整张图既算不完也存不下，所以分两层：
@@ -971,6 +974,7 @@ const COARSE_DIRS: [number, number, number][] = [[1, 0, 1], [-1, 0, 1], [0, 1, 1
 const MAX_LOADED = 4000;
 const chunkGround: (Uint8Array | undefined)[] = new Array(CHUNKS_X * CHUNKS_Y);
 const chunkBlock: (Uint8Array | undefined)[] = new Array(CHUNKS_X * CHUNKS_Y);
+const chunkWalk: (Uint8Array | undefined)[] = new Array(CHUNKS_X * CHUNKS_Y);
 const chunkProps: (Prop[] | undefined)[] = new Array(CHUNKS_X * CHUNKS_Y);
 const lastUse = new Uint32Array(CHUNKS_X * CHUNKS_Y);
 const loaded: number[] = [];
@@ -1292,14 +1296,25 @@ export function propsInChunk(cx: number, cy: number): Prop[] {
 
 // ---- 行走与寻路 ----
 
-export function isWalkable(x: number, y: number) {
-  if (!inMap(x, y)) return false;
-  const ci = chunkOf(x, y);
+/** 每块每格能不能走（地面、装饰物、建筑合在一起算好）：寻路一次要问几百万次，直接查表（10-27） */
+function walkChunk(ci: number): Uint8Array {
   const block = ensureProps(ci);
-  const li = local(x, y);
-  return !blockedG[chunkGround[ci]![li]] && !block[li] && !((chunkFlags[ci]?.[li] ?? 0) & F_BUILD);
+  const ground = chunkGround[ci]!;
+  const fl = chunkFlags[ci];
+  // 按位存（每块 128 字节），不随地面和装饰物一起被丢掉：走过一次的地方以后寻路不用重新生成
+  const w = new Uint8Array((CHUNK * CHUNK) >> 3);
+  for (let li = 0; li < CHUNK * CHUNK; li++) if (!blockedG[ground[li]] && !block[li] && !((fl?.[li] ?? 0) & F_BUILD)) w[li >> 3] |= 1 << (li & 7);
+  return (chunkWalk[ci] = w);
+}
+export function isWalkable(x: number, y: number) {
+  if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) return false;
+  const ci = (y >> 5) * CHUNKS_X + (x >> 5);
+  const li = ((y & 31) << 5) | (x & 31);
+  return ((chunkWalk[ci] ?? walkChunk(ci))[li >> 3] & (1 << (li & 7))) !== 0;
 }
 
+const DX8 = [1, -1, 0, 0, 1, 1, -1, -1];
+const DY8 = [0, 0, 1, -1, 1, -1, 1, -1];
 const DIRS: [number, number, number][] = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.414], [1, -1, 1.414], [-1, 1, 1.414], [-1, -1, 1.414]];
 /** 单次细寻路最多展开的格子数：大地图上不能整图搜索，远路靠粗网格走廊分段 */
 const MAX_NODES = 400_000;
@@ -1346,8 +1361,9 @@ export function findPath(from: Pt, to: Pt, maxNodes = MAX_NODES): Pt[] | null {
   const far = Math.max(Math.abs(from.x - to.x), Math.abs(from.y - to.y)) > 48;
   // 远路：先在粗网格上找走廊，再沿走廊一段一段细找；绕湖绕河也很快
   if (far) {
-    // 先找最短的走廊（不太偏向大路）；走不通几次就退回沿大路走（路都是连通的，一定到得了）
-    const p = farPath(from, to, ROAD_K, 3, true) ?? farPath(from, to, 0.55, 12, false);
+    // 先沿块图上最短的走廊精确细找（10-27：以前粗网格只看格子中心，会绕一倍远甚至找不到路）；
+    // 走廊里走不通再放宽一圈，还不行退回老办法：粗网格走廊分段找，最后沿大路走（路都是连通的）
+    const p = corridorPath(from, to) ?? farPath(from, to, ROAD_K, 3, true) ?? farPath(from, to, 0.55, 12, false);
     if (p) return p;
   }
   return astar(from, to, maxNodes);
@@ -1411,47 +1427,117 @@ function learnBlocked(cells: number[], keep: number): number {
   return n;
 }
 
-function astar(from: Pt, to: Pt, maxNodes: number): Pt[] | null {
-  // 只记搜过的格子（不再给整张地图开数组，5088 地图那样要 300MB）
-  const gBuf = new Map<number, number>();
-  const prevBuf = new Map<number, number>();
+/**
+ * 细格子 A*（8 方向，斜走不切墙角）。搜过的格子记在开放寻址的哈希表里（类型数组，比 Map 快好几倍），
+ * allow 可以把搜索限制在一条走廊里。
+ */
+let hKeys = new Int32Array(1 << 16).fill(-1);
+let hG = new Float32Array(1 << 16);
+let hPrev = new Int32Array(1 << 16);
+/** 已经展开过的格子：加权启发下不再重开（以前一格会被反复展开几十次） */
+let hDone = new Uint8Array(1 << 16);
+let hMask = (1 << 16) - 1;
+let hUsed = 0;
+function hReset(need: number) {
+  let cap = 1 << 16;
+  while (cap < need * 2) cap <<= 1;
+  if (cap !== hKeys.length) {
+    hKeys = new Int32Array(cap);
+    hG = new Float32Array(cap);
+    hPrev = new Int32Array(cap);
+    hDone = new Uint8Array(cap);
+    hMask = cap - 1;
+  }
+  hKeys.fill(-1);
+  hDone.fill(0);
+  hUsed = 0;
+}
+/** 找格子 key 的槽位；没有就占一个（返回 ~slot 表示新占的） */
+function hSlot(key: number): number {
+  let i = Math.imul(key, 0x9e3779b1) >>> 0 & hMask;
+  for (;;) {
+    const k = hKeys[i];
+    if (k === key) return i;
+    if (k === -1) {
+      hKeys[i] = key;
+      hUsed++;
+      return ~i;
+    }
+    i = (i + 1) & hMask;
+  }
+}
+function hGrow() {
+  const keys = hKeys, g = hG, prev = hPrev, done = hDone;
+  const cap = keys.length * 2;
+  hKeys = new Int32Array(cap).fill(-1);
+  hG = new Float32Array(cap);
+  hPrev = new Int32Array(cap);
+  hDone = new Uint8Array(cap);
+  hMask = cap - 1;
+  hUsed = 0;
+  // prev 存的是格子 key，不是槽位，所以直接搬
+  for (let i = 0; i < keys.length; i++) {
+    if (keys[i] === -1) continue;
+    const j = ~hSlot(keys[i]);
+    hG[j] = g[i];
+    hPrev[j] = prev[i];
+    hDone[j] = done[i];
+  }
+}
+
+/** 上一次 A* 是不是因为搜太多步才放弃的（不是真的走不通） */
+let astarExhausted = false;
+export function astar(from: Pt, to: Pt, maxNodes: number, allow?: (x: number, y: number) => boolean, weight = 1.1): Pt[] | null {
   const start = idx(from.x, from.y);
   const goal = idx(to.x, to.y);
-  const h = (i: number) => {
-    const dx = Math.abs((i % MAP_W) - to.x);
-    const dy = Math.abs(((i / MAP_W) | 0) - to.y);
-    return (Math.max(dx, dy) + 0.414 * Math.min(dx, dy)) * 1.1;
+  const h = (x: number, y: number) => {
+    const dx = Math.abs(x - to.x);
+    const dy = Math.abs(y - to.y);
+    return (Math.max(dx, dy) + 0.414 * Math.min(dx, dy)) * weight;
   };
-  gBuf.set(start, 0);
-  prevBuf.set(start, -1);
+  hReset(Math.min(maxNodes, 1 << 20) * 2);
+  const s0 = ~hSlot(start);
+  hG[s0] = 0;
+  hPrev[s0] = -1;
   const open = new Heap();
-  open.push(start, h(start));
+  open.push(start, h(from.x, from.y));
   let expanded = 0;
+  let found = false;
+  const ok = (x: number, y: number) => isWalkable(x, y) && (!allow || allow(x, y));
+  astarExhausted = false;
   while (open.size) {
-    const [cur, f] = open.pop();
-    if (cur === goal) break;
-    const g0 = gBuf.get(cur)!;
-    if (f - h(cur) > g0 + 1e-3) continue;
-    if (++expanded > maxNodes) return null;
+    const cur = open.popId();
+    const f = open.lastKey;
+    if (cur === goal) { found = true; break; }
     const x = cur % MAP_W;
     const y = (cur / MAP_W) | 0;
-    for (const [dx, dy, c] of DIRS) {
+    const cs = hSlot(cur);
+    const g0 = hG[cs];
+    if (hDone[cs] || f - h(x, y) > g0 + 1e-3) continue;
+    hDone[cs] = 1;
+    if (++expanded > maxNodes) { astarExhausted = true; return null; }
+    for (let d = 0; d < 8; d++) {
+      const dx = DX8[d];
+      const dy = DY8[d];
       const nx = x + dx;
       const ny = y + dy;
-      if (!isWalkable(nx, ny)) continue;
-      if (dx && dy && (!isWalkable(x + dx, y) || !isWalkable(x, y + dy))) continue;
-      const j = idx(nx, ny);
-      const ng = g0 + c;
-      const old = gBuf.get(j);
-      if (old !== undefined && old <= ng + 1e-3) continue;
-      gBuf.set(j, ng);
-      prevBuf.set(j, cur);
-      open.push(j, ng + h(j));
+      if (!ok(nx, ny)) continue;
+      if (d >= 4 && (!ok(x + dx, y) || !ok(x, y + dy))) continue;
+      const j = ny * MAP_W + nx;
+      const ng = g0 + (d >= 4 ? 1.414 : 1);
+      let sl = hSlot(j);
+      if (sl >= 0) {
+        if (hDone[sl] || hG[sl] <= ng + 1e-3) continue;
+      } else sl = ~sl;
+      hG[sl] = ng;
+      hPrev[sl] = cur;
+      open.push(j, ng + h(nx, ny));
+      if (hUsed * 2 > hKeys.length) hGrow();
     }
   }
-  if (!gBuf.has(goal)) return null;
+  if (!found) return null;
   const path: Pt[] = [];
-  for (let k = goal; k !== start; k = prevBuf.get(k)!) path.push({ x: k % MAP_W, y: (k / MAP_W) | 0 });
+  for (let k = goal; k !== start; k = hPrev[hSlot(k)]) path.push({ x: k % MAP_W, y: (k / MAP_W) | 0 });
   return path.reverse();
 }
 
@@ -1674,6 +1760,106 @@ export function navField(seeds: Pt[]): (p: Pt) => NavHit {
   if (navCache.length > 8) navCache.pop();
   return f;
 }
+/** 块图上从 a 到 b 的最短块序列（A*，启发用质心直线距离） */
+function blockPath(a: number, b: number): number[] | null {
+  const g = new Float64Array(navN).fill(Infinity);
+  const prev = new Int32Array(navN).fill(-1);
+  const heap = new Heap();
+  const h = (k: number) => Math.hypot(navX[k] - navX[b], navY[k] - navY[b]);
+  g[a] = 0;
+  heap.push(a, h(a));
+  while (heap.size) {
+    const k = heap.popId();
+    if (k === b) break;
+    const f = heap.lastKey;
+    if (f - h(k) > g[k] + 1e-6) continue;
+    for (let e = navStart[k]; e < navStart[k + 1]; e++) {
+      const j = navAdj[e];
+      const ng = g[k] + navW[e];
+      if (ng < g[j]) {
+        g[j] = ng;
+        prev[j] = k;
+        heap.push(j, ng + h(j));
+      }
+    }
+  }
+  if (g[b] === Infinity) return null;
+  const out: number[] = [];
+  for (let k = b; k !== -1; k = prev[k]) out.push(k);
+  return out.reverse();
+}
+
+/**
+ * 沿走廊找远路：块图上找最短的一串块，往外扩两圈当走廊，在走廊里做细格子 A*。
+ * 块图按粗格子中心建，偶尔有细格子其实过不去的地方（窄河、成排的石头）：走廊里走不通时，
+ * 把「搜到了的块 → 走廊里没搜到的块」之间的边删掉（块图学到这里不通），重新找走廊，最多 8 次。
+ * 块图建好之前返回 null。
+ */
+/** 走廊里 A* 的启发权重：走廊已经限定了范围，稍微贪心一点快很多，路线只比最短长 1-2% */
+const CORRIDOR_W = 1.25;
+function corridorPath(from: Pt, to: Pt): Pt[] | null {
+  if (!navComp) return null;
+  const a = navCompOf(from);
+  const b = navCompOf(to);
+  if (a < 0 || b < 0) return null;
+  const comp = navComp;
+  for (let tries = 0; tries < 8; tries++) {
+    const blocks = blockPath(a, b);
+    if (!blocks) return null;
+    const mark = new Uint8Array(navN);
+    let front = blocks;
+    for (const k of blocks) mark[k] = 1;
+    for (let r = 0; r < 2; r++) {
+      const next: number[] = [];
+      for (const k of front) for (let e = navStart[k]; e < navStart[k + 1]; e++) {
+        const j = navAdj[e];
+        if (!mark[j] && navW[e] < Infinity) { mark[j] = 1; next.push(j); }
+      }
+      front = next;
+    }
+    // 粗格子不能走（中心是水、建筑）但细格子可能能走（桥、窄路）：挨着走廊就算走廊里
+    const allow = (x: number, y: number) => {
+      const cx = x >> CS;
+      const cy = y >> CS;
+      const k = comp[cy * CW + cx];
+      if (k >= 0) return mark[k] === 1;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nx = cx + dx;
+        const ny = cy + dy;
+        if (nx < 0 || ny < 0 || nx >= CW || ny >= CH) continue;
+        const j = comp[ny * CW + nx];
+        if (j >= 0 && mark[j]) return true;
+      }
+      return false;
+    };
+    const p = astar(from, to, 2_500_000, allow, CORRIDOR_W);
+    if (p) return p;
+    if (astarExhausted) return null;
+    // 学习：搜到过的块 → 走廊里没搜到的块，这条边其实不通
+    const reached = new Uint8Array(navN);
+    for (let i = 0; i < hKeys.length; i++) {
+      const key = hKeys[i];
+      if (key < 0) continue;
+      const k = comp[(((key / MAP_W) | 0) >> CS) * CW + ((key % MAP_W) >> CS)];
+      if (k >= 0) reached[k] = 1;
+    }
+    let cut = 0;
+    for (let k = 0; k < navN; k++) {
+      if (!reached[k]) continue;
+      for (let e = navStart[k]; e < navStart[k + 1]; e++) {
+        const j = navAdj[e];
+        if (!mark[j] || reached[j] || navW[e] === Infinity) continue;
+        navW[e] = Infinity;
+        for (let q = navStart[j]; q < navStart[j + 1]; q++) if (navAdj[q] === k) navW[q] = Infinity;
+        cut++;
+      }
+    }
+    if (!cut) return null;
+    navCache.length = 0;
+  }
+  return null;
+}
+
 let navJob: Generator | null = null;
 /** 空闲时调：建块图建一小段（最多 budget 毫秒），建好了就把真实步行距离交给寻路估时；返回是否已建好 */
 export function warmNav(budget = 8): boolean {

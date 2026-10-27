@@ -1910,7 +1910,7 @@ export class MapScene extends Phaser.Scene {
       this.goViaStones(via, dest, done);
       return;
     }
-    const path = findPath(this.playerTile(), dest) ?? [];
+    const path = findPath(this.playerTile(), dest) ?? [dest];
     const stand = standTile(node);
     const atDest = st.loc.x === stand.x && st.loc.y === stand.y;
     // 存档里还在路上：按剩余时间匀速走完这条路
@@ -1959,7 +1959,7 @@ export class MapScene extends Phaser.Scene {
     const t1 = travelMs(store.state.loc, standOf(A), moveSpeed(store.state));
     const speedFor = (path: { x: number; y: number }[], ms: number) => (ms > 500 && path.length ? pathLength(this.playerTile(), path) / (ms / 1000) : undefined);
     const leg2 = () => {
-      const path = findPath(this.playerTile(), dest) ?? [];
+      const path = findPath(this.playerTile(), dest) ?? [dest];
       this.drawRoute(path);
       this.walkPath(path, done, speedFor(path, store.state.travel?.ms ?? 0));
     };
@@ -1969,7 +1969,7 @@ export class MapScene extends Phaser.Scene {
       leg2();
       return;
     }
-    const path = findPath(this.playerTile(), standTile(A)) ?? [];
+    const path = findPath(this.playerTile(), standTile(A)) ?? [standTile(A)];
     this.drawRoute(path);
     this.float(tl`顺路去${A.name}传送`, '#8ae8ff');
     this.walkPath(path, () => {
