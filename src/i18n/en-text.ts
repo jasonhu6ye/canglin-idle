@@ -1014,4 +1014,7 @@ export const EN_TEXT: Record<string, string> = {
   "你自己走动了，已停止跟随队长": "You moved on your own, so following stopped",
   "队长不在线，等他回来": "Leader is offline, waiting for them to come back",
   "你自己安排了别的事，已停止跟随队长": "You started something else, so following stopped",
+  "家园摆件重画：更立体": "Home decor redrawn: more depth",
+  "所有家园摆件统一加了光影：朝上的边亮、朝右的边暗、贴地的地方压暗，脚下还有一圈影子，不再像贴在地上的图片。": "Every home island piece now has proper lighting: upward edges catch the light, right edges fall into shade, the base is darker, and each piece casts a shadow, so nothing looks like a flat sticker anymore.",
+  "桌椅、床、柜子、沙发、壁炉、灶台、熔炉、工作台、木箱、钢琴、浴缸、帐篷、风车、凉亭、雕像、小船、鸡舍、狗屋等 30 多件按俯视角度重画，能看见桌面、柜顶和床上的被子，细节也多了。": "Over 30 pieces were redrawn from a top-down angle, including tables, chairs, beds, cabinets, sofas, the fireplace, stove, furnace, workbenches, crates, piano, bathtub, tent, windmill, gazebo, statue, rowboat, chicken coop and dog house. You can now see tabletops, cabinet tops and the quilts on beds, with much more detail.",
 };
