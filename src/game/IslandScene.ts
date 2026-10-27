@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
 import { NODES, WALK_TILES_PER_SEC } from '../core/data';
 import {
-  buildDef, canPlace, homeCan, homePlotCells, homePlots, HOME_PORTAL, HOME_SPAWN, homeSize, ISLAND, ISLAND_C, islandGround, leaveHome, placeBuild, removeAt, thingGrid,
+  buildDef, canPlace, collectHome, homeCan, homePlotCells, produceReady, homePlots, HOME_PORTAL, HOME_SPAWN, homeSize, ISLAND, ISLAND_C, islandGround, leaveHome, placeBuild, removeAt, thingGrid,
 } from '../core/home';
-import { CROP_DEFS, CROPS } from '../core/data';
+import { CROP_DEFS, CROPS, ITEMS } from '../core/data';
 import { fieldOfPlot, pickSeed, plotGrowth, plotPhase, tendPlot } from '../core/farm';
 import { cropTex, glintTex, soilTex } from './farmArt';
 import type { HomeThing } from '../core/types';
@@ -62,6 +62,8 @@ export class IslandScene extends Phaser.Scene {
   /** 家园农田的每格地：土、作物、熟了的闪光 */
   private cells: { id: string; soil: Phaser.GameObjects.Image; crop: Phaser.GameObjects.Image; glint: Phaser.GameObjects.Image; key: string }[] = [];
   private cellAt = new Map<string, string>();
+  /** 会产出东西的建筑头顶的小图标：攒了东西才显示 */
+  private bubbles: { t: HomeThing; img: Phaser.GameObjects.Image }[] = [];
   private tool: HomeTool = null;
   private ghost?: Phaser.GameObjects.Image;
   private ghostBox?: Phaser.GameObjects.Graphics;
@@ -239,6 +241,7 @@ export class IslandScene extends Phaser.Scene {
     this.objs.forEach((o) => o.destroy());
     this.objs = [];
     this.lamps = [];
+    this.bubbles = [];
     this.workSpot = undefined;
     const h = store.state.home;
     if (!h) return;
@@ -272,6 +275,8 @@ export class IslandScene extends Phaser.Scene {
   }
   private growCells() {
     const now = Date.now();
+    const home = store.state.home;
+    for (const b of this.bubbles) b.img.setVisible(produceReady(home, b.t, now) > 0);
     const farm = store.state.farm ?? {};
     const blink = Math.floor(now / 500) % 2 === 0;
     for (const p of this.cells) {
@@ -328,6 +333,20 @@ export class IslandScene extends Phaser.Scene {
       img = this.add.image(bx, by, this.thingTex(t.id)).setOrigin(0, 1).setDepth(d.floor || d.plot ? -4 : by + 1000);
     }
     this.objs.push(img);
+    if (d.produce) {
+      const item = d.produce.item;
+      const key = this.trophyTex(item, homeIcons.url(item), () => this.rebuild());
+      if (this.textures.exists(key)) {
+        const top = by - d.h * T - (UP[t.id] ?? 0);
+        const img = this.add.image(bx + (d.w * T) / 2, top - 2, key).setOrigin(0.5, 1).setDisplaySize(12, 12).setDepth(9e5).setVisible(false);
+        this.tweens.add({ targets: img, y: top - 5, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        this.objs.push(img);
+        this.bubbles.push({ t, img });
+      }
+      const zone = this.add.zone(bx + (d.w * T) / 2, by - (d.h * T) / 2 - (UP[t.id] ?? 0) / 2, d.w * T, d.h * T + (UP[t.id] ?? 0))
+        .setInteractive({ useHandCursor: true }).setData('collect', { x: t.x, y: t.y });
+      this.objs.push(zone);
+    }
     if (d.station || d.chest) {
       const zone = this.add.zone(bx + (d.w * T) / 2, by - (d.h * T) / 2 - (UP[t.id] ?? 0) / 2, d.w * T, d.h * T + (UP[t.id] ?? 0))
         .setInteractive({ useHandCursor: true }).setData('home', `home_${t.id}`);
@@ -478,6 +497,16 @@ export class IslandScene extends Phaser.Scene {
       }
       if (over.some((o) => o.getData('portal'))) {
         store.dispatch(leaveHome);
+        return;
+      }
+      const spot = !this.tool && over.map((o) => o.getData('collect') as { x: number; y: number } | undefined).find(Boolean);
+      if (spot) {
+        let got: Record<string, number> = {};
+        store.dispatch((g) => { const r = collectHome(g, Date.now(), spot); got = r.got; return r.state; });
+        if (Object.keys(got).length) {
+          this.game.events.emit(HOME_MSG, Object.entries(got).map(([id, n]) => tl`收取 ${ITEMS[id]?.name ?? id} ×${n}`).join(tl('、')));
+          this.growCells();
+        } else this.game.events.emit(HOME_MSG, tl('还没有东西可以收'));
         return;
       }
       const home = over.map((o) => o.getData('home') as string | undefined).find(Boolean);

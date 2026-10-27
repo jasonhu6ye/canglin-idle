@@ -1,6 +1,6 @@
 import { partyXpPct } from './party';
 import { CROP_DEFS, CROPS, cropsOfField, FARM_NODES, ITEMS, PLOT_BY_ID, plotsOf, WATER_SPEEDUP, type CropDef } from './data';
-import { homePlotCells, homePlots, homeFieldId, isHomeField } from './home';
+import { homeBarrel, homePlotCells, homePlots, homeFieldId, isHomeField } from './home';
 import { isRaining } from './weather';
 import { stepQuests } from './quests';
 import { nextRandom } from './rng';
@@ -108,7 +108,7 @@ function plantAt(s: GameState, plotId: string, crop: string, t: number): boolean
   const p: Plot = { crop, at: t, ripe: t + growMs(s, crop, fert), ...(fert ? { fert: fert as 1 | 2 } : {}) };
   s.farm[plotId] = p;
   // 装了洒水器的田，种下就浇好水
-  if (field && s.sprinklers?.includes(field)) waterAt(s, plotId, t);
+  if (field && (s.sprinklers?.includes(field) || (isHomeField(field) && homeBarrel(s)))) waterAt(s, plotId, t);
   return true;
 }
 

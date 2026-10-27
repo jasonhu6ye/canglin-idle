@@ -610,7 +610,7 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .home-bar { display: flex; align-items: center; gap: 6px;
   background: rgba(27, 18, 12, 0.88); border: 1px solid #6b5132; border-radius: 4px; padding: 4px 8px; pointer-events: auto; white-space: nowrap; }
 .home-bar b { color: #e8d8ff; }
-@media (max-width: 480px) { .home-bar { gap: 4px; padding: 4px 6px; } .home-bar > small { display: none; } .home-bar .pill { padding-left: 6px; padding-right: 6px; } }
+@media (max-width: 480px) { .home-bar { gap: 4px; padding: 4px 6px; flex-wrap: wrap; max-width: calc(100vw - 90px); } .home-bar > small { display: none; } .home-bar .pill { padding-left: 6px; padding-right: 6px; } }
 .home-msg { position: fixed; top: 90px; left: 50%; transform: translateX(-50%); z-index: 7; background: rgba(90, 30, 20, 0.92);
   border: 1px solid #c8603a; color: #ffd8c8; padding: 3px 10px; border-radius: 4px; font-size: 12px; pointer-events: none; }
 .home-build { position: fixed; left: 8px; right: 8px; bottom: 64px; z-index: 6; max-height: 46%; overflow-y: auto; padding: 8px;

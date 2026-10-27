@@ -23,7 +23,7 @@ export const UP: Record<string, number> = {
   painting: 10, candle: 6, teddy: 2, books: 2, tea_set: 0, music_box: 2, crystal_ball: 4, bonsai: 4, paper_lantern: 12, hourglass: 4,
   ship_model: 6, gem_case: 8, pumpkin_lamp: 2, plush_cat: 2, trophy_cup: 6,
   bunk_bed: 10, bookcase_tall: 16, counter: 6, round_table: 2, throne: 14, bed_royal: 10,
-  gazebo: 26, swing: 16, maple_tree: 26, palm_tree: 30, boat: 0, coop: 12, telescope: 10, totem: 22, flower_cart: 6,
+  apple_tree: 26, gazebo: 26, swing: 16, maple_tree: 26, palm_tree: 30, boat: 0, coop: 12, telescope: 10, totem: 22, flower_cart: 6,
 };
 
 const WOOD = ['#3a2416', '#5e3a22', '#7e5232', '#a06c40', '#c48a56'];
@@ -1000,6 +1000,13 @@ function paintNew(id: string, p: Pix, W: number, H: number, up: number, box: Box
       for (const rx of [9, W - 10]) for (let y = 3; y < H - 8; y++) p.set(rx, y, '#c8b088');
       box(7, H - 9, W - 14, 3, WOOD, 1);
       return true;
+    case 'apple_tree':
+      p.trunk(8, H - 14, H - 1, 4, WOOD);
+      p.blob(8, H - 26, 7.5, 9, LEAF, 61);
+      p.blob(4.5, H - 19, 4.5, 4, LEAF, 62);
+      p.blob(11.5, H - 19, 4.5, 4, LEAF, 63);
+      for (const [ax, ay] of [[4, H - 27], [10, H - 30], [12, H - 22], [6, H - 20], [9, H - 24], [3, H - 18]]) { p.set(ax, ay, '#d8302a'); p.set(ax + 1, ay, '#b02020'); p.set(ax, ay - 1, '#ff7a6a'); }
+      return true;
     case 'maple_tree':
       p.trunk(8, H - 14, H - 1, 4, DARKWOOD);
       p.blob(8, H - 26, 7.5, 9, MAPLE, 51);
@@ -1114,3 +1121,59 @@ export function paintPortalSwirl(): HTMLCanvasElement {
   }
   return p.canvas();
 }
+
+/** 家园产出和点心的物品图标（16×16）：鸡蛋、蜂蜜、苹果、煎蛋、苹果派、蜂蜜蛋糕 */
+const homeIconCache = new Map<string, string>();
+export function homeItemIconUrl(id: string): string | null {
+  if (!['egg', 'honey', 'apple', 'fried_egg', 'apple_pie', 'honey_cake'].includes(id) || typeof document === 'undefined') return null;
+  const hit = homeIconCache.get(id);
+  if (hit) return hit;
+  const p = new Pix(16, 16);
+  const oval = (cx: number, cy: number, rx: number, ry: number, f: (x: number, y: number, d: number) => string | null) => {
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      const d = Math.hypot((x - cx) / rx, (y - cy) / ry);
+      if (d <= 1) { const c = f(x, y, d); if (c) p.set(x, y, c); }
+    }
+  };
+  switch (id) {
+    case 'egg':
+      oval(7.5, 8.5, 4.6, 6, (x, y) => (x < 6 && y < 7 ? '#ffffff' : x > 9 || y > 12 ? '#d8c8a8' : '#f4ead6'));
+      p.set(5, 5, '#ffffff');
+      break;
+    case 'honey':
+      // 陶罐装蜜，罐口淌下一点
+      oval(7.5, 10, 5.5, 5, (x) => (x < 5 ? '#e8a040' : x > 10 ? '#a85a14' : '#d0801e'));
+      p.rect(4, 3, 8, 3, '#8a5a2a'); p.rect(4, 3, 8, 1, '#c89060');
+      p.rect(3, 5, 10, 1, '#f0c040');
+      p.set(10, 6, '#f0c040'); p.set(10, 7, '#f0c040'); p.set(10, 8, '#e0a020');
+      p.set(6, 9, '#ffe0a0'); p.set(5, 10, '#ffe0a0');
+      break;
+    case 'apple':
+      oval(7.5, 9, 6, 5.5, (x, y) => (x < 6 && y < 8 ? '#ff6a5a' : x > 10 || y > 12 ? '#a01818' : '#d82a24'));
+      p.rect(7, 2, 1, 3, '#5a3a1a');
+      p.rect(8, 2, 3, 2, '#4a9a3a'); p.set(10, 1, '#6ac050');
+      p.set(5, 6, '#ffffff');
+      break;
+    case 'fried_egg':
+      oval(7.5, 8.5, 7, 5.5, (x, y, d) => (d > 0.85 ? '#d8cdb8' : '#fbf6ea'));
+      oval(8, 8, 2.6, 2.4, (x, y) => (x < 8 && y < 8 ? '#ffd860' : '#f0a020'));
+      p.set(7, 7, '#fff4c0');
+      break;
+    case 'apple_pie':
+      oval(7.5, 9.5, 7, 4.5, (x, y, d) => (d > 0.82 ? '#a86a2a' : (x + y) % 4 === 0 ? '#c03a20' : '#e0a050'));
+      for (let x = 2; x < 14; x += 3) p.set(x, 9, '#f0c070');
+      for (let y = 7; y < 13; y += 2) p.set(7, y, '#f0c070');
+      p.rect(1, 13, 14, 1, '#7a4a1a');
+      break;
+    case 'honey_cake':
+      p.rect(2, 7, 12, 7, '#f0d8a0'); p.rect(2, 10, 12, 1, '#e8a040'); p.rect(2, 13, 12, 1, '#c89050');
+      p.rect(2, 5, 12, 2, '#f0b830'); p.set(4, 7, '#f0b830'); p.set(9, 8, '#f0b830'); p.set(12, 7, '#f0b830');
+      p.rect(7, 3, 2, 2, '#d82a24'); p.set(8, 2, '#4a9a3a');
+      p.rect(3, 6, 2, 1, '#ffe08a');
+      break;
+  }
+  const url = p.outline().canvas().toDataURL();
+  homeIconCache.set(id, url);
+  return url;
+}
+

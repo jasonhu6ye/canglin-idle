@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import type { MapNode } from '../core/data';
+import { ITEMS, type MapNode } from '../core/data';
 import {
   affordable, atPortal, BUILD_CATS, BUILDS, buildDef, comfortLevel, comfortOf, COMFORT_SPEED, COMFORT_STEPS, COMFORT_XP, enterHome, HOME_PLOT_MAX, HOME_SIZES,
-  HOME_UPGRADES, homeComfort, homeFieldId, homeLevel, homePlots, homeSize, isTrophy, leaveHome, upgradeHome,
+  HOME_UPGRADES, collectHome, homeComfort, homeFieldId, homeProduce, homeLevel, homePlots, homeSize, isTrophy, leaveHome, upgradeHome,
   type BuildCat, type BuildDef,
 } from '../core/home';
 import type { GameState } from '../core/types';
@@ -35,6 +35,7 @@ export function PortalSheet({ s, node, onClose }: { s: GameState; node: MapNode;
           <li>{tl('放一个储物箱，岛上就能存取仓库，干活背包满了也直接存进去。')}</li>
           <li>{tl('首领的战旗和战利品可以摆出来当装饰。')}</li>
           <li>{tl`能自己摆家园农田（最多 ${HOME_PLOT_MAX} 块），所有已解锁的作物都能种。`}</li>
+          <li>{tl('鸡舍下蛋、蜂箱产蜜、苹果树结果、堆肥箱出肥料，人不在也照样攒，回岛点一下就收进仓库。')}</li>
           <li>{tl('摆家具和饰品能提高舒适度，舒适度越高，所有技能的经验和干活速度加成越多（人不在岛上也算）。')}</li>
           <li>{tl('岛上做不了的任务（采集、打怪），点「继续工作」会自己从传送门出来去做。')}</li>
         </ul>
@@ -85,12 +86,21 @@ export function HomeHud({ s }: { s: GameState }) {
   const score = homeComfort(s.home);
   const clv = comfortLevel(score);
   const plots = homePlots(s);
+  const ready = homeProduce(s.home, Date.now());
+  const readyN = Object.values(ready).reduce((a, b) => a + b, 0);
+  const collectAll = () => {
+    let got: Record<string, number> = {};
+    store.dispatch((g) => { const r = collectHome(g, Date.now()); got = r.got; return r.state; });
+    const text = Object.entries(got).map(([id, n]) => tl`${ITEMS[id]?.name ?? id} ×${n}`).join(tl('、'));
+    if (text) { setMsg(tl`收进仓库：${text}`); setTimeout(() => setMsg(''), 2000); }
+  };
   const toggle = (k: 'comfort' | 'farm') => { setInfo(info === k ? null : k); close(); };
   return (
     <>
       <div className="home-bar">
         <b>{tl('家园岛屿')}</b> <small className="muted">{homeSize(s)}×{homeSize(s)}</small>
         <button className={`pill ${info === 'comfort' ? 'on' : ''}`} onClick={() => toggle('comfort')} title={tl('舒适度')}>{tl`舒适 ${clv} 级`}</button>
+        {readyN > 0 && <button className="pill on" onClick={collectAll} title={Object.entries(ready).map(([id, n]) => `${ITEMS[id]?.name} ×${n}`).join(tl('、'))}>{tl`收取 ${readyN}`}</button>}
         {plots.length > 0 && <button className={`pill ${info === 'farm' ? 'on' : ''}`} onClick={() => toggle('farm')}>{tl`农田 ${plots.length}/${HOME_PLOT_MAX}`}</button>}
         <button className={`pill ${open ? 'on' : ''}`} onClick={() => { setInfo(null); if (open) close(); else setOpen(true); }}>{open ? tl('收起建造') : tl('建造')}</button>
         <button className="pill" onClick={() => { close(); store.dispatch(leaveHome); }}>{tl('回城')}</button>

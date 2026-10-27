@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { CROP_DEFS, NODES, REGIONS, tierName, WATER_SPEEDUP } from '../core/data';
-import { homeNode, isHomeField } from '../core/home';
+import { homeBarrel, homeNode, isHomeField } from '../core/home';
 import { canPlantCrop, FERT_SPEEDUP, fertCount, fieldCounts, fieldCrops, fieldPlotIds, growMs, harvestAll, installSprinkler, nearField, pickSeed, plantAll, plotGrowth, plotPhase, seedCount, waterAll } from '../core/farm';
 import { isRaining } from '../core/weather';
 import { ITEMS } from '../core/data';
@@ -170,7 +170,8 @@ function FarmGear({ s, nodeId, near }: { s: GameState; nodeId: string; near: boo
   const node = (NODES.find((n) => n.id === nodeId) ?? homeNode(nodeId))!;
   const fert = s.settings.farmFert?.[nodeId] ?? '';
   const setFert = (id: string) => store.dispatch((g) => setSettings(g, { farmFert: { ...g.settings.farmFert, [nodeId]: id } }));
-  const has = s.sprinklers?.includes(nodeId);
+  const barrel = isHomeField(nodeId) && homeBarrel(s);
+  const has = s.sprinklers?.includes(nodeId) || barrel;
   const kits = fertCount(s, 'sprinkler');
   const rain = isRaining(node.region);
   return (
@@ -188,7 +189,7 @@ function FarmGear({ s, nodeId, near }: { s: GameState; nodeId: string; near: boo
       {fert && !fertCount(s, fert) && <p className="warn small">{tl`${ITEMS[fert].name}用完了，种下的不会施肥。在工坊能做。`}</p>}
       <div className="row-fert">
         <span>{tl('洒水器')}</span>
-        {has ? <b className="gold">{tl('已安装 · 新种的自动浇水')}</b> : (
+        {has ? <b className="gold">{barrel && !s.sprinklers?.includes(nodeId) ? tl('岛上有雨水桶 · 新种的自动浇水') : tl('已安装 · 新种的自动浇水')}</b> : (
           <>
             <button className="pill" disabled={!near || !kits} onClick={() => store.farm((g, t) => installSprinkler(g, nodeId, t))}>
               <Icon item="sprinkler" size={14} />{tl(' 安装 ')}<small>{tl`有 ${kits} 个`}</small>

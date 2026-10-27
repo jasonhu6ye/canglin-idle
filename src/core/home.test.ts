@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   canPlace, enterHome, HOME_SPAWN, homeCan, homeChest, leaveHome, migrateHome, placeBuild, removeAt, upgradeHome, atPortal,
-  BUILDS, comfortLevel, homeComfort, homePct, homePlots, homePlotCells, HOME_PLOT_MAX, PORTAL_IDS, homeNode,
+  BUILDS, collectHome, homeProduce, produceMs, comfortLevel, homeComfort, homePct, homePlots, homePlotCells, HOME_PLOT_MAX, PORTAL_IDS, homeNode,
 } from './home';
 import { ITEMS } from './data';
 import { fieldCounts, fieldCrops, harvestAll, nearField, plantAll, tendPlot } from './farm';
@@ -211,6 +211,55 @@ describe('家园农田和舒适度（10-27）', () => {
       expect(enterHome(s).home?.inside, id).toBe(true);
     }
     for (const d of BUILDS) for (const c of d.cost) expect(ITEMS[c.item], `${d.id}:${c.item}`).toBeTruthy();
+  });
+});
+
+describe('家园产出（10-27）', () => {
+  const T0 = 1_700_000_000_000;
+  const MIN = 60_000;
+  const setup = () => {
+    const s = onIsland();
+    s.bank = { ...s.bank, plank_2: 500, wheat: 100, oak_log: 50, green_herb: 50, fert_basic: 10, plank_1: 100, iron_bar: 10 };
+    return s;
+  };
+  it('鸡舍按时下蛋，攒满封顶，收取进仓库，零头接着算', () => {
+    let s = placeBuild(setup(), 'coop', X, Y, T0);
+    expect(homeProduce(s.home, T0 + 19 * MIN)).toEqual({});
+    expect(homeProduce(s.home, T0 + 45 * MIN)).toEqual({ egg: 2 });
+    const r = collectHome(s, T0 + 45 * MIN);
+    expect(r.got).toEqual({ egg: 2 });
+    expect(r.state.bank.egg).toBe(2);
+    // 零头 5 分钟留着：再过 15 分钟又有一个
+    expect(homeProduce(r.state.home, T0 + 60 * MIN)).toEqual({ egg: 1 });
+    // 离线一天也只攒 12 个，收完从头算
+    s = r.state;
+    const full = collectHome(s, T0 + 24 * 60 * MIN);
+    expect(full.got.egg).toBe(12);
+    expect(homeProduce(full.state.home, T0 + 24 * 60 * MIN + 10 * MIN)).toEqual({});
+    // 不在岛上收不了
+    expect(collectHome(leaveHome(s), T0 + 24 * 60 * MIN).got).toEqual({});
+  });
+  it('单收一件：只收点到的那件', () => {
+    let s = placeBuild(setup(), 'coop', X, Y, T0);
+    s = placeBuild(s, 'apple_tree', X + 4, Y, T0);
+    const r = collectHome(s, T0 + 120 * MIN, { x: X + 4, y: Y });
+    expect(r.got).toEqual({ apple: 3 });
+    expect(homeProduce(r.state.home, T0 + 120 * MIN)).toEqual({ egg: 6 });
+  });
+  it('花坛让蜂箱产得快，最多快一半', () => {
+    let s = placeBuild(setup(), 'beehive', X, Y, T0);
+    const base = produceMs(s.home, 'beehive');
+    s.bank = { ...s.bank, stone: 999, green_herb: 99 };
+    for (let i = 0; i < 7; i++) s = placeBuild({ ...s, bank: { ...s.bank, stone: 999 } }, 'flowerbed', X + 2, Y + 2 + i * 2, T0);
+    expect(produceMs(s.home, 'beehive')).toBeCloseTo(base / 1.5);
+  });
+  it('有雨水桶时家园农田新种的自动浇水', () => {
+    let s = setup();
+    s.bank = { ...s.bank, stone: 999, seed_potato: 10 };
+    s = placeBuild(s, 'farm_plot', X, Y + 3, T0);
+    s = placeBuild(s, 'water_barrel', X + 6, Y + 3, T0);
+    const r = plantAll(s, 'hfield1', 'potato', T0);
+    expect(Object.values(r.state.farm ?? {}).every((p) => p.water)).toBe(true);
   });
 });
 

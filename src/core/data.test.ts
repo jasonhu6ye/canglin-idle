@@ -1,5 +1,6 @@
 import { ACTIONS, CROP_DEFS, ITEMS, MONSTERS, NODES, nodeOfAction } from './data';
 import { SPECIES, TRAITS } from './bestiary';
+import { BUILDS } from './home';
 
 describe('数据闭环', () => {
   it('动作和掉落引用的物品都存在', () => {
@@ -51,6 +52,8 @@ describe('数据闭环', () => {
       c.outputs.forEach((o) => made.add(o.item));
       used.add(`seed_${c.id}`);
     }
+    // 家园产出（10-27）：鸡舍、蜂箱、苹果树、堆肥箱
+    for (const d of BUILDS) if (d.produce) made.add(d.produce.item);
     // 肥料种地时用、洒水器装在田里
     for (const id of ['fert_basic', 'fert_rich', 'sprinkler']) used.add(id);
     // 副本（10-25）：钥匙、回城卷轴、碎片从副本宝箱开出来；钥匙开洞口、卷轴回城、碎片合成强化石。强化石等强化系统开放

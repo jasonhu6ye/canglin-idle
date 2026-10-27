@@ -173,6 +173,13 @@ item('wheat', tl('小麦'), 'resource', 3, { tier: 0, desc: tl('种植收获的�
 const ITEMS_EARLY = new Set(['potato', 'wheat']);
 item('baked_potato', tl('烤土豆'), 'food', 4, { heals: 25 });
 item('bread', tl('面包'), 'food', 10, { heals: 50 });
+// 家园产出（10-27）：鸡舍下蛋、蜂箱产蜜、苹果树结果，做几道家常点心
+item('egg', tl('鸡蛋'), 'resource', 6, { desc: tl('家园鸡舍下的蛋，能做煎蛋和蜂蜜蛋糕。') });
+item('honey', tl('蜂蜜'), 'resource', 12, { desc: tl('家园蜂箱攒的蜜。蜂箱附近花越多产得越快。') });
+item('apple', tl('苹果'), 'resource', 6, { desc: tl('家园苹果树结的果子，能烤苹果派。') });
+item('fried_egg', tl('煎蛋'), 'food', 16, { heals: 60, desc: tl('两个家园鸡蛋煎的，简单顶饿。') });
+item('apple_pie', tl('苹果派'), 'food', 40, { heals: 150, desc: tl('家园苹果和小麦烤的派。') });
+item('honey_cake', tl('蜂蜜蛋糕'), 'food', 80, { heals: 230, desc: tl('用蜂蜜、鸡蛋和小麦做的蛋糕，回血很多。') });
 /**
  * 作物（用户 10-23 要求：种植和采集分开，种子几十种）。每阶 4 种，共 32 种。
  * [id, 名字, 种植等级, 颜色, 料理名, 形状]
@@ -1016,6 +1023,9 @@ make('craft_fert_rich', tl('高级肥料'), 'farming', 30, [one('fert_basic', 3)
 make('smith_sprinkler', tl('洒水器'), 'smithing', 20, [one('tin_bar', 4), one('plank_2', 2)], [one('sprinkler')]);
 make('cook_potato', tl('烤土豆'), 'cooking', 1, [one('potato')], [one('baked_potato')]);
 make('cook_bread', tl('烤面包'), 'cooking', 8, [one('wheat', 2)], [one('bread')]);
+make('cook_fried_egg', tl('煎蛋'), 'cooking', 5, [one('egg', 2)], [one('fried_egg')]);
+make('cook_apple_pie', tl('苹果派'), 'cooking', 20, [one('apple', 3), one('wheat', 2)], [one('apple_pie')]);
+make('cook_honey_cake', tl('蜂蜜蛋糕'), 'cooking', 35, [one('honey', 2), one('egg', 2), one('wheat', 2)], [one('honey_cake')]);
 for (const [id, , lvl, , dish] of CROPS) if (dish) make(`cook_meal_${id}`, dish, 'cooking', lvl, [one(id, 2)], [one(`meal_${id}`)]);
 // 烹饪失败统一得到烧焦的食物
 for (const a of actionList) if (a.kind === 'skill' && a.fail && a.skill === 'cooking') a.fail.item = 'burnt_food';

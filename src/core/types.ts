@@ -300,7 +300,8 @@ export interface Plot {
 
 /** 家园岛屿上摆的一件东西：左上角所在的格子 */
 /** n：家园农田的编号（1-8），田里每格地的 id 是 hfield<n>:<格> */
-export interface HomeThing { id: string; x: number; y: number; n?: number }
+/** at：会产出东西的建筑（鸡舍、蜂箱……）上次收取的时刻，从这一刻起攒产出 */
+export interface HomeThing { id: string; x: number; y: number; n?: number; at?: number }
 
 export interface GameState {
   version: 3;
