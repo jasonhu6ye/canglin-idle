@@ -104,10 +104,10 @@ export const OUTFITS: Outfit[] = [
     // 用户 10-27 给的录屏原型：黑袍尖帽的咒师，脸是一团黑只剩两点幽光，左手火右手冰，脚下金色法阵，待机会施法
     id: 'frostfire', name: tl('冰火咒师'), desc: tl('黑袍尖帽，帽檐下是一团看不见脸的黑暗，只剩两点幽光。左手燃火、右手凝冰，脚下一圈金色法阵，站着不动时会施法。'),
     skin: ['#6a6058', '#a89c90'], hair: ['#1a1620', '#2a2430', '#3c3448'],
-    coat: ['#201a28', '#302838', '#443a50', '#5e526c'], shirt: ['#2a2434', '#3a3246'],
-    pants: ['#14101a', '#201a28'], boots: ['#3a2a18', '#6a4a28'], scarf: ['#302838', '#443a50'],
-    pack: ['#302838', '#443a50', '#5e526c'], roll: '#302838',
-    head: 'voidhood', noPack: true, cloak: ['#1a1622', '#2a2434', '#3e3648'], trim: '#e0a030',
+    coat: ['#1c1630', '#2a2248', '#3a3062', '#564a88'], shirt: ['#241e3c', '#342c54'],
+    pants: ['#14101e', '#1e1830'], boots: ['#3a2a18', '#6a4a28'], scarf: ['#2a2248', '#3a3062'],
+    pack: ['#2a2248', '#3a3062', '#564a88'], roll: '#2a2248',
+    head: 'voidhood', noPack: true, cloak: ['#181430', '#262040', '#38305a'], trim: '#e0a030',
     glow: ['#1a6ab0', '#4ad0ff', '#e0ffff'], fx: 'frostfire',
   },
   // ---- 兑换码「为爱发电」解锁的五套（用户 10-23 给的参考图和录屏，按本作画法重画） ----
@@ -880,6 +880,12 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
       ball(p, sx, sy + 0.8, side ? 3 : 2.4, 1.7, R.coat);
       p.line(sx - (side ? 2 : 1.6), sy + 2.1, sx + (side ? 2 : 1.6), sy + 2.1, o.trim ?? GOLD[1]);
     }
+    // 领口的灰扣
+    const bx = side ? cx + 2 : cx - 0.5;
+    p.set(bx, sy + 1, '#b0b0b8');
+    p.set(bx + 1, sy + 1, '#7a7a84');
+    p.set(bx, sy + 2, '#8a8a94');
+    p.set(bx + 1, sy + 2, '#5a5a64');
   }
 
   // ---- 头 ----
@@ -1101,14 +1107,22 @@ function drawVoidHood(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose:
   const trim = o.trim ?? GOLD[2];
   // 圆兜帽（用户 10-27：不要尖顶）：罩住整个头，头顶偏后多出一截软塌塌的帽兜垂下来，走路时轻轻晃
   const bend = side ? -1 : 1;
-  ball(p, hx, cy - 0.6, side ? 5.2 : 5.5, 5.3, HD);
   if (side) {
-    // 侧面：帽兜贴着后脑，顺着脖子披到肩上，像一截风帽
-    capsule(p, hx - 3.6, cy - 3.2, hx - 5.4, cy - 1 + wave * 0.3, 1.6, HD, 1);
-    capsule(p, hx - 3.8, cy + 0.5, hx - 3.4, cy + 4.6, 1.9, HD, 1);
-    p.paint(hx - 4.6, cy - 1.6, HD[0]);
-    p.paint(hx - 4.2, cy + 1.6, HD[0]);
+    // 侧面（用户 10-27 参考图）：兜帽往脑后拖出一大截，越往后越细，收成一个尖角；下面顺着脖子披到肩上
+    const sag = wave * 0.35;
+    const spine: [number, number, number][] = [[hx - 1.5, cy - 1.6, 4.6], [hx - 5, cy - 2.6 + sag * 0.5, 3.4], [hx - 8.4, cy - 3.4 + sag, 2.2], [hx - 11, cy - 4 + sag * 1.4, 1.1], [hx - 12.6, cy - 4.3 + sag * 1.6, 0.5]];
+    for (let i = 1; i < spine.length; i++) {
+      const [x0, y0, r0] = spine[i - 1];
+      const [x1, y1, r1] = spine[i];
+      for (let k = 0; k <= 1; k += 0.25) ball(p, lerp(x0, x1, k), lerp(y0, y1, k), lerp(r0, r1, k), lerp(r0, r1, k) * 0.92, HD, i > 1 ? 1 : 0);
+    }
+    ball(p, hx + 0.2, cy - 0.4, 5.2, 5.3, HD);
+    capsule(p, hx - 3.6, cy + 1, hx - 3.2, cy + 4.6, 1.9, HD, 1);
+    // 帽子上几道顺着拖尾走的褶子
+    for (let i = 0; i < 4; i++) p.paint(hx - 3 - i * 2.4, cy - 0.2 - i * 0.7, HD[0]);
+    p.paint(hx - 4.4, cy + 2, HD[0]);
   } else {
+    ball(p, hx, cy - 0.6, 5.5, 5.3, HD);
     const fold: [number, number][] = [[hx + bend * 1.5, cy - 4.4], [hx + bend * 4.2, cy - 4.2 + wave * 0.15], [hx + bend * (6.2 + wave * 0.3), cy - 2.4 + wave * 0.4], [hx + bend * (6.6 + wave * 0.3), cy + 0.6 + wave * 0.5]];
     for (let i = 1; i < fold.length; i++) capsule(p, fold[i - 1][0], fold[i - 1][1], fold[i][0], fold[i][1], 2.3 - i * 0.45, HD, i > 1 ? 1 : 0);
     // 帽兜上的几道褶子
@@ -1129,16 +1143,20 @@ function drawVoidHood(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose:
   if (up) return;
   // 帽檐下是一团黑：圆拱形的帽口，几乎占满正脸，顶上圆、下面平
   const VOID = ['#060408', '#060408', '#0a0810', '#0a0810', '#0e0c16'];
-  const fx = side ? hx + 1.6 : hx;
-  const top = cy - 2.6;
-  const chin = cy + 3.6;
-  const hw = side ? 3.6 : 4;
+  const fx = side ? hx + 2 : hx;
+  const top = side ? cy - 2.2 : cy - 2.6;
+  const chin = side ? cy + 3.2 : cy + 3.6;
+  const hw = side ? 3 : 4;
   const isFace = (x: number, y: number) => {
     const px = x + 0.5, py = y + 0.5;
     if (py > chin || py < top) return false;
-    if (side && px < hx - 0.4) return false;
-    const r = Math.min(1, (py - top) / hw);
     const dx = Math.abs(px - fx);
+    if (side) {
+      // 侧面帽口是个圆
+      const dy = (py - (top + chin) / 2) / ((chin - top) / 2);
+      return (dx / hw) * (dx / hw) + dy * dy <= 1;
+    }
+    const r = Math.min(1, (py - top) / hw);
     // 上半截是半圆，下半截是直边
     return dx <= (r < 1 ? Math.sqrt(Math.max(0, 1 - (1 - r) * (1 - r))) * hw : hw);
   };
@@ -1157,12 +1175,12 @@ function drawVoidHood(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose:
   const purple = ['#5a2a98', '#d090ff'];
   const ey = Math.round(cy + 0.9);
   const eyes: [number, string[]][] = side
-    ? [[Math.round(hx + 2.4), pose.cast === 'beam' ? purple : pose.cast === 'raise' ? red : cyan]]
-    : [[Math.round(hx - 2), pose.cast === 'beam' ? purple : pose.cast === 'raise' ? red : cyan], [Math.round(hx + 1), pose.cast === 'beam' ? purple : cyan]];
+    ? [[Math.round(hx + 1.2), pose.cast === 'beam' ? purple : pose.cast === 'raise' || pose.cast === 'rise' ? red : cyan]]
+    : [[Math.round(hx - 2), pose.cast === 'beam' ? purple : pose.cast === 'raise' || pose.cast === 'rise' ? red : cyan], [Math.round(hx + 1), pose.cast === 'beam' ? purple : cyan]];
   const bright = flicker(pose, 2) > 0.45;
   for (const [x, c] of eyes) {
     p.set(x, ey, c[1]);
-    if (side) p.set(x + 1, ey, bright ? c[1] : c[0]);
+    if (side) p.set(x + 2, ey, bright ? c[1] : c[0]);
     else if (bright) p.set(x + (x < hx ? -1 : 1), ey, c[0]);
     p.set(x, ey + 1, c[0]);
   }
