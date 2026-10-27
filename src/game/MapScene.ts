@@ -102,6 +102,8 @@ function trackSpot(monsterId: string, exact = exactTrack(monsterId)): { x: numbe
 export const REGION_CHANGE = 'region-change';
 /** 开打首领时在屏幕上打出名字 */
 export const BOSS_BANNER = 'boss-banner';
+/** 场景 → 界面：玩家自己点地图、按方向键走动了（跟随队长会断开） */
+export const MANUAL_MOVE = 'manual-move';
 
 /** 角色当前所在格子，世界地图要用 */
 export const playerPos = { x: SPAWN.x, y: SPAWN.y };
@@ -843,6 +845,7 @@ export class MapScene extends Phaser.Scene {
     if (time < this.nextKeyStep) return;
     this.nextKeyStep = time + 280;
     store.tracking = null;
+    this.game.events.emit(MANUAL_MOVE);
     const p = this.playerTile();
     for (const r of [4, 3, 2, 1]) {
       if (isWalkable(p.x + dx * r, p.y + dy * r)) { this.moveTo(p.x + dx * r, p.y + dy * r, false); return; }
@@ -866,6 +869,7 @@ export class MapScene extends Phaser.Scene {
     const d = Math.hypot(tx - me.x, ty - me.y);
     if (d < 1) return;
     store.tracking = null;
+    this.game.events.emit(MANUAL_MOVE);
     const k = Math.min(1, 5 / d);
     for (const f of [1, 0.6, 0.3]) {
       const x = Math.round(me.x + (tx - me.x) * k * f);
@@ -1592,6 +1596,7 @@ export class MapScene extends Phaser.Scene {
       if (mouse && p.button === 2) {
         store.tracking = null;
         const wp = cam.getWorldPoint(p.x, p.y);
+        this.game.events.emit(MANUAL_MOVE);
         this.moveTo(Math.floor(wp.x / T), Math.floor(wp.y / T));
         return;
       }
@@ -1620,6 +1625,7 @@ export class MapScene extends Phaser.Scene {
       if (mouse) return; // 电脑端左键点空地不走路
       store.tracking = null;
       const wp = cam.getWorldPoint(p.x, p.y);
+      this.game.events.emit(MANUAL_MOVE);
       this.moveTo(Math.floor(wp.x / T), Math.floor(wp.y / T));
     });
 
