@@ -18,6 +18,7 @@ import { paintFoal, paintRanch, PADDOCK_SPOTS, RANCH_H, RANCH_W } from './horseA
 import { RANCH } from '../core/ranch';
 import { besideXOf, ensureMountTex, mountKindOf, saddleBob, seatOf } from './mounts';
 import { PumpkinFx } from './pumpkinFx';
+import { pumpkinEyes } from './pumpkinArt';
 import { FIGHT, FIGHT_RANGE, fightWeapon, FRAME_H, FRAME_W, HERO_ANIMS, HERO_FEET, HERO_PAD, NPC_ANIMS, NPC_OUTFITS, outfitOf, paintHeroSheet, type HeroDir } from './hero';
 import type { MonsterDef, RegionId, Summary } from '../core/types';
 import { store } from '../store';
@@ -2691,9 +2692,13 @@ export class MapScene extends Phaser.Scene {
     this.pkFx ??= new PumpkinFx(this);
     const riding = this.mountMode === 'ride' && !this.mountBusy;
     const dir = !riding || this.facing !== 'side' ? 0 : this.wolfBack.flipX ? -1 : 1;
+    const fx = this.player.x + this.wolfFront.x;
+    const fy = this.player.y + this.wolfFront.y;
+    const flip = this.wolfFront.flipX ? -1 : 1;
+    const eyes = on ? pumpkinEyes(String(this.wolfFront.anims.currentFrame?.frame.name ?? '')).map(([x, y]): [number, number] => [fx + x * flip, fy + y]) : [];
     this.pkFx.step(time, on ? {
       x: this.player.x + this.wolfBack.x, y: this.player.y + this.wolfBack.y,
-      moving: riding && !!this.walker, dir, depth: this.player.depth,
+      moving: riding && !!this.walker, dir, depth: this.player.depth, eyes,
     } : null);
   }
 

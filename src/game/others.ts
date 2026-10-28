@@ -7,6 +7,7 @@ import type { GameState } from '../core/types';
 import { FIGHT, FIGHT_RANGE, FRAME_H, FRAME_W, HERO_ANIMS, type FightWeapon, HERO_FEET, HERO_PAD, outfitOf, paintHeroSheet } from './hero';
 import { besideXOf, ensureMountTex, mountKindOf, saddleBob, seatOf } from './mounts';
 import { PumpkinFx } from './pumpkinFx';
+import { pumpkinEyes } from './pumpkinArt';
 import { T } from './tiles';
 import { WOLF_FEET, WOLF_H } from './wolfArt';
 
@@ -354,7 +355,13 @@ export class OtherPlayers {
       this.pose(o, moving);
       if (this.place) this.drawBar(o);
       o.box.setDepth(o.box.y + 999);
-      o.fx?.step(now, { x: o.box.x + (o.back?.x ?? 0), y: o.box.y + (o.back?.y ?? 0), moving: moving && !o.anim, dir: o.dir === 'side' ? (o.flip ? -1 : 1) : 0, depth: o.box.depth, lite: true });
+      if (o.fx && o.front) {
+        const fx = o.box.x + o.front.x;
+        const fy = o.box.y + o.front.y;
+        const flip = o.front.flipX ? -1 : 1;
+        const eyes = pumpkinEyes(String(o.front.anims.currentFrame?.frame.name ?? '')).map(([x, y]): [number, number] => [fx + x * flip, fy + y]);
+        o.fx.step(now, { x: o.box.x + (o.back?.x ?? 0), y: o.box.y + (o.back?.y ?? 0), moving: moving && !o.anim, dir: o.dir === 'side' ? (o.flip ? -1 : 1) : 0, depth: o.box.depth, lite: true, eyes });
+      }
     }
   }
 }

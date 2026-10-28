@@ -19,6 +19,7 @@ const VINE = ['#16300c', '#28501a', '#3f7a26', '#68a83c', '#9ad060'];
 const STEM = ['#2e2410', '#4e3e1a', '#6e5a28', '#8e7a3a'];
 const WALL = '#962c08';
 const HOLE = '#2a0802';
+const RIM = '#5a1806';
 
 /** 鬼火的颜色：k 0 最暗（洞口边缘）… 1 最亮（中心），lit 是这一帧的亮度 */
 function fire(k: number, lit: number) {
@@ -57,7 +58,7 @@ function pumpkin(p: Pix, b: Body, view: 0 | 1 | 2) {
 }
 
 /** 在南瓜上刻一个洞：pts 是相对南瓜中心的像素多边形，光从里面透出来 */
-function carve(p: Pix, b: Body, pts: [number, number][], lit: number) {
+function carve(p: Pix, b: Body, pts: [number, number][], lit: number): [number, number][] {
   // 脸是按 14×10 的南瓜设计的，按实际大小（含压扁拉长）缩放
   const kx = b.rx / 14;
   const ky = b.ry / 10;
@@ -76,6 +77,7 @@ function carve(p: Pix, b: Body, pts: [number, number][], lit: number) {
   };
   const mx = (x0 + x1) / 2;
   const hw = Math.max(1, (x1 - x0) / 2);
+  const out: [number, number][] = [];
   for (let y = y0; y <= y1; y++) {
     for (let x = x0; x <= x1; x++) {
       if (!inside(x + 0.5, y + 0.5) || !p.get(x, y)) continue;
@@ -83,6 +85,36 @@ function carve(p: Pix, b: Body, pts: [number, number][], lit: number) {
       const top = !inside(x + 0.5, y - 0.5);
       const k = 0.25 + ((y - y0) / Math.max(1, y1 - y0)) * 0.6 - Math.abs((x - mx) / hw) * 0.15;
       p.set(x, y, top ? WALL : lit < 0 ? HOLE : fire(k, lit));
+      out.push([x, y]);
+    }
+  }
+  return out;
+}
+
+/** 发光的眼睛（用户 10-28）：眼洞里是白热的光，没有暗边，光晕往外溢到周围两三格的南瓜皮上 */
+function glowEyes(p: Pix, eye: [number, number][], lit: number) {
+  if (!eye.length) return;
+  const set = new Set(eye.map(([x, y]) => `${x},${y}`));
+  const ys = eye.map((q) => q[1]);
+  const y0 = Math.min(...ys);
+  const y1 = Math.max(...ys);
+  for (const [x, y] of eye) {
+    const edge = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => !set.has(`${x + dx},${y + dy}`));
+    const f = (y - y0) / Math.max(1, y1 - y0);
+    p.set(x, y, edge ? '#ffd040' : f < 0.35 ? '#fff4b0' : '#ffffff');
+  }
+  const xs = eye.map((q) => q[0]);
+  const R = 3.2;
+  for (let y = Math.floor(y0 - R); y <= y1 + R; y++) {
+    for (let x = Math.floor(Math.min(...xs) - R); x <= Math.max(...xs) + R; x++) {
+      if (set.has(`${x},${y}`)) continue;
+      const c = p.get(x, y);
+      if (!c || (!SKIN.includes(c) && c !== RIM && c !== WALL)) continue;
+      let d = 99;
+      for (const [ex, ey] of eye) d = Math.min(d, Math.hypot(ex - x, ey - y));
+      if (d > R) continue;
+      const t = (1 - (d - 1) / (R - 1)) * (0.45 + lit * 0.4);
+      p.set(x, y, mix(c === RIM || c === WALL ? '#c85010' : c, d < 1.5 ? '#ffc030' : '#ffb848', Math.max(0, Math.min(0.9, t))));
     }
   }
 }
@@ -90,15 +122,17 @@ function carve(p: Pix, b: Body, pts: [number, number][], lit: number) {
 /** 脸：view 0 侧面（只看到右半边脸），1 正面；mouth 0 闭着 1 张大，lit 鬼火亮度（<0 闭眼的时候眼洞是暗的） */
 function face(p: Pix, b0: Body, view: 0 | 1, mouth: number, lit: number, blink = false) {
   const b = { ...b0, cy: b0.cy - 2 * (b0.ry / 10) };
-  const e = blink ? -1 : lit;
+  // 眼睛一直是亮的（打盹闭眼时除外），比嘴里的火光更亮
+  const e = blink ? -1 : Math.max(lit, 0.9);
+  const eyes: [number, number][] = [];
   if (view === 1) {
-    carve(p, b, [[-10.5, -0.5], [-2.5, -0.5], [-6.5, -7.5]], e);
-    carve(p, b, [[2.5, -0.5], [10.5, -0.5], [6.5, -7.5]], e);
+    eyes.push(...carve(p, b, [[-10.5, -0.5], [-2.5, -0.5], [-6.5, -7.5]], e));
+    eyes.push(...carve(p, b, [[2.5, -0.5], [10.5, -0.5], [6.5, -7.5]], e));
     carve(p, b, [[-1.8, 2.6], [1.8, 2.6], [0, 0]], lit);
     const o = 0.8 + mouth * 1.5;
     carve(p, b, [[-11.5, 2], [-8, 3.8], [-6, 2.8], [-4, 4.4], [-1.5, 3.4], [1.5, 4.4], [4, 3.2], [6, 4.4], [8, 3.4], [11.5, 2], [10, 6.5 + o], [6, 8.2 + o], [4, 6.6 + o], [1, 8.4 + o], [-2, 6.8 + o], [-5, 8.4 + o], [-9, 6.8 + o]], lit);
   } else {
-    carve(p, b, [[2.5, -1], [10.5, -1], [7.5, -8]], e);
+    eyes.push(...carve(p, b, [[2.5, -1], [10.5, -1], [7.5, -8]], e));
     carve(p, b, [[10.5, 2.4], [13.2, 2.4], [12.6, -0.4]], lit);
     const o = 0.8 + mouth * 1.6;
     carve(p, b, [[0.5, 3.2], [4, 4.8], [6, 3.8], [8.5, 5], [11, 3.8], [14, 2.6], [13, 6.8 + o], [10, 8.6 + o], [7.5, 7.2 + o], [4.5, 8.6 + o], [1.5, 6.6 + o]], lit);
@@ -110,10 +144,11 @@ function face(p: Pix, b0: Body, view: 0 | 1, mouth: number, lit: number, blink =
     for (let x = Math.floor(b.cx - b.rx); x <= b.cx + b.rx; x++) {
       const c = p.get(x, y);
       if (!c || !SKIN.includes(c)) continue;
-      if (isHole(p.get(x, y - 1)) || isHole(p.get(x - 1, y)) || isHole(p.get(x + 1, y))) edits.push([x, y, '#5a1806']);
+      if (isHole(p.get(x, y - 1)) || isHole(p.get(x - 1, y)) || isHole(p.get(x + 1, y))) edits.push([x, y, RIM]);
     }
   }
   for (const [x, y, c] of edits) p.set(x, y, c);
+  if (!blink) glowEyes(p, eyes, lit);
 }
 
 /** 一根有粗细的藤：沿着点画，起点粗终点细 */
@@ -366,4 +401,28 @@ export function pumpkinMountIconUrl() {
   ctx.drawImage(f.canvas(), -12, -6);
   iconUrl = c.toDataURL();
   return iconUrl;
+}
+
+/**
+ * 眼睛在这一帧的位置（相对脚底中心，侧面按朝右算），地图上的眼睛特效跟着它走；
+ * 背面看不到眼睛、闭眼的帧返回空。frameName 是精灵表的帧名 pumpkin-<动作>-<帧>-f
+ */
+export function pumpkinEyes(frameName: string): [number, number][] {
+  const m = /^pumpkin-(.+)-(\d+)-[bf]$/.exec(frameName);
+  if (!m) return [];
+  const a = PK_ANIMS.find((x) => x.key === m[1]);
+  if (!a || a.key.endsWith('-up')) return [];
+  const i = +m[2];
+  const o = poseOf(a.key, i / a.frames, i);
+  if (o.blink) return [];
+  const view = a.key.endsWith('-down') ? 1 : 0;
+  const b = bodyOf(o, view);
+  const kx = b.rx / 14;
+  const ky = b.ry / 10;
+  const cy = b.cy - 2 * ky;
+  const at = (ex: number, ey: number): [number, number] => {
+    const x = b.cx + ex * kx;
+    return [x - PK_W / 2, cy + ey * ky + ((x - b.cx) / b.rx) * b.tilt * b.ry - FEET];
+  };
+  return view === 1 ? [at(-6.5, -2.8), at(6.5, -2.8)] : [at(6.8, -3.4)];
 }

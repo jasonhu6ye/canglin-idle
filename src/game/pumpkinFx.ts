@@ -12,6 +12,7 @@ const GLOW = 'pk-glow';
 const EMBER = 'pk-ember';
 const WISP = ['pk-wisp-p', 'pk-wisp-g'];
 const BAT = 'pk-bat';
+const EYEFIRE = 'pk-eyefire';
 
 function ensureTex(scene: Phaser.Scene) {
   if (scene.textures.exists(GLOW)) return;
@@ -38,6 +39,8 @@ function ensureTex(scene: Phaser.Scene) {
     }));
     scene.textures.addCanvas(key, c);
   };
+  // 眼睛里冒出的火苗：白芯金边
+  px(EYEFIRE, 3, 4, ['.a.', 'aba', 'aba', '.a.'], { a: '#ffb030', b: '#fffbe0' });
   px(EMBER, 3, 3, ['.a.', 'aba', '.a.'], { a: '#ff9a1a', b: '#fff2a0' });
   // 鬼火：一小簇往上尖的火苗
   const flame = ['..a..', '.aa..', '.aba.', 'abcba', 'abcba', '.aba.'];
@@ -68,6 +71,8 @@ export interface PkState {
   depth: number;
   /** 少一点粒子（别的玩家用） */
   lite?: boolean;
+  /** 眼睛的世界坐标（pumpkinEyes 换算好的），背面、闭眼时为空 */
+  eyes?: [number, number][];
 }
 
 export class PumpkinFx {
@@ -75,6 +80,8 @@ export class PumpkinFx {
   private nextEmber = 0;
   private nextWisp = 0;
   private nextBat = 0;
+  private nextEye = 0;
+  private eyeGlow: Phaser.GameObjects.Image[] = [];
   constructor(private scene: Phaser.Scene) {
     ensureTex(scene);
   }
@@ -83,8 +90,10 @@ export class PumpkinFx {
   step(time: number, o: PkState | null) {
     if (!o) {
       this.glow?.setVisible(false);
+      for (const g of this.eyeGlow) g.setVisible(false);
       return;
     }
+    this.stepEyes(time, o);
     if (!this.glow) this.glow = this.scene.add.image(0, 0, GLOW).setBlendMode(Phaser.BlendModes.ADD);
     const pulse = 0.5 + Math.sin(time / 170) * 0.12 + Math.sin(time / 53) * 0.06;
     this.glow.setVisible(true).setPosition(o.x, o.y - 1).setDepth(o.depth - 1).setAlpha(pulse).setScale(o.moving ? 0.85 : 0.75, 0.36);
@@ -101,6 +110,32 @@ export class PumpkinFx {
     if (o.moving && !o.lite && time >= this.nextBat) {
       this.nextBat = time + 2600 + Math.random() * 2200;
       this.bat(o.x - o.dir * 8, o.y - 18, o.depth, o.dir ? -o.dir : Math.random() < 0.5 ? -1 : 1);
+    }
+  }
+
+  /**
+   * 眼睛特效（用户 10-28）：每只眼睛一团忽明忽暗的光晕，眼里不停往上冒细细的火苗，
+   * 飞起来火苗往后拉成两道光尾；隔几秒眼睛猛地一亮。
+   */
+  private stepEyes(time: number, o: PkState) {
+    const eyes = o.eyes ?? [];
+    while (this.eyeGlow.length < 2) this.eyeGlow.push(this.scene.add.image(0, 0, GLOW).setBlendMode(Phaser.BlendModes.ADD).setVisible(false));
+    const flash = (time % 3200) < 260 ? 1 - (time % 3200) / 260 : 0;
+    this.eyeGlow.forEach((g, k) => {
+      const e = eyes[k];
+      if (!e) return g.setVisible(false);
+      const a = 0.75 + Math.sin(time / 90 + k * 2) * 0.12 + Math.sin(time / 37 + k) * 0.08 + flash * 0.4;
+      g.setVisible(true).setPosition(e[0], e[1]).setDepth(o.depth + 2).setAlpha(Math.min(1, a)).setScale(0.2 + flash * 0.14, 0.17 + flash * 0.12);
+    });
+    if (!eyes.length || time < this.nextEye) return;
+    this.nextEye = time + (o.moving ? 40 : 110) * (o.lite ? 2 : 1);
+    for (const [x, y] of eyes) {
+      const p = this.scene.add.image(x + (Math.random() - 0.5) * 2, y - 1, EYEFIRE).setDepth(o.depth + 3).setBlendMode(Phaser.BlendModes.ADD).setScale(0.8 + Math.random() * 0.4);
+      const back = o.moving ? -o.dir * (10 + Math.random() * 8) : (Math.random() - 0.5) * 3;
+      this.scene.tweens.add({
+        targets: p, x: p.x + back, y: p.y - (o.moving ? 3 + Math.random() * 3 : 6 + Math.random() * 5), alpha: 0, scaleX: 0.3, scaleY: o.moving ? 0.4 : 1.2,
+        duration: o.moving ? 260 + Math.random() * 120 : 420 + Math.random() * 200, ease: 'Quad.easeOut', onComplete: () => p.destroy(),
+      });
     }
   }
 
@@ -145,6 +180,8 @@ export class PumpkinFx {
   }
 
   destroy() {
+    for (const g of this.eyeGlow) g.destroy();
+    this.eyeGlow = [];
     this.glow?.destroy();
     this.glow = undefined;
   }
