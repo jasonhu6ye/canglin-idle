@@ -1663,6 +1663,7 @@ export function buySeed(prev: GameState, item: string, qty: number): GameState {
   if (seedLocked(prev, item)) return prev;
   const s = clone(prev);
   s.bank.coins -= cost;
+  if (!s.bank.coins) delete s.bank.coins;
   s.bank[item] = (s.bank[item] ?? 0) + qty;
   s.seen[item] = 1;
   return s;
@@ -2026,6 +2027,7 @@ export function buyGoods(prev: GameState, item: string, qty: number, now = Date.
   if (n > left || (prev.bank.coins ?? 0) < price * n) return prev;
   const s = clone(prev);
   s.bank.coins -= price * n;
+  if (!s.bank.coins) delete s.bank.coins;
   s.bank[item] = (s.bank[item] ?? 0) + n;
   s.seen[item] = 1;
   const day = utcDay(now);
@@ -2040,6 +2042,7 @@ export function buyKey(prev: GameState, key: string, qty = 1): GameState {
   if (!row || n <= 0 || !atShop(prev) || (prev.bank.coins ?? 0) < row[1] * n) return prev;
   const s = clone(prev);
   s.bank.coins -= row[1] * n;
+  if (!s.bank.coins) delete s.bank.coins;
   const fit = Math.min(n, bagRoomFor(s.bag, key, bagSlots(s)));
   if (fit > 0) s.bag[key] = (s.bag[key] ?? 0) + fit;
   if (n > fit) s.bank[key] = (s.bank[key] ?? 0) + n - fit;

@@ -1085,4 +1085,8 @@ export const EN_TEXT: Record<string, string> = {
   "家园新家具 17 种，老摆件继续重画": "17 new home furniture pieces, and more old pieces redrawn",
   "新家具：碗柜、酒架、茶几、四柱帐床、吧台、吧凳、矮书架、三角钢琴、竖琴、缝纫台、屏风、大盆栽、洗脸架、摇椅、棋桌、鸟笼、衣帽架。": "New furniture: Cupboard, Wine Rack, Coffee Table, Canopy Bed, Bar Counter, Bar Stool, Low Bookshelf, Grand Piano, Harp, Sewing Table, Folding Screen, Potted Tree, Washstand, Rocking Chair, Chess Table, Birdcage and Coat Rack.",
   "继续按俯视立体的画法重画：书架和大书柜（格子有深度）、落地灯、盆栽、木桶、花瓶、鱼缸、穿衣镜、落地钟、地球仪、蜂箱、花坛、菜畦、鸟浴盆、铁砧、圆桌、上下铺、王座、路灯、石灯笼、雨水桶、堆肥箱。": "More pieces redrawn from a top-down angle with real depth: bookshelves and the tall bookcase (now with deep shelves), floor lamp, potted plant, barrel, vase, fish tank, standing mirror, grandfather clock, globe, beehive, flowerbed, garden bed, birdbath, anvil, round table, bunk bed, throne, street lamp, stone lantern, rain barrel and compost bin.",
+  "10 月 28 日": "Oct 28",
+  "全面检查和小修复": "Full check and small fixes",
+  "切回游戏时如果先点了按钮，离开期间的收获现在会完整算进「离开期间的收获」弹窗，不再漏掉一部分。": "If you tap a button right after switching back to the game, everything you earned while away now shows up in full in the While You Were Away popup instead of partly going missing.",
+  "在商人、种子摊买东西或扩建岛屿把金币正好花光时，仓库里不再留下一个数量为 0 的金币格子。": "Spending your last coin at the merchant, the seed stall, or on an island expansion no longer leaves an empty 0-coin slot in your bank.",
 };

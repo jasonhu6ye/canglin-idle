@@ -925,4 +925,5 @@ export const EN_UI: Record<string, string> = {
   "还差 {0} 积分": "{0} more points needed",
   "万圣节活动已经在 11 月 1 日结束，南瓜王回去了。手里的南瓜积分还可以在上面兑换。": "The Halloween event ended on November 1 and the Pumpkin King has gone home. You can still spend your Pumpkin Points above.",
   "冷却 {0} 小时从召唤那一刻开始算。": "The {0}-hour cooldown starts the moment you summon.",
+  "11 月 1 日活动关闭，南瓜王离开。南瓜积分在祭坛面板里兑换限定奖励，活动结束后也能换。": "The event closes on November 1 and the Pumpkin King leaves. Spend your Pumpkin Points on limited rewards in the altar panel; you can still exchange them after the event ends.",
 };

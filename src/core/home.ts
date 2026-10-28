@@ -405,6 +405,7 @@ export function upgradeHome(prev: GameState): GameState {
   if (!up || !prev.home?.inside || (prev.bank.coins ?? 0) < up.coins || !affordable(prev, up.items)) return prev;
   const s = clone(prev);
   s.bank.coins -= up.coins;
+  if (!s.bank.coins) delete s.bank.coins;
   spend(s, up.items);
   s.home!.lv = lv + 1;
   return s;

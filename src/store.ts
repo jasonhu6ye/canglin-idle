@@ -65,7 +65,9 @@ class Store {
   private absorb(summary: Summary, byUser = false) {
     // 点按钮时顺带结算了很久（刚切回来先点了东西）：一样弹离线收获
     if (byUser && summary.elapsedMs >= OFFLINE_POPUP_MS) {
-      this.offline = this.offline ? mergeSummary(this.offline, summary) : summary;
+      // 后台期间已经攒下的那部分也一起算进去，不丢
+      const all = this.away ? mergeSummary(this.away, summary) : summary;
+      this.offline = this.offline ? mergeSummary(this.offline, all) : all;
       this.away = null;
     }
     if (!summary.log?.length) return;
