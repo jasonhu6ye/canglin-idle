@@ -2975,6 +2975,7 @@ insert into public.item_values (id, value, task_tier) values
 ('wood_warbow@q3',108,null),
 ('wood_warbow@q4',189,null),
 ('wood_warbow@q5',324,null),
+('wool',4,null),
 ('world_fruit',90,null),
 ('worldchest_wb_flame_dragon',9600,null),
 ('worldchest_wb_frost_colossus',41600,null),

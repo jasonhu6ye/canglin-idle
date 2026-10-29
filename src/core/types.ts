@@ -301,6 +301,9 @@ export interface Plot {
 /** 家园岛屿上摆的一件东西：左上角所在的格子 */
 /** n：家园农田的编号（1-8），田里每格地的 id 是 hfield<n>:<格> */
 /** at：会产出东西的建筑（鸡舍、蜂箱……）上次收取的时刻，从这一刻起攒产出 */
+/** 家园访客订单：要交的东西、给的金币和声望 */
+export interface HomeOrder { item: string; qty: number; coins: number; rep: number; who: number; done?: boolean }
+
 export interface HomeThing { id: string; x: number; y: number; n?: number; at?: number }
 
 export interface GameState {
@@ -371,7 +374,15 @@ export interface GameState {
   farm?: Record<string, Plot>;
   /** 最近一次任务停下的原因（顶部提示条用，排新任务或点掉就清空） */
   /** 家园岛屿：扩建等级、地板、摆的东西、人在不在岛上、从哪个传送门进去的 */
-  home?: { lv: number; floors: Record<string, string>; things: HomeThing[]; inside?: boolean; from?: string };
+  home?: {
+    lv: number; floors: Record<string, string>; things: HomeThing[]; inside?: boolean; from?: string;
+    /** 岛屿声望（10-29）：交访客订单、摸宠物攒，等级解锁新建筑 */
+    rep?: number;
+    /** 今天的访客订单（本地日期） */
+    orders?: { day: string; list: HomeOrder[] };
+    /** 宠物今天摸过没有：宠物种类 → 本地日期 */
+    petted?: Record<string, string>;
+  };
   /** 装了洒水器的田 */
   sprinklers?: string[];
   lastStop?: { action: string; reason: TaskEndReason; mode: TaskMode; item?: string; at: number } | null;

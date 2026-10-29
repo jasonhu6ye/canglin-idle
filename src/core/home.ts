@@ -1,6 +1,7 @@
 import { ITEMS, NODES, type MapNode } from './data';
-import type { GameState, HomeThing, ItemStack } from './types';
+import type { GameState, HomeOrder, HomeThing, ItemStack } from './types';
 import { tl } from '../i18n';
+import { dayKey } from './mail';
 
 /**
  * 家园岛屿（用户 10-23）：两座城各有一个传送门，进去是一座自己的海岛。
@@ -98,6 +99,8 @@ export interface BuildDef {
   comfort?: number;
   /** 会自己产出东西：每 min 分钟一个 item，最多攒 cap 个（人不在、离线也攒） */
   produce?: { item: string; min: number; cap: number };
+  /** 岛屿声望到几级才能盖（10-29） */
+  rep?: number;
   desc?: string;
 }
 
@@ -259,6 +262,13 @@ export const BUILDS: BuildDef[] = [
   b('telescope', tl('望远镜'), 'outdoor', 1, 1, [c('iron_bar', 4), c('sapphire', 1)], { comfort: 7 }),
   b('totem', tl('图腾柱'), 'outdoor', 1, 1, [c('oak_log', 6), c('ruby', 1)], { comfort: 7 }),
   b('flower_cart', tl('花车'), 'outdoor', 2, 1, [c('plank_2', 8), c('green_herb', 6)]),
+  // ───── 10-29 访客订单和岛屿声望 ─────
+  b('order_board', tl('订单告示板'), 'outdoor', 2, 1, [c('plank_1', 6), c('cloth_1', 2)], { desc: tl('每天有 3 位访客在告示板上贴订单，交上家园产出的东西换金币和岛屿声望。声望升级能解锁新建筑。') }),
+  b('fish_pond', tl('鱼塘'), 'outdoor', 3, 3, [c('stone', 40), c('plank_2', 10), c('raw_minnow', 5)], { rep: 1, comfort: 6, produce: { item: 'raw_minnow', min: 25, cap: 10 }, desc: tl('每 25 分钟养出 1 条生银鱼，最多攒 10 条。') }),
+  b('sheep_pen', tl('羊圈'), 'outdoor', 3, 2, [c('plank_2', 20), c('wheat', 20)], { rep: 2, comfort: 6, produce: { item: 'wool', min: 45, cap: 8 }, desc: tl('每 45 分钟剪下 1 份羊毛，最多攒 8 份。羊毛能在工坊纺成粗布。') }),
+  b('lighthouse', tl('灯塔'), 'outdoor', 2, 2, [c('stone', 60), c('copper_bar', 6), c('crystal_1', 2)], { rep: 3, light: true, comfort: 12 }),
+  b('hot_balloon', tl('热气球'), 'outdoor', 3, 3, [c('cloth_3', 14), c('plank_3', 10), c('iron_bar', 4)], { rep: 4, comfort: 14 }),
+  b('gold_statue', tl('黄金雕像'), 'outdoor', 2, 2, [c('stone', 40), c('runic_bar', 4), c('titanium_bar', 2)], { rep: 5, comfort: 16, desc: tl('岛屿声望 5 级的纪念雕像。') }),
 ];
 for (const d of BUILDS) if (d.station && !d.desc) d.desc = tl`能做${NODES.find((n) => n.id === d.station)?.name.replace(tl('落霞城·'), '')}里的所有东西，站在岛上就能直接干活。`;
 export const BUILD_BY_ID: Record<string, BuildDef> = Object.fromEntries(BUILDS.map((d) => [d.id, d]));
@@ -309,6 +319,7 @@ export function canPlace(s: GameState, id: string, x: number, y: number): string
   if (!d) return tl('没有这种东西');
   if (!s.home?.inside) return tl('要在岛上才能建造');
   if (d.plot && homePlots(s).length >= HOME_PLOT_MAX) return tl`农田最多 ${HOME_PLOT_MAX} 块`;
+  if (d.rep && repLevel(s.home.rep ?? 0) < d.rep) return tl`岛屿声望 ${d.rep} 级解锁`;
   const size = homeSize(s);
   const top = thingGrid(s.home, 'top');
   const under = thingGrid(s.home, 'under');
@@ -566,6 +577,10 @@ export function migrateHome(h: GameState['home']): GameState['home'] {
       .filter(plotNumbers()),
     inside: !!h.inside,
     ...(h.from && PORTAL_IDS.includes(h.from) ? { from: h.from } : {}),
+    ...(Number.isFinite(h.rep) && h.rep! > 0 ? { rep: Math.floor(h.rep!) } : {}),
+    ...(h.orders && typeof h.orders.day === 'string' && Array.isArray(h.orders.list)
+      ? { orders: { day: h.orders.day, list: h.orders.list.filter((o) => o && ITEMS[o.item] && o.qty > 0).map((o) => ({ ...o })) } } : {}),
+    ...(h.petted && typeof h.petted === 'object' ? { petted: Object.fromEntries(Object.entries(h.petted).filter(([k, v]) => PETS[k] && typeof v === 'string')) } : {}),
   };
 }
 
@@ -646,3 +661,108 @@ export function homeCellIds(home: GameState['home']): Set<string> {
   return out;
 }
 
+
+// ───────── 访客订单和岛屿声望（用户 10-29「增加家园岛屿玩法内容」） ─────────
+
+/** 声望到这些分数升一级，最高 7 级 */
+export const REP_STEPS = [20, 60, 140, 280, 500, 800, 1200];
+export const repLevel = (rep: number) => REP_STEPS.filter((x) => rep >= x).length;
+/** 每升一级订单金币多给 5% */
+export const REP_COIN_BONUS = 0.05;
+export const ORDERS_PER_DAY = 3;
+/** 一天 3 单全交完额外给的声望 */
+export const ORDER_ALL_BONUS = 5;
+/** 摸一次宠物（每只每天一次）给的声望 */
+export const PET_REP = 2;
+/** 访客的名字，订单里的 who 是下标 */
+export const VISITORS = [tl('渔夫老周'), tl('面包师阿香'), tl('行商胡三'), tl('小学徒豆豆'), tl('巡逻兵铁柱'), tl('药婆婆'), tl('吟游诗人林歌'), tl('灯塔守望人')];
+/** 宠物：哪件建筑招来它 */
+export const PETS: Record<string, { name: string; home: string }> = {
+  cat: { name: tl('猫咪'), home: 'cat_bed' },
+  dog: { name: tl('小狗'), home: 'dog_house' },
+};
+/** 订单能要的东西：[物品, 最少, 最多, 声望几级起] */
+const ORDER_POOL: [string, number, number, number][] = [
+  ['egg', 4, 8, 0], ['apple', 2, 5, 0], ['honey', 2, 4, 0], ['potato', 6, 12, 0], ['wheat', 6, 12, 0], ['carrot', 5, 10, 0],
+  ['cabbage', 4, 8, 0], ['raw_minnow', 3, 6, 0], ['fert_basic', 2, 4, 0], ['fried_egg', 2, 4, 0],
+  ['onion', 4, 8, 1], ['corn', 4, 8, 1], ['tomato', 4, 8, 1], ['pea', 4, 8, 1], ['apple_pie', 1, 3, 1],
+  ['wool', 2, 5, 2], ['pumpkin', 3, 6, 2], ['pepper', 3, 6, 2], ['eggplant', 3, 6, 2], ['strawberry', 3, 6, 2],
+  ['honey_cake', 1, 2, 3], ['garlic', 3, 6, 3], ['beet', 3, 6, 3], ['watermelon', 2, 4, 4], ['rice', 3, 6, 4],
+];
+
+function strHash(str: string) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+
+/** 按日期和当时的声望等级排出当天的订单（同一天、同一等级永远一样） */
+export function makeOrders(day: string, rep: number): HomeOrder[] {
+  const lv = repLevel(rep);
+  const pool = ORDER_POOL.filter((p) => p[3] <= lv && ITEMS[p[0]]);
+  let h = strHash(`${day}#${lv}`);
+  const rnd = () => ((h = Math.imul(h ^ (h >>> 15), 2246822507) + 0x9e3779b9 >>> 0) % 10000) / 10000;
+  const list: HomeOrder[] = [];
+  const used = new Set<string>();
+  const who = new Set<number>();
+  while (list.length < ORDERS_PER_DAY && used.size < pool.length) {
+    const [item, lo, hi, need] = pool[Math.floor(rnd() * pool.length)];
+    if (used.has(item)) continue;
+    used.add(item);
+    let w = Math.floor(rnd() * VISITORS.length);
+    while (who.has(w)) w = (w + 1) % VISITORS.length;
+    who.add(w);
+    const qty = lo + Math.floor(rnd() * (hi - lo + 1));
+    const coins = Math.round((ITEMS[item].value * qty * 3 + 40 * (need + 1)) * (1 + REP_COIN_BONUS * lv) / 5) * 5;
+    list.push({ item, qty, coins, rep: 6 + 2 * need, who: w });
+  }
+  return list;
+}
+
+/** 今天的订单（没交过就现排，不写进存档） */
+export function homeOrders(s: GameState, now: number) {
+  const day = dayKey(now);
+  const o = s.home?.orders;
+  return o && o.day === day ? o.list : makeOrders(day, s.home?.rep ?? 0);
+}
+/** 把今天的订单定下来写进存档（交单、摸宠物改声望之前调，免得声望一变订单跟着变） */
+function pinOrders(s: GameState, now: number) {
+  const home = s.home!;
+  const day = dayKey(now);
+  if (home.orders?.day !== day) home.orders = { day, list: makeOrders(day, home.rep ?? 0) };
+}
+export const homeHasBoard = (s: GameState) => !!s.home?.things.some((t) => t.id === 'order_board');
+
+/** 交第 idx 单：东西先扣仓库再扣背包，金币进仓库。不能交就原样返回 */
+export function deliverOrder(prev: GameState, idx: number, now: number): GameState {
+  if (!prev.home?.inside || !homeHasBoard(prev)) return prev;
+  const o = homeOrders(prev, now)[idx];
+  if (!o || o.done || have(prev, o.item) < o.qty) return prev;
+  const s = clone(prev);
+  pinOrders(s, now);
+  const home = s.home!;
+  const order = home.orders!.list[idx];
+  spend(s, [{ item: order.item, qty: order.qty }]);
+  order.done = true;
+  s.bank.coins = (s.bank.coins ?? 0) + order.coins;
+  home.rep = (home.rep ?? 0) + order.rep + (home.orders!.list.every((x) => x.done) ? ORDER_ALL_BONUS : 0);
+  return s;
+}
+
+/** 岛上有哪些宠物（有猫窝就有猫，有狗屋就有狗） */
+export const homePets = (home: GameState['home']) =>
+  Object.keys(PETS).filter((k) => home?.things.some((t) => t.id === PETS[k].home));
+/** 今天还能不能摸这只 */
+export const canPet = (s: GameState, kind: string, now: number) =>
+  !!s.home?.inside && homePets(s.home).includes(kind) && s.home.petted?.[kind] !== dayKey(now);
+
+/** 摸摸宠物：每只每天一次，给一点声望 */
+export function petPet(prev: GameState, kind: string, now: number): GameState {
+  if (!canPet(prev, kind, now)) return prev;
+  const s = clone(prev);
+  pinOrders(s, now);
+  const home = s.home!;
+  home.petted = { ...home.petted, [kind]: dayKey(now) };
+  home.rep = (home.rep ?? 0) + PET_REP;
+  return s;
+}

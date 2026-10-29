@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canPlace, enterHome, HOME_SPAWN, homeCan, homeChest, leaveHome, migrateHome, placeBuild, removeAt, upgradeHome, atPortal,
   BUILDS, collectHome, homeProduce, produceMs, comfortLevel, homeComfort, homePct, homePlots, homePlotCells, HOME_PLOT_MAX, PORTAL_IDS, homeNode,
+  homeOrders, makeOrders, deliverOrder, ORDER_ALL_BONUS, REP_STEPS, repLevel, petPet, homePets, PET_REP, canPet,
 } from './home';
 import { ITEMS } from './data';
 import { fieldCounts, fieldCrops, harvestAll, installSprinkler, nearField, plantAll, tendPlot } from './farm';
@@ -294,3 +295,88 @@ describe('家园读档（10-27 全面检查）', () => {
   });
 });
 
+
+describe('访客订单和岛屿声望', () => {
+  const T = new Date(2026, 9, 29, 10).getTime();
+  const withBoard = () => {
+    const s = placeBuild({ ...onIsland(), bank: { ...onIsland().bank, cloth_1: 10 } }, 'order_board', X, Y, T);
+    expect(s.home!.things.some((t) => t.id === 'order_board')).toBe(true);
+    return s;
+  };
+
+  it('每天 3 单，同一天不变，换一天变', () => {
+    const s = withBoard();
+    const a = homeOrders(s, T);
+    expect(a).toHaveLength(3);
+    expect(new Set(a.map((o) => o.item)).size).toBe(3);
+    expect(homeOrders(s, T + 3600_000)).toEqual(a);
+    const days = [1, 2, 3, 4, 5].map((d) => JSON.stringify(homeOrders(s, T + d * 86400_000)));
+    expect(new Set(days).size).toBeGreaterThan(1);
+    // 0 级只要入门的东西
+    expect(makeOrders('2026-10-29', 0).every((o) => ['egg', 'apple', 'honey', 'potato', 'wheat', 'carrot', 'cabbage', 'raw_minnow', 'fert_basic', 'fried_egg'].includes(o.item))).toBe(true);
+  });
+
+  it('交单扣东西给金币和声望，3 单交完多给', () => {
+    let s = withBoard();
+    const list = homeOrders(s, T);
+    s.bag = Object.fromEntries(list.map((o) => [o.item, o.qty]));
+    const coins = s.bank.coins!;
+    s = deliverOrder(s, 0, T);
+    expect(s.home!.orders!.list[0].done).toBe(true);
+    expect(s.bank.coins).toBe(coins + list[0].coins);
+    expect(s.bag[list[0].item]).toBeUndefined();
+    expect(s.home!.rep).toBe(list[0].rep);
+    expect(deliverOrder(s, 0, T)).toBe(s);
+    s = deliverOrder(deliverOrder(s, 1, T), 2, T);
+    expect(s.home!.rep).toBe(list.reduce((a, o) => a + o.rep, 0) + ORDER_ALL_BONUS);
+    // 第二天新订单
+    expect(homeOrders(s, T + 86400_000).some((o) => o.done)).toBe(false);
+  });
+
+  it('没告示板、东西不够、不在岛上都交不了', () => {
+    const s = onIsland();
+    const o = homeOrders(s, T)[0];
+    s.bag = { [o.item]: o.qty };
+    expect(deliverOrder(s, 0, T)).toBe(s);
+    const b = withBoard();
+    expect(deliverOrder(b, 0, T)).toBe(b);
+    const out = { ...b, bag: { [homeOrders(b, T)[0].item]: 99 }, home: { ...b.home!, inside: false } };
+    expect(deliverOrder(out, 0, T)).toBe(out);
+  });
+
+  it('声望不够盖不了鱼塘，够了能盖，鱼塘产银鱼', () => {
+    const s = { ...onIsland() };
+    s.bank = { ...s.bank, raw_minnow: 10 };
+    expect(canPlace(s, 'fish_pond', X, Y)).toBe('岛屿声望 1 级解锁');
+    s.home = { ...s.home!, rep: REP_STEPS[0] };
+    expect(canPlace(s, 'fish_pond', X, Y)).toBeNull();
+    const a = placeBuild(s, 'fish_pond', X, Y, T);
+    expect(homeProduce(a.home, T + 50 * 60_000).raw_minnow).toBe(2);
+    expect(repLevel(REP_STEPS[REP_STEPS.length - 1])).toBe(REP_STEPS.length);
+  });
+
+  it('有猫窝狗屋才有宠物，每只每天摸一次', () => {
+    let s = onIsland();
+    s.bank = { ...s.bank, cloth_1: 10 };
+    expect(petPet(s, 'cat', T)).toBe(s);
+    s = placeBuild(s, 'cat_bed', X, Y, T);
+    expect(homePets(s.home)).toEqual(['cat']);
+    const a = petPet(s, 'cat', T);
+    expect(a.home!.rep).toBe(PET_REP);
+    expect(canPet(a, 'cat', T)).toBe(false);
+    expect(petPet(a, 'cat', T)).toBe(a);
+    expect(canPet(a, 'cat', T + 86400_000)).toBe(true);
+  });
+
+  it('读档保留声望、订单、摸宠物记录，丢掉坏数据', () => {
+    const h = migrateHome({ lv: 0, floors: {}, things: [], rep: 33, orders: { day: '2026-10-29', list: [{ item: 'egg', qty: 3, coins: 50, rep: 6, who: 0, done: true }, { item: 'nope', qty: 1, coins: 1, rep: 1, who: 1 }] }, petted: { cat: '2026-10-29', bogus: 'x' } } as never)!;
+    expect(h.rep).toBe(33);
+    expect(h.orders!.list).toHaveLength(1);
+    expect(h.petted).toEqual({ cat: '2026-10-29' });
+  });
+
+  it('羊毛能纺布', () => {
+    expect(ITEMS.wool).toBeDefined();
+    expect(NODES.find((n) => n.id === 'workshop')?.actions).toContain('weave_wool');
+  });
+});

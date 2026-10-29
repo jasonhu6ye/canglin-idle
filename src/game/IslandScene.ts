@@ -2,7 +2,9 @@ import Phaser from 'phaser';
 import { NODES, WALK_TILES_PER_SEC } from '../core/data';
 import {
   buildDef, canPlace, collectHome, homeCan, homePlotCells, produceReady, homePlots, HOME_PORTAL, HOME_SPAWN, homeSize, ISLAND, ISLAND_C, islandGround, leaveHome, placeBuild, removeAt, thingGrid,
+  canPet, homeOrders, homePets, petPet, PET_REP, PETS,
 } from '../core/home';
+import { paintBang, paintHeart, paintPetSheet, PET_FRAMES, PET_SIZE } from './petArt';
 import { CROP_DEFS, CROPS, ITEMS } from '../core/data';
 import { fieldOfPlot, pickSeed, plotGrowth, plotPhase, tendPlot } from '../core/farm';
 import { cropTex, glintTex, soilTex } from './farmArt';
@@ -24,6 +26,11 @@ export const HOME_TOOL = 'home-tool';
 /** 场景 → 界面：点了岛上的制作台、储物箱（地点 id），或者建造失败的原因 */
 export const HOME_CLICK = 'home-click';
 export const HOME_MSG = 'home-msg';
+/** 场景 → 界面：点了订单告示板 */
+export const HOME_ORDERS = 'home-orders';
+
+/** 岛上溜达的宠物 */
+interface Pet { kind: string; spr: Phaser.GameObjects.Sprite; zone: Phaser.GameObjects.Zone; pts: { x: number; y: number }[]; wait: number; step: number }
 
 /** 物品图标的图片地址（界面那边注册进来，战利品摆件用） */
 export const homeIcons = { url: (_id: string): string | undefined => undefined };
@@ -64,6 +71,10 @@ export class IslandScene extends Phaser.Scene {
   private cellAt = new Map<string, string>();
   /** 会产出东西的建筑头顶的小图标：攒了东西才显示 */
   private bubbles: { t: HomeThing; img: Phaser.GameObjects.Image }[] = [];
+  /** 告示板头上的「!」 */
+  private bangs: Phaser.GameObjects.Image[] = [];
+  private pets: Pet[] = [];
+  private gridCache?: Uint8Array;
   private tool: HomeTool = null;
   private ghost?: Phaser.GameObjects.Image;
   private ghostBox?: Phaser.GameObjects.Graphics;
@@ -79,6 +90,7 @@ export class IslandScene extends Phaser.Scene {
   private workSpot?: { x: number; y: number; faceLeft: boolean } | null;
 
   create() {
+    this.pets = [];
     this.cameras.main.setBackgroundColor('#1a4a6a');
     this.makeTextures();
     this.drawGround();
@@ -139,6 +151,15 @@ export class IslandScene extends Phaser.Scene {
     if (!this.textures.exists('home-portal')) this.textures.addCanvas('home-portal', paintPortal());
     if (!this.textures.exists('home-swirl')) this.textures.addCanvas('home-swirl', paintPortalSwirl());
     if (!this.textures.exists('home-pedestal')) this.textures.addCanvas('home-pedestal', paintPedestal());
+    if (!this.textures.exists('home-heart')) this.textures.addCanvas('home-heart', paintHeart());
+    if (!this.textures.exists('home-bang')) this.textures.addCanvas('home-bang', paintBang());
+    for (const kind of Object.keys(PET_SIZE)) {
+      const key = `pet-${kind}`;
+      if (this.textures.exists(key)) continue;
+      const tex = this.textures.addCanvas(key, paintPetSheet(kind))!;
+      const { w, h } = PET_SIZE[kind];
+      PET_FRAMES.forEach((f, i) => tex.add(f, 0, i * w, 0, w, h));
+    }
   }
   private wallTex(id: string, mask: number) {
     const key = `hw-${id}-${mask}`;
@@ -260,6 +281,8 @@ export class IslandScene extends Phaser.Scene {
     this.objs = [];
     this.lamps = [];
     this.bubbles = [];
+    this.bangs = [];
+    this.gridCache = undefined;
     this.workSpot = undefined;
     const h = store.state.home;
     if (!h) return;
@@ -274,6 +297,7 @@ export class IslandScene extends Phaser.Scene {
     }
     for (const t of h.things) this.drawThing(t, walls);
     this.buildCells();
+    this.syncPets();
   }
 
   // ───────── 家园农田（10-27）：每块 4×4 格，和城里的田一样点地块种 / 浇水 / 收获 ─────────
@@ -295,6 +319,8 @@ export class IslandScene extends Phaser.Scene {
     const now = Date.now();
     const home = store.state.home;
     for (const b of this.bubbles) b.img.setVisible(produceReady(home, b.t, now) > 0);
+    const pending = this.bangs.length > 0 && homeOrders(store.state, now).some((o) => !o.done);
+    for (const b of this.bangs) b.setVisible(pending);
     const farm = store.state.farm ?? {};
     const blink = Math.floor(now / 500) % 2 === 0;
     for (const p of this.cells) {
@@ -368,6 +394,16 @@ export class IslandScene extends Phaser.Scene {
       }
       const zone = this.add.zone(bx + (d.w * T) / 2, by - (d.h * T) / 2 - (UP[t.id] ?? 0) / 2, d.w * T, d.h * T + (UP[t.id] ?? 0))
         .setInteractive({ useHandCursor: true }).setData('collect', { x: t.x, y: t.y });
+      this.objs.push(zone);
+    }
+    if (t.id === 'order_board') {
+      const top = by - d.h * T - (UP[t.id] ?? 0);
+      const bang = this.add.image(bx + (d.w * T) / 2, top - 1, 'home-bang').setOrigin(0.5, 1).setDepth(9e5).setVisible(false);
+      this.tweens.add({ targets: bang, y: top - 4, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      this.objs.push(bang);
+      this.bangs.push(bang);
+      const zone = this.add.zone(bx + (d.w * T) / 2, by - (d.h * T) / 2 - (UP[t.id] ?? 0) / 2, d.w * T, d.h * T + (UP[t.id] ?? 0))
+        .setInteractive({ useHandCursor: true }).setData('orders', true);
       this.objs.push(zone);
     }
     if (d.station || d.chest) {
@@ -532,6 +568,9 @@ export class IslandScene extends Phaser.Scene {
         } else this.game.events.emit(HOME_MSG, tl('还没有东西可以收'));
         return;
       }
+      const pet = !this.tool && over.map((o) => o.getData('pet') as string | undefined).find(Boolean);
+      if (pet) { this.pat(pet); return; }
+      if (!this.tool && over.some((o) => o.getData('orders'))) { this.game.events.emit(HOME_ORDERS); return; }
       const home = over.map((o) => o.getData('home') as string | undefined).find(Boolean);
       if (home) {
         this.game.events.emit(HOME_CLICK, home);
@@ -580,8 +619,7 @@ export class IslandScene extends Phaser.Scene {
   }
 
   /** 岛不大：整张图上 A*，八方向、不切墙角 */
-  private findPath(from: { x: number; y: number }, to: { x: number; y: number }) {
-    const g = this.blockedGrid();
+  private findPath(from: { x: number; y: number }, to: { x: number; y: number }, g = this.blockedGrid()) {
     const N = ISLAND;
     const ok = (x: number, y: number) => x >= 0 && y >= 0 && x < N && y < N && !g[y * N + x];
     if (!ok(to.x, to.y)) {
@@ -705,6 +743,84 @@ export class IslandScene extends Phaser.Scene {
     this.body.play('work-craft', true);
   }
 
+  // ───────── 宠物（10-29）：有猫窝来猫、有狗屋来狗，在窝附近溜达，点一下摸摸 ─────────
+  private syncPets() {
+    const h = store.state.home;
+    const want = homePets(h);
+    this.pets = this.pets.filter((p) => {
+      if (want.includes(p.kind)) return true;
+      p.spr.destroy(); p.zone.destroy();
+      return false;
+    });
+    for (const kind of want) {
+      if (this.pets.some((p) => p.kind === kind)) continue;
+      const den = this.denOf(kind);
+      if (!den) continue;
+      const spr = this.add.sprite(den.x * T + T / 2, den.y * T + T, `pet-${kind}`, 'sit').setOrigin(0.5, 1);
+      const { w, h: ph } = PET_SIZE[kind];
+      const zone = this.add.zone(spr.x, spr.y - ph / 2, w + 6, ph + 6).setInteractive({ useHandCursor: true }).setData('pet', kind);
+      this.pets.push({ kind, spr, zone, pts: [], wait: 800 + Math.random() * 2000, step: 0 });
+    }
+  }
+  /** 宠物窝前面能站的一格 */
+  private denOf(kind: string) {
+    const t = store.state.home?.things.find((x) => x.id === PETS[kind].home);
+    const d = t && buildDef(t.id);
+    if (!t || !d) return null;
+    return { x: t.x + Math.floor(d.w / 2), y: t.y + d.h };
+  }
+  private stepPets(delta: number) {
+    for (const p of this.pets) {
+      if (p.pts.length) {
+        const to = p.pts[0];
+        const dx = to.x - p.spr.x;
+        const dy = to.y - p.spr.y;
+        const d = Math.hypot(dx, dy);
+        const move = ((p.kind === 'dog' ? 2.6 : 2) * T * Math.min(delta, 100)) / 1000;
+        if (d <= move) { p.spr.setPosition(to.x, to.y); p.pts.shift(); } else p.spr.setPosition(p.spr.x + (dx / d) * move, p.spr.y + (dy / d) * move);
+        if (Math.abs(dx) > 0.5) p.spr.setFlipX(dx < 0);
+        p.step += delta;
+        p.spr.setFrame(Math.floor(p.step / 160) % 2 ? 'walk1' : 'walk0');
+        if (!p.pts.length) { p.spr.setFrame('sit'); p.wait = 1500 + Math.random() * 4500; }
+      } else if ((p.wait -= delta) <= 0) {
+        p.wait = 2000;
+        const den = this.denOf(p.kind);
+        if (!den) continue;
+        // 狗跑得远一点，偶尔跑去主人身边
+        const r = p.kind === 'dog' ? 8 : 5;
+        const nearMe = p.kind === 'dog' && Math.random() < 0.3;
+        const goal = nearMe
+          ? { x: Math.floor(this.player.x / T) + (Math.random() < 0.5 ? -1 : 1), y: Math.floor(this.player.y / T) + 1 }
+          : { x: den.x + Math.round((Math.random() - 0.5) * 2 * r), y: den.y + Math.round((Math.random() - 0.5) * 2 * r) };
+        this.gridCache ??= this.blockedGrid();
+        const from = { x: Math.floor(p.spr.x / T), y: Math.floor((p.spr.y - 1) / T) };
+        const path = this.findPath(from, goal, this.gridCache);
+        if (path && path.length < 40) p.pts = path.map((q) => ({ x: q.x * T + T / 2, y: q.y * T + T }));
+      }
+      p.spr.setDepth(p.spr.y + 1000);
+      p.zone.setPosition(p.spr.x, p.spr.y - PET_SIZE[p.kind].h / 2);
+    }
+  }
+  /** 摸摸：冒几颗小心，每只每天第一次加声望 */
+  private pat(kind: string) {
+    const p = this.pets.find((x) => x.kind === kind);
+    if (!p) return;
+    p.pts = [];
+    p.spr.setFrame('sit');
+    p.wait = 2500;
+    p.spr.setFlipX(this.player.x < p.spr.x);
+    this.tweens.add({ targets: p.spr, scaleY: 0.85, duration: 90, yoyo: true, repeat: 1 });
+    for (let i = 0; i < 3; i++) {
+      const hrt = this.add.image(p.spr.x + (i - 1) * 4, p.spr.y - PET_SIZE[kind].h, 'home-heart').setDepth(9e5).setAlpha(0);
+      this.tweens.add({ targets: hrt, y: hrt.y - 12 - i * 2, alpha: { from: 1, to: 0 }, delay: i * 140, duration: 900, ease: 'Sine.easeOut', onComplete: () => hrt.destroy() });
+    }
+    const now = Date.now();
+    if (canPet(store.state, kind, now)) {
+      store.dispatch((g) => petPet(g, kind, now));
+      this.game.events.emit(HOME_MSG, tl`摸了摸${PETS[kind].name}，岛屿声望 +${PET_REP}`);
+    } else this.game.events.emit(HOME_MSG, tl`${PETS[kind].name}蹭了蹭你（今天已经摸过了）`);
+  }
+
   private anim(kind: 'walk' | 'idle') {
     this.body.play(`${kind}-${this.facing}`, true);
   }
@@ -746,6 +862,7 @@ export class IslandScene extends Phaser.Scene {
       if (w.i >= w.pts.length) { this.walker = undefined; this.anim('idle'); }
     }
     this.autoWork();
+    this.stepPets(delta);
     // 昼夜：和大地图同一个钟，晚上灯亮起来
     const dark = darkness(gameHour());
     this.night.setFillStyle(0x0a1430, dark * 0.5);
