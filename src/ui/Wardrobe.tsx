@@ -35,7 +35,7 @@ export function Wardrobe({ s, onClose }: { s: GameState; onClose: () => void }) 
   const [pick, setPick] = useState(cur);
   const sel = OUTFITS.find((o) => o.id === pick) ?? OUTFITS[0];
   // 兑换码外观：领过对应兑换码才能穿（用户 10-23）
-  const locked = (o: Outfit) => !!o.sealed || (!!o.code && !s.redeemed?.includes(o.code));
+  const locked = (o: Outfit) => !!o.sealed || (!!o.code && !s.redeemed?.includes(o.code)) || (o.event === 'halloween' && !s.halloween?.skin);
   return (
     <div className="page wardrobe">
       <div className="sheet-head">
@@ -49,9 +49,9 @@ export function Wardrobe({ s, onClose }: { s: GameState; onClose: () => void }) 
           <p className="muted">{sel.desc}</p>
           {(sel.code || sel.fx) && <p className="gold small-note">{tl('限定外观 · 自带动态特效')}</p>}
           <button className="primary" disabled={sel.id === cur || locked(sel)} onClick={() => store.dispatch((g) => setSettings(g, { skin: sel.id }))}>
-            {sel.id === cur ? tl('穿着中') : sel.sealed ? tl('暂未开放') : locked(sel) ? tl('需要兑换码解锁') : tl('换上')}
+            {sel.id === cur ? tl('穿着中') : sel.sealed ? tl('暂未开放') : locked(sel) ? (sel.event ? tl('需要在祭坛兑换') : tl('需要兑换码解锁')) : tl('换上')}
           </button>
-          {sel.sealed ? <p className="muted small-note">{tl('这套外观还没开放获取途径，先看看效果')}</p> : locked(sel) && <p className="muted small-note">{tl('在「更多」页输入兑换码领取')}</p>}
+          {sel.sealed ? <p className="muted small-note">{tl('这套外观还没开放获取途径，先看看效果')}</p> : locked(sel) && <p className="muted small-note">{sel.event ? tl('万圣节限定：在苍岭城东门外的活动祭坛用南瓜积分兑换') : tl('在「更多」页输入兑换码领取')}</p>}
         </div>
       </div>
       <div className="wardrobe-grid">
