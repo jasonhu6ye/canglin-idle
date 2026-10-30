@@ -78,7 +78,7 @@ function hero(ctx: CanvasRenderingContext2D, o: number, anim: string, i: number,
   let sh = heroSheets.get(key);
   if (!sh) { sh = paintHeroSheet(OUTFITS[o % OUTFITS.length], document.createElement('canvas'), HERO_ANIMS.filter((a) => a.key === anim)); heroSheets.set(key, sh); }
   const f = sh.frames.find((q) => q.name === `${anim}-${i}`) ?? sh.frames[0];
-  blit(ctx, sh.canvas, f.x, f.y, sh.fw, sh.fh, x - (FRAME_W * k) / 2, y - FRAME_H * k, k / sh.res, flip);
+  blit(ctx, sh.canvas, f.x, f.y, FRAME_W, FRAME_H, x - (FRAME_W * k) / 2, y - FRAME_H * k, k, flip);
 }
 
 const SAMPLE: DungeonGate = { id: 'poster', kind: 'blue', tier: 5, x: 0, y: 0, at: 0, expires: 0, seed: 20261025, floors: 4 };

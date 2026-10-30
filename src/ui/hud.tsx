@@ -46,9 +46,8 @@ export function portrait(skin?: string): string {
     const sheet = paintHeroSheet(o);
     const f = sheet.frames.find((x) => x.name === 'idle-down-0')!;
     const c = document.createElement('canvas');
-    const r = sheet.res;
-    c.width = c.height = HERO_W * r;
-    c.getContext('2d')!.drawImage(sheet.canvas, f.x + HERO_PAD.l * r, f.y + HERO_PAD.t * r, HERO_W * r, HERO_W * r, 0, 0, HERO_W * r, HERO_W * r);
+    c.width = c.height = HERO_W;
+    c.getContext('2d')!.drawImage(sheet.canvas, f.x + HERO_PAD.l, f.y + HERO_PAD.t, HERO_W, HERO_W, 0, 0, HERO_W, HERO_W);
     url = c.toDataURL();
     portraits.set(o.id, url);
   }

@@ -4,7 +4,7 @@ import { moveCadence } from '../net/presenceSync';
 import { rallyTime, takeFieldHits, updateAggro, type FieldMateHit } from '../net/social';
 import { maxHp } from '../core/sim';
 import type { GameState } from '../core/types';
-import { FIGHT, FIGHT_RANGE, FRAME_H, HERO_ANIMS, HERO_RES, type FightWeapon, HERO_FEET, HERO_PAD, outfitOf, paintHeroSheet } from './hero';
+import { FIGHT, FIGHT_RANGE, FRAME_H, FRAME_W, HERO_ANIMS, type FightWeapon, HERO_FEET, HERO_PAD, outfitOf, paintHeroSheet } from './hero';
 import { besideXOf, ensureMountTex, mountKindOf, saddleBob, seatOf } from './mounts';
 import { T } from './tiles';
 import { WOLF_FEET, WOLF_H } from './wolfArt';
@@ -152,7 +152,7 @@ export class OtherPlayers {
     if (this.scene.textures.exists(key)) return key;
     const sheet = paintHeroSheet(outfitOf(outfit));
     const t = this.scene.textures.addCanvas(key, sheet.canvas)!;
-    for (const f of sheet.frames) t.add(f.name, 0, f.x, f.y, sheet.fw, sheet.fh);
+    for (const f of sheet.frames) t.add(f.name, 0, f.x, f.y, FRAME_W, FRAME_H);
     for (const a of HERO_ANIMS) {
       if (/^(walk|idle|ride|rideidle|work|fight)-/.test(a.key)) {
         this.scene.anims.create({
@@ -301,7 +301,7 @@ export class OtherPlayers {
       let o = this.others.get(p.playerId);
       if (o && o.key !== key) { o.box.destroy(); o = undefined; }
       if (!o) {
-        const body = this.scene.add.sprite(0, 0, key).setOrigin(0.5, (HERO_FEET + HERO_PAD.t) / FRAME_H).setScale(1 / HERO_RES);
+        const body = this.scene.add.sprite(0, 0, key).setOrigin(0.5, (HERO_FEET + HERO_PAD.t) / FRAME_H);
         // 点别的玩家弹出菜单（查看信息、装备、加好友、交易…）
         body.setInteractive({ useHandCursor: true, pixelPerfect: false }).setData('player', p.playerId);
         body.play(`${key}:idle-down`);

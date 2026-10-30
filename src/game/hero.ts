@@ -22,11 +22,6 @@ export const HERO_FEET = 27;
 export const HERO_PAD = { l: 18, r: 18, t: 10, b: 2 };
 export const FRAME_W = HERO_W + HERO_PAD.l + HERO_PAD.r;
 export const FRAME_H = HERO_H + HERO_PAD.t + HERO_PAD.b;
-/**
- * 高清倍数（10-28 画质升级）：精灵表按 2 倍像素画，显示时缩回原大小。
- * 画法坐标、FRAME_W/H、HERO_FEET 都还是原来的逻辑像素；只有贴图尺寸和帧在表上的位置要乘它。
- */
-export const HERO_RES = 2;
 
 /** 一套外观的配色：衣橱里每套皮肤就是一组颜色和几个开关 */
 export interface Outfit {
@@ -267,45 +262,23 @@ const v = (a: number, len: number): [number, number] => [Math.sin(a) * len, Math
 /** 光从左上前方来 */
 const LX = -0.55, LY = -0.6, LZ = 0.58;
 /** 按法线挑色阶；dim 让背后的手脚整体暗一阶 */
-/** 色阶的分界 */
-const STEPS = [0.08, 0.38, 0.7, 0.9];
-function tone(R: string[], nx: number, ny: number, dim = 0, dither = 0) {
+function tone(R: string[], nx: number, ny: number, dim = 0) {
   const nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
   const s = nx * LX + ny * LY + nz * LZ;
-  let i = 0;
-  while (i < 4 && s > STEPS[i]) i++;
-  // 高清：靠近分界的地方按噪声在两阶之间抖动，渐变就细了
-  if (dither) {
-    const lo = i > 0 ? STEPS[i - 1] : -1;
-    const hi = i < 4 ? STEPS[i] : 2;
-    const f = (s - lo) / (hi - lo);
-    if (i < 4 && f > 0.65 && dither > (1 - f) / 0.35) i++;
-    else if (i > 0 && f < 0.35 && dither > f / 0.35) i--;
-  }
+  const i = s > 0.9 ? 4 : s > 0.7 ? 3 : s > 0.38 ? 2 : s > 0.08 ? 1 : 0;
   return R[Math.max(0, Math.min(4, i - dim))];
-}
-
-/** 4×4 有序抖动矩阵（0-1），比随机噪声干净 */
-const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16);
-/** 高清画布上逐真像素扫描：回调拿到逻辑坐标的中心点和这个真像素的抖动阈值 */
-function scan(p: Pix, x0: number, y0: number, x1: number, y1: number, f: (x: number, y: number, n: number) => string | null | undefined) {
-  const r = p.res;
-  for (let sy = Math.floor(y0 * r); sy <= Math.ceil(y1 * r); sy++) {
-    for (let sx = Math.floor(x0 * r); sx <= Math.ceil(x1 * r); sx++) {
-      const c = f((sx + 0.5) / r, (sy + 0.5) / r, r > 1 ? BAYER[(sy & 3) * 4 + (sx & 3)] : 0);
-      if (c) p.sub(sx, sy, c);
-    }
-  }
 }
 
 /** 有明暗的椭球；clip 返回 false 的像素跳过 */
 function ball(p: Pix, cx: number, cy: number, rx: number, ry: number, R: string[], dim = 0, clip?: (x: number, y: number) => boolean) {
-  scan(p, cx - rx, cy - ry, cx + rx, cy + ry, (x, y, n) => {
-    const nx = (x - cx) / rx;
-    const ny = (y - cy) / ry;
-    if (nx * nx + ny * ny > 1 || (clip && !clip(Math.floor(x), Math.floor(y)))) return null;
-    return tone(R, nx, ny, dim, n);
-  });
+  for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++) {
+    for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) {
+      const nx = (x + 0.5 - cx) / rx;
+      const ny = (y + 0.5 - cy) / ry;
+      if (nx * nx + ny * ny > 1 || (clip && !clip(x, y))) continue;
+      p.set(x, y, tone(R, nx, ny, dim));
+    }
+  }
 }
 
 /** 圆柱（胶囊）：手臂、腿、围巾、睡袋卷 */
@@ -313,13 +286,17 @@ function capsule(p: Pix, x0: number, y0: number, x1: number, y1: number, r: numb
   const dx = x1 - x0;
   const dy = y1 - y0;
   const len2 = dx * dx + dy * dy || 1;
-  scan(p, Math.min(x0, x1) - r, Math.min(y0, y1) - r, Math.max(x0, x1) + r, Math.max(y0, y1) + r, (px, py, n) => {
-    const t = Math.max(0, Math.min(1, ((px - x0) * dx + (py - y0) * dy) / len2));
-    const ex = px - (x0 + dx * t);
-    const ey = py - (y0 + dy * t);
-    if (ex * ex + ey * ey > r * r) return null;
-    return tone(R, ex / r, ey / r, dim, n);
-  });
+  for (let y = Math.floor(Math.min(y0, y1) - r); y <= Math.ceil(Math.max(y0, y1) + r); y++) {
+    for (let x = Math.floor(Math.min(x0, x1) - r); x <= Math.ceil(Math.max(x0, x1) + r); x++) {
+      const px = x + 0.5;
+      const py = y + 0.5;
+      const t = Math.max(0, Math.min(1, ((px - x0) * dx + (py - y0) * dy) / len2));
+      const ex = px - (x0 + dx * t);
+      const ey = py - (y0 + dy * t);
+      if (ex * ex + ey * ey > r * r) continue;
+      p.set(x, y, tone(R, ex / r, ey / r, dim));
+    }
+  }
 }
 
 /** 两个像素宽、一边亮一边暗的杆子 */
@@ -562,41 +539,6 @@ function rampsOf(o: Outfit): Ramps {
 /** 刘海的锯齿：每一列往下垂多少 */
 const BANGS = [1.4, 0.4, 0.9, 1.6, 0.5, 1.2, 0.3, 1.0, 1.5, 0.6, 1.1];
 
-/** 在逻辑像素 (x, y) 里按真像素画：pts 是 [i, j, 颜色]，i/j 是块内的真像素偏移 */
-function fine(p: Pix, x: number, y: number, pts: [number, number, string][]) {
-  const r = p.res;
-  const sx = Math.round(x) * r;
-  const sy = Math.round(y) * r;
-  for (const [i, j, c] of pts) if (i < r && j < r) p.sub(sx + i, sy + j, c);
-}
-
-/** 眼睛（高清）：上眼睑一道深线、眼白、瞳孔、左上一粒高光；低清就是两格黑 */
-function eye(p: Pix, x: number, y: number, S: string[], HR: string[], glow?: string) {
-  if (p.res < 2) { p.set(x, y, EYE); p.set(x, y + 1, EYE); return; }
-  const iris = glow ?? mix(EYE, '#3a6aa0', 0.55);
-  const lid = mix(HR[0], EYE, 0.5);
-  fine(p, x, y, [[0, 0, lid], [1, 0, lid], [0, 1, '#f4f0ea'], [1, 1, iris]]);
-  fine(p, x, y + 1, [[0, 0, iris], [1, 0, EYE], [0, 1, EYE], [1, 1, EYE]]);
-  // 高光
-  fine(p, x, y + 1, [[0, 0, '#ffffff']]);
-  // 眉毛：眼上方一道细线
-  fine(p, x, y - 1, [[0, 1, lid], [1, 1, lid]]);
-}
-
-/** 腮红：高清时只点半格，淡一点 */
-function cheek(p: Pix, x: number, y: number, c: string) {
-  if (p.res < 2) { p.set(x, y, c); return; }
-  const base = p.get(x, y);
-  if (!base) return;
-  fine(p, x, y, [[0, 0, mix(base, c, 0.6)], [1, 1, mix(base, c, 0.6)]]);
-}
-
-/** 嘴：高清时一道细线，宽 w 个逻辑像素 */
-function mouth(p: Pix, x: number, y: number, c: string, w: number) {
-  if (p.res < 2) { p.set(x, y, c); return; }
-  for (let k = 0; k < w; k++) fine(p, x + k, y, [[0, 0, c], [1, 0, c]]);
-}
-
 function drawHead(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose: Pose) {
   if (o.head) return drawSpecialHead(p, o, R, cx, cy, pose);
   const { dir } = pose;
@@ -613,36 +555,19 @@ function drawHead(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose: Pos
   ball(p, cx, cy - 0.3, hood ? 5.1 : 4.9, hood ? 5 : 4.7, HR);
   if (!hood) {
     // 几缕发丝：在头发上压一道暗线
-    const strand = (x0: number, y0: number, x1: number, y1: number, col = HR[1]) => {
-      const r = p.res;
-      const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1) * 2 * r;
+    const strand = (x0: number, y0: number, x1: number, y1: number) => {
+      const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1) * 2;
       for (let i = 0; i <= n; i++) {
-        const x = x0 + ((x1 - x0) * i) / n;
-        const y = y0 + ((y1 - y0) * i) / n;
-        if (r === 1) {
-          const c = p.get(x, y);
-          if (c && (c === HR[3] || c === HR[2])) p.set(x, y, HR[1]);
-        } else {
-          // 高清：细一半的发丝，只压在亮部
-          const sx = Math.floor(x * r), sy = Math.floor(y * r);
-          const c = p.getSub(sx, sy);
-          if (c && (c === HR[3] || c === HR[2] || c === HR[4])) p.sub(sx, sy, col);
-        }
+        const x = Math.round(x0 + ((x1 - x0) * i) / n);
+        const y = Math.round(y0 + ((y1 - y0) * i) / n);
+        const c = p.get(x, y);
+        if (c && (c === HR[3] || c === HR[2])) p.set(x, y, HR[1]);
       }
     };
-    if (dir !== 'up') {
-      strand(hx + 0.5, cy - 4.4, hx - 2, cy - 2);
-      if (p.res > 1) {
-        strand(hx + 1.5, cy - 4.6, hx - 0.5, cy - 2.2);
-        strand(hx + 2.6, cy - 4, hx + 1.6, cy - 1.6);
-        strand(hx - 1.6, cy - 4, hx - 3.2, cy - 1.8);
-        // 头顶左上一撮高光
-        strand(hx - 2.4, cy - 3.6, hx - 0.6, cy - 4.4, HR[4]);
-      }
-    } else {
+    if (dir !== 'up') strand(hx + 0.5, cy - 4.4, hx - 2, cy - 2);
+    else {
       strand(hx - 1, cy - 4, hx - 1.4, cy + 3.4);
       strand(hx + 1.6, cy - 3.6, hx + 2, cy + 3.4);
-      if (p.res > 1) { strand(hx - 3, cy - 2.6, hx - 3.4, cy + 2.6); strand(hx + 3.4, cy - 2.4, hx + 3.6, cy + 2.4); strand(hx + 0.4, cy - 4.2, hx + 0.3, cy + 3); }
     }
   }
   const S = R.skin;
@@ -669,24 +594,26 @@ function drawHead(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose: Pos
     const eR = Math.round(hx + 1);
     for (const x of [eL, eR]) {
       if (pose.blink) p.set(x, ey + 1, S[0]);
-      else eye(p, x, ey, S, HR);
+      else {
+        p.set(x, ey, EYE);
+        p.set(x, ey + 1, EYE);
+      }
     }
-    cheek(p, eL - 1, ey + 2, blush);
-    cheek(p, eR + 1, ey + 2, blush);
-    mouth(p, Math.round(hx - 0.5), ey + 2, lip, 2);
-    // 鼻尖一点阴影
-    fine(p, Math.round(hx - 0.5), ey + 1, [[1, 1, S[1]]]);
+    p.set(eL - 1, ey + 2, blush);
+    p.set(eR + 1, ey + 2, blush);
+    p.set(Math.round(hx - 0.5), ey + 2, lip);
   } else if (side) {
     const fx = hx + 1.1;
     ball(p, fx, fy, 3.6, 3.5, [S[2], S[3], S[3], S[3], S[4]], 0, (x, y) => x + 0.5 > hx - 0.2 && y + 0.5 >= bangY(x) && !(hood && x + 0.5 < hx + 1.2));
     bangShadow(hx, fx + 3);
     const ex = Math.round(hx + 2.4);
     if (pose.blink) p.set(ex, ey + 1, S[0]);
-    else eye(p, ex, ey, S, HR);
-    cheek(p, ex - 1, ey + 2, blush);
-    mouth(p, ex + 1, ey + 2, lip, 1);
-    // 鼻子：侧脸轮廓外凸一点
-    fine(p, ex + 2, ey + 1, [[0, 0, S[3]], [0, 1, S[2]]]);
+    else {
+      p.set(ex, ey, EYE);
+      p.set(ex, ey + 1, EYE);
+    }
+    p.set(ex - 1, ey + 2, blush);
+    p.set(ex + 1, ey + 2, lip);
     if (!hood) p.set(Math.round(hx - 0.4), ey + 1, S[1]);
   } else if (!hood) {
     // 背面：后颈露一点皮肤
@@ -696,7 +623,7 @@ function drawHead(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose: Pos
 }
 
 export function drawFrame(pose: Pose, o: Outfit): Pix {
-  const p = new Pix(FRAME_W, FRAME_H, HERO_RES);
+  const p = new Pix(FRAME_W, FRAME_H);
   p.ox = HERO_PAD.l;
   p.oy = HERO_PAD.t;
   const R = rampsOf(o);
@@ -2104,19 +2031,16 @@ export function paintHeroSheet(outfit: Outfit = OUTFITS[0], canvas = document.cr
   const total = anims.reduce((n, a) => n + a.frames, 0);
   const cols = 16;
   const rows = Math.ceil(total / cols);
-  // 表上的尺寸都是真像素（逻辑像素 × HERO_RES）
-  const FW = FRAME_W * HERO_RES;
-  const FH = FRAME_H * HERO_RES;
-  canvas.width = cols * FW;
-  canvas.height = rows * FH;
+  canvas.width = cols * FRAME_W;
+  canvas.height = rows * FRAME_H;
   const ctx = canvas.getContext('2d')!;
   const frames: { name: string; x: number; y: number }[] = [];
   let k = 0;
   for (const a of anims) {
     for (let i = 0; i < a.frames; i++) {
-      const x = (k % cols) * FW;
-      const y = Math.floor(k / cols) * FH;
-      ctx.clearRect(x, y, FW, FH);
+      const x = (k % cols) * FRAME_W;
+      const y = Math.floor(k / cols) * FRAME_H;
+      ctx.clearRect(x, y, FRAME_W, FRAME_H);
       const pose = a.pose(i / a.frames, i);
       pose.t = i / a.frames;
       pose.seed = k;
@@ -2125,5 +2049,5 @@ export function paintHeroSheet(outfit: Outfit = OUTFITS[0], canvas = document.cr
       k++;
     }
   }
-  return { canvas, frames, total, res: HERO_RES, fw: FW, fh: FH };
+  return { canvas, frames, total };
 }
