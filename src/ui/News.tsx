@@ -8,6 +8,13 @@ import { tl } from '../i18n';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-10-30-b', date: tl('10 月 30 日'), title: tl("流畅度优化"),
+    lines: [
+      tl("修好了在家园岛上摆东西摆得越多、画面越来越卡的问题。"),
+      tl("大地图上首领反复刷新、副本洞口开开关关之后，不会再越玩越卡。"),
+    ],
+  },
+  {
     id: '2026-10-30-a', date: tl('10 月 30 日'), title: tl("家园更热闹了：小动物、宠物礼物、声望奖励"),
     lines: [
       tl("岛上动起来了：鸡舍门口的鸡走来走去低头啄食，鱼塘和小池塘里的鱼时不时跳出水面，风车的风帆会转，热气球轻轻浮动，篝火冒烟，花坛边有蝴蝶、蜂箱边有蜜蜂，晚上灯塔会扫出两道光。"),

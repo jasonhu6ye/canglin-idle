@@ -304,6 +304,8 @@ export class IslandScene extends Phaser.Scene {
   }
 
   private rebuild() {
+    // 头顶图标、告示板「!」、热气球这些常驻的来回动画，不先停掉的话每摆一件东西就多攒一批（10-30 全面检查）
+    this.tweens.killTweensOf(this.objs);
     this.objs.forEach((o) => o.destroy());
     this.objs = [];
     this.lamps = [];

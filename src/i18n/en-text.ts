@@ -1109,4 +1109,7 @@ export const EN_TEXT: Record<string, string> = {
   "岛上动起来了：鸡舍门口的鸡走来走去低头啄食，鱼塘和小池塘里的鱼时不时跳出水面，风车的风帆会转，热气球轻轻浮动，篝火冒烟，花坛边有蝴蝶、蜂箱边有蜜蜂，晚上灯塔会扫出两道光。": "Your island comes alive: chickens stroll and peck outside the coop, fish leap from ponds, windmill sails turn, the hot air balloon gently bobs, campfires smoke, butterflies visit flowerbeds, bees buzz around hives, and at night the lighthouse sweeps two beams of light.",
   "宠物有亲密度了：每天摸一次涨一点，攒够天数多一颗心（最多 5 颗）。有心以后，每天摸它会叼来小礼物，心越多礼物越好。": "Pets now have affection: petting once a day raises it, and enough days earn a heart (up to 5). Once a pet has a heart, it brings you a little gift every day you pet it, with better gifts at more hearts.",
   "岛屿声望每升一级都能领一份奖励，在订单面板里领取。": "Every Island Reputation level now comes with a reward. Claim it in the orders panel.",
+  "流畅度优化": "Smoother performance",
+  "修好了在家园岛上摆东西摆得越多、画面越来越卡的问题。": "Fixed the home island getting slower and slower the more things you placed.",
+  "大地图上首领反复刷新、副本洞口开开关关之后，不会再越玩越卡。": "The world map no longer slows down over time as bosses respawn and dungeon gates open and close.",
 };

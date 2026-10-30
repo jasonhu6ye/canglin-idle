@@ -1089,6 +1089,7 @@ export class MapScene extends Phaser.Scene {
     const list = allGates(store.state, now);
     for (const [id, o] of this.gateObjs) {
       if (list.some((g) => g.id === id)) continue;
+      this.tweens.killTweensOf(o.objs);
       o.objs.forEach((x) => x.destroy());
       this.gateObjs.delete(id);
     }
@@ -2128,6 +2129,8 @@ export class MapScene extends Phaser.Scene {
         b.trail.destroy();
         b.fill.destroy();
         b.label?.destroy();
+        // 首领光环的呼吸动画是无限循环的，不停掉的话每刷一次首领就漏一批（10-30 全面检查）
+        if (b.aura) this.tweens.killTweensOf(b.aura);
         b.aura?.forEach((o) => o.destroy());
         return false;
       }
