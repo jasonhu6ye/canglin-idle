@@ -18,7 +18,7 @@ export const UP: Record<string, number> = {
   piano: 10, bathtub: 4, candelabra: 12, globe: 10, easel: 16, weapon_rack: 12, armor_stand: 16, barrel: 6, crates: 10, vase: 8,
   fishtank: 8, cat_bed: 0, rug_long: 0, st_atelier: 10,
   fountain: 14, pond: 0, pine_tree: 30, cherry_tree: 26, bush: 4, rock: 4, haystack: 8, scarecrow: 16, signpost: 12, mailbox: 8,
-  campfire: 2, torch: 14, stone_lantern: 14, tent: 10, beehive: 6, dog_house: 10, birdbath: 6, garden_bed: 2, windmill: 34,
+  campfire: 2, torch: 14, stone_lantern: 14, tent: 10, beehive: 6, dog_house: 10, birdbath: 6, garden_bed: 2, windmill: 34, windmill_body: 34,
   farm_plot: 0, water_barrel: 6, compost: 4,
   painting: 10, candle: 6, teddy: 2, books: 2, tea_set: 0, music_box: 2, crystal_ball: 4, bonsai: 4, paper_lantern: 12, hourglass: 4,
   ship_model: 6, gem_case: 8, pumpkin_lamp: 2, plush_cat: 2, trophy_cup: 6,
@@ -1059,8 +1059,9 @@ function paintHD(id: string, p: Pix, W: number, H: number): boolean {
       p.rect(W - 6, 0, 2, 4, IRON[3]); p.set(W - 7, 0, IRON[4]);
       for (const fx of [2, W - 4]) p.rect(fx, H - 3, 2, 3, GOLD[3]);
       return true;
-    case 'windmill': {
-      // 石砌塔身越往上越细，木头尖顶，四片带格子的风帆
+    case 'windmill':
+    case 'windmill_body': {
+      // 石砌塔身越往上越细，木头尖顶，四片带格子的风帆（windmill_body 不画风帆，岛上风帆单独转）
       const base = H - 1;
       const topY = 26;
       for (let y = topY; y <= base; y++) {
@@ -1077,6 +1078,7 @@ function paintHD(id: string, p: Pix, W: number, H: number): boolean {
       p.rect(cx - 3, base - 8, 6, 8, DARKWOOD[1]); p.rect(cx - 3, base - 8, 6, 1, DARKWOOD[3]); p.set(cx + 1, base - 4, GOLD[3]);
       p.rect(cx - 2, topY + 8, 4, 4, '#3a5a8a'); p.set(cx - 2, topY + 8, '#8ac0e8');
       const hub = { x: cx, y: 22 };
+      if (id === 'windmill_body') { p.rect(hub.x - 1, hub.y - 1, 3, 3, IRON[2]); return true; }
       for (const a of [0.6, 0.6 + Math.PI / 2, 0.6 + Math.PI, 0.6 + Math.PI * 1.5]) {
         const dx = Math.cos(a), dy = Math.sin(a);
         for (let r = 2; r < 13; r++) {
@@ -2156,3 +2158,19 @@ export function homeItemIconUrl(id: string): string | null {
   return url;
 }
 
+
+/** 风车的风帆（岛上单独转）：28×28，轴心在正中 */
+export function paintWindmillSails(): HTMLCanvasElement {
+  const p = new Pix(28, 28);
+  const hub = { x: 14, y: 14 };
+  for (const a of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
+    const dx = Math.cos(a), dy = Math.sin(a);
+    for (let r = 2; r < 13; r++) {
+      const x = hub.x + dx * r, y = hub.y + dy * r;
+      p.set(x, y, WOOD[1]);
+      if (r > 4) for (let w = 1; w <= 4; w++) p.set(x - dy * w, y + dx * w, (r + w) % 3 === 0 ? WOOD[2] : w === 4 ? '#d8d0c0' : '#f4ece0');
+    }
+  }
+  p.rect(hub.x - 1, hub.y - 1, 3, 3, IRON[2]); p.set(hub.x - 1, hub.y - 1, IRON[4]);
+  return p.outlineTinted().canvas();
+}

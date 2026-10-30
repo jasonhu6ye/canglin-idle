@@ -1101,4 +1101,12 @@ export const EN_TEXT: Record<string, string> = {
   "岛屿声望一共 7 级，逐级解锁新建筑：鱼塘（产银鱼）、羊圈（产羊毛）、灯塔、热气球、黄金雕像。声望越高，订单金币越多。": "Island Reputation has 7 levels that unlock new buildings one by one: Fish Pond (silverfish), Sheep Pen (wool), Lighthouse, Hot Air Balloon and Golden Statue. Higher reputation means more coins per order.",
   "新物品羊毛：2 份羊毛在工坊纺成 1 匹粗布。": "New item, Wool: 2 wool weaves into 1 rough cloth at the workshop.",
   "摆了猫窝、狗屋，岛上会来一只橘猫、一只小狗到处溜达，点一下摸摸它们，每天还能加一点声望。": "Place a Cat Bed or Dog House and a ginger cat or a puppy will roam your island. Tap to pet them for a little reputation each day.",
+  "：摆一个猫窝，岛上会来一只橘猫；摆一个狗屋，会来一只小狗。它们在窝附近溜达，小狗还会跑到你身边。点一下摸摸它，每只每天第一次摸加 2 点声望。每天摸一次涨亲密度，摸满 3、7、14、30、60 天各多一颗心；有了心之后，每天摸它会叼来小礼物（猫爱叼鱼和草药，狗会刨出金币、种子和兽皮），心越多礼物越好。": ": Place a Cat Bed and a ginger cat moves in; place a Dog House and a puppy comes along. They wander around their beds, and the puppy likes to run over to you. Tap one to pet it: the first pet each day gives 2 reputation per pet. Each day you pet it raises its affection, earning a heart at 3, 7, 14, 30 and 60 days. Once it has a heart, it brings you a little gift every day you pet it (cats like fish and herbs; dogs dig up coins, seeds and hides), and more hearts mean better gifts.",
+  "声望奖励": "Reputation rewards",
+  "：岛屿声望每升一级，订单面板里能领一份奖励：金币，加上肥料、种子、洒水器、宝石、金属锭这些东西，直接进仓库。顶栏「声望」上的红点也会提醒你。": ": Each Island Reputation level comes with a reward you claim in the orders panel: coins plus things like fertilizer, seeds, a sprinkler, gems or metal bars, sent straight to your bank. The red dot on the Rep button reminds you.",
+  "10 月 30 日": "October 30",
+  "家园更热闹了：小动物、宠物礼物、声望奖励": "A livelier home island: little critters, pet gifts and reputation rewards",
+  "岛上动起来了：鸡舍门口的鸡走来走去低头啄食，鱼塘和小池塘里的鱼时不时跳出水面，风车的风帆会转，热气球轻轻浮动，篝火冒烟，花坛边有蝴蝶、蜂箱边有蜜蜂，晚上灯塔会扫出两道光。": "Your island comes alive: chickens stroll and peck outside the coop, fish leap from ponds, windmill sails turn, the hot air balloon gently bobs, campfires smoke, butterflies visit flowerbeds, bees buzz around hives, and at night the lighthouse sweeps two beams of light.",
+  "宠物有亲密度了：每天摸一次涨一点，攒够天数多一颗心（最多 5 颗）。有心以后，每天摸它会叼来小礼物，心越多礼物越好。": "Pets now have affection: petting once a day raises it, and enough days earn a heart (up to 5). Once a pet has a heart, it brings you a little gift every day you pet it, with better gifts at more hearts.",
+  "岛屿声望每升一级都能领一份奖励，在订单面板里领取。": "Every Island Reputation level now comes with a reward. Claim it in the orders panel.",
 };

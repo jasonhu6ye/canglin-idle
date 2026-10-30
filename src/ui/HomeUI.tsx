@@ -3,7 +3,7 @@ import { ITEMS, type MapNode } from '../core/data';
 import {
   affordable, atPortal, BUILD_CATS, BUILDS, buildDef, comfortLevel, comfortOf, COMFORT_SPEED, COMFORT_STEPS, COMFORT_XP, enterHome, HOME_PLOT_MAX, HOME_SIZES,
   HOME_UPGRADES, collectHome, homeComfort, homeFieldId, homeProduce, homeLevel, homePlots, homeSize, isTrophy, leaveHome, upgradeHome,
-  canPet, deliverOrder, homeHasBoard, homeOrders, homePets, ORDER_ALL_BONUS, PET_REP, PETS, REP_COIN_BONUS, REP_STEPS, repLevel, VISITORS,
+  canPet, claimRepReward, deliverOrder, homeHasBoard, LOVE_STEPS, loveHearts, repUnclaimed, REP_REWARDS, homeOrders, homePets, ORDER_ALL_BONUS, PET_REP, PETS, REP_COIN_BONUS, REP_STEPS, repLevel, VISITORS,
   type BuildCat, type BuildDef,
 } from '../core/home';
 import type { GameState } from '../core/types';
@@ -103,7 +103,7 @@ export function HomeHud({ s }: { s: GameState }) {
   };
   const toggle = (k: 'comfort' | 'farm' | 'rep') => { setInfo(info === k ? null : k); close(); };
   const rlv = repLevel(s.home.rep ?? 0);
-  const todo = homeHasBoard(s) ? homeOrders(s, Date.now()).filter((o) => !o.done).length : 0;
+  const todo = (homeHasBoard(s) ? homeOrders(s, Date.now()).filter((o) => !o.done).length : 0) + repUnclaimed(s);
   return (
     <>
       <div className="home-bar">
@@ -251,6 +251,19 @@ function RepCard({ s, onClose, onMsg }: { s: GameState; onClose: () => void; onM
       <p className="small">{next ? tl`再攒 ${next - rep} 点升到 ${lv + 1} 级` : tl('已经满级了')}
         {unlock.length > 0 && <>{' · '}{tl`下一级解锁：${unlock.join(tl('、'))}`}</>}
         {lv > 0 && <>{' · '}{tl`订单金币 +${Math.round(lv * REP_COIN_BONUS * 100)}%`}</>}</p>
+      {repUnclaimed(s) > 0 && (() => {
+        const r = REP_REWARDS[s.home?.repGot ?? 0];
+        return (
+          <div className="home-up rep-reward">
+            <b>{tl`声望 ${(s.home?.repGot ?? 0) + 1} 级奖励`}</b>
+            <span className="bl-cost">
+              <span><Icon item="coins" size={14} info={false} />{fmtNum(r.coins)}</span>
+              {r.items.map((c) => <span key={c.item}><Icon item={c.item} size={14} />×{c.qty}</span>)}
+            </span>
+            <button className="pill on" onClick={() => { store.dispatch(claimRepReward); onMsg(tl('声望奖励已收进仓库')); }}>{tl('领取')}</button>
+          </div>
+        );
+      })()}
       {!board ? <p className="muted small">{tl('在「户外」里盖一块订单告示板，每天就会有 3 位访客来下订单。')}</p> : (
         <>
           <p className="small"><b>{tl('今天的订单')}</b> <span className="muted">{tl`全部交完再给声望 +${ORDER_ALL_BONUS}，每天 0 点换新`}</span></p>
@@ -273,10 +286,26 @@ function RepCard({ s, onClose, onMsg }: { s: GameState; onClose: () => void; onM
           </ul>
         </>
       )}
-      <p className="muted small">
-        {pets.length ? pets.map((k) => canPet(s, k, now) ? tl`${PETS[k].name}在等你摸摸（声望 +${PET_REP}）` : tl`今天摸过${PETS[k].name}了`).join(tl('；'))
-          : tl('摆一个猫窝或狗屋，岛上会来一只猫或狗，每天摸一次加声望。')}
-      </p>
+      {pets.length > 0 ? (
+        <ul className="home-pets">
+          {pets.map((k) => {
+            const love = s.home?.love?.[k] ?? 0;
+            const hearts = loveHearts(love);
+            const nextAt = LOVE_STEPS[hearts];
+            return (
+              <li key={k}>
+                <b>{PETS[k].name}</b>
+                <span className="pet-hearts">{LOVE_STEPS.map((_, i) => <i key={i} className={i < hearts ? 'on' : ''}>♥</i>)}</span>
+                <small className="muted">
+                  {canPet(s, k, now) ? tl`今天还没摸（声望 +${PET_REP}）` : tl('今天摸过了')}
+                  {' · '}{nextAt ? tl`再摸 ${nextAt - love} 天多一颗心` : tl('亲密度满了')}
+                  {' · '}{hearts ? tl('每天摸它会叼来小礼物') : tl('有一颗心后，摸它会叼来小礼物')}
+                </small>
+              </li>
+            );
+          })}
+        </ul>
+      ) : <p className="muted small">{tl('摆一个猫窝或狗屋，岛上会来一只猫或狗，每天摸一次加声望。')}</p>}
       <div className="go"><button onClick={onClose}>{tl('关闭')}</button></div>
     </div>
   );

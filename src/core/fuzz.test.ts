@@ -60,7 +60,7 @@ describe('随机操作压力测试', () => {
       s.bank.coins = 100_000;
       const log: string[] = [];
       for (let step = 0; step < 250; step++) {
-        const op = Math.floor(r() * 32);
+        const op = Math.floor(r() * 33);
         const item = pick(r, itemIds);
         const q = pick(r, qtys);
         const mode: TaskMode = pick(r, [{ type: 'infinite' }, { type: 'count', count: 1 + Math.floor(r() * 5) }, { type: 'time', ms: 60_000 }] as TaskMode[]);
@@ -109,6 +109,7 @@ describe('随机操作压力测试', () => {
           case 28: { what = 'summonPumpkin'; s = sim.summonPumpkin(s, Math.floor(r() * 6) - 1, now); break; }
           case 29: { what = `salvage ${item} ${q}`; s = sim.salvage(s, { [item]: q })[0]; break; }
           case 30: { const i = Math.floor(r() * 4); what = `deliverOrder ${i}`; s = home.deliverOrder(s, i, now); break; }
+          case 32: { what = 'claimRepReward'; s = home.claimRepReward({ ...s, home: s.home && { ...s.home, rep: (s.home.rep ?? 0) + 100 } }); break; }
           case 31: { const k = pick(r, ['cat', 'dog', 'nope']); what = `petPet ${k}`; s = home.petPet(s, k, now); break; }
         }
         log.push(what);

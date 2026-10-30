@@ -3,6 +3,7 @@ import {
   canPlace, enterHome, HOME_SPAWN, homeCan, homeChest, leaveHome, migrateHome, placeBuild, removeAt, upgradeHome, atPortal,
   BUILDS, collectHome, homeProduce, produceMs, comfortLevel, homeComfort, homePct, homePlots, homePlotCells, HOME_PLOT_MAX, PORTAL_IDS, homeNode,
   homeOrders, makeOrders, deliverOrder, ORDER_ALL_BONUS, REP_STEPS, repLevel, petPet, homePets, PET_REP, canPet,
+  petGift, loveHearts, LOVE_STEPS, claimRepReward, repUnclaimed, REP_REWARDS,
 } from './home';
 import { ITEMS } from './data';
 import { fieldCounts, fieldCrops, harvestAll, installSprinkler, nearField, plantAll, tendPlot } from './farm';
@@ -10,6 +11,7 @@ import { advance, migrate } from './sim';
 import { NODES, standOf } from './data';
 import { atBank, atMarket, nearNode, newGame } from './sim';
 import type { GameState } from './types';
+import { dayKey } from './mail';
 
 const portal = NODES.find((n) => n.id === 'portal_home')!;
 function onIsland(): GameState {
@@ -378,5 +380,42 @@ describe('访客订单和岛屿声望', () => {
   it('羊毛能纺布', () => {
     expect(ITEMS.wool).toBeDefined();
     expect(NODES.find((n) => n.id === 'workshop')?.actions).toContain('weave_wool');
+  });
+});
+
+describe('宠物亲密度和声望奖励', () => {
+  const T = new Date(2026, 9, 30, 10).getTime();
+  const D = 86400_000;
+  it('摸几天涨心，心够了叼礼物进仓库', () => {
+    let s = onIsland();
+    s.bank = { ...s.bank, cloth_1: 10 };
+    s = placeBuild(s, 'cat_bed', X, Y, T);
+    expect(petGift('cat', 1, 'x')).toBeNull();
+    for (let d = 0; d < LOVE_STEPS[0]; d++) s = petPet(s, 'cat', T + d * D);
+    expect(s.home!.love!.cat).toBe(LOVE_STEPS[0]);
+    expect(loveHearts(s.home!.love!.cat)).toBe(1);
+    const g = petGift('cat', LOVE_STEPS[0], 'any-day');
+    expect(g && g.qty > 0).toBe(true);
+    // 第 3 天那次摸到的礼物进了仓库
+    const g3 = petGift('cat', LOVE_STEPS[0], dayKey(T + 2 * D))!;
+    expect((s.bank[g3.item] ?? 0)).toBeGreaterThanOrEqual(g3.qty);
+    // 狗的礼物里有金币，满心能出红宝石这类稀有的
+    const dogs = new Set(Array.from({ length: 200 }, (_, i) => petGift('dog', 999, `d${i}`)!.item));
+    expect(dogs.has('coins')).toBe(true);
+    expect(dogs.has('ruby')).toBe(true);
+  });
+
+  it('声望升级奖励一级一级领，领完就没有', () => {
+    let s = onIsland();
+    s.home = { ...s.home!, rep: REP_STEPS[1] };
+    expect(repUnclaimed(s)).toBe(2);
+    const c = s.bank.coins!;
+    s = claimRepReward(s);
+    expect(s.bank.coins).toBe(c + REP_REWARDS[0].coins);
+    expect(s.bank.fert_basic).toBe(10);
+    s = claimRepReward(s);
+    expect(repUnclaimed(s)).toBe(0);
+    expect(claimRepReward(s)).toBe(s);
+    expect(migrateHome(s.home)!.repGot).toBe(2);
   });
 });

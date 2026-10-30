@@ -581,6 +581,8 @@ export function migrateHome(h: GameState['home']): GameState['home'] {
     ...(h.orders && typeof h.orders.day === 'string' && Array.isArray(h.orders.list)
       ? { orders: { day: h.orders.day, list: h.orders.list.filter((o) => o && ITEMS[o.item] && o.qty > 0).map((o) => ({ ...o })) } } : {}),
     ...(h.petted && typeof h.petted === 'object' ? { petted: Object.fromEntries(Object.entries(h.petted).filter(([k, v]) => PETS[k] && typeof v === 'string')) } : {}),
+    ...(h.love && typeof h.love === 'object' ? { love: Object.fromEntries(Object.entries(h.love).filter(([k, v]) => PETS[k] && Number.isFinite(v) && v > 0).map(([k, v]) => [k, Math.floor(v)])) } : {}),
+    ...(Number.isFinite(h.repGot) && h.repGot! > 0 ? { repGot: Math.min(REP_STEPS.length, Math.floor(h.repGot!)) } : {}),
   };
 }
 
@@ -756,7 +758,29 @@ export const homePets = (home: GameState['home']) =>
 export const canPet = (s: GameState, kind: string, now: number) =>
   !!s.home?.inside && homePets(s.home).includes(kind) && s.home.petted?.[kind] !== dayKey(now);
 
-/** 摸摸宠物：每只每天一次，给一点声望 */
+// ───────── 宠物亲密度和小礼物（用户 10-30「继续增加家园内容 更多游戏细节」） ─────────
+
+/** 摸够这么多天升一颗心，最多 5 颗 */
+export const LOVE_STEPS = [3, 7, 14, 30, 60];
+export const loveHearts = (love: number) => LOVE_STEPS.filter((x) => love >= x).length;
+/** 宠物叼来的礼物：[物品, 最少, 最多, 几颗心起, 权重]。coins 是金币 */
+const PET_GIFTS: Record<string, [string, number, number, number, number][]> = {
+  cat: [['raw_minnow', 2, 4, 1, 6], ['green_herb', 2, 3, 1, 3], ['raw_trout', 1, 2, 2, 4], ['fert_rich', 1, 2, 3, 2], ['sapphire', 1, 1, 4, 1]],
+  dog: [['coins', 30, 80, 1, 5], ['seed_carrot', 3, 6, 1, 3], ['hide_1', 2, 4, 1, 3], ['plain_log', 3, 6, 2, 2], ['coins', 150, 300, 3, 2], ['ruby', 1, 1, 5, 1]],
+};
+/** 今天摸这只能拿到的礼物（按日期定好，同一天一样）；心不够就没有 */
+export function petGift(kind: string, love: number, day: string): { item: string; qty: number } | null {
+  const hearts = loveHearts(love);
+  const pool = (PET_GIFTS[kind] ?? []).filter((g) => g[3] <= hearts && (g[0] === 'coins' || ITEMS[g[0]]));
+  if (!pool.length) return null;
+  let h = strHash(`${day}~${kind}`);
+  const rnd = () => ((h = Math.imul(h ^ (h >>> 15), 2246822507) + 0x9e3779b9 >>> 0) % 10000) / 10000;
+  let r = rnd() * pool.reduce((a, g) => a + g[4], 0);
+  const g = pool.find((x) => (r -= x[4]) < 0) ?? pool[0];
+  return { item: g[0], qty: g[1] + Math.floor(rnd() * (g[2] - g[1] + 1)) };
+}
+
+/** 摸摸宠物：每只每天一次，给一点声望、涨亲密度；有心了还会叼来小礼物（进仓库） */
 export function petPet(prev: GameState, kind: string, now: number): GameState {
   if (!canPet(prev, kind, now)) return prev;
   const s = clone(prev);
@@ -764,5 +788,33 @@ export function petPet(prev: GameState, kind: string, now: number): GameState {
   const home = s.home!;
   home.petted = { ...home.petted, [kind]: dayKey(now) };
   home.rep = (home.rep ?? 0) + PET_REP;
+  const love = (home.love?.[kind] ?? 0) + 1;
+  home.love = { ...home.love, [kind]: love };
+  const gift = petGift(kind, love, dayKey(now));
+  if (gift) s.bank[gift.item] = (s.bank[gift.item] ?? 0) + gift.qty;
+  return s;
+}
+
+// ───────── 声望升级奖励：每升一级领一次 ─────────
+export const REP_REWARDS: { coins: number; items: ItemStack[] }[] = [
+  { coins: 500, items: [{ item: 'fert_basic', qty: 10 }] },
+  { coins: 1000, items: [{ item: 'seed_carrot', qty: 20 }, { item: 'fert_rich', qty: 5 }] },
+  { coins: 2000, items: [{ item: 'sprinkler', qty: 1 }] },
+  { coins: 3500, items: [{ item: 'sapphire', qty: 2 }] },
+  { coins: 5000, items: [{ item: 'titanium_bar', qty: 3 }] },
+  { coins: 8000, items: [{ item: 'runic_bar', qty: 3 }] },
+  { coins: 12000, items: [{ item: 'ruby', qty: 3 }] },
+];
+/** 还有几级的奖励没领 */
+export const repUnclaimed = (s: GameState) => Math.max(0, repLevel(s.home?.rep ?? 0) - (s.home?.repGot ?? 0));
+/** 领下一份声望奖励（一次领一级），进仓库 */
+export function claimRepReward(prev: GameState): GameState {
+  if (!prev.home || !repUnclaimed(prev)) return prev;
+  const s = clone(prev);
+  const home = s.home!;
+  const r = REP_REWARDS[home.repGot ?? 0];
+  home.repGot = (home.repGot ?? 0) + 1;
+  s.bank.coins = (s.bank.coins ?? 0) + r.coins;
+  for (const i of r.items) s.bank[i.item] = (s.bank[i.item] ?? 0) + i.qty;
   return s;
 }

@@ -382,6 +382,10 @@ export interface GameState {
     orders?: { day: string; list: HomeOrder[] };
     /** 宠物今天摸过没有：宠物种类 → 本地日期 */
     petted?: Record<string, string>;
+    /** 宠物亲密度：摸过几天（10-30） */
+    love?: Record<string, number>;
+    /** 声望升级奖励领到第几级了 */
+    repGot?: number;
   };
   /** 装了洒水器的田 */
   sprinklers?: string[];
