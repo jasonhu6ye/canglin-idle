@@ -515,7 +515,7 @@ export class MapScene extends Phaser.Scene {
       // 高清贴图：按倍数缩回原大小，下面算位置都用 displayWidth/Height
       const img = this.add.image(bx, by, key).setOrigin(0.5, 1).setScale(this.artScale(key)).setDepth(by + 1000);
       // 脚下一片淡淡的投影，房子才像落在地上
-      this.add.ellipse(bx + 1, by - 1, img.displayWidth - 2, 7, 0x000000, 0.18).setDepth(by + 999);
+      this.add.ellipse(bx + 2, by - 1, img.displayWidth + 6, 9, 0x000000, 0.22).setDepth(by + 999);
       if (b.kind === 'windmill') {
         const blades = this.add.image(bx, by - img.displayHeight + 16, 'windmill-blades').setScale(this.artScale('windmill-blades')).setDepth(by + 1001);
         this.tweens.add({ targets: blades, angle: 360, duration: 9000, repeat: -1 });
