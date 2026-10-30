@@ -1170,4 +1170,6 @@ export const EN_TEXT: Record<string, string> = {
   "在苍岭城东门外的活动祭坛面板用 800 南瓜积分兑换，兑换后直接穿上，之后在「更多 › 衣橱」里随时换。活动结束后积分照样能换。": "Trade 800 Pumpkin Points for it in the event altar panel outside Canglin's east gate. It is worn right away, and you can switch any time afterwards under More › Wardrobe. Points can still be traded after the event ends.",
   "需要在祭坛兑换": "Trade for it at the altar",
   "万圣节限定：在苍岭城东门外的活动祭坛用南瓜积分兑换": "Halloween-limited: trade Pumpkin Points for it at the event altar outside Canglin's east gate",
+  "骑乘坐姿优化": "Riding pose improved",
+  "骑坐骑时从正面和背面看，角色改成两腿分开跨坐在坐骑上，不再像站在上面；骑南瓜灵驹时人稳稳坐在南瓜顶上。": "Seen from the front or back, riders now sit astride their mount with legs apart instead of looking like they are standing on it. On the Jack o' Lantern Steed you sit firmly on top of the pumpkin.",
 };

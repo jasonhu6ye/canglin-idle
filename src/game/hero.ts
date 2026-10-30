@@ -235,6 +235,8 @@ interface Pose {
   /** 侧面：两条大腿的摆角；正面/背面：抬脚高度 */
   legF?: number;
   legB?: number;
+  /** 正面/背面骑坐：两腿分开跨在坐骑上，膝盖往外撇、小腿垂在两边（用户 10-30：正面看着像站着） */
+  straddle?: boolean;
   /** 侧面膝盖弯曲 */
   kneeF?: number;
   kneeB?: number;
@@ -808,8 +810,25 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
       capsule(p, x, ay - 1.9, x, ay, 1.45, up ? R.boots.map((_, i) => R.boots[Math.max(0, i - 1)]) : R.boots);
       ball(p, x, ay + 0.3, 1.6, 1, R.boots);
     };
-    leg(cx - 2, pose.legB ?? 0);
-    leg(cx + 2, pose.legF ?? 0);
+    // 跨坐：大腿从胯部往两边斜着伸出去（正面看短），膝盖在外，小腿往下收，靴尖朝外
+    const straddle = (k: number) => {
+      const hx = cx + k * 1.6;
+      const kx = cx + k * 4.6;
+      const ky = hipY + 1.6;
+      const fx = cx + k * 5;
+      const fy = hipY + 4.4;
+      capsule(p, hx, hipY, kx, ky, 1.6, R.pants);
+      capsule(p, kx, ky, fx, fy, 1.3, R.pants);
+      capsule(p, fx, fy - 1.4, fx, fy, 1.45, up ? R.boots.map((_, i) => R.boots[Math.max(0, i - 1)]) : R.boots);
+      ball(p, fx + k * 0.6, fy + 0.3, 1.5, 0.9, R.boots);
+    };
+    if (pose.straddle) {
+      straddle(-1);
+      straddle(1);
+    } else {
+      leg(cx - 2, pose.legB ?? 0);
+      leg(cx + 2, pose.legF ?? 0);
+    }
   }
 
   // ---- 身体：衬衣 + 敞开的皮背心 ----
@@ -2291,7 +2310,7 @@ const ride = (dir: HeroDir, run: boolean): HeroAnim => ({
         cape: run ? 2 + (i % 2) : 1, blink: !run && i === 5,
       };
     }
-    return { dir, bob, legF: 1, legB: 1, armLift: [run ? 1 : 0.5, run ? 1 : 0.5], cape: run ? 2 : 0, blink: !run && i === 5 };
+    return { dir, bob, straddle: true, armLift: [run ? 1 : 0.5, run ? 1 : 0.5], cape: run ? 2 : 0, blink: !run && i === 5 };
   },
 });
 
