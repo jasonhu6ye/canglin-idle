@@ -1112,4 +1112,7 @@ export const EN_TEXT: Record<string, string> = {
   "流畅度优化": "Smoother performance",
   "修好了在家园岛上摆东西摆得越多、画面越来越卡的问题。": "Fixed the home island getting slower and slower the more things you placed.",
   "大地图上首领反复刷新、副本洞口开开关关之后，不会再越玩越卡。": "The world map no longer slows down over time as bosses respawn and dungeon gates open and close.",
+  "图标补全": "Icon fixes",
+  "每种鱼都有了自己颜色的图标（生鱼、烤鱼、鱼料理都分得清了）；田里作物做的菜和渔家宴席换成了菜盘图标，不再是一条鱼。": "Every fish now has its own colored icon, so raw fish, cooked fish and fish dishes are easy to tell apart. Farm-crop meals and fishermen's feasts now show a dish icon instead of a fish.",
+  "羊毛有了自己的图标。": "Wool now has its own icon.",
 };

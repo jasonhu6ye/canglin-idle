@@ -8,6 +8,13 @@ import { tl } from '../i18n';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-10-30-c', date: tl('10 月 30 日'), title: tl("图标补全"),
+    lines: [
+      tl("每种鱼都有了自己颜色的图标（生鱼、烤鱼、鱼料理都分得清了）；田里作物做的菜和渔家宴席换成了菜盘图标，不再是一条鱼。"),
+      tl("羊毛有了自己的图标。"),
+    ],
+  },
+  {
     id: '2026-10-30-b', date: tl('10 月 30 日'), title: tl("流畅度优化"),
     lines: [
       tl("修好了在家园岛上摆东西摆得越多、画面越来越卡的问题。"),

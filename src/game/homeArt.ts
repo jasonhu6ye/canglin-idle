@@ -2106,7 +2106,7 @@ export function paintPortalSwirl(): HTMLCanvasElement {
 /** 家园产出和点心的物品图标（16×16）：鸡蛋、蜂蜜、苹果、煎蛋、苹果派、蜂蜜蛋糕 */
 const homeIconCache = new Map<string, string>();
 export function homeItemIconUrl(id: string): string | null {
-  if (!['egg', 'honey', 'apple', 'fried_egg', 'apple_pie', 'honey_cake'].includes(id) || typeof document === 'undefined') return null;
+  if (!['egg', 'honey', 'apple', 'fried_egg', 'apple_pie', 'honey_cake', 'wool'].includes(id) || typeof document === 'undefined') return null;
   const hit = homeIconCache.get(id);
   if (hit) return hit;
   const p = new Pix(16, 16);
@@ -2151,6 +2151,14 @@ export function homeItemIconUrl(id: string): string | null {
       p.rect(2, 5, 12, 2, '#f0b830'); p.set(4, 7, '#f0b830'); p.set(9, 8, '#f0b830'); p.set(12, 7, '#f0b830');
       p.rect(7, 3, 2, 2, '#d82a24'); p.set(8, 2, '#4a9a3a');
       p.rect(3, 6, 2, 1, '#ffe08a');
+      break;
+    case 'wool':
+      // 一团蓬松的羊毛：几个圆团挤在一起，左上亮、右下灰，翘出一缕卷毛
+      for (const [cx, cy, r] of [[5, 9, 3.6], [10, 9, 3.6], [7.5, 6, 3.6], [7.5, 11, 3.4], [4, 6.5, 2.4], [11, 6.5, 2.4]] as [number, number, number][]) {
+        oval(cx, cy, r, r, (x, y) => (x + y < 12 ? '#ffffff' : x + y > 18 ? '#c8c2b6' : '#ece8de'));
+      }
+      for (const [x, y] of [[6, 5], [9, 8], [5, 10], [10, 11], [8, 12]]) p.set(x, y, '#d8d2c6');
+      p.set(12, 3, '#ece8de'); p.set(13, 2, '#ece8de'); p.set(13, 1, '#ffffff');
       break;
   }
   const url = p.outline().canvas().toDataURL();
