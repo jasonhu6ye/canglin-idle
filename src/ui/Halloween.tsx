@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { ITEMS, MONSTERS, NODES } from '../core/data';
-import { HW_ALTAR, HW_BOX, HW_COOLDOWN, HW_END, HW_MOUNT, HW_MOUNT_COST, HW_POINT, HW_TIERS, hwBossId, hwFight, hwOpen, hwShopOpen, hwWait } from '../core/halloween';
-import { buyPumpkinMount, combatEstimate, combatLevel, startNow, summonPumpkin } from '../core/sim';
+import { HW_ALTAR, HW_BOX, HW_COOLDOWN, HW_END, HW_MOUNT, HW_MOUNT_COST, HW_POINT, HW_SKIN, HW_SKIN_COST, HW_TIERS, hwBossId, hwFight, hwOpen, hwShopOpen, hwWait } from '../core/halloween';
+import { buyPumpkinMount, buyReaperSkin, combatEstimate, combatLevel, startNow, summonPumpkin } from '../core/sim';
+import { OUTFITS } from '../game/hero';
+import { HeroPreview } from './Wardrobe';
 import { pumpkinMountIconUrl } from '../game/pumpkinArt';
 import type { GameState } from '../core/types';
 import type { MapNode } from '../core/data';
@@ -63,13 +65,29 @@ function KingAnim({ d, size = 96 }: { d: number; size?: number }) {
   return <canvas ref={ref} width={96} height={96} className="hw-king" style={{ width: size, height: size }} />;
 }
 
-/** 南瓜积分兑换（10-27）：南瓜坐骑，10 月 30 日起显示（用户 10-30 提前开启） */
+/** 南瓜积分兑换（10-27）：南瓜坐骑，10 月 30 日起显示（用户 10-30 提前开启）；10-30 加死神皮肤 */
 function PumpkinShop({ s, now }: { s: GameState; now: number }) {
   if (!hwShopOpen(now)) return null;
   const pts = s.bank[HW_POINT] ?? 0;
   const got = !!s.halloween?.mount;
   const it = ITEMS[HW_MOUNT];
-  return (
+  const skin = OUTFITS.find((o) => o.id === HW_SKIN)!;
+  const gotSkin = !!s.halloween?.skin;
+  return (<>
+    <div className="hw-shop">
+      <div className="hw-shop-icon hw-shop-hero"><HeroPreview outfit={skin} scale={2} /></div>
+      <div>
+        <b>{skin.name}</b> <span className="good">{tl('限定外观')}</span>
+        <div className="muted small">{tl('没有腿、飘在半空的死神，待机时掏出燃着魂火的巨镰舞一轮。兑换后在「更多 › 衣橱」里随时换。')}</div>
+        <div className="hw-shop-row">
+          <span><img src={pumpkinPointUrl()} alt="" className="inline-icon" />{tl` ${fmtNum(HW_SKIN_COST)} 南瓜积分`}</span>
+          {gotSkin ? <span className="good">{tl('已兑换，在衣橱里')}</span>
+            : <button className="primary" disabled={pts < HW_SKIN_COST} onClick={() => store.dispatch((g) => buyReaperSkin(g, Date.now()))}>
+              {pts < HW_SKIN_COST ? tl`还差 ${fmtNum(HW_SKIN_COST - pts)} 积分` : tl('兑换')}
+            </button>}
+        </div>
+      </div>
+    </div>
     <div className="hw-shop">
       <img className="hw-shop-icon" src={pumpkinMountIconUrl()} alt="" />
       <div>
@@ -84,7 +102,7 @@ function PumpkinShop({ s, now }: { s: GameState; now: number }) {
         </div>
       </div>
     </div>
-  );
+  </>);
 }
 
 /** 祭坛面板：选难度召唤南瓜王 */

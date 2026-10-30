@@ -45,7 +45,7 @@ export interface Outfit {
   /** 镇上的村民：不背行囊 */
   npc?: boolean;
   /** 兑换码外观（用户 10-23）：特殊头部造型，hair 这时是头部主色 */
-  head?: 'pumpkin' | 'voidpumpkin' | 'paleknight' | 'jester' | 'bone' | 'voidhood';
+  head?: 'pumpkin' | 'voidpumpkin' | 'paleknight' | 'jester' | 'bone' | 'voidhood' | 'reaper';
   /** 袍子下摆、兜帽边的金线 */
   trim?: string;
   /** 不背行囊、没有围巾尾巴 */
@@ -57,13 +57,17 @@ export interface Outfit {
   /** 发光色（眼睛、脸、灯、粒子）：暗、中、亮 */
   glow?: string[];
   /** 粒子特效 */
-  fx?: 'embers' | 'wisps' | 'sparks' | 'mist' | 'confetti' | 'frostfire';
+  fx?: 'embers' | 'wisps' | 'sparks' | 'mist' | 'confetti' | 'frostfire' | 'soulfire';
   /** 衣服上的菱格花纹（小丑） */
   harlequin?: boolean;
   /** 要用这个兑换码解锁 */
   code?: string;
   /** 暂未开放：衣橱里能看，谁都穿不上（用户 10-27：冰火咒师先不能解锁） */
   sealed?: boolean;
+  /** 没有腿、飘在半空（用户 10-30 死神）：下身是一截往后飘的破袍尾巴，整个人上下浮动 */
+  float?: boolean;
+  /** 活动解锁：万圣节祭坛用南瓜积分兑换 */
+  event?: 'halloween';
 }
 
 export const OUTFITS: Outfit[] = [
@@ -111,6 +115,16 @@ export const OUTFITS: Outfit[] = [
     pack: ['#2a2248', '#3a3062', '#564a88'], roll: '#2a2248',
     head: 'voidhood', noPack: true, cloak: ['#181430', '#262040', '#38305a'], trim: '#e0a030',
     glow: ['#1a6ab0', '#4ad0ff', '#e0ffff'], fx: 'frostfire', sealed: true,
+  },
+  {
+    // 用户 10-30：万圣节死神皮肤。没有腿、飘在半空，待机时从袍子里掏出镰刀耍一轮，镰刀上烧着魂火；百帧特效
+    id: 'reaper', name: tl('幽冥死神'), desc: tl('兜帽下是一张骷髅脸，眼窝里烧着幽绿的魂火。没有腿，破烂的黑袍下摆散成雾气，整个人飘在半空；站着不动时会从袍子里抽出燃着魂火的巨镰，耍上一轮再散掉。'),
+    skin: ['#8a887c', '#dcdad0'], hair: ['#141020', '#241c34', '#38304c'],
+    coat: ['#141020', '#241c34', '#38304c', '#5e5078'], shirt: ['#1c1628', '#2c2440'],
+    pants: ['#0a0810', '#141020'], boots: ['#0a0810', '#141020'], scarf: ['#1c1628', '#2c2440'],
+    pack: ['#1c1628', '#2c2440', '#463a5c'], roll: '#1c1628',
+    head: 'reaper', noPack: true, float: true, cloak: ['#0c0a12', '#181424', '#262034'],
+    glow: ['#1a7a40', '#4ae080', '#d8ffe8'], fx: 'soulfire', event: 'halloween',
   },
   // ---- 兑换码「为爱发电」解锁的五套（用户 10-23 给的参考图和录屏，按本作画法重画） ----
   {
@@ -208,7 +222,7 @@ const STEEL = ['#3e444c', '#7a828c', '#bcc4ce', '#f4f8fc'];
 const BELT = ['#1e120a', '#3a2414', '#5a3a20'];
 
 export type HeroDir = 'down' | 'up' | 'side';
-export type HeroTool = 'pickaxe' | 'axe' | 'hoe' | 'sickle' | 'rod' | 'hammer' | 'knife' | 'sword' | 'spear' | 'dagger' | 'bow' | 'staff' | 'handaxe' | 'greatshield' | 'longbow' | 'crossbow' | 'warbow' | 'arbalest' | 'none';
+export type HeroTool = 'pickaxe' | 'axe' | 'hoe' | 'sickle' | 'rod' | 'hammer' | 'knife' | 'sword' | 'spear' | 'dagger' | 'bow' | 'staff' | 'handaxe' | 'greatshield' | 'longbow' | 'crossbow' | 'warbow' | 'arbalest' | 'scythe' | 'none';
 
 interface Pose {
   dir: HeroDir;
@@ -252,6 +266,15 @@ interface Pose {
   /** 待机施法阶段（冰火咒师用）：抬手、掌心凝聚元素、白光召剑、握剑、剑散成光点、放下手；castK 是该阶段的进度 0-1 */
   cast?: 'rise' | 'raise' | 'merge' | 'orb' | 'flash' | 'beam' | 'slam' | 'wave' | 'fade' | 'lower';
   castK?: number;
+  /** 死神待机（用户 10-30）：伸手到袍子里、镰刀凭空成形、持镰、旋镰、举镰、横扫、镰刀散成魂火、放下手；reapK 是阶段进度 0-1 */
+  reap?: 'reach' | 'summon' | 'hold' | 'spin' | 'raise' | 'slash' | 'fade' | 'lower';
+  reapK?: number;
+  /** 飘浮外观：整个人离地的高度（负数向上） */
+  hover?: number;
+  /** 工具从手里长出来的比例 0-1（召唤镰刀时） */
+  toolGrow?: number;
+  /** 镰刀的刀刃朝哪一侧（1 / -1） */
+  bladeFlip?: number;
   /** 这一帧在动作里的进度 0-1、帧序号（特效闪烁用，生成精灵表时填） */
   t?: number;
   seed?: number;
@@ -310,8 +333,24 @@ function rod(p: Pix, x0: number, y0: number, x1: number, y1: number, a: number, 
 }
 
 /** 工具：从手的位置沿角度 a 伸出去 */
-function drawTool(p: Pix, tool: HeroTool, hx: number, hy: number, a: number, pose: Pose) {
-  const K = 1;
+/** 死神巨镰的刀刃：从杆顶往一侧探出去、再往下弯成月牙。按 0-1 的位置返回 [沿杆高度, 横向距离, 厚度] */
+function scytheBlade(s: number) {
+  return [2.2 - s * s * 6.5, s * 9.5, 2.4 * (1 - s) + 0.5] as const;
+}
+/** 刀背那条边上的点（魂火从这里烧起来） */
+function scytheEdge(hx: number, hy: number, a: number, flip: number, K = 1): [number, number][] {
+  const pts: [number, number][] = [];
+  for (let i = 0; i <= 20; i++) {
+    const [h, u] = scytheBlade(i / 20);
+    const [dx, dy] = v(a, (12 + h + 0.6) * K);
+    const [px, py] = v(a + Math.PI / 2, u * flip * K);
+    pts.push([hx + dx + px, hy + dy + py]);
+  }
+  return pts;
+}
+
+function drawTool(p: Pix, tool: HeroTool, hx: number, hy: number, a: number, pose: Pose): [number, number][] | undefined {
+  const K = pose.toolGrow ?? 1;
   const along = (t: number) => {
     const [dx, dy] = v(a, t * K);
     return [hx + dx, hy + dy] as [number, number];
@@ -385,6 +424,38 @@ function drawTool(p: Pix, tool: HeroTool, hx: number, hy: number, a: number, pos
     rod(p, bx, by, ex, ey, a, [STEEL[1], STEEL[2], STEEL[3]]);
     p.set(ex, ey, STEEL[3]);
     p.set(...along(11.2), STEEL[2]);
+  } else if (tool === 'scythe') {
+    // 死神巨镰（用户 10-30 要炫酷）：乌黑的长杆缠着四道骨白绑带，杆顶一截铁套，月牙刀刃往一侧探出去再垂下来，
+    // 刀背暗、刃口亮，刀身上三点幽绿符文，杆顶另一侧挂着一颗小骷髅
+    const flip = pose.bladeFlip ?? 1;
+    const DARK = ['#120c14', '#2a1e2c', '#4a3a4c'];
+    handle(-4.5, 12, DARK);
+    for (const w of [-2.5, 0.5, 3.5, 6.5]) {
+      strip(w, -0.9, 0.9, (k) => (k < 0.5 ? '#dcd8cc' : '#a8a498'));
+      strip(w + 0.7, -0.9, 0.9, () => '#8a867c');
+    }
+    strip(11, -1.1, 1.1, () => STEEL[1]);
+    strip(11.8, -1.1, 1.1, () => STEEL[2]);
+    strip(12.6, -0.8, 0.8, () => STEEL[0]);
+    for (let i = 0; i <= 44; i++) {
+      const s = i / 44;
+      const [h, u, th] = scytheBlade(s);
+      for (let w = 0; w <= th; w += 0.4) {
+        const [x, y] = along(12 + h - w);
+        const [bx, by] = perp(x, y, u * flip);
+        p.set(bx, by, w < 0.5 ? STEEL[1] : w > th - 0.6 || s > 0.9 ? STEEL[3] : STEEL[2]);
+      }
+    }
+    for (const s of [0.22, 0.42, 0.62]) {
+      const [h, u, th] = scytheBlade(s);
+      const [x, y] = along(12 + h - th * 0.45);
+      p.set(...perp(x, y, u * flip), '#4ae080');
+    }
+    // 杆顶的小骷髅：3×3 骨白，两个黑眼
+    const [kx, ky] = perp(...along(11.2), -1.9 * flip);
+    for (const [dx, dy] of [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [0, 1]]) p.set(kx + dx, ky + dy, dy === 0 ? '#1a1418' : dy < 0 ? '#ece8dc' : '#b8b4a8');
+    p.set(kx, ky, '#dcd8cc');
+    return scytheEdge(hx, hy, a, flip, K);
   } else if (tool === 'spear') {
     handle(-3, 12.5);
     // 枪缨
@@ -636,6 +707,7 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
   const down = pose.dir === 'down';
   const wave = pose.cape ?? 0;
   const ground = HERO_FEET - 0.8;
+  const float = !!o.float;
 
   // ---- 先算腿：侧面两节腿，身体高度由更低的那只脚决定 ----
   const THIGH = 3.4;
@@ -647,9 +719,12 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
     ] as const)
     : [];
   const reachDown = (a: number, k: number) => THIGH * Math.cos(a) + SHIN * Math.cos(a - k);
-  const hipY = side
-    ? ground - Math.max(...legs.map(([a, k]) => reachDown(a, k)))
-    : ground - 6 + crouch + (pose.hop ?? 0);
+  // 飘着的死神没有腿：腰的高度固定，再加上浮动
+  const hipY = float
+    ? ground - 6 + crouch + (pose.hop ?? 0) + (pose.hover ?? -2)
+    : side
+      ? ground - Math.max(...legs.map(([a, k]) => reachDown(a, k)))
+      : ground - 6 + crouch + (pose.hop ?? 0);
   const sy = hipY - 7.4 + (pose.bob ?? 0);
   const headY = sy - 4.6;
   const C = R.coat;
@@ -710,7 +785,9 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
   back?.draw();
 
   // ---- 腿 ----
-  if (side) {
+  if (float) {
+    // 没有腿，下身在身体之后画成一截袍尾
+  } else if (side) {
     legs.forEach(([a, k], i) => {
       const dim = i === 0 ? 1 : 0;
       const [tx, ty] = v(a, THIGH);
@@ -861,8 +938,13 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
     if (down) for (let y = top; y < bottom - 1; y++) if (C.includes(p.get(cx - 1, y) ?? '')) p.set(cx - 1, y, o.trim ?? C[3]);
   }
 
+  if (float) drawFloatTail(p, o, R, cx, hipY, pose);
+
   // ---- 正面 / 背面的手臂 ----
   let hands: [number, number][] = [];
+  /** 死神的镰刀：握在哪只手、什么角度，头画完之后再画（刀刃举过头顶时要压在头上面） */
+  let scythe: { hx: number; hy: number; a: number; grow: number; fade: number; flip: number } | null = null;
+  let blade: [number, number][] | undefined;
   if (!side) {
     const [l, r] = pose.armLift ?? [0, 0];
     const arm = (x: number, lift: number) => {
@@ -895,6 +977,50 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
         ball(p, hx, hy, 1.15, 1.05, R.skin);
         hands.push([hx, hy]);
       }
+    } else if (float && pose.reap) {
+      // 死神掏镰刀（用户 10-30）：右手先探到肩后的袍子里、左手张开聚魂火，镰刀在右手里凭空成形，
+      // 然后竖在身侧、绕手旋一整圈、双手举过头顶、从右上斜着横扫到左下，最后镰刀散成魂火、放下手
+      const rp = pose.reap;
+      const rk = pose.reapK ?? 1;
+      const k = ease(rk);
+      const fast = ease(Math.min(1, rk * 2.2));
+      type H = { ex: number; ey: number; hx: number; hy: number };
+      const DOWN: H = { ex: 4.4, ey: 3.9, hx: 4.4, hy: 7.1 };
+      const BACK: H = { ex: 6.4, ey: 1.4, hx: 3.6, hy: -1.6 };
+      const HOLD: H = { ex: 6.2, ey: 3.4, hx: 6.8, hy: 5.2 };
+      const SPIN: H = { ex: 6, ey: 3, hx: 5, hy: 4 };
+      const RAISE: H = { ex: 5.4, ey: 0.2, hx: 2.2, hy: -2.8 };
+      const LOW: H = { ex: 5, ey: 4.6, hx: -1.5, hy: 7.6 };
+      const LOPEN: H = { ex: 6, ey: 3.4, hx: 7.6, hy: 2.4 };
+      const LRAISE: H = { ex: 5, ey: 0.8, hx: 0.6, hy: -1.4 };
+      const LLOW: H = { ex: 4.6, ey: 4.2, hx: 2.6, hy: 6.8 };
+      const SEQ: Record<NonNullable<Pose['reap']>, [[H, H, number], [H, H, number]]> = {
+        reach: [[DOWN, BACK, k], [DOWN, LOPEN, k]],
+        summon: [[BACK, BACK, k], [LOPEN, LOPEN, k]],
+        hold: [[BACK, HOLD, Math.min(1, k * 2.5)], [LOPEN, DOWN, Math.min(1, k * 2.5)]],
+        spin: [[HOLD, SPIN, Math.min(1, k * 3)], [DOWN, DOWN, k]],
+        raise: [[SPIN, RAISE, k], [DOWN, LRAISE, k]],
+        slash: [[RAISE, LOW, fast], [LRAISE, LLOW, fast]],
+        fade: [[LOW, LOW, k], [LLOW, LLOW, k]],
+        lower: [[LOW, DOWN, k], [LLOW, DOWN, k]],
+      };
+      const [right, left] = SEQ[rp];
+      hands = [];
+      for (const sg of [-1, 1]) {
+        const [from, to, kk] = sg < 0 ? left : right;
+        const at = (key: keyof H) => lerp(from[key], to[key], kk);
+        const sx = cx + sg * 4.2, sy0 = sy + 1.3;
+        const ex = cx + sg * at('ex'), ey = sy + at('ey');
+        const hx = cx + sg * at('hx'), hy = sy + at('hy');
+        capsule(p, sx, sy0, ex, ey, 1.35, R.shirt);
+        capsule(p, ex, ey, hx, hy, 1.2, C);
+        ball(p, hx, hy, 1.15, 1.05, R.skin);
+        hands.push([hx, hy]);
+      }
+      // 镰刀角度：竖着略向右倾，旋镰绕手转一整圈，举镰时再往右歪一点，横扫从右上扫到左下
+      const UPR = Math.PI - 0.15;
+      const a = rp === 'spin' ? UPR + ease(rk) * TAU : rp === 'raise' ? lerp(UPR, Math.PI - 0.55, k) : rp === 'slash' ? lerp(Math.PI - 0.55, -0.75, fast) : rp === 'fade' ? -0.75 : UPR;
+      if (rp !== 'reach' && rp !== 'lower') scythe = { hx: hands[1][0], hy: hands[1][1], a, grow: rp === 'summon' ? ease(rk) : 1, fade: rp === 'fade' ? rk : 0, flip: -1 };
     } else {
       arm(cx - 4.4, l);
       arm(cx + 4.4, r);
@@ -950,14 +1076,19 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
 
   // ---- 头 ----
   drawHead(p, o, R, cx, headY, pose);
+  if (scythe) blade = drawScythe(p, scythe, pose);
 
   if (up && !bare) capsule(p, cx - 4.3, sy - 0.2, cx + 4.3, sy - 0.2, 1.5, R.roll);
 
   // ---- 前面的手臂和工具 ----
   if (side) {
-    const arm = sideArm(pose.armF ?? 0, pose.elbowF ?? 0, pose.reach ?? 0, 0);
+    const rs = float && pose.reap ? reapSide(pose) : null;
+    const arm = sideArm(rs ? rs.armF : pose.armF ?? 0, rs ? rs.elbowF : pose.elbowF ?? 0, pose.reach ?? 0, 0);
     const tool = pose.tool ?? 'none';
-    if (tool !== 'none' && tool !== 'greatshield') drawTool(p, tool, arm.hx, arm.hy, arm.a + (pose.toolTurn ?? 0), pose);
+    if (rs?.show) {
+      scythe = { hx: arm.hx, hy: arm.hy, a: rs.a, grow: rs.grow, fade: rs.fade, flip: -1 };
+      blade = drawScythe(p, scythe, pose);
+    } else if (tool !== 'none' && tool !== 'greatshield') drawTool(p, tool, arm.hx, arm.hy, arm.a + (pose.toolTurn ?? 0), pose);
     arm.draw();
     if (tool === 'greatshield') drawGreatShield(p, arm.hx, arm.hy);
     hands = [[back!.hx, back!.hy], [arm.hx, arm.hy]];
@@ -972,8 +1103,76 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
   if (o.offhand === 'shield' && down) drawShield(p, cx - 5.6, sy + 3.2, 'front');
   if (o.offhand === 'shield' && up) drawShield(p, cx - 2.6, sy + 1.4, 'back');
   const out = p.outlineTinted();
-  if (o.fx) drawFx(out, o, pose, { cx, sy, hipY, headY, lantern, hands });
+  if (o.fx) drawFx(out, o, pose, { cx, sy, hipY, headY, lantern, hands, blade, scythe });
   return out;
+}
+
+/** 镰刀先画在一张空图上再拷过来：散掉时按像素哈希一格格消失（同一格每帧的哈希一样，所以是渐渐散而不是乱闪） */
+function drawScythe(p: Pix, s: { hx: number; hy: number; a: number; grow: number; fade: number; flip: number }, pose: Pose) {
+  const tp = new Pix(p.w, p.h);
+  tp.ox = p.ox;
+  tp.oy = p.oy;
+  const edge = drawTool(tp, 'scythe', s.hx, s.hy, s.a, { ...pose, toolGrow: s.grow, bladeFlip: s.flip });
+  for (let i = 0; i < tp.data.length; i++) {
+    const c = tp.data[i];
+    if (!c || (s.fade > 0 && phash(i % p.w, Math.floor(i / p.w), 5) < s.fade)) continue;
+    p.data[i] = c;
+  }
+  return edge;
+}
+
+/** 死神侧面掏镰刀的手位：前臂角度、手肘、镰刀的绝对角度（0 朝下、π/2 朝前、π 朝上） */
+function reapSide(pose: Pose) {
+  const rp = pose.reap!;
+  const rk = pose.reapK ?? 1;
+  const k = ease(rk);
+  const fast = ease(Math.min(1, rk * 2.2));
+  type A = [number, number, number];
+  const REST: A = [0.1, 0.25, 0], BACK: A = [3.4, 0.4, Math.PI - 0.4], HOLD: A = [0.9, 1, Math.PI - 0.15], SPIN: A = [1.2, 0.9, Math.PI - 0.15], RAISE: A = [2.6, 0.5, Math.PI + 0.45], LOW: A = [0.5, 0.9, 0.9];
+  const SEQ: Record<NonNullable<Pose['reap']>, [A, A, number]> = {
+    reach: [REST, BACK, k], summon: [BACK, BACK, k], hold: [BACK, HOLD, Math.min(1, k * 2.5)], spin: [HOLD, SPIN, Math.min(1, k * 3)],
+    raise: [SPIN, RAISE, k], slash: [RAISE, LOW, fast], fade: [LOW, LOW, k], lower: [LOW, REST, k],
+  };
+  const [f, to, kk] = SEQ[rp];
+  const a = rp === 'spin' ? SPIN[2] + ease(rk) * TAU : lerp(f[2], to[2], kk);
+  return { armF: lerp(f[0], to[0], kk), elbowF: lerp(f[1], to[1], kk), a, grow: rp === 'summon' ? ease(rk) : 1, fade: rp === 'fade' ? rk : 0, show: rp !== 'reach' && rp !== 'lower' };
+}
+
+/** 死神的下身（用户 10-30：没有腿、飘在半空）：腰下一截破袍子越往下越窄，被风吹着往后飘，下摆撕成缕、末端泛绿散成雾 */
+function drawFloatTail(p: Pix, o: Outfit, R: Ramps, cx: number, hipY: number, pose: Pose) {
+  const side = pose.dir === 'side';
+  const wave = pose.cape ?? 0;
+  const C = R.coat;
+  const G = o.glow ?? ['#1a7a40', '#4ae080', '#d8ffe8'];
+  const top = Math.floor(hipY) - 1;
+  const len = 8;
+  const seed = pose.seed ?? 0;
+  for (let y = top; y <= top + len; y++) {
+    const k = (y - top) / len;
+    // 往后（侧面是往左）飘：越往下偏得越多，走路时摆得更开
+    const drift = side ? -(k * k * (3.5 + wave * 1.2)) : Math.sin(k * 2.2 + wave * 0.5) * k * 1.2;
+    const hw = side ? 3 * (1 - k) + 0.8 : k < 0.3 ? 4 + k * 2 : 4.6 - (k - 0.3) * 5.2;
+    const mid = cx + drift + (side ? 0.3 : 0);
+    const l = mid - hw, r = mid + hw;
+    for (let x = Math.floor(l); x <= Math.ceil(r); x++) {
+      const px = x + 0.5;
+      if (px < l || px > r) continue;
+      const hem = top + len - phash(x, 7, 17) * 3;
+      if (y > hem) continue;
+      const nx = ((px - mid) / (hw || 1)) * 0.9;
+      const ph = Math.sin(x * 0.95 + k * 1.8 + wave * 0.4);
+      const dim = ph < -0.45 ? 1 : 0;
+      const lit = ph > 0.55 ? 0.5 : 0;
+      p.set(x, y, y > hem - 1 ? mix(C[1], G[0], 0.6) : tone(C, nx * 0.6 + lit, 0.15 - lit * 0.6, dim));
+    }
+  }
+  // 袍尾下散开的几点雾
+  for (let j = 0; j < 4; j++) {
+    const ph = ((pose.t ?? 0) * 1.5 + j * 0.25 + (seed % 5) * 0.03) % 1;
+    const x = cx + (side ? -3 - j * 1.6 - ph * 3 : (j - 1.5) * 2.4 + Math.sin(ph * 6 + j) * 1.2);
+    const y = top + len - 1 + ph * 3 - (side ? j * 0.6 : 0);
+    if (!p.get(Math.round(x), Math.round(y))) p.set(x, y, ph < 0.5 ? mix(C[2], G[0], 0.5) : mix(C[1], G[0], 0.35));
+  }
 }
 
 // ---- 兑换码外观的特殊部件（用户 10-23：南瓜提灯人、幽蓝南瓜、白发魔骑、红黑小丑、骸骨术士） ----
@@ -1003,6 +1202,7 @@ function drawSpecialHead(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, po
   const ey = Math.round(cy + 0.2);
 
   if (o.head === 'voidhood') return drawVoidHood(p, o, R, cx, cy, pose);
+  if (o.head === 'reaper') return drawReaperHead(p, o, R, cx, cy, pose);
   if (o.head === 'pumpkin' || o.head === 'voidpumpkin') {
     // 扁圆的南瓜，五道竖棱，顶上一截弯梗和一片叶子
     ball(p, hx, cy - 0.2, side ? 5.2 : 5.7, 4.7, H);
@@ -1247,6 +1447,71 @@ function drawVoidHood(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose:
     if (side) p.set(x + 2, ey, bright ? c[1] : c[0]);
     else if (bright) p.set(x + (x < hx ? -1 : 1), ey, c[0]);
     p.set(x, ey + 1, c[0]);
+  }
+}
+
+const BONE = ['#5a584e', '#8a887c', '#b8b6aa', '#dcdad0', '#f6f4ec'];
+/** 死神（用户 10-30）：深兜帽罩着头，帽兜在脑后松松垂下一截；帽口一团黑，黑暗里浮着一张骷髅脸，眼窝里烧着幽绿魂火 */
+function drawReaperHead(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose: Pose) {
+  const side = pose.dir === 'side';
+  const up = pose.dir === 'up';
+  const wave = pose.cape ?? 0;
+  const HD = R.coat;
+  const hx = side ? cx + 0.5 : cx;
+  const G = o.glow ?? ['#1a7a40', '#4ae080', '#d8ffe8'];
+  if (side) {
+    ball(p, hx - 2.2 + wave * 0.1, cy - 1, 5.2, 5.2, HD, 1);
+    ball(p, hx - 0.4, cy - 0.6, 5.2, 5.4, HD);
+    capsule(p, hx - 4.6, cy + 0.6, hx - 5.4 - wave * 0.3, cy + 5.4, 2.2, HD, 1);
+    capsule(p, hx + 2.8, cy + 3.2, hx + 3.4, cy + 5.4, 1.5, HD);
+    for (let i = 0; i < 3; i++) p.paint(hx - 2.4 - i * 2, cy - 0.4 - i * 0.8, HD[0]);
+  } else {
+    ball(p, hx, cy - 0.6, 5.5, 5.3, HD);
+    // 帽兜往左后方垂下去，走路时轻晃
+    const fold: [number, number][] = [[hx - 1.5, cy - 4.4], [hx - 4.2, cy - 4 + wave * 0.15], [hx - 6.2 - wave * 0.3, cy - 2 + wave * 0.4], [hx - 6.4 - wave * 0.3, cy + 1 + wave * 0.5]];
+    for (let i = 1; i < fold.length; i++) capsule(p, fold[i - 1][0], fold[i - 1][1], fold[i][0], fold[i][1], 2.2 - i * 0.45, HD, i > 1 ? 1 : 0);
+    for (let i = 0; i < 3; i++) p.paint(hx - 3.2 - i * 1.1, cy - 3.4 + i * 1.5, HD[0]);
+  }
+  if (up) return;
+  const VOID = ['#040306', '#040306', '#08060c', '#08060c', '#0c0a12'];
+  const fx0 = side ? hx + 2 : hx;
+  const top = side ? cy - 2.4 : cy - 2.8;
+  const chin = side ? cy + 3.4 : cy + 3.8;
+  const hw = side ? 3 : 4;
+  const isFace = (x: number, y: number) => {
+    const px = x + 0.5, py = y + 0.5;
+    if (py > chin || py < top) return false;
+    const dx = Math.abs(px - fx0);
+    if (side) {
+      const dy = (py - (top + chin) / 2) / ((chin - top) / 2);
+      return (dx / hw) * (dx / hw) + dy * dy <= 1;
+    }
+    const r = Math.min(1, (py - top) / hw);
+    return dx <= (r < 1 ? Math.sqrt(Math.max(0, 1 - (1 - r) * (1 - r))) * hw : hw);
+  };
+  ball(p, fx0, (top + chin) / 2, hw + 1, (chin - top) / 2 + 1, VOID, 0, isFace);
+  // 骷髅：圆颅骨、窄下颌、一排牙、鼻孔
+  const sx = side ? fx0 + 0.6 : fx0;
+  const sy0 = (top + chin) / 2 - 0.2;
+  ball(p, sx, sy0 - 0.4, side ? 2.4 : 3.1, 2.6, BONE, 0, isFace);
+  ball(p, sx, sy0 + 2, side ? 1.8 : 2.2, 1.3, BONE, 1, isFace);
+  const ty = Math.round(sy0 + 2.4);
+  for (let i = side ? -1 : -2; i <= 2; i++) p.set(Math.round(sx) + i, ty, i & 1 ? BONE[4] : '#1a1418');
+  p.set(Math.round(sx) + (side ? 1 : 0), Math.round(sy0 + 0.8), '#1a1418');
+  if (side) p.set(Math.round(sx) + 1, Math.round(sy0 + 0.4), '#1a1418');
+  // 眼窝：两个黑洞，里面一点魂火忽明忽暗；旋镰、举镰、横扫时烧得更旺，往上冒出一截
+  const ey = Math.round(sy0 - 0.6);
+  const bright = flicker(pose, 2) > 0.4;
+  const blaze = pose.reap === 'raise' || pose.reap === 'slash' || pose.reap === 'spin';
+  const eyes = side ? [Math.round(sx) + 1] : [Math.round(sx) - 2, Math.round(sx) + 1];
+  for (const x of eyes) {
+    p.rect(x, ey - 1, 2, 2, '#0a0810');
+    const inner = side ? x : x < sx ? x + 1 : x;
+    p.set(x, ey, G[1]);
+    p.set(x + 1, ey, G[1]);
+    p.set(inner, ey, bright || blaze ? G[2] : G[1]);
+    p.set(inner, ey - 1, blaze ? G[1] : bright ? G[0] : '#0a0810');
+    if (blaze) p.set(inner, ey - 2, bright ? G[1] : G[0]);
   }
 }
 
@@ -1617,8 +1882,8 @@ function drawCloak(p: Pix, o: Outfit, cx: number, sy: number, hipY: number, pose
   const side = pose.dir === 'side';
   const up = pose.dir === 'up';
   // 咒师的袍子：下摆撑得更开，像一只钟
-  const bell = o.head === 'voidhood';
-  const bottom = hipY + (up ? 4.5 : bell && !side ? 5 : 4);
+  const bell = o.head === 'voidhood' || !!o.float;
+  const bottom = hipY + (up ? 4.5 : bell && !side ? (o.float ? 3.5 : 5) : 4);
   for (let y = Math.floor(sy - 0.5); y <= Math.ceil(bottom); y++) {
     const k = (y - sy) / (bottom - sy);
     let l: number, r: number;
@@ -1685,7 +1950,8 @@ function drawLantern(p: Pix, o: Outfit, hx: number, hy: number, pose: Pose, hidd
 }
 
 /** 粒子特效：画在描边之后，不带黑边；按帧进度循环，位置用哈希打散 */
-function drawFx(p: Pix, o: Outfit, pose: Pose, at: { cx: number; sy: number; hipY: number; headY: number; lantern: [number, number] | null; hands: [number, number][] }) {
+interface FxAt { cx: number; sy: number; hipY: number; headY: number; lantern: [number, number] | null; hands: [number, number][]; blade?: [number, number][]; scythe?: { hx: number; hy: number; a: number; grow: number; fade: number; flip: number } | null }
+function drawFx(p: Pix, o: Outfit, pose: Pose, at: FxAt) {
   const t = pose.t ?? 0;
   const seed = pose.seed ?? 0;
   const G = o.glow ?? ['#c84a10', '#ffa020', '#fff0a0'];
@@ -1694,6 +1960,7 @@ function drawFx(p: Pix, o: Outfit, pose: Pose, at: { cx: number; sy: number; hip
     if (x >= -HERO_PAD.l && y >= -HERO_PAD.t && x < HERO_W + HERO_PAD.r && y < HERO_H + HERO_PAD.b) p.set(x, y, c);
   };
   if (o.fx === 'frostfire') return drawFrostfireFx(p, o, pose, at, put);
+  if (o.fx === 'soulfire') return drawSoulfireFx(p, o, pose, at, put);
   if (o.fx === 'embers' || o.fx === 'wisps') {
     // 火星 / 鬼火：从灯里往上飘，越往上越暗，到头就灭
     const src: [number, number][] = [];
@@ -1753,6 +2020,198 @@ function drawFx(p: Pix, o: Outfit, pose: Pose, at: { cx: number; sy: number; hip
   }
 }
 
+const SOUL = ['#0e3a24', '#1a7a40', '#4ae080', '#a8ffc8', '#f0fff4'];
+/** 3×3 的小骷髅魂：骨白的脑壳、两个暗绿的眼窝、一格下巴 */
+function soulSkull(put: (x: number, y: number, c: string) => void, x: number, y: number, c: string, eye = SOUL[1]) {
+  for (const dx of [-1, 0, 1]) { put(x + dx, y - 1, c); put(x + dx, y, dx ? eye : c); }
+  put(x, y + 1, c);
+  put(x - 1, y + 1, SOUL[2]);
+  put(x + 1, y + 1, SOUL[2]);
+}
+/**
+ * 死神的魂火特效（用户 10-30：百帧、精美、镰刀炫酷）：
+ * 常驻：脚下一圈幽绿的雾打转（人是飘着的）、袍尾往上飘魂火丝、三颗小骷髅魂绕身慢转；
+ * 掏镰刀：魂火被吸进手里 → 白绿闪光里镰刀成形、冲击环散开 → 刀背烧着魂火、火星飘落 → 旋镰留残影 → 举镰时绕身一圈绿符文、眼火冲天 →
+ * 横扫拉出一道绿白的月牙刀光、刀光里飞出魂魄、地上裂开绿光 → 镰刀散成往上飘的光点
+ */
+function drawSoulfireFx(p: Pix, o: Outfit, pose: Pose, at: FxAt, put: (x: number, y: number, c: string) => void) {
+  const t = pose.t ?? 0;
+  const seed = pose.seed ?? 0;
+  const { cx, sy, hipY, headY, hands, blade, scythe } = at;
+  const empty = (x: number, y: number, c: string) => { if (!p.get(Math.round(x), Math.round(y))) put(x, y, c); };
+  const rp = pose.reap;
+  const k = pose.reapK ?? 1;
+  const side = pose.dir === 'side';
+  const up = pose.dir === 'up';
+  // ---- 脚下的雾：一圈在地上打转的暗绿雾点，偶尔冒起一点亮的 ----
+  const gy = HERO_FEET - 0.6;
+  for (let j = 0; j < 14; j++) {
+    const a = (j / 14) * TAU + t * TAU * 0.5;
+    const r = 0.55 + phash(j, 2, 9) * 0.45;
+    const x = cx + Math.cos(a) * 8 * r;
+    const y = gy + Math.sin(a) * 2.2 * r;
+    empty(x, y, j % 4 ? SOUL[0] : SOUL[1]);
+    if (j % 5 === 0 && flicker(pose, 2 + j) > 0.7) empty(x, y - 1, SOUL[1]);
+  }
+  // ---- 袍尾往上飘的魂火丝 ----
+  for (let j = 0; j < 5; j++) {
+    const ph = (t * 1.3 + j * 0.2 + (seed % 7) * 0.02) % 1;
+    if (ph > 0.9) continue;
+    const x = cx + (j - 2) * 3.2 + Math.sin(ph * 7 + j * 2) * 1.6;
+    const y = hipY + 6 - ph * 16;
+    empty(x, y, ph < 0.3 ? SOUL[3] : ph < 0.6 ? SOUL[2] : SOUL[1]);
+    if (ph < 0.5) empty(x, y + 1, SOUL[1]);
+  }
+  // ---- 三颗小骷髅魂绕着身子慢慢转：转到身后的那颗被身体挡住 ----
+  for (let j = 0; j < 3; j++) {
+    const a = (j / 3) * TAU + t * TAU * 0.6;
+    const x = Math.round(cx + Math.cos(a) * 11);
+    const y = Math.round(sy + 2 + Math.sin(a) * 3.5 - Math.sin(t * TAU * 2 + j) * 1);
+    if (Math.sin(a) < -0.2) continue;
+    soulSkull(Math.sin(a) > 0.3 ? put : empty, x, y, Math.sin(a) > 0.5 ? SOUL[4] : SOUL[3]);
+  }
+  if (!rp) return;
+  const grip = scythe ? [scythe.hx, scythe.hy] : hands[hands.length - 1];
+  if (!grip) return;
+  const [gx, gy2] = grip;
+  if (rp === 'reach') {
+    // 魂火从四面八方被吸进伸出去的那只手，另一只手掌心聚起一团绿光
+    if (k < 0.3) return;
+    for (let j = 0; j < 12; j++) {
+      const ph = 1 - ((t * 3 + j * 0.1 + phash(j, 1, 9) * 0.4) % 1);
+      const a = (j / 12) * TAU + j * 0.7;
+      const r = 1.5 + ph * 11;
+      empty(gx + Math.cos(a) * r, gy2 + Math.sin(a) * r * 0.7, ph < 0.3 ? SOUL[3] : ph < 0.6 ? SOUL[2] : SOUL[1]);
+    }
+    if (!side && hands[0]) {
+      const [lx, ly] = hands[0];
+      const g = (k - 0.3) / 0.7;
+      put(lx, ly - 2, flicker(pose, 3) > 0.5 ? SOUL[3] : SOUL[2]);
+      if (g > 0.4) { put(lx - 1, ly - 2, SOUL[1]); put(lx + 1, ly - 2, SOUL[1]); put(lx, ly - 3, SOUL[1]); }
+    }
+    return;
+  }
+  if (rp === 'summon') {
+    // 手里炸开一团白绿的光：八道光芒先长后缩，一圈冲击环往外散，镰刀在光里成形
+    const burst = Math.sin(Math.min(1, k * 1.3) * Math.PI);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * TAU + 0.3;
+      const len = 2 + burst * 9;
+      for (let r = 1.5; r < len; r += 0.7) empty(gx + Math.cos(a) * r, gy2 + Math.sin(a) * r, r < len * 0.5 ? SOUL[4] : r < len * 0.8 ? SOUL[3] : SOUL[2]);
+    }
+    const rr = k * 13;
+    for (let i = 0; i < 48; i++) {
+      const a = (i / 48) * TAU;
+      empty(gx + Math.cos(a) * rr, gy2 + Math.sin(a) * rr * 0.6, k < 0.5 ? SOUL[3] : SOUL[1]);
+    }
+    if (k < 0.5) for (let i = 0; i < 48; i += 2) { const a = (i / 48) * TAU; empty(gx + Math.cos(a) * rr * 0.6, gy2 + Math.sin(a) * rr * 0.4, SOUL[4]); }
+    if (!side && hands[0]) {
+      const [lx, ly] = hands[0];
+      put(lx, ly - 2, SOUL[3]);
+      put(lx, ly - 3, SOUL[2]);
+    }
+  }
+  if (!blade || !scythe) return;
+  // ---- 刀背上的魂火：每隔一点起一簇，举镰时最高，散掉时跟着变矮；火星从刀上飘下来 ----
+  const heat = rp === 'summon' ? k * 0.6 : rp === 'hold' ? 0.7 + 0.3 * Math.min(1, k * 3) : rp === 'spin' ? 0.8 : rp === 'raise' ? 1 + k * 0.8 : rp === 'slash' ? 1.5 : rp === 'fade' ? 1 - k : 1;
+  if (heat > 0.05) {
+    for (let i = 0; i < blade.length; i += 2) {
+      const [bx, by] = blade[i];
+      const s = i / (blade.length - 1);
+      const h = Math.round((2.5 + s * 3) * heat + 0.5);
+      flameField(empty, bx, by, 2.2, h, t, seed + i * 3, SOUL, (scythe.flip < 0 ? 1 : -1) * 0.4);
+    }
+    for (let j = 0; j < 6; j++) {
+      const ph = (t * 3 + j * 0.17 + phash(j, 4, 9) * 0.5) % 1;
+      if (ph > heat * 0.7) continue;
+      const [bx, by] = blade[Math.min(blade.length - 1, Math.floor(phash(j, seed % 3, 5) * blade.length))];
+      empty(bx + Math.sin(ph * 10 + j) * 1.5, by - 2 - ph * 7, ph < 0.4 ? SOUL[3] : ph < 0.7 ? SOUL[2] : SOUL[1]);
+    }
+  }
+  if (rp === 'spin') {
+    // 旋镰的残影：刀刃在稍早两个角度的位置留两道越来越淡的暗绿影子（隔点画）
+    for (const [back, c] of [[0.45, SOUL[1]], [0.9, SOUL[0]]] as [number, string][]) {
+      const pts = scytheEdge(gx, gy2, scythe.a - back, scythe.flip);
+      for (let i = 0; i < pts.length; i++) {
+        if ((i + Math.floor(back * 4)) % 2) continue;
+        const [x, y] = pts[i];
+        empty(x, y, c);
+        empty(x, y + 1, SOUL[0]);
+      }
+    }
+    // 刀尖拖出的光迹
+    const tip = blade[blade.length - 1];
+    for (let j = 1; j <= 5; j++) {
+      const pts = scytheEdge(gx, gy2, scythe.a - j * 0.12, scythe.flip);
+      const [x, y] = pts[pts.length - 1];
+      empty(x, y, j < 3 ? SOUL[3] : SOUL[2]);
+    }
+    empty(tip[0], tip[1] - 1, SOUL[4]);
+  }
+  if (rp === 'raise') {
+    // 绕身一圈绿符文，身后的被身体挡住；两眼的魂火冲上去一截
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * TAU + t * TAU * 1.2;
+      const ox = Math.round(cx + Math.cos(a) * 11);
+      const oy = Math.round(sy + 3 + Math.sin(a) * 3.2);
+      const rune = RUNES[(i + Math.floor(t * 6)) % RUNES.length];
+      const c = Math.sin(a) > 0 ? SOUL[3] : SOUL[2];
+      for (let j = 0; j < 9; j++) if (rune[j]) empty(ox + (j % 3) - 1, oy + Math.floor(j / 3) - 1, c);
+    }
+    if (!up) for (const [dx, h] of side ? [[3, 3]] : [[-2, 3], [2, 3]]) for (let j = 1; j <= h; j++) empty(cx + dx + (j > 1 ? Math.sin(t * TAU * 4 + j) * 0.8 : 0), headY - 1 - j, j === 1 ? SOUL[3] : j === 2 ? SOUL[2] : SOUL[1]);
+  }
+  if (rp === 'slash') {
+    // 刀光：以手为圆心，从起手角度到当前角度拉出一道两格厚的绿白月牙，越靠近刀刃越亮、越早的越暗越稀
+    const a0 = side ? Math.PI + 0.45 : Math.PI - 0.55;
+    const a1 = scythe.a;
+    const span = a0 - a1;
+    const n = Math.max(2, Math.ceil(Math.abs(span) * 18));
+    for (let i = 0; i <= n; i++) {
+      const f = i / n;
+      const a = lerp(a0, a1, f);
+      const age = 1 - f;
+      if (age > 0.75 && (i & 1)) continue;
+      for (const r of [13, 14.2, 15.4, 16.6]) {
+        if (r > 15 && age > 0.5) continue;
+        const [dx, dy] = v(a, r);
+        const [px, py] = v(a + Math.PI / 2, (r - 12) * 0.9 * scythe.flip);
+        const c = age < 0.15 ? SOUL[4] : age < 0.4 ? SOUL[3] : age < 0.7 ? SOUL[2] : SOUL[1];
+        empty(gx + dx + px, gy2 + dy + py, c);
+      }
+    }
+    // 刀光里飞出来的魂魄和地上的绿光裂纹
+    if (k > 0.4) {
+      const g = (k - 0.4) / 0.6;
+      for (let j = 0; j < 4; j++) {
+        const a = lerp(a0, a1, 0.3 + j * 0.2);
+        const r = 16 + g * 7;
+        const [dx, dy] = v(a, r);
+        soulSkull(empty, Math.round(gx + dx), Math.round(gy2 + dy - g * 3), g < 0.5 ? SOUL[4] : SOUL[3], g < 0.5 ? SOUL[1] : SOUL[0]);
+      }
+      for (let j = 0; j < 7; j++) {
+        if (j / 7 > g * 1.4) continue;
+        const x = cx + (side ? 3 + j * 2.4 : -3 - j * 2.2);
+        const y = HERO_FEET - (j % 2) - (j === 3 ? 1 : 0);
+        empty(x, y, g < 0.6 ? SOUL[2] : SOUL[1]);
+        empty(x + 1, y, SOUL[0]);
+      }
+    }
+  }
+  if (rp === 'fade') {
+    // 镰刀散成光点往上飘
+    for (let i = 0; i < blade.length; i += 2) {
+      const ph = (k + phash(i, 3, 7) * 0.5) % 1;
+      const [bx, by] = blade[i];
+      empty(bx + Math.sin(ph * 6 + i) * 1.2, by - ph * 9, ph < 0.4 ? SOUL[3] : ph < 0.7 ? SOUL[2] : SOUL[1]);
+    }
+    const [hx2, hy2] = v(scythe.a, 4);
+    for (let j = 0; j < 4; j++) {
+      const ph = (k * 1.2 + j * 0.25) % 1;
+      empty(gx + hx2 * j * 0.6 + Math.sin(ph * 5 + j) * 1.5, gy2 + hy2 * j * 0.6 - ph * 8, ph < 0.5 ? SOUL[2] : SOUL[1]);
+    }
+  }
+}
+
 // ---- 动作表 ----
 
 const TAU = Math.PI * 2;
@@ -1780,12 +2239,12 @@ const walk = (dir: HeroDir): HeroAnim => ({
         dir, legF: s * 0.52, legB: -s * 0.52,
         kneeF: 0.12 + Math.max(0, c) * 0.95, kneeB: 0.12 + Math.max(0, -c) * 0.95,
         armF: -s * 0.5, armB: s * 0.5, elbowF: 0.3 + Math.max(0, -s) * 0.45, elbowB: 0.3 + Math.max(0, s) * 0.45,
-        cape: 1 + Math.abs(s),
+        cape: 1 + Math.abs(s), hover: -2 + (Math.abs(s) > 0.5 ? -1 : 0),
       };
     }
     return {
       dir, hop: Math.abs(s) > 0.55 ? -1 : 0, legF: Math.max(0, s) * 2.4, legB: Math.max(0, -s) * 2.4,
-      armLift: [Math.max(0, s) * 1.6, Math.max(0, -s) * 1.6], cape: s,
+      armLift: [Math.max(0, s) * 1.6, Math.max(0, -s) * 1.6], cape: s, hover: -2 + (Math.abs(s) > 0.5 ? -1 : 0),
     };
   },
 });
@@ -1796,20 +2255,34 @@ const walk = (dir: HeroDir): HeroAnim => ({
  * 69-76 举剑砸地放冲击波，77-84 剑插在地上再放两道冲击波和地裂光纹，85-90 剑散成光点，91-95 放下手
  */
 const CAST_PHASES: [number, Pose['cast']][] = [[12, undefined], [18, 'rise'], [36, 'raise'], [44, 'merge'], [54, 'orb'], [57, 'flash'], [69, 'beam'], [77, 'slam'], [85, 'wave'], [91, 'fade'], [96, 'lower']];
+/**
+ * 死神掏镰刀（用户 10-30，待机 120 帧、10 帧每秒）：0-19 飘着，20-31 右手探到肩后、左手聚魂火，32-39 镰刀在手里成形，
+ * 40-63 竖镰在身侧烧着魂火，64-79 绕手旋一整圈留残影，80-91 双手举过头顶、符文绕身、眼火冲天，92-99 从右上横扫到左下拉出刀光，
+ * 100-109 镰刀散成光点，110-119 放下手
+ */
+const REAP_PHASES: [number, Pose['reap']][] = [[20, undefined], [32, 'reach'], [40, 'summon'], [64, 'hold'], [80, 'spin'], [92, 'raise'], [100, 'slash'], [110, 'fade'], [120, 'lower']];
+const IDLE_FRAMES = 120;
+/** 按阶段表找出帧 i 所在的阶段和阶段内进度 */
+function phaseOf<T>(table: [number, T][], i: number): [T, number] {
+  let from = 0;
+  for (const [end, c] of table) {
+    if (i < end) return [c, (i - from + 0.5) / (end - from)];
+    from = end;
+  }
+  return [table[table.length - 1][1], 1];
+}
 const idle = (dir: HeroDir): HeroAnim => ({
-  key: `idle-${dir}`, frames: 96, rate: 8,
+  key: `idle-${dir}`, frames: IDLE_FRAMES, rate: 10,
   pose: (t, i) => {
     const b = Math.sin(t * TAU * 8);
-    let from = 0;
-    let cast: Pose['cast'];
-    let castK = 1;
-    for (const [end, c] of CAST_PHASES) {
-      if (i < end) { cast = c; castK = (i - from + 0.5) / (end - from); break; }
-      from = end;
-    }
+    // 冰火咒师的施法表是按 96 帧写的，换算到现在的帧数
+    const [cast, castK] = phaseOf(CAST_PHASES, (i * 96) / IDLE_FRAMES);
+    const [reap, reapK] = phaseOf(REAP_PHASES, i);
     return {
       dir, bob: b > 0.3 ? 1 : 0, legF: 0.12, legB: -0.1, armF: 0.1 + b * 0.05, armB: -0.1,
-      elbowF: 0.25, elbowB: 0.2, cape: Math.round(1 + b), blink: i === 5 || i === 63, cast, castK,
+      elbowF: 0.25, elbowB: 0.2, cape: Math.round(1 + b), blink: i === 6 || i === 79, cast, castK, reap, reapK,
+      // 飘着的外观：慢慢上下浮
+      hover: -2 + Math.round(Math.sin(t * TAU * 3) * 1.4),
     };
   },
 });

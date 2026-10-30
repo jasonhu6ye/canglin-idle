@@ -36,6 +36,9 @@ export const hwTierOf = (monsterId: string) => {
  */
 export const HW_MOUNT = 'mount_pumpkin';
 export const HW_MOUNT_COST = 1000;
+/** 死神皮肤「幽冥死神」（用户 10-30）：用南瓜积分兑换，解锁后在衣橱换上，每个存档一次 */
+export const HW_SKIN = 'reaper';
+export const HW_SKIN_COST = 800;
 export const HW_REVEAL = new Date(2026, 9, 30).getTime();
 export const hwShopOpen = (now: number) => now >= HW_REVEAL;
 
