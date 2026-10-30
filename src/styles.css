@@ -721,6 +721,9 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .hw-cards figcaption { padding: 6px; font-size: 11px; line-height: 1.5; }
 .hw-cards figcaption b { color: #ffb050; }
 @media (max-width: 520px) { .hw-cards { grid-template-columns: 1fr; } .hw-cards img, .hw-king-box { aspect-ratio: 2 / 1; object-fit: contain; background: #1a0c24; } }
+.hw-cards img.hw-mount-img { object-fit: contain; background: radial-gradient(circle at 50% 60%, #6a2a10, #1a0c24 70%); }
+.hw-cards:has(.hw-mount-img) { grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 520px) { .hw-cards:has(.hw-mount-img) { grid-template-columns: 1fr; } }
 .hw-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .hw-table th, .hw-table td { padding: 4px 6px; border-bottom: 1px solid rgba(160, 80, 255, 0.25); text-align: left; }
 .hw-table th { color: #d0a0ff; }

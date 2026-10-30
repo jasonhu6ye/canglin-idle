@@ -51,6 +51,8 @@ export const setSpeedMultiplier = (m: number) => {
 
 const DRAG_THRESHOLD = 8;
 const FONT = '"PingFang SC","Microsoft YaHei",sans-serif';
+/** 祭坛旁边摆着的南瓜坐骑比骑的大一点，远远能看清 */
+const PK_SHOW = 1.3;
 const CHIMNEY: Record<string, boolean> = { furnace: true, hall: true, smithy: true, inn: true, house: true, house3: true, atelier: true, manor: true, thatch: true };
 
 export const NODE_CLICK = 'node-click';
@@ -889,6 +891,7 @@ export class MapScene extends Phaser.Scene {
     this.syncMount();
     this.stepRider();
     this.stepPumpkin(time);
+    this.stepShowcase(time);
     this.stepKeys(time);
     this.stepHold(time);
     this.stepWalker(delta);
@@ -1308,6 +1311,31 @@ export class MapScene extends Phaser.Scene {
       fontFamily: FONT, fontSize: '9px', color: '#ffb050', stroke: '#1a0820', strokeThickness: 3, resolution: 4, align: 'center',
     }).setOrigin(0.5, 1).setDepth(D_LABEL);
     this.add.zone(cx, cy - 50, T * 6, T * 6).setInteractive({ useHandCursor: true }).setData('node', n.id);
+    this.addPumpkinShowcase(cx + 54, cy - T / 2 + 2);
+  }
+
+  /** 祭坛旁边摆着的南瓜坐骑（用户 10-30：做出来摆上去、开启积分兑换），点它和点祭坛一样打开兑换 */
+  private showcase?: { fx: PumpkinFx; back: Phaser.GameObjects.Sprite; front: Phaser.GameObjects.Sprite };
+  private addPumpkinShowcase(x: number, y: number) {
+    ensureMountTex(this, 'pumpkin');
+    const depth = y + 1000;
+    const back = this.add.sprite(x, y, 'mount-pumpkin').setOrigin(0.5, WOLF_FEET / WOLF_H).setDepth(depth).setFlipX(true);
+    const front = this.add.sprite(x, y, 'mount-pumpkin').setOrigin(0.5, WOLF_FEET / WOLF_H).setDepth(depth + 0.5).setFlipX(true);
+    back.play('mount:pumpkin-idle-side-b');
+    front.play('mount:pumpkin-idle-side-f');
+    for (const sp of [back, front]) sp.setScale(PK_SHOW);
+    this.add.text(x, y - 46, tl('南瓜灵驹\n积分兑换'), {
+      fontFamily: FONT, fontSize: '8px', color: '#ffd86a', stroke: '#1a0820', strokeThickness: 3, resolution: 4, align: 'center',
+    }).setOrigin(0.5, 1).setDepth(D_LABEL);
+    this.showcase = { fx: new PumpkinFx(this), back, front };
+  }
+  private stepShowcase(time: number) {
+    const sc = this.showcase;
+    if (!sc) return;
+    const view = this.cameras.main.worldView;
+    if (!Phaser.Geom.Rectangle.Contains(view, sc.front.x, sc.front.y - 20)) return sc.fx.step(time, null);
+    const eyes = pumpkinEyes(String(sc.front.anims.currentFrame?.frame.name ?? '')).map(([ex, ey]): [number, number] => [sc.front.x - ex * PK_SHOW, sc.front.y + ey * PK_SHOW]);
+    sc.fx.step(time, { x: sc.back.x, y: sc.back.y, moving: false, dir: 0, depth: sc.front.depth, lite: true, eyes });
   }
 
   /** 城镇畜牧站（用户 10-24）：马厩 + 马场，栏里有小马崽时马场里就站着小马，会抬头甩尾 */

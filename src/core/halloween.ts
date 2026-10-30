@@ -1,7 +1,7 @@
 import { tl } from '../i18n';
 /*
  * 万圣节限定活动（用户 10-24）：苍岭城东边的活动祭坛可以召唤南瓜王，
- * 5 档难度（30 级起），每小时召唤一次，打赢掉南瓜礼盒，礼盒开出南瓜积分（活动结束前拿去兑换，兑换商店后续开放）。
+ * 5 档难度（30 级起），每小时召唤一次，打赢掉南瓜礼盒，礼盒开出南瓜积分（在祭坛面板兑换南瓜坐骑）。
  * 活动到 11 月 1 日 0 点（本地时间）关闭。这里只放常量和纯函数，data/sim/ui 都从这里取。
  */
 
@@ -31,12 +31,12 @@ export const hwTierOf = (monsterId: string) => {
 
 /**
  * 南瓜坐骑（用户 10-27）：用南瓜积分兑换，移速 +200%。
- * 先不公布：10 月 31 日 0 点（本地，活动最后一天）以前界面上看不到它和价格，之后才显示、才能换；
+ * 用户 10-30 要求提前公开：从 10 月 30 日 0 点（本地）起祭坛面板显示、可以兑换，祭坛旁边摆着一只；
  * 活动结束后积分还能拿来换。每个存档限一只。
  */
 export const HW_MOUNT = 'mount_pumpkin';
 export const HW_MOUNT_COST = 1000;
-export const HW_REVEAL = new Date(2026, 9, 31).getTime();
+export const HW_REVEAL = new Date(2026, 9, 30).getTime();
 export const hwShopOpen = (now: number) => now >= HW_REVEAL;
 
 export const hwOpen = (now: number) => now < HW_END;

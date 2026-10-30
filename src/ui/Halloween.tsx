@@ -63,7 +63,7 @@ function KingAnim({ d, size = 96 }: { d: number; size?: number }) {
   return <canvas ref={ref} width={96} height={96} className="hw-king" style={{ width: size, height: size }} />;
 }
 
-/** 南瓜积分兑换（10-27）：南瓜坐骑，10 月 31 日以前不显示 */
+/** 南瓜积分兑换（10-27）：南瓜坐骑，10 月 30 日起显示（用户 10-30 提前开启） */
 function PumpkinShop({ s, now }: { s: GameState; now: number }) {
   if (!hwShopOpen(now)) return null;
   const pts = s.bank[HW_POINT] ?? 0;
@@ -228,6 +228,12 @@ export function HalloweenNotice() {
               <img src={posterRewardUrl()} alt="" />
               <figcaption><b>{tl('③ 南瓜礼盒')}</b>{tl('打开得 8-15 南瓜积分和金币，积分直接存进仓库。')}</figcaption>
             </figure>
+            {hwShopOpen(now) && (
+              <figure>
+                <img src={pumpkinMountIconUrl()} alt="" className="hw-mount-img" />
+                <figcaption><b>{tl('④ 南瓜灵驹')}</b>{tl`限定坐骑，移动速度 +200%。在祭坛面板用 ${fmtNum(HW_MOUNT_COST)} 南瓜积分兑换，每个存档一只。`}</figcaption>
+              </figure>
+            )}
           </div>
           <h3>{tl('五档难度')}</h3>
           <table className="hw-table">

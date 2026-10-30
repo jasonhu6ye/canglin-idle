@@ -1152,4 +1152,11 @@ export const EN_TEXT: Record<string, string> = {
   "新玩法预告：异域之路": "New mode preview: Otherworld Roads",
   "即将开放「异域之路」：野外会随机亮起异域传送门（小门 2 人、中门 7 人、大门 20 人），门后是随机生成的白石古道网，有 T6-T8 高阶资源、异域守卫看守的绿蓝金三色宝箱，出口通往大陆另一头。道路几个小时后就会消失。": "Coming soon, Otherworld Roads: Otherworld Gates will light up at random in the wilds (small gates for 2, medium for 7, large for 20). Beyond them lies a randomly generated web of white-stone roads with T6-T8 resources, green, blue and gold chests guarded by Otherworld Guardians, and exits to the far side of the continent. The roads vanish after a few hours.",
   "详细介绍和配图会在关掉这条公告后弹出，攻略手册的「副本」里也能再打开。": "An illustrated introduction pops up after you close this note, and you can reopen it from the Dungeons article in the handbook.",
+  "南瓜灵驹\n积分兑换": "Jack o' Lantern Steed\nPoints exchange",
+  "④ 南瓜灵驹": "④ Jack o' Lantern Steed",
+  "限定坐骑，移动速度 +200%。在祭坛面板用 {0} 南瓜积分兑换，每个存档一只。": "Limited mount with +200% movement speed. Trade {0} Pumpkin Points for it in the altar panel, one per save.",
+  "南瓜礼盒在背包里打开，得 8-15 南瓜积分和一些金币，积分直接存进仓库。积分在祭坛面板里兑换限定坐骑「南瓜灵驹」（1000 积分，移动速度 +200%，每个存档一只），活动结束后也能换。": "Open Pumpkin Boxes in your backpack for 8-15 Pumpkin Points and some coins; the points go straight to your bank. Trade points in the altar panel for the limited mount Jack o' Lantern Steed (1000 points, +200% movement speed, one per save). You can still trade after the event ends.",
+  "南瓜坐骑开放兑换": "Pumpkin mount now available",
+  "万圣节限定坐骑「南瓜灵驹」开放兑换：用 1000 南瓜积分在活动祭坛面板里换，移动速度 +200%，每个存档一只。没有腿，靠底下的鬼火飘着飞，眼睛会发光。": "The Halloween-limited mount Jack o' Lantern Steed is now available: trade 1000 Pumpkin Points for it in the event altar panel. +200% movement speed, one per save. It has no legs, floats on the will-o'-wisps beneath it, and its eyes glow.",
+  "南瓜灵驹就摆在苍岭城东门外的活动祭坛旁边，点它也能打开兑换。活动 11 月 1 日结束，结束后手里的积分还能换。": "The steed is on display next to the event altar outside Canglin's east gate; tap it to open the exchange too. The event ends November 1, and leftover points can still be traded afterwards.",
 };
