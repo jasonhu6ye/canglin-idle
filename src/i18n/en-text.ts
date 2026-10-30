@@ -1159,4 +1159,6 @@ export const EN_TEXT: Record<string, string> = {
   "南瓜坐骑开放兑换": "Pumpkin mount now available",
   "万圣节限定坐骑「南瓜灵驹」开放兑换：用 1000 南瓜积分在活动祭坛面板里换，移动速度 +200%，每个存档一只。没有腿，靠底下的鬼火飘着飞，眼睛会发光。": "The Halloween-limited mount Jack o' Lantern Steed is now available: trade 1000 Pumpkin Points for it in the event altar panel. +200% movement speed, one per save. It has no legs, floats on the will-o'-wisps beneath it, and its eyes glow.",
   "南瓜灵驹就摆在苍岭城东门外的活动祭坛旁边，点它也能打开兑换。活动 11 月 1 日结束，结束后手里的积分还能换。": "The steed is on display next to the event altar outside Canglin's east gate; tap it to open the exchange too. The event ends November 1, and leftover points can still be traded afterwards.",
+  "骑乘坐姿优化": "Riding pose improved",
+  "骑坐骑时从正面和背面看，角色改成两腿分开跨坐在坐骑上，不再像站在上面；骑南瓜灵驹时人稳稳坐在南瓜顶上。": "Seen from the front or back, riders now sit astride their mount with legs apart instead of looking like they are standing on it. On the Jack o' Lantern Steed you sit firmly on top of the pumpkin.",
 };

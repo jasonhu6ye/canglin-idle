@@ -8,6 +8,12 @@ import { tl } from '../i18n';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-10-30-f', date: tl('10 月 30 日'), title: tl("骑乘坐姿优化"),
+    lines: [
+      tl("骑坐骑时从正面和背面看，角色改成两腿分开跨坐在坐骑上，不再像站在上面；骑南瓜灵驹时人稳稳坐在南瓜顶上。"),
+    ],
+  },
+  {
     id: '2026-10-30-e', date: tl('10 月 30 日'), title: tl("南瓜坐骑开放兑换"),
     lines: [
       tl("万圣节限定坐骑「南瓜灵驹」开放兑换：用 1000 南瓜积分在活动祭坛面板里换，移动速度 +200%，每个存档一只。没有腿，靠底下的鬼火飘着飞，眼睛会发光。"),
