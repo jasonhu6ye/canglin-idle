@@ -1,4 +1,5 @@
 import { openDungeonNotice } from './DungeonNotice';
+import { openAvalonNotice } from './AvalonNotice';
 import { useSticky } from './sticky';
 import { GUILD_COST } from '../net/api';
 import { EXCHANGE_DAY_MAX, GUILD_MAX_LV, TECH_MAX, VALUE_PER_CONTRIB, VAULT_COST, VAULT_SLOTS } from '../core/guild';
@@ -283,6 +284,7 @@ const ARTICLES: Article[] = [
     id: 'dungeon', cat: tl('装备与战斗'), title: tl('副本：绿洞和蓝洞'),
     body: () => <>
       <p><button className="pill" onClick={openDungeonNotice}>{tl('打开副本玩法公告（带配图）')}</button></p>
+      <p><button className="pill" onClick={openAvalonNotice}>{tl('即将开放：异域之路预告（带配图）')}</button></p>
       <P>{tl('副本钥匙在背包里点「使用」，会在身边空地开一个洞口，30 分钟后消失（已经在里面的人不受影响）。开好后会问要不要自动寻路过去，地图上洞口有绿色或蓝色光柱和倒计时。每个洞口通关（开了宝箱）后就不能再进，没通关可以反复进；每人同时最多开着 2 个，两次开洞口之间要隔 5 分钟。洞口只有开启人、队友和同公会成员看得见。')}</P>
       <ul className="hb-list">
         <li><b>{tl('绿洞')}</b>{tl('：单人地下副本，1-4 层随机，一个人或组队都能进。')}</li>

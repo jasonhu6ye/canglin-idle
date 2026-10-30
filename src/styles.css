@@ -1004,6 +1004,13 @@ h2.dg-blue { color: #6ab4ff; }
 /* 副本公告（10-25） */
 .dg-notice .hw-cards figure { background: rgba(14, 24, 40, 0.7); border-color: #2a5a7a; }
 .dg-notice .hw-cards figcaption b, .dg-notice .hw-lead b { color: #7ad8ff; }
+.av-notice .hw-cards figure { background: rgba(30, 26, 56, 0.7); border-color: #7a6a3a; }
+.av-notice .hw-cards figcaption b, .av-notice .hw-lead b { color: #ffd86a; }
+.av-title { color: #fff2c0; text-shadow: 0 2px 0 #1a1030, 0 0 12px #ffc040, 0 0 2px #000; font-size: 24px; letter-spacing: 6px; }
+.av-title small { color: #c8d0ff; }
+.av-risk-box { display: flex; align-items: center; justify-content: center; aspect-ratio: 4 / 3; font-size: 40px; background: radial-gradient(circle, rgba(255,210,120,0.35), rgba(20,16,40,0.9)); }
+@media (max-width: 520px) { .av-risk-box { aspect-ratio: 2 / 1; } }
+.av-t1 { color: #8ae09a; } .av-t2 { color: #7ab8ff; } .av-t3 { color: #ffd86a; }
 .dg-title { color: #b8f0ff; text-shadow: 0 2px 0 #06101a, 0 0 10px #2a9aff, 0 0 2px #000; font-size: 20px; }
 .dg-title small { color: #ffd86a; }
 .dg-keys-card .dg-keys { aspect-ratio: 4 / 3; display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 4px 8px; background: radial-gradient(circle, rgba(255, 210, 90, 0.25), transparent 70%), linear-gradient(#0e1424, #1a2236); }

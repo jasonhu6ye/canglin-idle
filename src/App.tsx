@@ -16,6 +16,7 @@ import { ItemPopup, LootReveal } from './ui/ItemPopup';
 import { Mailbox } from './ui/Mailbox';
 import { DungeonHud, DungeonPopups } from './ui/Dungeon';
 import { DungeonNotice } from './ui/DungeonNotice';
+import { AvalonNotice } from './ui/AvalonNotice';
 import { Guide, openGuide } from './ui/Guide';
 import { News } from './ui/News';
 import { HalloweenChip, HalloweenNotice } from './ui/Halloween';
@@ -372,6 +373,7 @@ function Game() {
       {!offline && <News />}
       <HalloweenNotice />
       <DungeonNotice />
+      <AvalonNotice />
       <UpdateBanner />
       {inactive && (
         <div className="modal-bg tab-lock">

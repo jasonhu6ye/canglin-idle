@@ -10,6 +10,7 @@ import { store } from '../store';
 import { fmtNum } from './format';
 import { FINE_POINTER, openNodeSheet } from './itemOpen';
 import { newsPending, onNewsClosed } from './News';
+import { NOTICE_CLOSED } from './AvalonNotice';
 import { guideShowing, onGuideClosed } from './Guide';
 import { tl } from '../i18n';
 
@@ -195,6 +196,8 @@ export function HalloweenNotice() {
   const close = () => {
     try { localStorage.setItem(SEEN, '1'); } catch { /* 存不了就算了 */ }
     setOpen(false);
+    // 后面排队的公告（异域之路预告）等这个关掉再弹
+    window.dispatchEvent(new Event(NOTICE_CLOSED));
   };
   const go = () => {
     close();
