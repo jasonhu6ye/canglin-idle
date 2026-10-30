@@ -7,53 +7,11 @@ import { Pix, mix, phash } from './pix';
  * 这样所有东西都有一致的「描边像素画」观感。正式美术到位后替换成 sprite sheet 即可。
  */
 
-/** 野外摆件的高清倍数（10-28 画质升级）：树冠、石头这类团块按真像素画，边缘圆润 */
-const PROP_RES = 2;
 const BARK = ['#4a2e1a', '#6a4426', '#8a5c34'];
-
-/** 高清树冠：按真像素在叶团上点出亮叶和暗叶，再给树干加竖向的树皮纹 */
-function foliageDetail(p: Pix, leaf: string[], bark: string[], seed: number) {
-  if (p.res < 2) return;
-  for (let sy = 0; sy < p.ph; sy++) {
-    for (let sx = 0; sx < p.pw; sx++) {
-      const c = p.getSub(sx, sy);
-      if (!c) continue;
-      const n = phash(sx, sy, seed + 40);
-      if (leaf.includes(c)) {
-        const i = leaf.indexOf(c);
-        // 叶团左上多亮点、右下多暗点，叶子成小簇（相邻真像素一起变）
-        const cl = phash(sx >> 1, sy >> 1, seed + 41);
-        if (cl < 0.07 && i < 3) p.sub(sx, sy, leaf[i + 1]);
-        else if (cl > 0.93 && i > 0) p.sub(sx, sy, leaf[i - 1]);
-        else if (n < 0.03 && i > 0) p.sub(sx, sy, mix(c, '#000000', 0.25));
-      } else if (bark.includes(c)) {
-        // 树皮：竖向的纹理
-        if (Math.sin(sx * 2.4 + Math.sin(sy * 0.5) * 1.5) > 0.75) p.sub(sx, sy, mix(c, '#000000', 0.22));
-        else if (n < 0.04) p.sub(sx, sy, mix(c, '#ffffff', 0.12));
-      }
-    }
-  }
-}
-
-/** 高清石头：几道裂纹和麻点 */
-function rockDetail(p: Pix, pal: string[], seed: number) {
-  if (p.res < 2) return;
-  for (let sy = 0; sy < p.ph; sy++) {
-    for (let sx = 0; sx < p.pw; sx++) {
-      const c = p.getSub(sx, sy);
-      if (!c || !pal.includes(c)) continue;
-      const n = phash(sx, sy, seed + 50);
-      const crack = Math.sin(sx * 0.9 + Math.sin(sy * 0.7 + seed) * 2.2 + sy * 0.4);
-      if (crack > 0.985) p.sub(sx, sy, pal[0]);
-      else if (n < 0.05) p.sub(sx, sy, mix(c, '#000000', 0.18));
-      else if (n > 0.97) p.sub(sx, sy, mix(c, '#ffffff', 0.15));
-    }
-  }
-}
 const LEAF = ['#2a5a26', '#3c7a32', '#58a040', '#7cc456'];
 
 function tree(w: number, h: number, leaf: string[], bark = BARK, seed = 0) {
-  const p = new Pix(w, h, PROP_RES);
+  const p = new Pix(w, h);
   const cx = w / 2 - 0.5;
   p.trunk(cx, h - 9, h - 2, 3, bark);
   p.set(cx - 2, h - 2, bark[1]);
@@ -61,14 +19,13 @@ function tree(w: number, h: number, leaf: string[], bark = BARK, seed = 0) {
   p.blob(cx - 3, h - 13, 5, 4.5, leaf, seed + 1);
   p.blob(cx + 3, h - 13, 5, 4.5, leaf, seed + 2);
   p.blob(cx, h - 17, 6.5, 5.5, leaf, seed + 3);
-  foliageDetail(p, leaf, bark, seed);
   return p.outline();
 }
 
 function pine(snow: boolean) {
   const w = 16;
   const h = 26;
-  const p = new Pix(w, h, PROP_RES);
+  const p = new Pix(w, h);
   p.trunk(7.5, 20, 24, 2, BARK);
   const pal = ['#1e4a2e', '#2a6038', '#3a7a46', '#4e9658'];
   for (let t = 0; t < 4; t++) {
@@ -89,7 +46,7 @@ function pine(snow: boolean) {
 }
 
 function redwood() {
-  const p = new Pix(18, 36, PROP_RES);
+  const p = new Pix(18, 36);
   p.trunk(8.5, 14, 34, 4, ['#5a2418', '#8a3a26', '#b05a3a']);
   p.set(5, 34, '#8a3a26');
   p.set(12, 34, '#5a2418');
@@ -101,7 +58,7 @@ function redwood() {
 }
 
 function giant() {
-  const p = new Pix(46, 60, PROP_RES);
+  const p = new Pix(46, 60);
   const bark = ['#4a2818', '#6e3c22', '#94583a'];
   // 粗大的树干和根
   p.trunk(22.5, 30, 57, 10, bark);
@@ -120,7 +77,7 @@ function giant() {
 }
 
 function deadtree(bark = ['#3a3028', '#55473a', '#6e5e4e']) {
-  const p = new Pix(16, 22, PROP_RES);
+  const p = new Pix(16, 22);
   p.trunk(7.5, 8, 20, 2, bark);
   p.line(8, 12, 13, 6, bark[1]);
   p.line(12, 8, 14, 3, bark[1]);
@@ -131,7 +88,7 @@ function deadtree(bark = ['#3a3028', '#55473a', '#6e5e4e']) {
 }
 
 function palm() {
-  const p = new Pix(20, 28, PROP_RES);
+  const p = new Pix(20, 28);
   for (let y = 10; y < 27; y++) {
     const x = 9 + Math.sin((y - 10) / 7) * 2;
     p.set(x, y, y % 3 ? '#9a7044' : '#6a4a2a');
@@ -153,7 +110,7 @@ function palm() {
 }
 
 function cactus() {
-  const p = new Pix(12, 18, PROP_RES);
+  const p = new Pix(12, 18);
   const pal = ['#2e5e2a', '#3e7a34', '#58983e'];
   p.trunk(5.5, 2, 16, 4, pal);
   p.trunk(1.5, 6, 10, 2, pal);
@@ -165,9 +122,8 @@ function cactus() {
 }
 
 function rock(w: number, h: number, pal: string[], snowCap = false, seed = 0) {
-  const p = new Pix(w, h, PROP_RES);
+  const p = new Pix(w, h);
   p.blob(w / 2 - 0.5, h / 2 + 0.5, w / 2 - 1.5, h / 2 - 1.5, pal, seed);
-  rockDetail(p, pal, seed);
   if (snowCap) {
     for (let x = 0; x < w; x++) {
       for (let y = 0; y < h; y++) {
@@ -183,7 +139,7 @@ function rock(w: number, h: number, pal: string[], snowCap = false, seed = 0) {
 }
 
 function shards(w: number, h: number, pal: string[]) {
-  const p = new Pix(w, h, PROP_RES);
+  const p = new Pix(w, h);
   const spikes = [[w / 2, 1, 2.5], [w / 2 - 3, 5, 2], [w / 2 + 3, 4, 2], [w / 2 - 1, 7, 1.5]];
   for (const [cx, top, hw] of spikes) {
     for (let y = top; y < h - 1; y++) {
@@ -200,14 +156,14 @@ function shards(w: number, h: number, pal: string[]) {
 }
 
 function small(w: number, h: number, draw: (p: Pix) => void, outline = true) {
-  const p = new Pix(w, h, PROP_RES);
+  const p = new Pix(w, h);
   draw(p);
   return outline ? p.outline() : p;
 }
 
 /** 金合欢：细长的干，顶上一把扁平的伞状树冠 */
 function acacia() {
-  const p = new Pix(30, 26, PROP_RES);
+  const p = new Pix(30, 26);
   const bark = ['#4a3020', '#6a4630', '#8a6044'];
   p.line(14, 25, 14, 14, bark[1]);
   p.line(15, 25, 15, 14, bark[0]);
@@ -231,7 +187,7 @@ function goldtree() {
 
 /** 雨林大树：板根 + 高树干 + 层层叠叠的大叶冠，垂着藤 */
 function jungletree() {
-  const p = new Pix(26, 38, PROP_RES);
+  const p = new Pix(26, 38);
   const bark = ['#3a2a1a', '#5a4228', '#7a5a3a'];
   p.trunk(12.5, 14, 36, 4, bark);
   p.line(10, 32, 6, 37, bark[1]);
@@ -250,7 +206,7 @@ function jungletree() {
 
 /** 雨林地上的大叶藤丛 */
 function vine() {
-  const p = new Pix(14, 10, PROP_RES);
+  const p = new Pix(14, 10);
   for (let i = -3; i <= 3; i++) p.line(7, 9, 7 + i * 2, 3 + Math.abs(i) * 0.7, i % 2 ? '#2a6a2a' : '#3e8a36');
   p.blob(4, 5, 2.5, 1.6, ['#1c4a1e', '#2a6a2a', '#3e8a36', '#5aac4a'], 76);
   p.blob(10, 4, 2.5, 1.6, ['#1c4a1e', '#2a6a2a', '#3e8a36', '#5aac4a'], 77);
@@ -260,7 +216,7 @@ function vine() {
 
 /** 珊瑚：分叉的枝状，粉红或橙色 */
 function coral() {
-  const p = new Pix(14, 14, PROP_RES);
+  const p = new Pix(14, 14);
   const pal = ['#a83a4a', '#d85a6a', '#f08a8a', '#ffc0b8'];
   const branch = (x0: number, y0: number, x1: number, y1: number, c: string) => { p.line(x0, y0, x1, y1, c); p.line(x0 + 1, y0, x1 + 1, y1, pal[0]); };
   branch(6, 13, 6, 6, pal[1]);
@@ -274,7 +230,7 @@ function coral() {
 
 /** 红砂岩：层理分明的方墩石 */
 function redrock() {
-  const p = new Pix(18, 16, PROP_RES);
+  const p = new Pix(18, 16);
   p.blob(8.5, 9, 8, 6.5, ['#6a2a1a', '#8a3e26', '#a85232', '#c87a50'], 81);
   for (let y = 3; y < 16; y += 3) for (let x = 0; x < 18; x++) p.paint(x, y, '#6a2a1a');
   p.paint(6, 4, '#e09a6a');
@@ -284,7 +240,7 @@ function redrock() {
 
 /** 晶柱：一根高高的发光晶体，带几根小晶 */
 function crystalspire() {
-  const p = new Pix(16, 30, PROP_RES);
+  const p = new Pix(16, 30);
   const pal = ['#2a5a8a', '#4a8ad0', '#8ad0ff', '#ffffff'];
   const spike = (cx: number, top: number, bottom: number, hw: number) => {
     for (let y = top; y <= bottom; y++) {
@@ -305,7 +261,7 @@ function crystalspire() {
 
 /** 垂柳：弯弯的干，长长下垂的蓝绿枝条 */
 function willow() {
-  const p = new Pix(22, 28, PROP_RES);
+  const p = new Pix(22, 28);
   p.trunk(10.5, 12, 26, 3, BARK);
   const pal = ['#2a5a46', '#3a7a5a', '#58a070', '#8ccc94'];
   p.blob(10.5, 9, 9, 6, pal, 61);
@@ -319,7 +275,7 @@ function willow() {
 
 /** 古藤：粗大扭曲的藤干缠成一团，顶上挂着叶子和发光的果子 */
 function ancientvine() {
-  const p = new Pix(24, 32, PROP_RES);
+  const p = new Pix(24, 32);
   const bark = ['#2a3a1e', '#3e5428', '#587236'];
   for (let k = 0; k < 3; k++) {
     for (let y = 8; y < 31; y++) {
@@ -336,7 +292,7 @@ function ancientvine() {
 
 /** 雷击石柱：一根黑色石尖，上面缠着蓝白的电纹 */
 function stormspire() {
-  const p = new Pix(14, 32, PROP_RES);
+  const p = new Pix(14, 32);
   const pal = ['#1a1a28', '#2a2a3e', '#3e3e58', '#5a5a7a'];
   for (let y = 1; y < 31; y++) {
     const half = 1 + (y / 31) * 5;
@@ -361,7 +317,7 @@ function starshard() {
 
 /** 尖木栅栏：一格一根削尖的木桩 */
 function palisade() {
-  const p = new Pix(16, 26, PROP_RES);
+  const p = new Pix(16, 26);
   for (const [x, top] of [[1, 2], [6, 0], [11, 3]]) {
     for (let y = top; y < 25; y++) {
       const tip = y - top;
@@ -378,7 +334,7 @@ function palisade() {
 
 /** 晶墙：半透明的紫色晶块砌成，顶上一排晶尖 */
 function crystalwall() {
-  const p = new Pix(16, 26, PROP_RES);
+  const p = new Pix(16, 26);
   const pal = ['#3a2a6a', '#5a44a0', '#8a70d8', '#d8ccff'];
   for (let y = 8; y < 25; y++) {
     for (let x = 0; x < 16; x++) {
@@ -398,7 +354,7 @@ function crystalwall() {
 
 /** 纸灯笼：挂在木杆上的红灯笼 */
 function lantern() {
-  const p = new Pix(10, 24, PROP_RES);
+  const p = new Pix(10, 24);
   p.rect(4, 6, 2, 17, '#3a2a1e');
   p.rect(2, 22, 6, 1, '#2a1e17');
   p.rect(4, 3, 4, 1, '#3a2a1e');
@@ -413,7 +369,7 @@ function lantern() {
 
 /** 小渔船：停在水上的木船，船头翘起，桅杆收着帆 */
 function boat() {
-  const p = new Pix(30, 22, PROP_RES);
+  const p = new Pix(30, 22);
   for (let y = 12; y < 20; y++) {
     const t = (y - 12) / 8;
     const x0 = Math.round(2 + t * 4 - (y < 14 ? 2 : 0));
@@ -429,7 +385,7 @@ function boat() {
 
 /** 遗迹石柱：带凹槽的白石柱，柱头、柱础各一块 */
 function pillar(broken: boolean) {
-  const p = new Pix(12, 34, PROP_RES);
+  const p = new Pix(12, 34);
   const pal = ['#8a867c', '#b8b4a8', '#dcd8cc', '#f4f0e8'];
   const top = broken ? 14 : 4;
   for (let y = top; y < 31; y++) for (let x = 2; x < 10; x++) p.set(x, y, x === 2 ? pal[3] : x === 9 ? pal[0] : x % 3 === 1 ? pal[1] : pal[2]);

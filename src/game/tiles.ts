@@ -8,18 +8,12 @@ import { GROUNDS, LIQUIDS, hash, type Ground } from './world';
 
 export const T = 16;
 export const VARIANTS = 4;
-/**
- * 地块的高清倍数（10-28 画质升级）：图集按 2 倍像素画，tilemap 图层缩回原大小。
- * 地面花纹还是按 16×16 逻辑像素算，每个逻辑像素底下的真像素再往相邻像素的颜色稍微过渡、加一点颗粒，看起来更细。
- */
-export const TILE_RES = 2;
-const CELL = (T + 2) * TILE_RES;
+const CELL = T + 2;
 const COLS = 16;
 const EDGE_BASE = GROUNDS.length * VARIANTS;
 export const TILE_COUNT = EDGE_BASE + LIQUIDS.length * 15 * VARIANTS;
 const ROWS = Math.ceil(TILE_COUNT / COLS);
-/** 图集里每格的真像素尺寸和间距（margin/spacing 都已乘倍数） */
-export const TILESET = { tile: T * TILE_RES, margin: TILE_RES, spacing: 2 * TILE_RES, width: COLS * CELL, height: ROWS * CELL };
+export const TILESET = { margin: 1, spacing: 2, width: COLS * CELL, height: ROWS * CELL };
 
 const ANIMATED: Ground[] = ['water', 'ocean', 'swampwater', 'lava', 'shallows', 'moonwater', 'starwater'];
 
@@ -392,37 +386,20 @@ export const tileIndex = (g: number, v: number) => g * VARIANTS + v;
 export const liquidIndex = (liquid: number, mask: number, v: number) => EDGE_BASE + (liquid * 15 + mask - 1) * VARIANTS + v;
 
 function cellOrigin(i: number) {
-  return { x: (i % COLS) * CELL + TILE_RES, y: Math.floor(i / COLS) * CELL + TILE_RES };
+  return { x: (i % COLS) * CELL + 1, y: Math.floor(i / COLS) * CELL + 1 };
 }
 
 let tileImg: ImageData | null = null;
 function putTile(ctx: CanvasRenderingContext2D, i: number, pixel: (x: number, y: number) => RGB | null) {
   const img = tileImg ?? (tileImg = ctx.createImageData(CELL, CELL));
-  const R = TILE_RES;
-  const half = R / 2;
   for (let py = 0; py < CELL; py++) {
     for (let px = 0; px < CELL; px++) {
-      // 外圈一个逻辑像素取最近的内部像素（extrude）
-      const ix = Math.min(15 * R + R - 1, Math.max(0, px - R));
-      const iy = Math.min(15 * R + R - 1, Math.max(0, py - R));
-      const x = ix >> (R === 2 ? 1 : 0);
-      const y = iy >> (R === 2 ? 1 : 0);
-      let c = pixel(x, y);
+      // 外圈 1px 取最近的内部像素（extrude）
+      const x = Math.min(15, Math.max(0, px - 1));
+      const y = Math.min(15, Math.max(0, py - 1));
+      const c = pixel(x, y);
       const o = (py * CELL + px) * 4;
       if (!c) { img.data[o + 3] = 0; continue; }
-      if (R > 1) {
-        // 这个真像素靠近哪边，就往那边的相邻逻辑像素过渡一点，1 像素的叶片、石缝就不那么生硬；再加一点颗粒
-        const sx = ix % R < half ? -1 : 1;
-        const sy = iy % R < half ? -1 : 1;
-        const a = x + sx >= 0 && x + sx < 16 ? pixel(x + sx, y) : null;
-        const b = y + sy >= 0 && y + sy < 16 ? pixel(x, y + sy) : null;
-        const grain = 1 + (hash(ix + i * 37, iy, 7) - 0.5) * 0.09;
-        c = [
-          (c[0] * 0.72 + (a ?? c)[0] * 0.14 + (b ?? c)[0] * 0.14) * grain,
-          (c[1] * 0.72 + (a ?? c)[1] * 0.14 + (b ?? c)[1] * 0.14) * grain,
-          (c[2] * 0.72 + (a ?? c)[2] * 0.14 + (b ?? c)[2] * 0.14) * grain,
-        ];
-      }
       img.data[o] = c[0];
       img.data[o + 1] = c[1];
       img.data[o + 2] = c[2];
@@ -430,7 +407,7 @@ function putTile(ctx: CanvasRenderingContext2D, i: number, pixel: (x: number, y:
     }
   }
   const { x, y } = cellOrigin(i);
-  ctx.putImageData(img, x - R, y - R);
+  ctx.putImageData(img, x - 1, y - 1);
 }
 
 export function paintTileset(canvas: HTMLCanvasElement) {
