@@ -5,26 +5,26 @@ import { HERO_ANIMS, HERO_H, HERO_PAD, HERO_W, OUTFITS, paintHeroSheet, type Out
 import { store } from '../store';
 import { tl } from '../i18n';
 
-const PREVIEW = ['walk-down', 'idle-side', 'walk-side', 'walk-up', 'work-chop', 'fight-sword'];
+/** 衣橱只展示正面待机（用户 10-30：不用轮播其他动作） */
+const PREVIEW = 'idle-down';
 
-/** 衣橱里的小人：轮流播放几段动作 */
+/** 衣橱里的小人：正面待机动作循环播放 */
 export function HeroPreview({ outfit, scale = 3 }: { outfit: Outfit; scale?: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const sheet = useMemo(() => paintHeroSheet(outfit), [outfit]);
   useEffect(() => {
-    const anims = HERO_ANIMS.filter((a) => PREVIEW.includes(a.key));
+    const a = HERO_ANIMS.find((x) => x.key === PREVIEW)!;
     let tick = 0;
     const draw = () => {
       const ctx = ref.current?.getContext('2d');
       if (!ctx) return;
-      const a = anims[Math.floor(tick / 24) % anims.length];
       const f = sheet.frames.find((x) => x.name === `${a.key}-${tick % a.frames}`)!;
       ctx.clearRect(0, 0, HERO_W, HERO_H);
       ctx.drawImage(sheet.canvas, f.x + HERO_PAD.l, f.y + HERO_PAD.t, HERO_W, HERO_H, 0, 0, HERO_W, HERO_H);
       tick++;
     };
     draw();
-    const id = setInterval(draw, 125);
+    const id = setInterval(draw, 1000 / a.rate);
     return () => clearInterval(id);
   }, [sheet]);
   return <canvas ref={ref} width={HERO_W} height={HERO_H} className="pix" style={{ width: HERO_W * scale, height: HERO_H * scale }} />;
