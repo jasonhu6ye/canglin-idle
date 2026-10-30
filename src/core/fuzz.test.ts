@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import * as sim from './sim';
 import * as farm from './farm';
 import * as home from './home';
-import { ACTIONS, ITEMS, NODES, FARM_NODES, standOf } from './data';
+import { ACTIONS, ITEMS, NODES, FARM_NODES, KEY_SHOP, MAT_SHOP, SCROLL_TOWN, standOf } from './data';
+import { HW_POINT, HW_REVEAL } from './halloween';
 import type { GameState, TaskMode } from './types';
 
 /** 随机操作压力测试：乱点一通之后存档不能出现负数、小数、NaN、超格背包等坏数据 */
@@ -59,7 +60,7 @@ describe('随机操作压力测试', () => {
       s.bank.coins = 100_000;
       const log: string[] = [];
       for (let step = 0; step < 250; step++) {
-        const op = Math.floor(r() * 24);
+        const op = Math.floor(r() * 33);
         const item = pick(r, itemIds);
         const q = pick(r, qtys);
         const mode: TaskMode = pick(r, [{ type: 'infinite' }, { type: 'count', count: 1 + Math.floor(r() * 5) }, { type: 'time', ms: 60_000 }] as TaskMode[]);
@@ -100,6 +101,16 @@ describe('随机操作压力测试', () => {
             s = [() => home.placeBuild(s, b.id, x, y), () => home.removeAt(s, x, y), () => home.leaveHome(s), () => home.upgradeHome(s)][k](); break;
           }
           case 23: what = `walk`; s = sim.startWalk(s, s.loc, standOf(node), pick(r, [0, 1000, -5, NaN])); break;
+          // 10-28 全面检查补上：商人、钥匙、南瓜坐骑兑换、家园产出、召唤南瓜王、分解
+          case 24: { const shop = sim.SHOP_NODES[0]; s = { ...s, loc: standOf(shop), walk: null, travel: null }; const it = pick(r, [...MAT_SHOP, SCROLL_TOWN, 'nope']); what = `buyGoods ${it} ${q}`; s = sim.buyGoods(s, it, q, now); break; }
+          case 25: { const shop = sim.SHOP_NODES[0]; s = { ...s, loc: standOf(shop), walk: null, travel: null }; const k = pick(r, KEY_SHOP)[0]; what = `buyKey ${k} ${q}`; s = sim.buyKey(s, k, q); break; }
+          case 26: { what = 'buyPumpkinMount'; s.bank[HW_POINT] = (s.bank[HW_POINT] ?? 0) + 600; s = sim.buyPumpkinMount(s, Math.max(now, HW_REVEAL)); break; }
+          case 27: { what = 'collectHome'; s = home.collectHome(s, now).state; break; }
+          case 28: { what = 'summonPumpkin'; s = sim.summonPumpkin(s, Math.floor(r() * 6) - 1, now); break; }
+          case 29: { what = `salvage ${item} ${q}`; s = sim.salvage(s, { [item]: q })[0]; break; }
+          case 30: { const i = Math.floor(r() * 4); what = `deliverOrder ${i}`; s = home.deliverOrder(s, i, now); break; }
+          case 32: { what = 'claimRepReward'; s = home.claimRepReward({ ...s, home: s.home && { ...s.home, rep: (s.home.rep ?? 0) + 100 } }); break; }
+          case 31: { const k = pick(r, ['cat', 'dog', 'nope']); what = `petPet ${k}`; s = home.petPet(s, k, now); break; }
         }
         log.push(what);
         if (CONSERVE.has(op) || (op === 22 && !what.includes('upgrade'))) {

@@ -8,6 +8,7 @@ import { guideShowing, onGuideClosed } from './Guide';
 import { Icon } from './icons';
 import { FINE_POINTER } from './itemOpen';
 import { newsPending, onNewsClosed } from './News';
+import { NOTICE_CLOSED } from './AvalonNotice';
 
 /**
  * 副本玩法公告（用户 10-25：进游戏弹出绿洞蓝洞公告，带配图）。
@@ -39,6 +40,8 @@ export function DungeonNotice() {
   const close = () => {
     try { localStorage.setItem(SEEN, '1'); } catch { /* 存不了就算了 */ }
     setOpen(false);
+    // 后面排队的公告（异域之路预告）等这个关掉再弹
+    window.dispatchEvent(new Event(NOTICE_CLOSED));
   };
   const go = () => {
     close();

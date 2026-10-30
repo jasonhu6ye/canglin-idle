@@ -12,12 +12,12 @@ import { phash } from './pix';
  */
 
 const cache = new Map<string, string>();
-const once = (key: string, draw: () => HTMLCanvasElement) => {
+export const once = (key: string, draw: () => HTMLCanvasElement) => {
   let url = cache.get(key);
   if (!url) { url = draw().toDataURL(); cache.set(key, url); }
   return url;
 };
-function canvas(w: number, h: number) {
+export function canvas(w: number, h: number) {
   const c = document.createElement('canvas');
   c.width = w;
   c.height = h;
@@ -25,7 +25,7 @@ function canvas(w: number, h: number) {
   ctx.imageSmoothingEnabled = false;
   return { c, ctx };
 }
-function glowAt(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, col: string) {
+export function glowAt(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, col: string) {
   const g = ctx.createRadialGradient(x, y, 0, x, y, r);
   g.addColorStop(0, col);
   g.addColorStop(1, 'rgba(0,0,0,0)');
@@ -39,7 +39,7 @@ function blit(ctx: CanvasRenderingContext2D, img: CanvasImageSource, sx: number,
   else ctx.drawImage(img, sx, sy, sw, sh, x, y, sw * k, sh * k);
   ctx.restore();
 }
-const whole = (ctx: CanvasRenderingContext2D, img: HTMLCanvasElement, x: number, y: number, k = 1, flip = false) => blit(ctx, img, 0, 0, img.width, img.height, x, y, k, flip);
+export const whole = (ctx: CanvasRenderingContext2D, img: HTMLCanvasElement, x: number, y: number, k = 1, flip = false) => blit(ctx, img, 0, 0, img.width, img.height, x, y, k, flip);
 
 /** 洞里的地面和后墙：地砖铺满，上面一排墙 */
 function cave(ctx: CanvasRenderingContext2D, w: number, h: number, th: DgThemeId, wallRows = 2) {
@@ -52,7 +52,7 @@ function cave(ctx: CanvasRenderingContext2D, w: number, h: number, th: DgThemeId
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, w, h);
 }
-function sparkles(ctx: CanvasRenderingContext2D, w: number, h: number, cols: string[], n: number, salt: number) {
+export function sparkles(ctx: CanvasRenderingContext2D, w: number, h: number, cols: string[], n: number, salt: number) {
   for (let k = 0; k < n; k++) {
     ctx.fillStyle = cols[k % cols.length];
     const x = Math.floor(phash(k, 6, salt) * w);
@@ -62,7 +62,7 @@ function sparkles(ctx: CanvasRenderingContext2D, w: number, h: number, cols: str
   }
 }
 /** 一道竖着的光柱 */
-function beam(ctx: CanvasRenderingContext2D, x: number, y: number, h: number, col: string) {
+export function beam(ctx: CanvasRenderingContext2D, x: number, y: number, h: number, col: string) {
   const g = ctx.createLinearGradient(0, y - h, 0, y);
   g.addColorStop(0, 'rgba(0,0,0,0)');
   g.addColorStop(1, col);
@@ -73,7 +73,7 @@ function beam(ctx: CanvasRenderingContext2D, x: number, y: number, h: number, co
 
 /** 主角某一帧（外观 o、动画 key、第 i 帧） */
 const heroSheets = new Map<string, ReturnType<typeof paintHeroSheet>>();
-function hero(ctx: CanvasRenderingContext2D, o: number, anim: string, i: number, x: number, y: number, k = 1, flip = false) {
+export function hero(ctx: CanvasRenderingContext2D, o: number, anim: string, i: number, x: number, y: number, k = 1, flip = false) {
   const key = `${o}|${anim}`;
   let sh = heroSheets.get(key);
   if (!sh) { sh = paintHeroSheet(OUTFITS[o % OUTFITS.length], document.createElement('canvas'), HERO_ANIMS.filter((a) => a.key === anim)); heroSheets.set(key, sh); }

@@ -13,7 +13,7 @@ import { doorOf, FACILITY_NAME, townAt, TOWNS, type Facility, type TownDef } fro
 export { MAP_W, MAP_H, MID_BOX, OLD_BOX, at, atW, atF } from './geo';
 import { MAP_W, MAP_H, MID_BOX, OLD_BOX, at, atW, atF } from './geo';
 import { APT_MAX, APT_MIN, COAT_NAME, coatOf, FOAL, FOAL_CHANCE, horseItem, RANCH } from './ranch';
-import { HW_ALTAR, HW_BOX, HW_POINT, HW_TIERS, hwTierOf } from './halloween';
+import { HW_ALTAR, HW_BOX, HW_MOUNT, HW_POINT, HW_TIERS, hwTierOf } from './halloween';
 import { isEn, tl, tlc } from '../i18n';
 
 /** soon：占位技能，还没有内容（养殖，用户 10-23） */
@@ -175,6 +175,7 @@ item('baked_potato', tl('烤土豆'), 'food', 4, { heals: 25 });
 item('bread', tl('面包'), 'food', 10, { heals: 50 });
 // 家园产出（10-27）：鸡舍下蛋、蜂箱产蜜、苹果树结果，做几道家常点心
 item('egg', tl('鸡蛋'), 'resource', 6, { desc: tl('家园鸡舍下的蛋，能做煎蛋和蜂蜜蛋糕。') });
+item('wool', tl('羊毛'), 'resource', 4, { desc: tl('家园羊圈剪下的羊毛。工坊里 2 份羊毛能纺 1 匹粗布。') });
 item('honey', tl('蜂蜜'), 'resource', 12, { desc: tl('家园蜂箱攒的蜜。蜂箱附近花越多产得越快。') });
 item('apple', tl('苹果'), 'resource', 6, { desc: tl('家园苹果树结的果子，能烤苹果派。') });
 item('fried_egg', tl('煎蛋'), 'food', 16, { heals: 60, desc: tl('两个家园鸡蛋煎的，简单顶饿。') });
@@ -565,6 +566,11 @@ for (let apt = APT_MIN; apt <= APT_MAX; apt++) {
 item('mount_danmark', 'Chinese can fly', 'gear', 0, {
   desc: tl('黑毛银鬃的巨狼，红眼，身上有旧伤疤。骑乘时移动速度 +160%。在「更多」页输入兑换码获得。'),
   equip: { slot: 'mount', skill: 'hitpoints', level: 1, attack: 0, strength: 0, defence: 0, move: 1.6 },
+});
+// 南瓜坐骑（用户 10-27）：万圣节南瓜积分兑换，见 halloween.ts
+item(HW_MOUNT, tl('南瓜灵驹'), 'gear', 0, {
+  desc: tl('万圣节限定坐骑。没有腿的巨型南瓜灯，靠底下一团幽紫鬼火托着悬浮，肚子里的火光从刻出来的眼睛和嘴里透出来，飞起来一路拖着鬼火、洒下火星。骑乘时移动速度 +200%。用南瓜积分兑换。'),
+  equip: { slot: 'mount', skill: 'hitpoints', level: 1, attack: 0, strength: 0, defence: 0, move: 2 },
 });
 
 const HERB_FOR_TIER = ['green_herb', 'fire_bloom', 'moon_herb', 'silver_leaf', 'flame_heart', 'frost_lotus', 'frost_lotus', 'frost_lotus'];
@@ -1038,6 +1044,7 @@ make('craft_fert_rich', tl('高级肥料'), 'farming', 30, [one('fert_basic', 3)
 make('smith_sprinkler', tl('洒水器'), 'smithing', 20, [one('tin_bar', 4), one('plank_2', 2)], [one('sprinkler')]);
 make('cook_potato', tl('烤土豆'), 'cooking', 1, [one('potato')], [one('baked_potato')]);
 make('cook_bread', tl('烤面包'), 'cooking', 8, [one('wheat', 2)], [one('bread')]);
+make('weave_wool', tl('羊毛纺布'), 'crafting', 1, [one('wool', 2)], [one('cloth_1')], 0.8);
 make('cook_fried_egg', tl('煎蛋'), 'cooking', 5, [one('egg', 2)], [one('fried_egg')]);
 make('cook_apple_pie', tl('苹果派'), 'cooking', 20, [one('apple', 3), one('wheat', 2)], [one('apple_pie')]);
 make('cook_honey_cake', tl('蜂蜜蛋糕'), 'cooking', 35, [one('honey', 2), one('egg', 2), one('wheat', 2)], [one('honey_cake')]);

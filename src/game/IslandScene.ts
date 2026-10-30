@@ -2,7 +2,11 @@ import Phaser from 'phaser';
 import { NODES, WALK_TILES_PER_SEC } from '../core/data';
 import {
   buildDef, canPlace, collectHome, homeCan, homePlotCells, produceReady, homePlots, HOME_PORTAL, HOME_SPAWN, homeSize, ISLAND, ISLAND_C, islandGround, leaveHome, placeBuild, removeAt, thingGrid,
+  canPet, homeOrders, homePets, petGift, petPet, PET_REP, PETS,
 } from '../core/home';
+import { dayKey } from '../core/mail';
+import { paintBang, paintHeart, paintPetSheet, PET_FRAMES, PET_SIZE } from './petArt';
+import { paintBeam, paintBee, paintButterfly, paintChicken, paintJumpFish, paintRipple, paintSmoke } from './lifeArt';
 import { CROP_DEFS, CROPS, ITEMS } from '../core/data';
 import { fieldOfPlot, pickSeed, plotGrowth, plotPhase, tendPlot } from '../core/farm';
 import { cropTex, glintTex, soilTex } from './farmArt';
@@ -12,7 +16,7 @@ import { store } from '../store';
 import { darkness } from './ambience';
 import { DPR } from './dpr';
 import { FRAME_H, HERO_FEET, HERO_PAD, type HeroDir } from './hero';
-import { paintFloor, paintPedestal, paintPortal, paintPortalSwirl, paintThing, paintWall, PORTAL_H, UP } from './homeArt';
+import { paintFloor, paintPedestal, paintPortal, paintPortalSwirl, paintThing, paintWall, paintWindmillSails, PORTAL_H, UP } from './homeArt';
 import { liquidIndex, T, tileIndex, VARIANTS } from './tiles';
 import { GROUNDS, LIQUIDS, type PropKind } from './world';
 import { paintProp } from './art';
@@ -24,11 +28,17 @@ export const HOME_TOOL = 'home-tool';
 /** 场景 → 界面：点了岛上的制作台、储物箱（地点 id），或者建造失败的原因 */
 export const HOME_CLICK = 'home-click';
 export const HOME_MSG = 'home-msg';
+/** 场景 → 界面：点了订单告示板 */
+export const HOME_ORDERS = 'home-orders';
+
+/** 岛上溜达的宠物 */
+interface Pet { kind: string; spr: Phaser.GameObjects.Sprite; zone: Phaser.GameObjects.Zone; pts: { x: number; y: number }[]; wait: number; step: number }
 
 /** 物品图标的图片地址（界面那边注册进来，战利品摆件用） */
 export const homeIcons = { url: (_id: string): string | undefined => undefined };
 
 const DRAG = 8;
+const BUTTERFLIES: [string, string][] = [['#f8f0a0', '#e0b030'], ['#ffb0d0', '#e06a9a'], ['#a8d8ff', '#4a8ae0'], ['#ffffff', '#c8c8d8']];
 const FONT = '"PingFang SC","Microsoft YaHei",sans-serif';
 const SPEED = WALK_TILES_PER_SEC * 2;
 
@@ -64,6 +74,12 @@ export class IslandScene extends Phaser.Scene {
   private cellAt = new Map<string, string>();
   /** 会产出东西的建筑头顶的小图标：攒了东西才显示 */
   private bubbles: { t: HomeThing; img: Phaser.GameObjects.Image }[] = [];
+  /** 告示板头上的「!」 */
+  private bangs: Phaser.GameObjects.Image[] = [];
+  private pets: Pet[] = [];
+  private gridCache?: Uint8Array;
+  /** 岛上的小动静（鸡、蝴蝶、风车、灯塔……）：每帧调一次，重画时清掉 */
+  private life: ((time: number, dt: number, dark: number) => void)[] = [];
   private tool: HomeTool = null;
   private ghost?: Phaser.GameObjects.Image;
   private ghostBox?: Phaser.GameObjects.Graphics;
@@ -79,6 +95,7 @@ export class IslandScene extends Phaser.Scene {
   private workSpot?: { x: number; y: number; faceLeft: boolean } | null;
 
   create() {
+    this.pets = [];
     this.cameras.main.setBackgroundColor('#1a4a6a');
     this.makeTextures();
     this.drawGround();
@@ -139,6 +156,37 @@ export class IslandScene extends Phaser.Scene {
     if (!this.textures.exists('home-portal')) this.textures.addCanvas('home-portal', paintPortal());
     if (!this.textures.exists('home-swirl')) this.textures.addCanvas('home-swirl', paintPortalSwirl());
     if (!this.textures.exists('home-pedestal')) this.textures.addCanvas('home-pedestal', paintPedestal());
+    if (!this.textures.exists('home-heart')) this.textures.addCanvas('home-heart', paintHeart());
+    if (!this.textures.exists('home-bang')) this.textures.addCanvas('home-bang', paintBang());
+    const sheet = (key: string, frames: HTMLCanvasElement[]) => {
+      if (this.textures.exists(key)) return;
+      const w = frames[0].width;
+      const h = frames[0].height;
+      const c = document.createElement('canvas');
+      c.width = w * frames.length;
+      c.height = h;
+      frames.forEach((f, i) => c.getContext('2d')!.drawImage(f, i * w, 0));
+      const tex = this.textures.addCanvas(key, c)!;
+      frames.forEach((_, i) => tex.add(i, 0, i * w, 0, w, h));
+    };
+    sheet('life-chicken', paintChicken());
+    BUTTERFLIES.forEach(([a, b], i) => sheet(`life-fly${i}`, paintButterfly(a, b)));
+    const one = (key: string, c: HTMLCanvasElement) => { if (!this.textures.exists(key)) this.textures.addCanvas(key, c); };
+    one('life-bee', paintBee());
+    one('life-fish0', paintJumpFish('#d8e4ec'));
+    one('life-fish1', paintJumpFish('#ff7a3a'));
+    [2, 4, 6].forEach((r) => one(`life-ripple${r}`, paintRipple(r)));
+    one('life-smoke', paintSmoke());
+    one('life-beam', paintBeam());
+    one('life-sails', paintWindmillSails());
+    if (!this.textures.exists('ht-windmill_body')) this.textures.addCanvas('ht-windmill_body', paintThing('windmill_body', 2, 2));
+    for (const kind of Object.keys(PET_SIZE)) {
+      const key = `pet-${kind}`;
+      if (this.textures.exists(key)) continue;
+      const tex = this.textures.addCanvas(key, paintPetSheet(kind))!;
+      const { w, h } = PET_SIZE[kind];
+      PET_FRAMES.forEach((f, i) => tex.add(f, 0, i * w, 0, w, h));
+    }
   }
   private wallTex(id: string, mask: number) {
     const key = `hw-${id}-${mask}`;
@@ -256,10 +304,15 @@ export class IslandScene extends Phaser.Scene {
   }
 
   private rebuild() {
+    // 头顶图标、告示板「!」、热气球这些常驻的来回动画，不先停掉的话每摆一件东西就多攒一批（10-30 全面检查）
+    this.tweens.killTweensOf(this.objs);
     this.objs.forEach((o) => o.destroy());
     this.objs = [];
     this.lamps = [];
     this.bubbles = [];
+    this.bangs = [];
+    this.life = [];
+    this.gridCache = undefined;
     this.workSpot = undefined;
     const h = store.state.home;
     if (!h) return;
@@ -274,6 +327,8 @@ export class IslandScene extends Phaser.Scene {
     }
     for (const t of h.things) this.drawThing(t, walls);
     this.buildCells();
+    this.buildLife();
+    this.syncPets();
   }
 
   // ───────── 家园农田（10-27）：每块 4×4 格，和城里的田一样点地块种 / 浇水 / 收获 ─────────
@@ -295,6 +350,8 @@ export class IslandScene extends Phaser.Scene {
     const now = Date.now();
     const home = store.state.home;
     for (const b of this.bubbles) b.img.setVisible(produceReady(home, b.t, now) > 0);
+    const pending = this.bangs.length > 0 && homeOrders(store.state, now).some((o) => !o.done);
+    for (const b of this.bangs) b.setVisible(pending);
     const farm = store.state.farm ?? {};
     const blink = Math.floor(now / 500) % 2 === 0;
     for (const p of this.cells) {
@@ -353,7 +410,9 @@ export class IslandScene extends Phaser.Scene {
       if (!this.textures.exists(key)) return;
       img = this.add.image(bx + T / 2, by - 6, key).setOrigin(0.5, 1).setDisplaySize(16, 16).setDepth(by + 1000);
     } else {
-      img = this.add.image(bx, by, this.thingTex(t.id)).setOrigin(0, 1).setDepth(d.floor || d.plot ? -4 : by + 1000);
+      img = this.add.image(bx, by, t.id === 'windmill' ? 'ht-windmill_body' : this.thingTex(t.id)).setOrigin(0, 1).setDepth(d.floor || d.plot ? -4 : by + 1000);
+      // 热气球拴在地上，轻轻地一起一伏
+      if (t.id === 'hot_balloon') this.tweens.add({ targets: img, y: by - 2, duration: 1800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     }
     this.objs.push(img);
     if (d.produce) {
@@ -368,6 +427,16 @@ export class IslandScene extends Phaser.Scene {
       }
       const zone = this.add.zone(bx + (d.w * T) / 2, by - (d.h * T) / 2 - (UP[t.id] ?? 0) / 2, d.w * T, d.h * T + (UP[t.id] ?? 0))
         .setInteractive({ useHandCursor: true }).setData('collect', { x: t.x, y: t.y });
+      this.objs.push(zone);
+    }
+    if (t.id === 'order_board') {
+      const top = by - d.h * T - (UP[t.id] ?? 0);
+      const bang = this.add.image(bx + (d.w * T) / 2, top - 1, 'home-bang').setOrigin(0.5, 1).setDepth(9e5).setVisible(false);
+      this.tweens.add({ targets: bang, y: top - 4, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      this.objs.push(bang);
+      this.bangs.push(bang);
+      const zone = this.add.zone(bx + (d.w * T) / 2, by - (d.h * T) / 2 - (UP[t.id] ?? 0) / 2, d.w * T, d.h * T + (UP[t.id] ?? 0))
+        .setInteractive({ useHandCursor: true }).setData('orders', true);
       this.objs.push(zone);
     }
     if (d.station || d.chest) {
@@ -532,6 +601,9 @@ export class IslandScene extends Phaser.Scene {
         } else this.game.events.emit(HOME_MSG, tl('还没有东西可以收'));
         return;
       }
+      const pet = !this.tool && over.map((o) => o.getData('pet') as string | undefined).find(Boolean);
+      if (pet) { this.pat(pet); return; }
+      if (!this.tool && over.some((o) => o.getData('orders'))) { this.game.events.emit(HOME_ORDERS); return; }
       const home = over.map((o) => o.getData('home') as string | undefined).find(Boolean);
       if (home) {
         this.game.events.emit(HOME_CLICK, home);
@@ -580,8 +652,7 @@ export class IslandScene extends Phaser.Scene {
   }
 
   /** 岛不大：整张图上 A*，八方向、不切墙角 */
-  private findPath(from: { x: number; y: number }, to: { x: number; y: number }) {
-    const g = this.blockedGrid();
+  private findPath(from: { x: number; y: number }, to: { x: number; y: number }, g = this.blockedGrid()) {
     const N = ISLAND;
     const ok = (x: number, y: number) => x >= 0 && y >= 0 && x < N && y < N && !g[y * N + x];
     if (!ok(to.x, to.y)) {
@@ -705,6 +776,201 @@ export class IslandScene extends Phaser.Scene {
     this.body.play('work-craft', true);
   }
 
+  // ───────── 岛上的小动静（10-30）：鸡啄食、蝴蝶、蜜蜂、鱼跳水、篝火冒烟、风车转、灯塔扫光 ─────────
+  private buildLife() {
+    const things = store.state.home?.things ?? [];
+    let flies = 0;
+    for (const t of things) {
+      const d = buildDef(t.id);
+      if (!d) continue;
+      const bx = t.x * T;
+      const by = (t.y + d.h) * T;
+      const H = d.h * T + (UP[t.id] ?? 0);
+      const mid = bx + (d.w * T) / 2;
+      if (t.id === 'windmill') {
+        const sails = this.add.image(mid, by - H + 22, 'life-sails').setDepth(by + 1001);
+        this.objs.push(sails);
+        this.life.push((_t, dt) => sails.setRotation(sails.rotation + dt * 0.0011));
+      } else if (t.id === 'lighthouse') {
+        // 夜里两道光柱绕着灯头转；侧面看过去转到前后时变短
+        const lamp = { x: mid, y: by - H + 14 };
+        const beams = [0, Math.PI].map(() => this.add.image(lamp.x, lamp.y, 'life-beam').setOrigin(0, 0.5).setBlendMode(Phaser.BlendModes.ADD).setDepth(9e5 - 1).setAlpha(0));
+        this.objs.push(...beams);
+        this.life.push((time, _dt, dark) => beams.forEach((b, i) => {
+          const a = time * 0.0009 + i * Math.PI;
+          b.setScale(0.25 + 0.75 * Math.abs(Math.cos(a)), 0.6 + 0.4 * Math.abs(Math.cos(a))).setFlipX(Math.cos(a) < 0).setOrigin(Math.cos(a) < 0 ? 1 : 0, 0.5)
+            .setRotation(Math.sin(a) * 0.12).setAlpha(dark * 0.95);
+        }));
+      } else if (t.id === 'coop') {
+        for (let i = 0; i < 2; i++) this.addChicken(mid + (i ? 10 : -10), by + 4, by);
+      } else if (t.id === 'beehive') {
+        const bees = [0, 1, 2].map(() => this.add.image(mid, by - 8, 'life-bee').setDepth(by + 1002));
+        this.objs.push(...bees);
+        this.life.push((time, _dt, dark) => bees.forEach((b, i) => {
+          const a = time * (0.003 + i * 0.0007) + i * 2.1;
+          b.setPosition(mid + Math.cos(a) * (7 + i * 2), by - 12 + Math.sin(a * 1.7) * 4).setVisible(dark < 0.5);
+        }));
+      } else if ((t.id === 'flowerbed' || t.id === 'flower_cart' || t.id === 'cherry_tree' || t.id === 'garden_bed') && flies < 8) {
+        flies++;
+        const k = flies % BUTTERFLIES.length;
+        const fly = this.add.sprite(mid, by - 10, `life-fly${k}`, 0).setDepth(by + 1002);
+        this.objs.push(fly);
+        const seed = t.x * 7 + t.y * 13;
+        this.life.push((time, _dt, dark) => {
+          const s = time / 1000 + seed;
+          fly.setPosition(mid + Math.sin(s * 0.7) * 14 + Math.sin(s * 2.3) * 3, by - 12 + Math.sin(s * 1.1) * 6 + Math.cos(s * 3.1) * 2);
+          fly.setFrame(Math.floor(time / 110 + seed) % 2).setAlpha(1 - dark).setVisible(dark < 0.6);
+        });
+      } else if (t.id === 'fish_pond' || t.id === 'pond') {
+        let next = 0;
+        const w = d.w * T;
+        const top = by - d.h * T;
+        this.life.push((time) => {
+          if (!next) next = time + 1500 + Math.random() * 3000;
+          if (time < next) return;
+          next = time + (t.id === 'fish_pond' ? 2500 : 5000) + Math.random() * 4000;
+          this.fishJump(bx + w * (0.3 + Math.random() * 0.4), top + d.h * T * (0.35 + Math.random() * 0.3), by);
+        });
+      } else if (t.id === 'campfire') {
+        let next = 0;
+        this.life.push((time) => {
+          if (time < next) return;
+          next = time + 380 + Math.random() * 200;
+          const puff = this.add.image(mid + (Math.random() - 0.5) * 3, by - 10, 'life-smoke').setDepth(by + 1003).setAlpha(0.7);
+          this.tweens.add({ targets: puff, y: puff.y - 18 - Math.random() * 6, x: puff.x + 3 + Math.random() * 4, alpha: 0, scale: 1.8, duration: 1600, ease: 'Sine.easeOut', onComplete: () => puff.destroy() });
+        });
+      }
+    }
+  }
+  /** 鸡舍门口溜达的鸡：走两步、停下来啄几下 */
+  private addChicken(x0: number, y0: number, depth: number) {
+    const c = this.add.sprite(x0, y0, 'life-chicken', 0).setOrigin(0.5, 1).setDepth(depth + 1);
+    this.objs.push(c);
+    let to: { x: number; y: number } | null = null;
+    let wait = Math.random() * 2000;
+    this.life.push((time, dt) => {
+      if (to) {
+        const dx = to.x - c.x, dy = to.y - c.y;
+        const dist = Math.hypot(dx, dy);
+        const step = (12 * dt) / 1000;
+        if (dist <= step) { c.setPosition(to.x, to.y); to = null; wait = 1200 + Math.random() * 3000; } else c.setPosition(c.x + (dx / dist) * step, c.y + (dy / dist) * step);
+        if (Math.abs(dx) > 0.3) c.setFlipX(dx < 0);
+        c.setFrame(0);
+      } else {
+        c.setFrame(Math.floor(time / 260) % 3 === 0 ? 1 : 0);
+        if ((wait -= dt) <= 0) to = { x: x0 + (Math.random() - 0.5) * 34, y: y0 + Math.random() * 14 };
+      }
+      c.setDepth(c.y + 1000);
+    });
+  }
+  /** 一条鱼从水里跳出来划个弧线落回去，起落各溅一圈水花 */
+  private fishJump(x: number, y: number, depth: number) {
+    const dir = Math.random() < 0.5 ? -1 : 1;
+    const fish = this.add.image(x, y, `life-fish${Math.random() < 0.3 ? 1 : 0}`).setDepth(depth + 1002).setFlipX(dir > 0);
+    const ripple = (rx: number) => {
+      const r = this.add.image(rx, y + 1, 'life-ripple2').setDepth(depth + 1001).setAlpha(0.9);
+      let k = 0;
+      this.time.addEvent({ delay: 140, repeat: 2, callback: () => { k++; if (k < 3) r.setTexture(`life-ripple${[2, 4, 6][k]}`); r.setAlpha(0.9 - k * 0.3); if (k >= 3) r.destroy(); } });
+    };
+    ripple(x);
+    const o = { k: 0 };
+    this.tweens.add({
+      targets: o, k: 1, duration: 650, ease: 'Linear',
+      onUpdate: () => { fish.setPosition(x + dir * 14 * o.k, y - Math.sin(o.k * Math.PI) * 10).setRotation(dir * (o.k - 0.5) * 1.6); },
+      onComplete: () => { fish.destroy(); ripple(x + dir * 14); },
+    });
+  }
+
+  // ───────── 宠物（10-29）：有猫窝来猫、有狗屋来狗，在窝附近溜达，点一下摸摸 ─────────
+  private syncPets() {
+    const h = store.state.home;
+    const want = homePets(h);
+    this.pets = this.pets.filter((p) => {
+      if (want.includes(p.kind)) return true;
+      p.spr.destroy(); p.zone.destroy();
+      return false;
+    });
+    for (const kind of want) {
+      if (this.pets.some((p) => p.kind === kind)) continue;
+      const den = this.denOf(kind);
+      if (!den) continue;
+      const spr = this.add.sprite(den.x * T + T / 2, den.y * T + T, `pet-${kind}`, 'sit').setOrigin(0.5, 1);
+      const { w, h: ph } = PET_SIZE[kind];
+      const zone = this.add.zone(spr.x, spr.y - ph / 2, w + 6, ph + 6).setInteractive({ useHandCursor: true }).setData('pet', kind);
+      this.pets.push({ kind, spr, zone, pts: [], wait: 800 + Math.random() * 2000, step: 0 });
+    }
+  }
+  /** 宠物窝前面能站的一格 */
+  private denOf(kind: string) {
+    const t = store.state.home?.things.find((x) => x.id === PETS[kind].home);
+    const d = t && buildDef(t.id);
+    if (!t || !d) return null;
+    return { x: t.x + Math.floor(d.w / 2), y: t.y + d.h };
+  }
+  private stepPets(delta: number) {
+    for (const p of this.pets) {
+      if (p.pts.length) {
+        const to = p.pts[0];
+        const dx = to.x - p.spr.x;
+        const dy = to.y - p.spr.y;
+        const d = Math.hypot(dx, dy);
+        const move = ((p.kind === 'dog' ? 2.6 : 2) * T * Math.min(delta, 100)) / 1000;
+        if (d <= move) { p.spr.setPosition(to.x, to.y); p.pts.shift(); } else p.spr.setPosition(p.spr.x + (dx / d) * move, p.spr.y + (dy / d) * move);
+        if (Math.abs(dx) > 0.5) p.spr.setFlipX(dx < 0);
+        p.step += delta;
+        p.spr.setFrame(Math.floor(p.step / 160) % 2 ? 'walk1' : 'walk0');
+        if (!p.pts.length) { p.spr.setFrame('sit'); p.wait = 1500 + Math.random() * 4500; }
+      } else if ((p.wait -= delta) <= 0) {
+        p.wait = 2000;
+        const den = this.denOf(p.kind);
+        if (!den) continue;
+        // 狗跑得远一点，偶尔跑去主人身边
+        const r = p.kind === 'dog' ? 8 : 5;
+        const nearMe = p.kind === 'dog' && Math.random() < 0.3;
+        const goal = nearMe
+          ? { x: Math.floor(this.player.x / T) + (Math.random() < 0.5 ? -1 : 1), y: Math.floor(this.player.y / T) + 1 }
+          : { x: den.x + Math.round((Math.random() - 0.5) * 2 * r), y: den.y + Math.round((Math.random() - 0.5) * 2 * r) };
+        this.gridCache ??= this.blockedGrid();
+        const from = { x: Math.floor(p.spr.x / T), y: Math.floor((p.spr.y - 1) / T) };
+        const path = this.findPath(from, goal, this.gridCache);
+        if (path && path.length < 40) p.pts = path.map((q) => ({ x: q.x * T + T / 2, y: q.y * T + T }));
+      }
+      p.spr.setDepth(p.spr.y + 1000);
+      p.zone.setPosition(p.spr.x, p.spr.y - PET_SIZE[p.kind].h / 2);
+    }
+  }
+  /** 摸摸：冒几颗小心，每只每天第一次加声望 */
+  private pat(kind: string) {
+    const p = this.pets.find((x) => x.kind === kind);
+    if (!p) return;
+    p.pts = [];
+    p.spr.setFrame('sit');
+    p.wait = 2500;
+    p.spr.setFlipX(this.player.x < p.spr.x);
+    this.tweens.add({ targets: p.spr, scaleY: 0.85, duration: 90, yoyo: true, repeat: 1 });
+    for (let i = 0; i < 3; i++) {
+      const hrt = this.add.image(p.spr.x + (i - 1) * 4, p.spr.y - PET_SIZE[kind].h, 'home-heart').setDepth(9e5).setAlpha(0);
+      this.tweens.add({ targets: hrt, y: hrt.y - 12 - i * 2, alpha: { from: 1, to: 0 }, delay: i * 140, duration: 900, ease: 'Sine.easeOut', onComplete: () => hrt.destroy() });
+    }
+    const now = Date.now();
+    if (canPet(store.state, kind, now)) {
+      const gift = petGift(kind, (store.state.home?.love?.[kind] ?? 0) + 1, dayKey(now));
+      store.dispatch((g) => petPet(g, kind, now));
+      const what = gift && (gift.item === 'coins' ? tl`${gift.qty} 金币` : tl`${ITEMS[gift.item]?.name ?? gift.item} ×${gift.qty}`);
+      this.game.events.emit(HOME_MSG, what ? tl`摸了摸${PETS[kind].name}，岛屿声望 +${PET_REP}。它叼来了${what}！` : tl`摸了摸${PETS[kind].name}，岛屿声望 +${PET_REP}`);
+      if (gift) this.giftPop(p.spr.x, p.spr.y - PET_SIZE[kind].h - 4, gift.item);
+    } else this.game.events.emit(HOME_MSG, tl`${PETS[kind].name}蹭了蹭你（今天已经摸过了）`);
+  }
+
+  /** 宠物叼来的礼物：物品图标从宠物头上弹起来 */
+  private giftPop(x: number, y: number, item: string) {
+    const key = this.trophyTex(item, homeIcons.url(item), () => this.giftPop(x, y, item));
+    if (!this.textures.exists(key)) return;
+    const img = this.add.image(x, y, key).setDisplaySize(12, 12).setDepth(9e5 + 1);
+    this.tweens.add({ targets: img, y: y - 14, duration: 500, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: img, alpha: 0, delay: 1400, duration: 400, onComplete: () => img.destroy() });
+  }
+
   private anim(kind: 'walk' | 'idle') {
     this.body.play(`${kind}-${this.facing}`, true);
   }
@@ -746,8 +1012,11 @@ export class IslandScene extends Phaser.Scene {
       if (w.i >= w.pts.length) { this.walker = undefined; this.anim('idle'); }
     }
     this.autoWork();
+    this.stepPets(delta);
     // 昼夜：和大地图同一个钟，晚上灯亮起来
     const dark = darkness(gameHour());
+    const dt = Math.min(delta, 100);
+    for (const f of this.life) f(_time, dt, dark);
     this.night.setFillStyle(0x0a1430, dark * 0.5);
     for (const l of this.lamps) l.setAlpha(dark * 0.8);
   }

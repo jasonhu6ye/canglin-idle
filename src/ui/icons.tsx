@@ -1,6 +1,7 @@
 import { homeItemIconUrl } from '../game/homeArt';
 import { baseOf } from '../core/quality';
-import { HW_BOX, HW_POINT } from '../core/halloween';
+import { HW_BOX, HW_MOUNT, HW_POINT } from '../core/halloween';
+import { pumpkinMountIconUrl } from '../game/pumpkinArt';
 import { pumpkinBoxUrl, pumpkinPointUrl } from '../game/halloweenArt';
 import { CROPS, ITEMS, MONSTERS, TIERS, tierName } from '../core/data';
 
@@ -15,7 +16,7 @@ import { foalIconUrl, horseIconUrl } from '../game/horseArt';
 import { aptOf, coatOf, FOAL } from '../core/ranch';
 
 /** 坐骑图标：马按毛色画，别的是狼 */
-export const mountIconUrl = (id: string) => (aptOf(id) ? horseIconUrl(coatOf(aptOf(id))) : wolfIconUrl());
+export const mountIconUrl = (id: string) => (id === HW_MOUNT ? pumpkinMountIconUrl() : aptOf(id) ? horseIconUrl(coatOf(aptOf(id))) : wolfIconUrl());
 import type { SkillId } from '../core/types';
 
 /*
@@ -961,13 +962,32 @@ const EQUIP_TPL: Record<string, string> = {
   axe: 'axe', pickaxe: 'pickaxe', sickle: 'sickle', knife: 'knife', rod: 'rod', hoe: 'hoe', hammer: 'hammer', needle: 'needle', pan: 'pan',
 };
 
+/** 每种鱼一个颜色（10-30 全面检查：以前所有生鱼一个图标、所有烤鱼一个图标，背包里分不清） */
+const FISH_TINT: Record<string, string> = {
+  minnow: '#c8d4e0', shrimp: '#f08a6a', carp: '#e0a040', trout: '#d88a9a', bass: '#6a9a8a', cod: '#a8c0d8', salmon: '#f07a5a',
+  eel: '#5a6a4a', lava_eel: '#e0502a', ghostfish: '#c8e8f0', abyssfish: '#3a3a7a', loach: '#8a7a50', crucian: '#b0a070', grass_carp: '#7aa050',
+  perch: '#a0b040', bighead: '#8a9aa8', catfish: '#c0a050', bream: '#d8dce4', pike: '#6a8a4a', snow_trout: '#e8f0ff', herring: '#9ab8d8',
+  flounder: '#a89070', sturgeon: '#6a7a8a', swamp_catfish: '#5a7040', bonefin: '#e8e0c8', stingray: '#7a6a9a', squid: '#c890b0',
+  grouper: '#e07a4a', lanternfish: '#f0d050', swordfish: '#4a7ab0', tuna: '#3a5a8a', magma_shrimp: '#ff6a2a', fire_carp: '#ff8a20',
+  flame_shark: '#d04a2a', sulfur_catfish: '#d8c830', star_ray: '#8a8ae0', crystal_fish: '#a0f0ff', phantom_eel: '#b08af0', thunder_shark: '#f0e060',
+  abyss_bass: '#2a4a6a', void_angler: '#6a3aa0', dragonfish: '#e0b030', starwhale: '#5a6ad8', hill_trout: '#7ac0a0', vine_perch: '#5aa040',
+  harbor_mackerel: '#5a8ac0', moon_catfish: '#d0d8f0', tide_bream: '#4ab0c0', aurora_salmon: '#7ae0b0', ash_shark: '#8a8a90', storm_eel: '#4a6ae0', star_whale: '#3a4aa0',
+};
+/** 烤过的鱼：本色往焦黄里调 */
+const cooked = (hex: string) => {
+  const a = parseInt(hex.slice(1), 16);
+  const b = 0xc07a3a;
+  const m = (sh: number) => Math.round((((a >> sh) & 255) * 0.45) + (((b >> sh) & 255) * 0.55));
+  return `#${((m(16) << 16) | (m(8) << 8) | m(0)).toString(16).padStart(6, '0')}`;
+};
+
 /** 物品 → [模板, 颜色]（矿石、木头、棉花、兽皮另有专门的图，见 resIconUrl） */
 export function itemIcon(id: string): [string, string] {
   if (SPECIFIC[id]) return SPECIFIC[id];
   const it = ITEMS[id];
   const tier = it?.tier ?? 0;
   const prefix = id.split('_')[0];
-  if (id.startsWith('raw_')) return ['fish', '#8aa0b8'];
+  if (id.startsWith('raw_')) return ['fish', FISH_TINT[id.slice(4)] ?? '#8aa0b8'];
   if (id.startsWith('seed_')) return ['seed', CROP_COLOR[id.slice(5)]?.[0] ?? '#c8a040'];
   if (CROP_COLOR[id]) return [CROP_COLOR[id][1] === 'grain' ? 'herb' : 'veg', CROP_COLOR[id][0]];
   // 兽肉、魔核按阶级换颜色
@@ -978,7 +998,11 @@ export function itemIcon(id: string): [string, string] {
   if (id.startsWith('crystal_rune_')) return ['rune', ['#e8eef4', '#a060e0', '#f0d040', '#3aa060', '#3a7ad0', '#c0b0ff', '#ff8a2a', '#7a3ad0'][tier]];
   if (id.startsWith('feather_arrow_')) return ['arrow', ['#a07a50', '#3a3a5a', '#7a5232', '#e8e8e8', '#2aa08a', '#3a5ab0', '#8ad0f0', '#ff8a2a'][tier]];
   if (id.startsWith('spice_meal_')) return ['food', ['#6ac860', '#c8a040', '#b0642e', '#8a4a2a', '#8ac050', '#c02a1a', '#e03a2a', '#9a5ad8'][tier]];
-  if (it?.category === 'food') return ['fish', '#d08a4a'];
+  // 农田作物做的菜：盘子模板，按作物本色上色（以前全是一条鱼的图标）
+  if (id.startsWith('feast_')) return ['food', ['#e0a050', '#7ab0d0', '#c8e0f0', '#7a9a4a', '#f0c850', '#e0502a', '#b08af0', '#5a6ad8'][(Number(id.slice(6)) || 1) - 1] ?? '#d08a4a'];
+  if (id.startsWith('dish_')) return ['food', FISH_TINT[id.slice(5)] ? cooked(FISH_TINT[id.slice(5)]) : '#c89050'];
+  if (id.startsWith('meal_')) return ['food', CROP_COLOR[id.slice(5)]?.[0] ?? '#d08a4a'];
+  if (it?.category === 'food') return ['fish', FISH_TINT[id] ? cooked(FISH_TINT[id]) : '#d08a4a'];
   if (id.endsWith('_potion')) return ['potion', SPECIFIC[id.replace('_potion', '')]?.[1] ?? '#c04ae0'];
   if (id.startsWith('plank_')) return ['plank', WOOD[TIERS[tier].wood]];
   if (id.startsWith('leather_')) return ['leather', HIDE_TINT[tier]];

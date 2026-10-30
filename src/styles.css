@@ -621,6 +621,18 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .home-build .small { font-size: 11px; margin: 4px 0; }
 .comfort-bar { height: 6px; margin: 6px 0; border-radius: 3px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
 .comfort-bar i { display: block; height: 100%; background: linear-gradient(90deg, #e8a04a, #ffe08a); }
+.home-orders { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 4px; }
+.home-orders li { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; background: rgba(255, 255, 255, 0.06); }
+.home-orders li.done { opacity: 0.55; }
+.home-pets { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 4px; }
+.home-pets li { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; padding: 6px 8px; border-radius: 6px; background: rgba(255, 255, 255, 0.06); }
+.home-pets small { flex-basis: 100%; }
+.pet-hearts i { font-style: normal; color: rgba(255, 255, 255, 0.2); margin-right: 1px; }
+.pet-hearts i.on { color: #ff6a8a; }
+.rep-reward { background: rgba(232, 184, 74, 0.12); border-radius: 6px; padding: 6px 8px; }
+.home-orders .ho-body { flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.comfort-bar.rep-bar i { background: linear-gradient(90deg, #4ab0e0, #8ae0ff); }
+.home-bar .dot-badge { display: inline-block; margin-left: 4px; min-width: 14px; padding: 0 3px; border-radius: 7px; background: #e8503a; color: #fff; font-style: normal; font-size: 10px; line-height: 14px; text-align: center; }
 .home-fields { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 4px; }
 .home-fields li { display: flex; flex-direction: column; padding: 6px 8px; border-radius: 6px; background: rgba(255, 255, 255, 0.06); cursor: pointer; }
 .home-fields li:hover { background: rgba(255, 255, 255, 0.12); }
@@ -709,6 +721,9 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .hw-cards figcaption { padding: 6px; font-size: 11px; line-height: 1.5; }
 .hw-cards figcaption b { color: #ffb050; }
 @media (max-width: 520px) { .hw-cards { grid-template-columns: 1fr; } .hw-cards img, .hw-king-box { aspect-ratio: 2 / 1; object-fit: contain; background: #1a0c24; } }
+.hw-cards img.hw-mount-img { object-fit: contain; background: radial-gradient(circle at 50% 60%, #6a2a10, #1a0c24 70%); }
+.hw-cards:has(.hw-mount-img) { grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 520px) { .hw-cards:has(.hw-mount-img) { grid-template-columns: 1fr; } }
 .hw-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .hw-table th, .hw-table td { padding: 4px 6px; border-bottom: 1px solid rgba(160, 80, 255, 0.25); text-align: left; }
 .hw-table th { color: #d0a0ff; }
@@ -992,6 +1007,13 @@ h2.dg-blue { color: #6ab4ff; }
 /* 副本公告（10-25） */
 .dg-notice .hw-cards figure { background: rgba(14, 24, 40, 0.7); border-color: #2a5a7a; }
 .dg-notice .hw-cards figcaption b, .dg-notice .hw-lead b { color: #7ad8ff; }
+.av-notice .hw-cards figure { background: rgba(30, 26, 56, 0.7); border-color: #7a6a3a; }
+.av-notice .hw-cards figcaption b, .av-notice .hw-lead b { color: #ffd86a; }
+.av-title { color: #fff2c0; text-shadow: 0 2px 0 #1a1030, 0 0 12px #ffc040, 0 0 2px #000; font-size: 24px; letter-spacing: 6px; }
+.av-title small { color: #c8d0ff; }
+.av-risk-box { display: flex; align-items: center; justify-content: center; aspect-ratio: 4 / 3; font-size: 40px; background: radial-gradient(circle, rgba(255,210,120,0.35), rgba(20,16,40,0.9)); }
+@media (max-width: 520px) { .av-risk-box { aspect-ratio: 2 / 1; } }
+.av-t1 { color: #8ae09a; } .av-t2 { color: #7ab8ff; } .av-t3 { color: #ffd86a; }
 .dg-title { color: #b8f0ff; text-shadow: 0 2px 0 #06101a, 0 0 10px #2a9aff, 0 0 2px #000; font-size: 20px; }
 .dg-title small { color: #ffd86a; }
 .dg-keys-card .dg-keys { aspect-ratio: 4 / 3; display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 4px 8px; background: radial-gradient(circle, rgba(255, 210, 90, 0.25), transparent 70%), linear-gradient(#0e1424, #1a2236); }
@@ -1106,3 +1128,8 @@ h2.dg-blue { color: #6ab4ff; }
 .hb-first > b { display: block; margin-bottom: 6px; color: var(--gold); font-size: 13px; }
 .guild .guild-list li > span:first-child { flex: 1; min-width: 0; }
 .guild .guild-list .row-tools small, .guild .guild-list .row-tools button { white-space: nowrap; }
+/* 南瓜积分兑换（10-27） */
+.hw-shop { display: flex; gap: 10px; align-items: center; margin: 8px 12px; padding: 8px 10px; border: 1px solid #c86a1a; border-radius: 8px; background: linear-gradient(135deg, rgba(120, 40, 10, 0.45), rgba(60, 20, 80, 0.45)); box-shadow: 0 0 12px rgba(255, 140, 40, 0.25) inset; }
+.hw-shop-icon { width: 56px; height: 56px; image-rendering: pixelated; flex: none; filter: drop-shadow(0 0 6px rgba(255, 160, 50, 0.7)); }
+.hw-shop b { color: #ffb050; }
+.hw-shop-row { display: flex; gap: 10px; align-items: center; justify-content: space-between; margin-top: 6px; flex-wrap: wrap; }

@@ -18,13 +18,14 @@ export const UP: Record<string, number> = {
   piano: 10, bathtub: 4, candelabra: 12, globe: 10, easel: 16, weapon_rack: 12, armor_stand: 16, barrel: 6, crates: 10, vase: 8,
   fishtank: 8, cat_bed: 0, rug_long: 0, st_atelier: 10,
   fountain: 14, pond: 0, pine_tree: 30, cherry_tree: 26, bush: 4, rock: 4, haystack: 8, scarecrow: 16, signpost: 12, mailbox: 8,
-  campfire: 2, torch: 14, stone_lantern: 14, tent: 10, beehive: 6, dog_house: 10, birdbath: 6, garden_bed: 2, windmill: 34,
+  campfire: 2, torch: 14, stone_lantern: 14, tent: 10, beehive: 6, dog_house: 10, birdbath: 6, garden_bed: 2, windmill: 34, windmill_body: 34,
   farm_plot: 0, water_barrel: 6, compost: 4,
   painting: 10, candle: 6, teddy: 2, books: 2, tea_set: 0, music_box: 2, crystal_ball: 4, bonsai: 4, paper_lantern: 12, hourglass: 4,
   ship_model: 6, gem_case: 8, pumpkin_lamp: 2, plush_cat: 2, trophy_cup: 6,
   bunk_bed: 10, bookcase_tall: 16, counter: 6, round_table: 2, throne: 14, bed_royal: 10,
   cupboard: 16, wine_rack: 12, coffee_table: 2, canopy_bed: 18, bar_counter: 6, bar_stool: 2, bookshelf_low: 6, grand_piano: 6, harp: 14, sewing_table: 8,
   folding_screen: 16, potted_tree: 16, wash_basin: 6, rocking_chair: 8, chess_table: 2, bird_cage: 12, coat_rack: 14,
+  order_board: 18, fish_pond: 2, sheep_pen: 8, lighthouse: 40, hot_balloon: 40, gold_statue: 26,
   apple_tree: 26, gazebo: 26, swing: 16, maple_tree: 26, palm_tree: 30, boat: 0, coop: 12, telescope: 10, totem: 22, flower_cart: 6,
 };
 
@@ -460,6 +461,7 @@ function shade3d(p: Pix) {
  */
 function paintHD(id: string, p: Pix, W: number, H: number): boolean {
   const cx = Math.floor(W / 2);
+  const B = H - 1;
   /** 朝上的面：最上一行最亮，往下（离人越近）稍暗，带木纹 */
   const top = (x: number, y: number, w: number, d: number, pal: string[], grain = true) => {
     for (let j = 0; j < d; j++) for (let i = 0; i < w; i++) {
@@ -533,6 +535,147 @@ function paintHD(id: string, p: Pix, W: number, H: number): boolean {
   };
   const mug = (x: number, y: number) => { p.rect(x, y, 3, 4, '#d8d0c0'); p.set(x, y, '#ffffff'); p.set(x + 1, y, '#6a3a1a'); p.set(x + 3, y + 1, '#d8d0c0'); p.set(x + 3, y + 2, '#b8b0a0'); };
   switch (id) {
+    // ───── 10-29 访客订单、岛屿声望解锁的建筑 ─────
+    case 'order_board': {
+      // 告示板：两根木桩撑一块木板，顶上一道红瓦小雨棚，板上钉着三张订单
+      for (const px of [3, W - 5]) for (let y = 5; y <= B; y++) { p.set(px, y, WOOD[3]); p.set(px + 1, y, WOOD[1]); }
+      for (let y = 0; y < 5; y++) {
+        const half = W / 2 - 1 - (4 - y) * 0.6;
+        for (let x = Math.ceil(cx - half); x < cx + half; x++) p.set(x, y, y === 4 ? BRICK[0] : (x + y) % 4 === 0 ? BRICK[2] : y < 2 ? BRICK[4] : BRICK[3]);
+      }
+      for (let y = 6; y < 21; y++) for (let x = 2; x < W - 2; x++) {
+        p.set(x, y, y === 6 ? WOOD[4] : y === 20 ? WOOD[0] : (y - 6) % 5 === 4 ? WOOD[1] : x === 2 ? WOOD[3] : phash(x >> 2, y, 41) < 0.15 ? WOOD[1] : WOOD[2]);
+      }
+      const papers: [number, number, string][] = [[5, 8, '#f4ecd8'], [13, 9, '#e6eef6'], [21, 8, '#f8e4c8']];
+      for (const [x, y, c] of papers) {
+        p.rect(x, y, 6, 9, c); p.rect(x, y + 8, 6, 1, mix(c, '#000000', 0.18));
+        for (let k = 0; k < 3; k++) p.rect(x + 1, y + 3 + k * 2, k === 2 ? 3 : 4, 1, '#8a8070');
+        p.set(x + 2, y, '#d83a2a'); p.set(x + 3, y, '#ff6a4a');
+      }
+      return true;
+    }
+    case 'fish_pond': {
+      // 鱼塘：石头围边的一大汪水，水里几条银鱼和红鲤，荷叶、芦苇，岸边一截小木栈台
+      const ry = H / 2 - 3;
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const d = Math.hypot((x - W / 2 + 0.5) / (W / 2 - 1), (y - H / 2 - 0.5) / ry) + (phash(x, y, 13) - 0.5) * 0.07;
+        if (d > 1) continue;
+        let c = d > 0.86 ? (phash(x >> 1, y >> 1, 14) < 0.5 ? STONE[3] : STONE[2]) : d > 0.8 ? STONE[1] : WATER[d > 0.6 ? 2 : d > 0.3 ? 1 : 0];
+        if (d <= 0.8 && y < H / 2 - ry * 0.5 && d > 0.55) c = mix(c, WATER[3], 0.4);
+        if (d <= 0.8 && phash(x, y, 15) < 0.025) c = WATER[4];
+        p.set(x, y, c);
+      }
+      const fish = (x: number, y: number, col: string, dir: number) => {
+        for (let i = 0; i < 4; i++) p.set(x + i * dir, y, i === 0 ? mix(col, '#ffffff', 0.3) : col);
+        p.set(x + 1 * dir, y - 1, col); p.set(x + 4 * dir, y - 1, col); p.set(x + 4 * dir, y + 1, col);
+      };
+      fish(16, 24, '#d8e4ec', 1); fish(30, 30, '#d8e4ec', -1); fish(22, 34, '#ff7a3a', 1); fish(32, 19, '#d8e4ec', -1);
+      p.blob(12, 16, 3.5, 2.2, LEAF, 31); p.set(12, 15, '#ff9ab8'); p.set(13, 15, '#ffd0e0');
+      p.blob(36, 36, 3, 2, LEAF, 32);
+      for (const rx of [6, 8, 41]) for (let y = 0; y < 8; y++) p.set(rx + (y < 3 ? 1 : 0), H / 2 + 6 - y, y === 7 ? '#8a5a2a' : LEAF[y < 3 ? 3 : 2]);
+      // 栈台
+      top(W - 15, H - 13, 12, 7, WOOD); front(W - 15, H - 6, 12, 3, WOOD);
+      for (let x = W - 15; x < W - 3; x += 3) for (let y = H - 12; y < H - 6; y++) p.set(x, y, WOOD[1]);
+      p.rect(W - 14, H - 3, 2, 3, WOOD[0]); p.rect(W - 6, H - 3, 2, 3, WOOD[0]);
+      return true;
+    }
+    case 'sheep_pen': {
+      // 羊圈：干草铺地，一圈木栅栏，里面两只毛茸茸的羊和一个饲料槽
+      const WOOL = ['#a8a49c', '#d4d0c8', '#eeebe4', '#ffffff'];
+      for (let y = 8; y < H - 2; y++) for (let x = 2; x < W - 2; x++) p.set(x, y, phash(x, y, 61) < 0.3 ? HAY[2] : phash(x, y, 62) < 0.25 ? LEAF[3] : HAY[3]);
+      const rail = (y: number) => { for (let x = 1; x < W - 1; x++) { p.set(x, y, WOOD[3]); p.set(x, y + 1, WOOD[1]); } };
+      for (let x = 1; x < W; x += 9) for (let y = 2; y <= B; y++) { p.set(x, y, WOOD[2]); p.set(x + 1, y, WOOD[0]); }
+      rail(4); rail(8);
+      for (const sy of [10, 20]) { p.set(1, sy, WOOD[3]); p.set(W - 2, sy, WOOD[3]); }
+      p.rect(W - 15, 13, 10, 4, WOOD[2]); p.rect(W - 15, 13, 10, 1, WOOD[4]); p.rect(W - 14, 14, 8, 1, HAY[4]);
+      const sheep = (x: number, y: number, face: number) => {
+        p.rect(x - 3, y + 3, 1, 3, '#3a3030'); p.rect(x + 2, y + 3, 1, 3, '#3a3030');
+        p.blob(x, y, 5.5, 4, WOOL, x * 7 + y);
+        for (const [dx, dy] of [[-3, -2], [1, -3], [3, 0], [-1, 1]]) p.set(x + dx, y + dy, WOOL[3]);
+        const hx = x + face * 5;
+        p.rect(hx - 1, y - 2, 3, 4, '#3a3030'); p.set(hx + (face > 0 ? 1 : -1), y - 1, '#ffffff');
+        p.set(hx - face, y - 3, WOOL[2]);
+      };
+      sheep(13, 20, -1); sheep(28, 26, 1);
+      for (let x = 1; x < W - 1; x++) { p.set(x, H - 7, WOOD[3]); p.set(x, H - 6, WOOD[1]); p.set(x, H - 3, WOOD[3]); p.set(x, H - 2, WOOD[1]); }
+      return true;
+    }
+    case 'lighthouse': {
+      // 灯塔：礁石底座，红白条纹塔身往上收细，围栏走廊，玻璃灯室里一盏金灯，黑色圆顶
+      p.blob(cx - 6, B - 3, 7, 4, STONE, 81); p.blob(cx + 7, B - 2, 6, 3.5, STONE, 82); p.blob(cx, B - 4, 9, 4, STONE, 83);
+      const t0 = 20, t1 = B - 5;
+      for (let y = t0; y <= t1; y++) {
+        const k = (y - t0) / (t1 - t0);
+        const half = 5 + k * 4;
+        const red = Math.floor((y - t0) / 8) % 2 === 0;
+        const pal = red ? CLOTH_R : PLASTER;
+        for (let x = Math.ceil(cx - half); x < cx + half; x++) {
+          const side = (x - (cx - half)) / (2 * half);
+          p.set(x, y, side < 0.2 ? pal[4] : side > 0.75 ? pal[1] : pal[3]);
+        }
+      }
+      p.rect(cx - 2, t1 - 8, 4, 8, DARKWOOD[1]); p.rect(cx - 2, t1 - 8, 4, 1, DARKWOOD[3]);
+      p.rect(cx - 1, t0 + 14, 2, 3, '#2a3a5a'); p.set(cx - 1, t0 + 14, '#8ac0e8');
+      top(cx - 8, t0 - 2, 16, 2, IRON, false);
+      for (let x = cx - 8; x < cx + 8; x += 2) p.set(x, t0 - 4, IRON[3]);
+      for (let x = cx - 8; x < cx + 8; x++) p.set(x, t0 - 5, IRON[2]);
+      for (let y = 9; y < t0 - 5; y++) for (let x = cx - 4; x < cx + 4; x++) {
+        const edge = x === cx - 4 || x === cx + 3;
+        p.set(x, y, edge ? IRON[1] : Math.abs(x - cx + 0.5) < 2 && y > 10 && y < t0 - 6 ? (y % 3 ? GOLD[4] : '#ffffff') : '#a8e0ff');
+      }
+      for (let y = 2; y < 9; y++) { const half = 1 + (y - 2) * 0.75; for (let x = Math.ceil(cx - half); x < cx + half; x++) p.set(x, y, x < cx - half + 1.5 ? IRON[3] : IRON[1]); }
+      p.set(cx - 1, 1, GOLD[3]); p.set(cx, 1, GOLD[3]); p.set(cx, 0, GOLD[4]);
+      return true;
+    }
+    case 'hot_balloon': {
+      // 热气球：五彩条纹的大气球，下面几根绳子吊着藤筐，筐边挂沙袋，停在地上
+      const by0 = 30, rx = 21, ry = 26;
+      const cols = ['#e84a4a', '#f0c850', '#4a9ae0', '#f0f0e6', '#6ac860'];
+      for (let y = by0 - ry; y <= by0 + ry; y++) for (let x = cx - rx; x <= cx + rx; x++) {
+        const dx = (x - cx + 0.5) / rx;
+        const dy = (y - by0) / ry;
+        const squeeze = dy > 0 ? 1 - dy * dy * 0.55 : 1;
+        const d = dx * dx / (squeeze * squeeze) + dy * dy;
+        if (d > 1 || (dy > 0 && Math.abs(dx) > squeeze)) continue;
+        const gore = Math.floor((Math.asin(Math.max(-1, Math.min(1, dx / Math.max(0.2, squeeze)))) / Math.PI + 0.5) * 7);
+        let c = cols[gore % cols.length];
+        const lit = -dx * 0.6 - dy * 0.5;
+        if (lit > 0.45) c = mix(c, '#ffffff', 0.3); else if (lit < -0.35) c = mix(c, '#1a1020', 0.3);
+        if (Math.abs(dy - 0.15) < 0.04) c = mix(c, '#5a3010', 0.45);
+        p.set(x, y, c);
+      }
+      const neckY = by0 + ry - 2;
+      for (let y = neckY - 3; y < neckY + 2; y++) for (let x = cx - 4; x < cx + 4; x++) p.set(x, y, y < neckY ? '#c88a3a' : '#8a5a2a');
+      const bt = B - 11;
+      for (const [x0, x1] of [[cx - 4, cx - 7], [cx - 1, cx - 3], [cx + 1, cx + 2], [cx + 3, cx + 6]]) p.line(x0, neckY + 2, x1, bt, '#6a5030');
+      // 喷火口
+      p.rect(cx - 1, neckY + 4, 2, 3, IRON[2]); p.set(cx - 1, neckY + 7, '#ffb030'); p.set(cx, neckY + 8, '#ffe070');
+      top(cx - 8, bt, 16, 3, HAY, false); front(cx - 8, bt + 3, 16, B - bt - 2, HAY);
+      for (let y = bt + 4; y < B - 1; y += 2) for (let x = cx - 7; x < cx + 7; x++) if ((x + y) % 4 === 0) p.set(x, y, HAY[1]);
+      p.blob(cx - 10, bt + 6, 2, 2.5, ['#6a5030', '#8a6a40', '#a8885a', '#c8a878'], 91);
+      p.blob(cx + 10, bt + 6, 2, 2.5, ['#6a5030', '#8a6a40', '#a8885a', '#c8a878'], 92);
+      return true;
+    }
+    case 'gold_statue': {
+      // 黄金雕像：大理石台座刻着星星，上面一尊高举火炬的金色人像
+      top(2, H - 14, W - 4, 4, MARBLE, false); front(2, H - 10, W - 4, 10, MARBLE);
+      p.rect(cx - 3, H - 7, 6, 1, GOLD[3]); p.set(cx, H - 8, GOLD[4]); p.set(cx, H - 6, GOLD[2]); p.set(cx - 1, H - 7, GOLD[4]);
+      for (let x = 3; x < W - 3; x++) if (x % 4 === 0) p.set(x, H - 2, MARBLE[1]);
+      const fy = H - 14;
+      for (let y = 14; y < fy; y++) {
+        const half = 2.5 + Math.min(3.5, (y - 14) * 0.25) + (y > fy - 8 ? 1.5 : 0);
+        for (let x = Math.ceil(cx - half); x < cx + half; x++) p.set(x, y, x < cx - half + 1.5 ? GOLD[4] : x > cx + half - 2 ? GOLD[1] : (x + y) % 6 === 0 ? GOLD[2] : GOLD[3]);
+      }
+      p.blob(cx, 10, 3, 3.5, GOLD, 71);
+      p.set(cx - 1, 10, GOLD[0]); p.set(cx + 1, 10, GOLD[0]);
+      // 举火炬的胳膊
+      for (let i = 0; i < 9; i++) { p.set(cx + 3 + Math.floor(i * 0.4), 18 - i, GOLD[3]); p.set(cx + 4 + Math.floor(i * 0.4), 18 - i, GOLD[1]); }
+      p.rect(cx + 6, 6, 3, 4, GOLD[2]); p.set(cx + 6, 6, GOLD[4]);
+      p.set(cx + 7, 5, '#ff9a2a'); p.set(cx + 7, 4, '#ffd060'); p.set(cx + 6, 4, '#ff7a1a'); p.set(cx + 7, 3, '#fff0a0'); p.set(cx + 8, 4, '#ffb030');
+      // 另一只手抱着书
+      p.rect(cx - 7, 20, 4, 5, GOLD[2]); p.rect(cx - 7, 20, 4, 1, GOLD[4]);
+      return true;
+    }
     // ───── 10-27 第二批重画：书架、灯、盆栽、桶罐、户外小件 ─────
     case 'shelf':
     case 'bookcase_tall': {
@@ -916,8 +1059,9 @@ function paintHD(id: string, p: Pix, W: number, H: number): boolean {
       p.rect(W - 6, 0, 2, 4, IRON[3]); p.set(W - 7, 0, IRON[4]);
       for (const fx of [2, W - 4]) p.rect(fx, H - 3, 2, 3, GOLD[3]);
       return true;
-    case 'windmill': {
-      // 石砌塔身越往上越细，木头尖顶，四片带格子的风帆
+    case 'windmill':
+    case 'windmill_body': {
+      // 石砌塔身越往上越细，木头尖顶，四片带格子的风帆（windmill_body 不画风帆，岛上风帆单独转）
       const base = H - 1;
       const topY = 26;
       for (let y = topY; y <= base; y++) {
@@ -934,6 +1078,7 @@ function paintHD(id: string, p: Pix, W: number, H: number): boolean {
       p.rect(cx - 3, base - 8, 6, 8, DARKWOOD[1]); p.rect(cx - 3, base - 8, 6, 1, DARKWOOD[3]); p.set(cx + 1, base - 4, GOLD[3]);
       p.rect(cx - 2, topY + 8, 4, 4, '#3a5a8a'); p.set(cx - 2, topY + 8, '#8ac0e8');
       const hub = { x: cx, y: 22 };
+      if (id === 'windmill_body') { p.rect(hub.x - 1, hub.y - 1, 3, 3, IRON[2]); return true; }
       for (const a of [0.6, 0.6 + Math.PI / 2, 0.6 + Math.PI, 0.6 + Math.PI * 1.5]) {
         const dx = Math.cos(a), dy = Math.sin(a);
         for (let r = 2; r < 13; r++) {
@@ -1961,7 +2106,7 @@ export function paintPortalSwirl(): HTMLCanvasElement {
 /** 家园产出和点心的物品图标（16×16）：鸡蛋、蜂蜜、苹果、煎蛋、苹果派、蜂蜜蛋糕 */
 const homeIconCache = new Map<string, string>();
 export function homeItemIconUrl(id: string): string | null {
-  if (!['egg', 'honey', 'apple', 'fried_egg', 'apple_pie', 'honey_cake'].includes(id) || typeof document === 'undefined') return null;
+  if (!['egg', 'honey', 'apple', 'fried_egg', 'apple_pie', 'honey_cake', 'wool'].includes(id) || typeof document === 'undefined') return null;
   const hit = homeIconCache.get(id);
   if (hit) return hit;
   const p = new Pix(16, 16);
@@ -2007,9 +2152,33 @@ export function homeItemIconUrl(id: string): string | null {
       p.rect(7, 3, 2, 2, '#d82a24'); p.set(8, 2, '#4a9a3a');
       p.rect(3, 6, 2, 1, '#ffe08a');
       break;
+    case 'wool':
+      // 一团蓬松的羊毛：几个圆团挤在一起，左上亮、右下灰，翘出一缕卷毛
+      for (const [cx, cy, r] of [[5, 9, 3.6], [10, 9, 3.6], [7.5, 6, 3.6], [7.5, 11, 3.4], [4, 6.5, 2.4], [11, 6.5, 2.4]] as [number, number, number][]) {
+        oval(cx, cy, r, r, (x, y) => (x + y < 12 ? '#ffffff' : x + y > 18 ? '#c8c2b6' : '#ece8de'));
+      }
+      for (const [x, y] of [[6, 5], [9, 8], [5, 10], [10, 11], [8, 12]]) p.set(x, y, '#d8d2c6');
+      p.set(12, 3, '#ece8de'); p.set(13, 2, '#ece8de'); p.set(13, 1, '#ffffff');
+      break;
   }
   const url = p.outline().canvas().toDataURL();
   homeIconCache.set(id, url);
   return url;
 }
 
+
+/** 风车的风帆（岛上单独转）：28×28，轴心在正中 */
+export function paintWindmillSails(): HTMLCanvasElement {
+  const p = new Pix(28, 28);
+  const hub = { x: 14, y: 14 };
+  for (const a of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
+    const dx = Math.cos(a), dy = Math.sin(a);
+    for (let r = 2; r < 13; r++) {
+      const x = hub.x + dx * r, y = hub.y + dy * r;
+      p.set(x, y, WOOD[1]);
+      if (r > 4) for (let w = 1; w <= 4; w++) p.set(x - dy * w, y + dx * w, (r + w) % 3 === 0 ? WOOD[2] : w === 4 ? '#d8d0c0' : '#f4ece0');
+    }
+  }
+  p.rect(hub.x - 1, hub.y - 1, 3, 3, IRON[2]); p.set(hub.x - 1, hub.y - 1, IRON[4]);
+  return p.outlineTinted().canvas();
+}
