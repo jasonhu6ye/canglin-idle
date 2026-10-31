@@ -374,8 +374,10 @@ export interface EquipType {
     threat?: number };
   group: string;
 }
+/** 双手输出武器自带吸血（10-31）：装不了副手，没法带灯笼的 5% 吸血，挨打比单手多三到五成，补上这一块 */
+const TWO_HAND_LEECH = 0.05;
 const W = (key: string, name: string, skill: SkillId, maker: SkillId, mats: [Mat, number][], plus: number, attack: number, strength: number, attackMs: number, style: CombatStyle, strFlat = 0, twoHanded = false): EquipType =>
-  ({ key, name, slot: 'weapon', skill, maker, mats, plus, stats: { attack, strength, strFlat, attackMs, style, ...(twoHanded ? { twoHanded } : {}) }, group: tl('武器') });
+  ({ key, name, slot: 'weapon', skill, maker, mats, plus, stats: { attack, strength, strFlat, attackMs, style, ...(twoHanded ? { twoHanded, leech: TWO_HAND_LEECH } : {}) }, group: tl('武器') });
 const ARMOR_SLOTS: [EquipSlot, number, number][] = [
   // [部位, 防御占比, 制作多加几级]
   ['head', 0.3, 2], ['body', 0.5, 6], ['feet', 0.2, 3], ['hands', 0.15, 1],
