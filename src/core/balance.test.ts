@@ -5,7 +5,7 @@ import { XP_TABLE } from './xp';
 
 /*
  * 武器平衡（用户 10-31：各有优劣，可以有的稍强，但不许差太多、不许超模）。
- * 每把武器在 T2/T4/T6/T8：同阶板甲 + 灯笼（双手武器没副手），比上一阶等级高 5 级，
+ * 每把武器在 T1/T2/T4/T6/T8：同阶板甲 + 灯笼（双手武器没副手），比上一阶等级高 5 级，
  * 打同阶附近所有怪（不含世界首领）的平均每小时击杀数，以剑为 100。双手大盾是坦克，不算。
  */
 const WEAPONS = EQUIP_TYPES.filter((e) => e.slot === 'weapon' && e.key !== 'greatshield').map((e) => e.key);
@@ -30,9 +30,16 @@ export function weaponScores(ti: number) {
 }
 
 describe('武器平衡（10-31）', () => {
+  it('每一阶每把武器的攻击力都大于 0，并且不低于剑的一半', () => {
+    TIERS.forEach((t) => {
+      const sword = ITEMS[`${t.id}_sword`].equip!.strength;
+      for (const w of WEAPONS) expect(ITEMS[`${t.id}_${w}`].equip!.strength, `${t.id}_${w}`).toBeGreaterThanOrEqual(Math.max(1, sword / 2));
+    });
+  });
   it('每一阶所有输出武器都在剑的 92%-112% 之间', () => {
-    for (const ti of [1, 3, 5, 7]) {
-      const sc = weaponScores(ti);
+    const all = [0, 1, 3, 5, 7].map((ti) => [ti, weaponScores(ti)] as const);
+    for (const [ti, sc] of all) console.log(`T${ti + 1} ` + Object.entries(sc).map(([w, v]) => `${w} ${v}`).join(' | '));
+    for (const [ti, sc] of all) {
       for (const [w, v] of Object.entries(sc)) {
         expect(v, `T${ti + 1} ${w}`).toBeGreaterThanOrEqual(92);
         expect(v, `T${ti + 1} ${w}`).toBeLessThanOrEqual(112);
