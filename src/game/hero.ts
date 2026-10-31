@@ -1214,13 +1214,26 @@ function composeCoffin(p: Pix, o: Outfit, pose: Pose, cx: number, ground: number
       const taper = d < 7 ? (7 - d) * 0.25 : d > 18 ? (d - 18) * 0.15 : 0;
       for (let x = Math.floor(cx - hw + taper); x <= Math.ceil(cx + hw - taper); x++) {
         const edge = x <= cx - hw + taper + 0.5 || x >= cx + hw - taper - 0.5 || d < 0.5 || y >= ground - 0.5;
-        base.set(x, y, edge ? COFRIM : d % 6 < 1 ? COFWOOD[1] : x < cx - 1 ? COFWOOD[3] : COFWOOD[2]);
+        // 背板那条边压暗两格、朝前的那条边提亮一格，木箱才有厚度；横木纹里撒一点颗粒
+        const grain = phash(x, y, 4) > 0.82 ? 1 : 0;
+        base.set(x, y, edge ? COFRIM : d % 6 < 1 ? COFWOOD[1] : x < cx - hw + taper + 2.5 ? COFWOOD[1 + grain] : x > cx + hw - taper - 1.8 ? COFWOOD[4 - grain] : x < cx - 1 ? COFWOOD[3 - grain] : COFWOOD[2 + grain]);
       }
     }
     // 里子：开盖后看得见一条红绒
     if (lid > 0.1) for (let y = Math.floor(top + 1); y < ground; y++) for (let x = Math.floor(cx - 1); x <= Math.ceil(cx + hw - 0.5); x++) if (base.get(x, y) !== COFRIM) base.set(x, y, x > cx + 1 ? VELVET[2] : VELVET[1]);
   } else {
-    // ---- 正面 / 背面：六角木棺，边一圈深色木框，里面铺暗红绒布（背面只有背板的木纹） ----
+    // ---- 正面 / 背面：六角木棺。先把整口棺材往右下错两格画一遍深色木板当侧板和底板（用户 10-31：要立体，不要纸片），
+    // 再画正面：边一圈深色木框，里面铺暗红绒布（背面只有背板的木纹） ----
+    for (let y = Math.floor(top + 1); y <= ground + 1; y++) {
+      const d = y - 1 - top;
+      const hw = cofHalf(d);
+      for (let x = Math.floor(cx + 3 - hw); x <= Math.ceil(cx + 3 + hw); x++) {
+        const px = x + 0.5 - 3;
+        if (Math.abs(px - cx) > hw + 0.4) continue;
+        const rim = Math.abs(px - cx) > hw - 1 || y >= ground + 0.5;
+        base.set(x, y, rim ? COFRIM : d % 5 < 1 ? COFWOOD[1] : phash(x, y, 6) > 0.8 ? COFWOOD[1] : px > cx + hw - 2.5 ? COFWOOD[3] : COFWOOD[2]);
+      }
+    }
     for (let y = Math.floor(top); y <= ground; y++) {
       const d = y - top;
       const hw = cofHalf(d);
@@ -1228,8 +1241,9 @@ function composeCoffin(p: Pix, o: Outfit, pose: Pose, cx: number, ground: number
         const px = x + 0.5;
         if (Math.abs(px - cx) > hw + 0.4) continue;
         const rim = Math.abs(px - cx) > hw - 1 || d < 1 || y >= ground - 0.5;
+        const grain = phash(x, y, 7) > 0.8 ? 1 : 0;
         if (rim) base.set(x, y, COFRIM);
-        else if (up) base.set(x, y, (x - Math.round(cx) + 20) % 4 === 0 ? COFWOOD[1] : (d % 9 < 1 ? COFWOOD[1] : px < cx - 2 ? COFWOOD[3] : COFWOOD[2]));
+        else if (up) base.set(x, y, (x - Math.round(cx) + 20) % 4 === 0 ? COFWOOD[1] : d % 9 < 1 ? COFWOOD[1] : px < cx - 2 ? COFWOOD[3 - grain] : COFWOOD[2 + grain]);
         else {
           const inner = Math.abs(px - cx) < hw - 3 && d > 3 && d < COF_T - 3;
           base.set(x, y, inner ? VELVET[0] : Math.abs(px - cx) > hw - 2 ? VELVET[3] : VELVET[2]);
@@ -1264,8 +1278,10 @@ function composeCoffin(p: Pix, o: Outfit, pose: Pose, cx: number, ground: number
         if (open > 0.3) base.set(x0 + 1, y, COFLID[0]);
       }
     } else {
-      // 正面：棺盖铰链在左边，开盖时整块往左转过去，看起来越来越窄、越来越暗；盖上钉着金十字，几道竖木纹
+      // 正面：棺盖铰链在左边，开盖时整块往左转过去，看起来越来越窄；转过一半就看见盖子里面的红绒；
+      // 盖子四边有倒角（左上亮、右下暗），几道竖木板带木纹，金十字钉在盖上、右下带一格投影
       const w = 1 - open * 0.94;
+      const isCross = (u: number, d: number) => (Math.abs(u) < 0.6 && d > 4.5 && d < 15) || (Math.abs(u) < 3 && d > 7.5 && d < 9.5);
       for (let y = Math.floor(top + 1); y < ground; y++) {
         const d = y - top;
         const hw = cofHalf(d) - 1;
@@ -1278,11 +1294,19 @@ function composeCoffin(p: Pix, o: Outfit, pose: Pose, cx: number, ground: number
           if (ux > cx + hw + 0.5) continue;
           const u = ux - cx;
           const plank = ((Math.round(u) + 40) % 4 === 0) ? 1 : 0;
-          let c = plank ? COFLID[1] : u < -hw + 1.5 ? COFLID[4] : u > hw - 1.5 ? COFLID[1] : d < 2 ? COFLID[4] : COFLID[3 - (d > COF_T - 3 ? 1 : 0)];
-          // 金十字
-          const cross = (Math.abs(u) < 0.6 && d > 4.5 && d < 15) || (Math.abs(u) < 3 && d > 7.5 && d < 9.5);
-          if (cross) c = Math.abs(u) < 0.6 && u < 0 ? GOLD[3] : d < 8.5 && Math.abs(u) >= 0.6 ? GOLD[3] : GOLD[2];
-          if (open > 0) c = mix(c, '#100a08', open * 0.6);
+          const grain = phash(Math.round(ux), y, 8) > 0.78 ? 1 : 0;
+          let c: string;
+          if (open > 0.5) c = Math.abs(u) > hw - 1.2 || d < 2 || d > COF_T - 2.5 ? COFLID[2] : grain ? VELVET[1] : VELVET[2];
+          else if (u < -hw + 1.6 || d < 2.2) c = COFLID[4];
+          else if (u > hw - 1.6 || d > COF_T - 3) c = COFLID[1];
+          else if (plank) c = COFLID[1];
+          else c = COFLID[3 - grain];
+          // 金十字和它右下的投影
+          if (open <= 0.5) {
+            if (isCross(u, d)) c = (Math.abs(u) < 0.6 && u < 0) || (d < 8.5 && Math.abs(u) >= 0.6) ? GOLD[3] : GOLD[2];
+            else if (isCross(u - 1, d - 1)) c = COFLID[0];
+          }
+          if (open > 0 && open <= 0.5) c = mix(c, '#100a08', open * 0.5);
           base.set(x, y, c);
         }
         // 盖子的外沿
