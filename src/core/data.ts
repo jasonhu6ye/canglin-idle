@@ -288,6 +288,19 @@ ENH_STONE_NAMES.forEach((name, i) => {
     tier: i, desc: tl`T${i + 1} 强化石的碎片。集齐 ${SHARD_PER_STONE} 个，在背包或仓库里点「合成」得到 1 颗同阶强化石。副本里的怪和副本宝箱会掉。`,
   });
 });
+/**
+ * 特殊装备材料（用户 10-31）：幽魂精魄做幽魂链刃，冥火灯芯做提灯。只有 T7、T8，
+ * 只能从 T7 以上的副本宝箱里低概率开出来（dungeon.ts rollChest）。
+ */
+export const SPECIAL_MATS = { wraith: tl('幽魂精魄'), wick: tl('冥火灯芯') } as const;
+for (const i of [6, 7]) {
+  item(`wraith_${i + 1}`, tl`T${i + 1} 幽魂精魄`, 'material', BAR_VALUE[i] * 6, {
+    tier: i, desc: tl('副本深处游荡的幽魂凝成的精魄，冰凉发光。打造幽魂链刃要用。只能从 T7 以上的副本宝箱里低概率开出。'),
+  });
+  item(`wick_${i + 1}`, tl`T${i + 1} 冥火灯芯`, 'material', BAR_VALUE[i] * 6, {
+    tier: i, desc: tl('一截烧不尽的冥火灯芯，点着时火苗是青色的。打造提灯要用。只能从 T7 以上的副本宝箱里低概率开出。'),
+  });
+}
 /** 洞察之瞳（用户 10-26）：洞察者背包的特殊材料，只能开副本宝箱得到（宝箱越好越容易出，也会开出比钥匙低阶的） */
 TIERS.forEach((t, i) => {
   item(`sageeye_${i + 1}`, tl`T${i + 1} 洞察之瞳`, 'material', Math.round(60 + t.level * 20), {
@@ -354,7 +367,7 @@ item(SCROLL_TOWN, tl('回城卷轴'), 'misc', 200, {
  * mat 是材料：bar 精炼锭、plank 加工木材、leather 皮革、cloth 布料。
  * plus 是在本阶解锁等级上再加几级才能做。
  */
-type Mat = 'bar' | 'plank' | 'leather' | 'cloth' | 'resin';
+type Mat = 'bar' | 'plank' | 'leather' | 'cloth' | 'resin' | 'wraith' | 'wick';
 export interface EquipType {
   key: string;
   name: string;
@@ -371,8 +384,14 @@ export interface EquipType {
     /** 护甲（10-26）：防御加成、伤害加成、攻速加成的系数，乘每阶的 ARMOR_PCT */
     armor?: ArmorKind; defPct?: number; dmgPct?: number; hastePct?: number; dodgePct?: number;
     /** 嘲讽值（10-26，固定点数，不随阶级品质变） */
-    threat?: number };
+    threat?: number;
+    /** 幽魂链刃（10-31）：每次打中有这个概率再砍一刀（两段伤害） */
+    chain?: number;
+    /** 提灯（10-31）：固定暴击率、武器特殊效果触发概率提升（不随品质变） */
+    crit?: number; proc?: number };
   group: string;
+  /** 特殊装备（10-31）：只有这一阶及以上的版本（6 = T7），不会在野外、福袋、副本宝箱里直接掉 */
+  minTier?: number;
 }
 const W = (key: string, name: string, skill: SkillId, maker: SkillId, mats: [Mat, number][], plus: number, attack: number, strength: number, attackMs: number, style: CombatStyle, strFlat = 0, twoHanded = false): EquipType =>
   ({ key, name, slot: 'weapon', skill, maker, mats, plus, stats: { attack, strength, strFlat, attackMs, style, ...(twoHanded ? { twoHanded } : {}) }, group: tl('武器') });
@@ -429,6 +448,10 @@ export const EQUIP_TYPES: EquipType[] = [
   W('greataxe', tl('巨斧'), 'melee', 'smithing', [['bar', 3], ['plank', 2]], 5, 0.85, 2.7, 3600, 'melee', 28, true),
   // 大锤：单下伤害最高、出手最慢、命中最低
   W('warhammer', tl('大锤'), 'melee', 'smithing', [['bar', 4], ['plank', 1]], 6, 0.75, 3.3, 4200, 'melee', 42, true),
+  // 幽魂链刃（用户 10-31，特殊装备，只有 T7/T8）：单手，打中后 17% 概率再砍一刀（两段伤害）。
+  // 内测版本主推的最强近战（用户 10-31）：配灯笼约剑的 110%，配提灯约 118%，材料要副本宝箱里的幽魂精魄
+  { ...W('chainblade', tl('幽魂链刃'), 'melee', 'smithing', [['bar', 3], ['leather', 1], ['wraith', 2]], 8, 1.05, 0.9, 2300, 'melee', -4), minTier: 6,
+    stats: { attack: 1.05, strength: 0.9, strFlat: -4, attackMs: 2300, style: 'melee', chain: 0.17 } },
   // 双手大盾（用户 10-25）：攻击低、防御很高，双手持握，装上就不能用副手
   { ...W('greatshield', tl('双手大盾'), 'melee', 'smithing', [['bar', 4], ['plank', 1]], 5, 0.55, 0.6, 2800, 'melee'), stats: { attack: 0.55, strength: 0.6, defence: 1.5, attackMs: 2800, style: 'melee', twoHanded: true, threat: 150 } },
   // ---- 远程：皮革 + 加工木材 ----
@@ -454,6 +477,8 @@ export const EQUIP_TYPES: EquipType[] = [
   // 灯笼（用户 10-26）：任何战斗方式都加力量（伤害），外加固定 5% 吸血（打出伤害的 5% 回成自己的血，不随阶级和品质变）。
   // 锭做灯架、树脂当灯油（树脂线终于有用途了）
   OH('lantern', tl('灯笼'), 'defence', 'smithing', [['bar', 1], ['resin', 2]], 3, { strength: 0.4, leech: 0.05 }),
+  // 提灯（用户 10-31，特殊副手，只有 T7/T8）：攻击力和灯笼一样，没有吸血，改成暴击率 +5%、武器特殊效果触发概率 +5%
+  { ...OH('soullamp', tl('提灯'), 'defence', 'smithing', [['bar', 2], ['resin', 2], ['wick', 2]], 8, { strength: 0.4, crit: 0.05, proc: 0.05 }), minTier: 6 },
   // 工具
   TL('axe', tl('斧头'), 'axe', 'woodcutting', 'smithing', [['bar', 1], ['plank', 1]], 1),
   TL('pickaxe', tl('镐子'), 'pickaxe', 'mining', 'smithing', [['bar', 1], ['plank', 1]], 1),
@@ -468,11 +493,14 @@ export const EQUIP_TYPES: EquipType[] = [
 ];
 const TOOL_SLOTS: EquipSlot[] = ['axe', 'pickaxe', 'sickle', 'knife', 'rod', 'hoe', 'hammer', 'needle', 'pan'];
 const matItem = (m: Mat, i: number) => (m === 'bar' ? `${TIERS[i].id}_bar` : `${m}_${i + 1}`);
-const matCost = (m: Mat, i: number) => (m === 'bar' ? BAR_VALUE[i] : RES_VALUE[i] * 3);
+const matCost = (m: Mat, i: number) => (m === 'bar' ? BAR_VALUE[i] : m === 'wraith' || m === 'wick' ? BAR_VALUE[i] * 6 : RES_VALUE[i] * 3);
+/** 普通装备（野外、福袋、副本宝箱会掉的那些），不含只有高阶才有的特殊装备 */
+export const COMMON_EQUIP = () => EQUIP_TYPES.filter((e) => e.minTier === undefined);
 
 TIERS.forEach((t, i) => {
   const p = POWER[i];
   for (const e of EQUIP_TYPES) {
+    if (i < (e.minTier ?? 0)) continue;
     const st = e.stats;
     const value = Math.round(e.mats.reduce((v, [m, q]) => v + matCost(m, i) * q, 0) * 1.5);
     // 装备名字只写阶级（用户 10-26：不要「铁制布甲」这种），如「T4 布袍」
@@ -483,6 +511,7 @@ TIERS.forEach((t, i) => {
         attack: Math.round(p * (st.attack ?? 0)), strength: st.strength ? Math.max(1, Math.round(p * st.strength + (st.strFlat ?? 0))) : 0, defence: Math.round(p * (st.defence ?? 0)),
         style: st.style, speed: st.speed ? TOOL_SPEED[i] : undefined, attackMs: st.attackMs,
         ...(st.haste ? { haste: TORCH_HASTE[i] } : {}), ...(st.twoHanded ? { twoHanded: true } : {}), ...(st.leech ? { leech: st.leech } : {}), ...(st.threat ? { threat: st.threat } : {}),
+        ...(st.chain ? { chain: st.chain } : {}), ...(st.crit ? { crit: st.crit } : {}), ...(st.proc ? { proc: st.proc } : {}),
         ...(st.armor ? { armor: st.armor, defPct: pct3(ARMOR_PCT[i] * st.defPct!), dmgPct: pct3(ARMOR_PCT[i] * st.dmgPct!) } : {}),
         ...(st.hastePct ? { haste: pct3(ARMOR_PCT[i] * st.hastePct) } : {}),
         ...(st.dodgePct ? { dodge: pct3(ARMOR_PCT[i] * st.dodgePct) } : {}),
@@ -647,7 +676,7 @@ const BOSS_TROPHY: Record<string, [string, string]> = {
     const n = t + 1;
     const v = BAR_VALUE[t];
     const seeds = CROPS.filter((c) => tierForLevel(c[2]) === t).map((c) => `seed_${c[0]}`);
-    const gear = EQUIP_TYPES.filter((e) => !e.stats.speed).map((e) => `${T.id}_${e.key}`);
+    const gear = COMMON_EQUIP().filter((e) => !e.stats.speed).map((e) => `${T.id}_${e.key}`);
     const gearPool = (w: number) => gear.map((g) => ({ item: g, min: 1, max: 1, w: w / gear.length }));
     item(`luckybag_${n}`, BAG_NAME[t], 'loot', v * 3, {
       tier: t, desc: tl('精英和首领身上搜出来的福袋，打开能得到金币和一把同阶材料。'),
@@ -724,7 +753,7 @@ for (const it of itemList.filter((x) => x.equip && !x.equip.move && x.equip.slot
         speed: e.speed ? Math.round(e.speed * QUALITY_SPEED[q] * 1000) / 1000 : undefined,
         ...(e.haste ? { haste: Math.round(e.haste * QUALITY_SPEED[q] * 1000) / 1000 } : {}),
         ...(e.hp ? { hp: Math.round(e.hp * QUALITY_STAT[q]) } : {}),
-        ...Object.fromEntries((['xp', 'luck', 'crit', 'dodge', 'work', 'defPct', 'dmgPct'] as const).filter((k) => e[k]).map((k) => [k, Math.round(e[k]! * QUALITY_SPEED[q] * 1000) / 1000])),
+        ...Object.fromEntries((['xp', 'luck', 'crit', 'dodge', 'work', 'defPct', 'dmgPct'] as const).filter((k) => e[k] && !(k === 'crit' && e.slot === 'offhand')).map((k) => [k, Math.round(e[k]! * QUALITY_SPEED[q] * 1000) / 1000])),
       },
     };
     if (q === 0) Object.assign(it, def);
@@ -803,7 +832,7 @@ function speciesDrops(sp: Species, idx: number): Drop[] {
   // 精英和首领：宝石、本阶装备（强化石 10-25 起只在副本里出）
   if (sp.rank !== 'normal' || fam === 'dragon') add(GEM_FOR_TIER[t], 1, sp.rank === 'boss' ? 0.25 : sp.rank === 'elite' ? 0.03 : 0.01);
   if (sp.rank !== 'normal') {
-    const gear = EQUIP_TYPES.filter((e) => !e.stats.speed);
+    const gear = COMMON_EQUIP().filter((e) => !e.stats.speed);
     add(`${T.id}_${gear[idx % gear.length].key}`, 1, sp.rank === 'boss' ? 0.1 : 0.01);
     if (sp.rank === 'boss') add(`${T.id}_${gear[(idx + 7) % gear.length].key}`, 1, 0.06);
   }
@@ -1037,6 +1066,7 @@ TIERS.forEach((t, i) => {
   // 装备
   const prefix = { smithing: 'smith', fletching: 'fletch', crafting: 'craft' } as Record<SkillId, string>;
   for (const e of EQUIP_TYPES) {
+    if (i < (e.minTier ?? 0)) continue;
     const id = `${t.id}_${e.key}`;
     const inputs = e.mats.map(([m, q]) => one(matItem(m, i), q));
     const qty = inputs.reduce((a, x) => a + x.qty, 0);

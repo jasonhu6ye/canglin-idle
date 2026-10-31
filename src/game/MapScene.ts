@@ -2199,6 +2199,14 @@ export class MapScene extends Phaser.Scene {
       const crit = !!c.pCrit;
       const hitIn = this.playerStrike();
       this.time.delayedCall(hitIn, () => this.foe === foe && this.playerSwingFx(foe, m, dmg, crit));
+      // 幽魂链刃连斩（10-31）：第二刀晚一点，青色数字
+      const d2 = c.pDmg2 ?? 0;
+      if (d2 > 0) this.time.delayedCall(hitIn + 220, () => {
+        if (this.foe !== foe || !foe.active) return;
+        this.hitFlash(foe, 1);
+        const S = monsterFrameSize(m);
+        this.popText(foe.x + 11, foe.y - S * 0.55 - 7, tl`连斩 ${d2}`, '#8af0f8', 9);
+      });
       // 灯笼吸血：打中后主角头顶飘一个血红色的回血数字
       const leech = c.pLeech ?? 0;
       if (leech > 0) this.time.delayedCall(hitIn + 260, () => this.float(`+${leech}`, '#6ee86a'));

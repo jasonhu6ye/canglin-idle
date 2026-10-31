@@ -1,4 +1,4 @@
-import { BAR_VALUE, dungeonMonsterId, EQUIP_TYPES, ITEMS, keyId, MAT_LINE_IDS, SCROLL_TOWN, TIERS } from './data';
+import { BAR_VALUE, COMMON_EQUIP, dungeonMonsterId, ITEMS, keyId, MAT_LINE_IDS, SCROLL_TOWN, TIERS } from './data';
 import { SPECIES } from './bestiary';
 import { qid, rollQuality } from './quality';
 import { nextRandom } from './rng';
@@ -352,9 +352,11 @@ const Q_UP1 = [0.02, 0.03, 0.05, 0.08];
 const Q_UP2 = [0, 0.002, 0.005, 0.01];
 const Q_KEY = [0.06, 0.1, 0.15, 0.22];
 const Q_POTION = [0.3, 0.4, 0.5, 0.6];
+/** 特殊装备材料每种的出货率（绿/蓝/紫/金箱），蓝洞再 ×1.3 */
+export const Q_SPECIAL = [0.03, 0.045, 0.07, 0.1];
 const Q_EYE = [0.06, 0.1, 0.16, 0.26];
 const POTIONS = () => Object.values(ITEMS).filter((i) => i.category === 'potion').sort((a, b) => a.value - b.value).map((i) => i.id);
-const GEAR = EQUIP_TYPES.filter((e) => !e.stats.speed && e.slot !== 'ring' && e.slot !== 'neck').map((e) => e.key);
+const GEAR = COMMON_EQUIP().filter((e) => !e.stats.speed && e.slot !== 'ring' && e.slot !== 'neck').map((e) => e.key);
 
 /**
  * 开宝箱：每一项单独随机，不一定都有，运气差会很穷。金币一定有。
@@ -402,6 +404,12 @@ export function rollChest(gate: DungeonGate, q: number, rand: () => number): Rec
   // 洞察之瞳（10-26）：本阶的不常出，低阶的多一些（T1-T3 只能这样得到）
   if (rand() < Q_EYE[q] * (gate.kind === 'blue' ? 1.3 : 1)) add(`sageeye_${n}`, q >= 3 ? ri(1, 2) : 1);
   if (t > 0 && rand() < Q_EYE[q] * 1.6) add(`sageeye_${ri(1, t)}`, ri(1, 2));
+  // 特殊装备材料（用户 10-31）：T7 以上的绿洞/蓝洞宝箱低概率开出幽魂精魄、冥火灯芯（各自单独掷）
+  if (t >= 6) {
+    const k = Q_SPECIAL[q] * (gate.kind === 'blue' ? 1.3 : 1);
+    if (rand() < k) add(`wraith_${n}`, 1);
+    if (rand() < k) add(`wick_${n}`, 1);
+  }
   return out;
 }
 

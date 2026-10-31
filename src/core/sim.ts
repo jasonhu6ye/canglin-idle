@@ -278,7 +278,7 @@ export function mergeSummary(a: Summary, b: Summary): Summary {
 
 export const level = (s: GameState, skill: SkillId) => levelForXp(s.xp[skill]);
 /** 身上所有装备某项加成之和（饰品的生命、经验、掉率、暴击、闪避、干活速度，火把和项链的攻速，灯笼的吸血） */
-export function gearSum(s: GameState, k: 'hp' | 'xp' | 'luck' | 'crit' | 'dodge' | 'work' | 'haste' | 'leech' | 'defPct' | 'dmgPct') {
+export function gearSum(s: GameState, k: 'hp' | 'xp' | 'luck' | 'crit' | 'dodge' | 'work' | 'haste' | 'leech' | 'defPct' | 'dmgPct' | 'proc') {
   let n = 0;
   for (const id of Object.values(s.equipment)) n += (id && ITEMS[id]?.equip?.[k]) || 0;
   return n;
@@ -305,6 +305,11 @@ function aimsAtMate(s: GameState, rand: () => number) {
   return mates.length > 0 && rand() >= targetChance(threatOf(s.equipment), mates);
 }
 /** 灯笼吸血（10-26）：打出 dmg 伤害后回血；不足 1 点的部分按几率补 1 点，长期期望正好是 dmg×吸血比例 */
+/** 幽魂链刃（10-31）：打中后再砍一刀的概率，提灯再加触发概率；不是链刃就是 0 */
+export function chainChance(s: GameState) {
+  const w = s.equipment.weapon ? ITEMS[s.equipment.weapon]?.equip : undefined;
+  return w?.chain ? w.chain + gearSum(s, 'proc') : 0;
+}
 function leechHeal(s: GameState, dmg: number, rand: () => number) {
   const ls = gearSum(s, 'leech');
   if (!ls || s.hp <= 0) return 0;
@@ -607,7 +612,7 @@ export const regenPct = (m: MonsterDef) => (m.world ? 0.003 : m.rank === 'boss' 
 export function combatEstimate(s: GameState, m: MonsterDef) {
   const st = combatStats(s, m);
   const swing = playerAttackMs(s);
-  let avg = st.playerHit * ((1 + st.playerMaxHit) / 2) * (1 + st.crit * (st.critMult - 1));
+  let avg = st.playerHit * ((1 + st.playerMaxHit) / 2) * (1 + st.crit * (st.critMult - 1)) * (1 + chainChance(s));
   const rage = m.traits.includes('berserk') ? 1.25 : 1;
   const venom = m.traits.includes('venom') ? Math.ceil(m.level / 8) : 0;
   const mv = moveOf(m);
@@ -655,6 +660,18 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     const [r, next] = nextRandom(s.rng);
     s.rng = next;
     return r;
+  };
+
+  /** 幽魂链刃（10-31）：打中之后按概率再砍一刀（单独掷伤害和暴击，必中），返回第二刀伤害 */
+  const chainHit = (c: NonNullable<GameState['combat']>, st: ReturnType<typeof combatStats>) => {
+    const ch = chainChance(s);
+    if (!ch || c.monsterHp <= 0 || rand() >= ch) return 0;
+    let raw = 1 + Math.floor(rand() * st.playerMaxHit);
+    if (rand() < st.crit) raw *= st.critMult;
+    const d = Math.max(1, Math.min(c.monsterHp, Math.round(raw)));
+    c.monsterHp -= d;
+    c.pDmg2 = d;
+    return d;
   };
 
   /** 采集、制作、打怪的产出进背包；万一放不下，多出来的才进仓库 */
@@ -1030,12 +1047,15 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       c.pDmg = -1;
       c.pCrit = false;
       c.pLeech = undefined;
+      c.pDmg2 = undefined;
       if (rand() < st.playerHit) {
         let raw = 1 + Math.floor(rand() * st.playerMaxHit);
         if (rand() < st.crit) { raw *= st.critMult; c.pCrit = true; }
-        const dmg = Math.max(1, Math.min(c.monsterHp, Math.round(raw)));
+        let dmg = Math.max(1, Math.min(c.monsterHp, Math.round(raw)));
         c.monsterHp -= dmg;
         c.pDmg = dmg;
+        const d2 = chainHit(c, st);
+        dmg += d2;
         if (c.crew) c.pTotal = (c.pTotal ?? 0) + dmg;
         c.pLeech = leechHeal(s, dmg, rand) || undefined;
         addXp(st.style, dmg);
@@ -1183,12 +1203,14 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       c.pDmg = -1;
       c.pCrit = false;
       c.pLeech = undefined;
+      c.pDmg2 = undefined;
       if (rand() < st.playerHit) {
         let raw = 1 + Math.floor(rand() * st.playerMaxHit);
         if (rand() < st.crit) { raw *= st.critMult; c.pCrit = true; }
-        const dmg = Math.max(1, Math.min(c.monsterHp, Math.round(raw)));
+        let dmg = Math.max(1, Math.min(c.monsterHp, Math.round(raw)));
         c.monsterHp -= dmg;
         c.pDmg = dmg;
+        dmg += chainHit(c, st);
         c.pTotal = (c.pTotal ?? 0) + dmg;
         if (run.me && !run.contrib?.includes(run.me)) run.contrib = [...(run.contrib ?? []), run.me];
         c.pLeech = leechHeal(s, dmg, rand) || undefined;

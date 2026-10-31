@@ -937,4 +937,12 @@ export const EN_CORE: Record<string, string> = {
   "灯塔守望人": "The Lighthouse Keeper",
   "猫咪": "Cat",
   "小狗": "Dog",
+  "幽魂精魄": "Wraith Essence",
+  "冥火灯芯": "Netherflame Wick",
+  "T{0} 幽魂精魄": "T{0} Wraith Essence",
+  "T{0} 冥火灯芯": "T{0} Netherflame Wick",
+  "副本深处游荡的幽魂凝成的精魄，冰凉发光。打造幽魂链刃要用。只能从 T7 以上的副本宝箱里低概率开出。": "The cold, glowing essence of a wraith that roamed the depths of a dungeon. Used to forge the Phantom Chainblade. Only found, rarely, in T7+ dungeon chests.",
+  "一截烧不尽的冥火灯芯，点着时火苗是青色的。打造提灯要用。只能从 T7 以上的副本宝箱里低概率开出。": "A wick of netherflame that never burns out; it lights with a cyan flame. Used to forge the Spirit Lamp. Only found, rarely, in T7+ dungeon chests.",
+  "幽魂链刃": "Phantom Chainblade",
+  "提灯": "Spirit Lamp",
 };

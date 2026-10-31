@@ -380,3 +380,20 @@ describe('副本队友伤害记到同一只怪上（10-26）', () => {
     setDgCrew(0);
   });
 });
+
+describe('特殊装备材料（10-31）', () => {
+  it('只有 T7 以上的副本宝箱会开出幽魂精魄、冥火灯芯，概率低', async () => {
+    const { rollChest } = await import('./dungeon');
+    const { nextRandom } = await import('./rng');
+    let st = 12345;
+    const rand = () => { const [r, n] = nextRandom(st); st = n; return r; };
+    for (const tier of [3, 5]) for (let i = 0; i < 300; i++) {
+      const out = rollChest({ kind: 'green', tier, floors: 4, seed: 1 } as never, 3, rand);
+      expect(Object.keys(out).some((k) => /^(wraith|wick)_/.test(k))).toBe(false);
+    }
+    let hit = 0;
+    for (let i = 0; i < 2000; i++) if (rollChest({ kind: 'green', tier: 6, floors: 2, seed: 1 } as never, 0, rand).wraith_7) hit++;
+    expect(hit / 2000).toBeGreaterThan(0.01);
+    expect(hit / 2000).toBeLessThan(0.06);
+  });
+});

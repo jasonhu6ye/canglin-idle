@@ -58,7 +58,7 @@ describe('数据闭环', () => {
     // 肥料种地时用、洒水器装在田里
     for (const id of ['fert_basic', 'fert_rich', 'sprinkler']) used.add(id);
     // 副本（10-25）：钥匙、回城卷轴、碎片从副本宝箱开出来；钥匙开洞口、卷轴回城、碎片合成强化石。强化石等强化系统开放
-    for (const it of Object.values(ITEMS)) if (/^(dkey_|enhshard_|enhstone_|sageeye_)/.test(it.id) || it.id === 'scroll_town') { made.add(it.id); if (!it.id.startsWith('enhstone_')) used.add(it.id); }
+    for (const it of Object.values(ITEMS)) if (/^(dkey_|enhshard_|enhstone_|sageeye_|wraith_|wick_)/.test(it.id) || it.id === 'scroll_town') { made.add(it.id); if (!it.id.startsWith('enhstone_')) used.add(it.id); }
     for (const it of Object.values(ITEMS)) {
       expect(made.has(it.id), `${it.name} 没有来源`).toBe(true);
       const usable = used.has(it.id) || !!it.equip || !!it.heals || !!it.ammo || !!it.opens || it.category === 'loot' || it.category === 'deco';
@@ -73,8 +73,10 @@ describe('装备体系', () => {
     const { EQUIP_TYPES, TIERS } = await import('./data');
     const makers = new Set<string>();
     for (const a of Object.values(ACTIONS)) if (a.kind === 'skill') a.outputs.forEach((o) => makers.add(o.item));
-    for (const t of TIERS) {
+    for (const [ti, t] of TIERS.entries()) {
       for (const e of EQUIP_TYPES) {
+        // 特殊装备（10-31）只有 T7/T8
+        if (ti < (e.minTier ?? 0)) { expect(ITEMS[`${t.id}_${e.key}`]).toBeUndefined(); continue; }
         const it = ITEMS[`${t.id}_${e.key}`];
         expect(it?.equip, `${t.id}_${e.key}`).toBeDefined();
         expect(makers.has(it.id), `${it.name} 做不出来`).toBe(true);

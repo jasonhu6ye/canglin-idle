@@ -109,6 +109,10 @@ export interface ItemDef {
     threat?: number;
     /** 灯笼（10-26）：吸血，打出伤害的这个比例回成自己的血（0.05 = 5%） */
     leech?: number;
+    /** 幽魂链刃（10-31）：打中后再砍一刀的概率 */
+    chain?: number;
+    /** 提灯（10-31）：武器特殊效果触发概率提升 */
+    proc?: number;
   };
 }
 
@@ -241,6 +245,8 @@ export interface CombatState {
   pCrit?: boolean;
   /** 这一下灯笼吸回了多少血 */
   pLeech?: number;
+  /** 幽魂链刃的第二刀伤害（这一下没触发就没有） */
+  pDmg2?: number;
   /** 副本（10-26）：自己对这只怪一共打了多少伤害（发给队友）、怪的血量上限和开打时洞里有几个队友 */
   pTotal?: number;
   monsterMax?: number;

@@ -958,4 +958,11 @@ export const EN_UI: Record<string, string> = {
   "亲密度满了": "Max affection",
   "每天摸它会叼来小礼物": "Brings you a little gift when petted each day",
   "有一颗心后，摸它会叼来小礼物": "Once it has a heart, it brings a little gift when petted",
+  "连斩 {0}": "Double {0}",
+  "连斩 {0}%（打中后再砍一刀）": "Double strike {0}% (strikes again on hit)",
+  "武器特效触发 +{0}%": "Weapon effect chance +{0}%",
+  " · 布甲和装备 +{0}": " · cloth & gear +{0}",
+  "连斩": "Double strike",
+  "幽魂链刃 17% · 提灯 +{0}": "Chainblade 17% · Spirit Lamp +{0}",
+  "幽魂链刃：打中后再砍一刀": "Phantom Chainblade: strikes again on hit",
 };

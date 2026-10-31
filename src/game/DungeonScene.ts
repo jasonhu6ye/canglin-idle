@@ -497,6 +497,7 @@ export class DungeonScene extends Phaser.Scene {
     const w = this.weapon();
     const f = FIGHT[w];
     const st = combatStats(store.state, m);
+    const d2 = store.state.combat?.pDmg2 ?? 0;
     const dur = Math.min(f.ms, Math.max(200, (store.state.combat?.playerTimerMs ?? 2000) * 0.85));
     const key = `fight-${w}`;
     this.anim = key;
@@ -518,6 +519,13 @@ export class DungeonScene extends Phaser.Scene {
       this.popText(spr.x + 4, spr.y - 22, crit ? tl`暴击 ${dmg}!` : `${dmg}`, crit ? '#ff7a30' : big ? '#ffb030' : '#ffffff', crit ? 11 : big ? 10 : 8);
       if (leech > 0) this.popText(this.player.x + 6, this.player.y - 30, `+${leech}`, '#6ee86a', 8);
       if (crit) this.cameras.main.shake(110, 0.003);
+      // 幽魂链刃连斩（10-31）
+      if (d2 > 0) this.time.delayedCall(220, () => {
+        if (!spr.active) return;
+        spr.setTintFill(0xaaf8ff);
+        this.time.delayedCall(70, () => spr.active && spr.clearTint());
+        this.popText(spr.x + 10, spr.y - 29, tl`连斩 ${d2}`, '#8af0f8', 9);
+      });
     };
     const shoot = () => {
       if (!ranged) return land();

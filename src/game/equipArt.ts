@@ -635,6 +635,55 @@ function shortsword(p: Pix, t: number) {
   if (t === 7) parts.push(ball(o + 5, 0, 1.1, A));
   axis(p, parts);
 }
+/*
+ * 特殊装备（用户 10-31）：幽魂链刃、提灯，只有 T7/T8。t 只会是 6 或 7。
+ */
+function chainblade(p: Pix, t: number) {
+  // 幽魂链刃：黑柄骨刺护手，刃身青白半透微弯，柄头拖一串锁链；T8 刃脊金色、锁链更长
+  const GHOST = ramp(t >= 7 ? '#7ae0e8' : '#5ac0d0');
+  const BONE = ['#8a867c', '#b8b4a8', '#dcd8cc', '#f4f0e4'];
+  const o = 3;
+  const parts: Part[] = [
+    grip(o, o + 4.5, 1, '#2a2230', '#4a3e52'),
+    bar(o + 5, 3.4, 0.8, BONE, 1.4),
+    blade(o + 5.8, o + 21, (q: number) => (q < 0.75 ? 2.2 + Math.sin(q * 7) * 0.45 : 2.6 * (1 - q) / 0.25), GHOST, { fuller: t >= 7 ? GOLDS[2] : GHOST[0], edge: GHOST[4] }),
+    dots(o + 9, o + 17, 3.2, 0, '#eaffff'),
+  ];
+  axis(p, parts);
+  // 锁链：从柄头往左下垂一串交替的环
+  const n = t >= 7 ? 5 : 4;
+  for (let k = 0; k < n; k++) {
+    const x = 3 - k * 0.5 + Math.sin(k) * 0.4, y = 20.5 + k * 0.9;
+    p.set(Math.round(x), Math.round(y), k % 2 ? '#5a5e66' : '#9aa0aa');
+    if (k % 2 === 0) p.set(Math.round(x) + 1, Math.round(y), '#3a3e46');
+  }
+}
+function soullamp(p: Pix, t: number) {
+  // 提灯：一根短提杆挑着的骨笼灯，里面青色冥火；T8 灯笼金边、火更亮
+  const fire = t >= 7 ? ['#2ac0c8', '#8af8ff', '#ffffff'] : ['#1a8a9a', '#5ad8e0', '#d8ffff'];
+  const M = ramp(METAL[t]);
+  const BONE = ['#6a665c', '#a8a498', '#dcd8cc'];
+  // 提杆和弯钩
+  for (let x = 2; x <= 15; x++) { p.set(x, 3 + Math.round((x - 2) * 0.12), x < 5 ? '#4a3e52' : '#7a6a58'); p.set(x, 4 + Math.round((x - 2) * 0.12), '#4a3a30'); }
+  p.set(15, 4, M[3]); p.set(16, 5, M[3]); p.set(16, 6, M[2]);
+  const cx = 15.5, y0 = 8, y1 = 19;
+  // 灯帽
+  for (let x = 11; x <= 20; x++) p.set(x, 7, t >= 7 ? GOLDS[2] : M[2]);
+  for (let x = 13; x <= 18; x++) p.set(x, 6, t >= 7 ? GOLDS[3] : M[3]);
+  for (let y = y0; y <= y1; y++) {
+    const k = (y - y0) / (y1 - y0);
+    const w = 3.5 + 2.5 * Math.sin(Math.PI * k);
+    for (let x = Math.floor(cx - w); x <= Math.ceil(cx + w) - 1; x++) {
+      const edge = x === Math.floor(cx - w) || x === Math.ceil(cx + w) - 1;
+      const rib = Math.abs(x + 0.5 - cx) < 0.6;
+      if (edge || rib || y % 4 === 0) { p.set(x, y, edge ? BONE[0] : BONE[1]); continue; }
+      const d = Math.hypot((x + 0.5 - cx) / w, (y - (y0 + y1) / 2 - 1) / 5);
+      p.set(x, y, d < 0.35 ? fire[2] : d < 0.7 ? fire[1] : mix(fire[0], '#0c0a14', 0.4));
+    }
+  }
+  for (let x = 12; x <= 19; x++) p.set(x, y1 + 1, t >= 7 ? GOLDS[1] : M[1]);
+  p.set(15, y1 + 2, BONE[2]); p.set(16, y1 + 2, BONE[2]); p.set(15, y1 + 3, BONE[1]);
+}
 function broadsword(p: Pix, t: number) {
   // 阔剑：双手大剑，长握柄、宽护手、宽刃一直顶到格子角上
   const M = ramp(METAL[t]);
@@ -1698,6 +1747,8 @@ export function equipIconUrl(key: string, tier: number): string | null {
   else if (key === 'staff') staff(p, tier);
   else if (key === 'handaxe') handaxe(p, tier);
   else if (key === 'shortsword') shortsword(p, tier);
+  else if (key === 'chainblade') chainblade(p, tier);
+  else if (key === 'soullamp') soullamp(p, tier);
   else if (key === 'broadsword') broadsword(p, tier);
   else if (key === 'greataxe') greataxe(p, tier);
   else if (key === 'warhammer') warhammer(p, tier);
