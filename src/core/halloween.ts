@@ -36,9 +36,11 @@ export const hwTierOf = (monsterId: string) => {
  */
 export const HW_MOUNT = 'mount_pumpkin';
 export const HW_MOUNT_COST = 1000;
-/** 死神皮肤「幽冥死神」（用户 10-30）：用南瓜积分兑换，解锁后在衣橱换上，每个存档一次 */
-export const HW_SKIN = 'reaper';
+/** 万圣节限定外观：用南瓜积分兑换，解锁后在衣橱随时换，每套每个存档一次。10-30 死神「幽冥死神」，10-31 「棺材伯爵」 */
+export const HW_SKINS: { id: string; cost: number }[] = [{ id: 'reaper', cost: 800 }, { id: 'coffin', cost: 800 }];
 export const HW_SKIN_COST = 800;
+/** 这套万圣节外观换过了没（老存档的死神记在 halloween.skin 上） */
+export const hwHasSkin = (h: { skin?: boolean; skins?: string[] } | undefined, id: string) => !!h && ((id === 'reaper' && !!h.skin) || !!h.skins?.includes(id));
 export const HW_REVEAL = new Date(2026, 9, 30).getTime();
 export const hwShopOpen = (now: number) => now >= HW_REVEAL;
 
