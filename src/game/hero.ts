@@ -1222,18 +1222,7 @@ function composeCoffin(p: Pix, o: Outfit, pose: Pose, cx: number, ground: number
     // 里子：开盖后看得见一条红绒
     if (lid > 0.1) for (let y = Math.floor(top + 1); y < ground; y++) for (let x = Math.floor(cx - 1); x <= Math.ceil(cx + hw - 0.5); x++) if (base.get(x, y) !== COFRIM) base.set(x, y, x > cx + 1 ? VELVET[2] : VELVET[1]);
   } else {
-    // ---- 正面 / 背面：六角木棺。先把整口棺材往右下错两格画一遍深色木板当侧板和底板（用户 10-31：要立体，不要纸片），
-    // 再画正面：边一圈深色木框，里面铺暗红绒布（背面只有背板的木纹） ----
-    for (let y = Math.floor(top + 1); y <= ground + 1; y++) {
-      const d = y - 1 - top;
-      const hw = cofHalf(d);
-      for (let x = Math.floor(cx + 3 - hw); x <= Math.ceil(cx + 3 + hw); x++) {
-        const px = x + 0.5 - 3;
-        if (Math.abs(px - cx) > hw + 0.4) continue;
-        const rim = Math.abs(px - cx) > hw - 1 || y >= ground + 0.5;
-        base.set(x, y, rim ? COFRIM : d % 5 < 1 ? COFWOOD[1] : phash(x, y, 6) > 0.8 ? COFWOOD[1] : px > cx + hw - 2.5 ? COFWOOD[3] : COFWOOD[2]);
-      }
-    }
+    // ---- 正面 / 背面：六角木棺的正面：边一圈深色木框，里面铺暗红绒布（背面只有背板的木纹）。侧板、底板在最后按盒子的角度另画 ----
     for (let y = Math.floor(top); y <= ground; y++) {
       const d = y - top;
       const hw = cofHalf(d);
@@ -1318,26 +1307,75 @@ function composeCoffin(p: Pix, o: Outfit, pose: Pose, cx: number, ground: number
       if (pose.eyeGlow && open < 0.08) for (let y = Math.floor(top + 4); y < ground - 3; y += 2) if (phash(y, pose.seed ?? 0, 3) < pose.eyeGlow) base.set(cx + cofHalf(y - top) - 0.5, y, g[0]);
     }
   }
-  // ---- 整口倾倒：绕着底角转，越躺越扁 ----
+  // ---- 整口倾倒 ----
   const tilt = pose.tilt ?? 0;
-  if (Math.abs(tilt) < 0.01) return base;
+  if (side) {
+    // 侧面：绕着底角转，越躺越扁
+    if (Math.abs(tilt) < 0.01) return base;
+    const out = new Pix(p.w, p.h);
+    out.ox = p.ox;
+    out.oy = p.oy;
+    const pivX = cx - 4 * Math.max(-1, Math.min(1, tilt / 0.3));
+    const sq = 1 - 0.62 * Math.abs(Math.sin(tilt));
+    const cs = Math.cos(tilt), sn = Math.sin(tilt);
+    for (let y = -p.oy; y < p.h - p.oy; y++) {
+      for (let x = -p.ox; x < p.w - p.ox; x++) {
+        const dx = x + 0.5 - pivX;
+        const dy = (y + 0.5 - ground) / sq;
+        const c = base.get(Math.floor(pivX + dx * cs - dy * sn), Math.floor(ground + dx * sn + dy * cs));
+        if (c) out.set(x, y, c);
+      }
+    }
+    return out;
+  }
+  return coffinBox(p, base, cx, ground, tilt, pose.seed ?? 0);
+}
+
+/**
+ * 正面 / 背面的棺材当成一个有厚度的盒子画（用户 10-31：倒下去也要立体）：盖子那一面按角度贴上去，
+ * 长边侧板和底板按盒子厚度另画。立着时镜头偏左上，能看见右侧板和底板；躺下时盖子朝天、压扁一半，下面露出整条长边侧板。
+ * 三个方向的屏幕向量：A 沿棺材长度、V 沿宽度、D 沿厚度（从背板指向盖子）
+ */
+function coffinBox(p: Pix, base: Pix, cx: number, ground: number, tilt: number, seed: number): Pix {
   const out = new Pix(p.w, p.h);
   out.ox = p.ox;
   out.oy = p.oy;
+  const sn = Math.sin(tilt), cs = Math.cos(tilt);
+  const A = [-sn, -cs], V = [cs, -sn * 0.5], D = [-0.75 * (1 - sn), -(0.25 + 0.75 * sn)];
+  const T = 4;
+  // 转轴在底部偏左的角上；O 是盖子上 (u=0, v=0) 那一点在屏幕上的位置
   const pivX = cx - 4 * Math.max(-1, Math.min(1, tilt / 0.3));
-  const pivY = ground;
-  const sq = 1 - 0.62 * Math.abs(Math.sin(tilt));
-  const cs = Math.cos(tilt), sn = Math.sin(tilt);
+  const O = [pivX + (cx - pivX) * V[0], ground + (cx - pivX) * V[1]];
+  const at = (u: number, v: number, w: number): [number, number] => [O[0] + u * A[0] + v * V[0] + (w - T) * D[0], O[1] + u * A[1] + v * V[1] + (w - T) * D[1]];
+  // 哪条长边、哪头看得见：背板相对盖子的偏移（-D）朝哪边，那边的侧板就露出来
+  const sideSign = -(D[0] * V[0] + D[1] * V[1]) > 0 ? 1 : -1;
+  const endDot = -(D[0] * A[0] + D[1] * A[1]);
+  const face = (u: number, v: number, w: number, c: string) => { const [x, y] = at(u, v, w); out.set(x, y, c); };
+  for (let u = 0; u <= COF_T; u += 0.5) {
+    const hw = cofHalf(COF_T - u) - 0.5;
+    for (let w = 0; w <= T; w += 0.5) {
+      const c = w < 0.6 ? COFRIM : u % 5 < 0.5 ? COFWOOD[1] : phash(Math.round(u * 2), Math.round(w * 2), 6) > 0.82 ? COFWOOD[1] : w > T - 0.9 ? COFWOOD[3] : COFWOOD[2];
+      face(u, sideSign * hw, w, c);
+      face(u, sideSign * (hw - 0.5), w, c);
+    }
+  }
+  if (Math.abs(endDot) > 0.05) {
+    const u0 = endDot < 0 ? 0 : COF_T;
+    const hw = cofHalf(COF_T - u0);
+    for (let v = -hw; v <= hw; v += 0.5) for (let w = 0; w <= T; w += 0.5) face(u0, v, w, w < 0.6 || Math.abs(v) > hw - 0.6 ? COFRIM : COFWOOD[1]);
+  }
+  // 盖子那一面：屏幕上每一格反算回盖子上的 (u, v)，从立着画好的那张图里取色
+  const det = A[0] * V[1] - A[1] * V[0];
   for (let y = -p.oy; y < p.h - p.oy; y++) {
     for (let x = -p.ox; x < p.w - p.ox; x++) {
-      const dx = x + 0.5 - pivX;
-      const dy = (y + 0.5 - pivY) / sq;
-      const sx = pivX + dx * cs - dy * sn;
-      const sy = pivY + dx * sn + dy * cs;
-      const c = base.get(Math.floor(sx), Math.floor(sy));
+      const dx = x + 0.5 - O[0], dy = y + 0.5 - O[1];
+      const u = (dx * V[1] - dy * V[0]) / det;
+      const v = (A[0] * dy - A[1] * dx) / det;
+      const c = base.get(Math.floor(cx + v), Math.floor(ground - u));
       if (c) out.set(x, y, c);
     }
   }
+  void seed;
   return out;
 }
 
