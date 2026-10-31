@@ -296,26 +296,55 @@ function sleepOf(b: AiPlayer): [number, number] | null {
   if (rnd(b.seed, 93) < 0.1) return null;
   return [22.5 + rnd(b.seed, 94) * 4, 5.5 + rnd(b.seed, 95) * 3];
 }
-/** 这个 AI 现在在不在线 */
-export function botOnline(b: AiPlayer, t = Date.now()) {
-  const s = sleepOf(b);
-  if (!s) return true;
-  const local = (((t / HOUR + zoneOf(b).tz) % 24) + 24) % 24;
-  return (((local - s[0]) % 24) + 24) % 24 >= s[1];
-}
-/** 一段时间里的下线、上线时刻（打招呼用） */
-function sleepsIn(b: AiPlayer, from: number, to: number) {
-  const s = sleepOf(b);
-  if (!s) return [];
-  const out: { day: number; off: number; on: number }[] = [];
-  for (let d = Math.floor(from / DAY) - 1; d <= Math.floor(to / DAY) + 1; d++) {
-    const off = d * DAY + (s[0] - zoneOf(b).tz) * HOUR;
-    out.push({ day: d, off, on: off + s[1] * HOUR });
+/**
+ * 玩家类型（用户 10-31：不是每个人都常在线）：
+ * 肝帝醒着就在线；常玩的大多数天上来两三次、每次几小时；休闲的隔天上来一会；偶尔玩的几天才来一次
+ */
+type Habit = 'hardcore' | 'regular' | 'casual' | 'rare';
+export const habitOf = (b: AiPlayer): Habit => { const r = rnd(b.seed, 102); return r < 0.12 ? 'hardcore' : r < 0.45 ? 'regular' : r < 0.8 ? 'casual' : 'rare'; };
+const HABIT: Record<Exclude<Habit, 'hardcore'>, { days: number; n: [number, number]; len: [number, number] }> = {
+  regular: { days: 0.85, n: [1, 3], len: [1.5, 4] },
+  casual: { days: 0.55, n: [1, 2], len: [0.5, 2] },
+  rare: { days: 0.25, n: [1, 1], len: [0.3, 1.5] },
+};
+/** 当地第 d 天的几段在线时间（当地小时，可能过了午夜） */
+function sessionsOf(b: AiPlayer, d: number): [number, number][] {
+  const h = habitOf(b);
+  const s = sleepOf(b) ?? [24, 6];
+  const wake = (s[0] + s[1]) % 24, bed = s[0] + (s[0] < wake ? 24 : 0);
+  if (h === 'hardcore') return [[wake, bed]];
+  const c = HABIT[h];
+  if (rnd(b.seed, 103, d) >= c.days) return [];
+  const n = c.n[0] + Math.floor(rnd(b.seed, 104, d) * (c.n[1] - c.n[0] + 1));
+  const out: [number, number][] = [];
+  for (let k = 0; k < n; k++) {
+    const len = c.len[0] + rnd(b.seed, 105, d, k) * (c.len[1] - c.len[0]);
+    // 多半在下班后的晚上，也有午休、上午的
+    const r = rnd(b.seed, 106, d, k);
+    const at = r < 0.6 ? Math.max(wake, 18) + rnd(b.seed, 107, d, k) * 3 : wake + rnd(b.seed, 107, d, k) * Math.max(1, 17 - wake);
+    const st = Math.min(at, bed - len), en = Math.min(st + len, bed);
+    if (en > st && !out.some(([x, y]) => st < y + 0.5 && en > x - 0.5)) out.push([st, en]);
   }
   return out;
 }
-/** 话多话少：有的 AI 一直在说，有的几乎不说话 */
-const chattyOf = (b: AiPlayer) => 0.15 + 3 * rnd(b.seed, 91) ** 2;
+const localOf = (b: AiPlayer, t: number) => t / HOUR + zoneOf(b).tz;
+/** 这个 AI 现在在不在线 */
+export function botOnline(b: AiPlayer, t = Date.now()) {
+  if (habitOf(b) === 'hardcore' && !sleepOf(b)) return true;
+  const L = localOf(b, t), d = Math.floor(L / 24), h = L - d * 24;
+  return sessionsOf(b, d).some(([x, y]) => h >= x && h < y) || sessionsOf(b, d - 1).some(([x, y]) => h + 24 >= x && h + 24 < y);
+}
+/** 一段时间里的上线、下线时刻（打招呼用） */
+function sessionsIn(b: AiPlayer, from: number, to: number) {
+  const out: { key: string; on: number; off: number }[] = [];
+  const tz = zoneOf(b).tz;
+  for (let d = Math.floor(localOf(b, from) / 24) - 1; d <= Math.floor(localOf(b, to) / 24); d++) {
+    sessionsOf(b, d).forEach(([x, y], k) => out.push({ key: `${d}-${k}`, on: (d * 24 + x - tz) * HOUR, off: (d * 24 + y - tz) * HOUR }));
+  }
+  return out;
+}
+/** 话多话少：有的 AI 一直在说，有的几乎不说话；三分之一基本只潜水 */
+const chattyOf = (b: AiPlayer) => (rnd(b.seed, 96) < 0.35 ? 0.03 : 0.15 + 3 * rnd(b.seed, 91) ** 2);
 function pickTalker(on: AiPlayer[], r: number) {
   const total = on.reduce((a, b) => a + chattyOf(b), 0);
   let x = r * total;
@@ -825,9 +854,11 @@ export function botChat(bots: AiPlayer[], from: number, to: number): ChatMsg[] {
   }
   // 上线打招呼、下线说再见
   for (const b of bots) {
-    for (const z of sleepsIn(b, from, to)) {
-      if (rnd(b.seed, 97, z.day) < 0.35) { const en = pick(BYE, rnd(b.seed, 98, z.day)); push(`bot-bye-${b.id}-${z.day}`, b, en, BOT_ZH[en], z.off - 40_000); }
-      if (rnd(b.seed, 99, z.day) < 0.35) { const en = pick(HELLO, rnd(b.seed, 100, z.day)); push(`bot-hi-${b.id}-${z.day}`, b, en, BOT_ZH[en], z.on + 30_000); }
+    // 潜水的很少打招呼
+    const p = Math.min(0.5, 0.1 + chattyOf(b) * 0.15);
+    for (const z of sessionsIn(b, from, to)) {
+      if (rnd(b.seed, 97, strHash(z.key)) < p) { const en = pick(BYE, rnd(b.seed, 98, strHash(z.key))); push(`bot-bye-${b.id}-${z.key}`, b, en, BOT_ZH[en], z.off - 40_000); }
+      if (rnd(b.seed, 99, strHash(z.key)) < p) { const en = pick(HELLO, rnd(b.seed, 100, strHash(z.key))); push(`bot-hi-${b.id}-${z.key}`, b, en, BOT_ZH[en], z.on + 30_000); }
     }
   }
   // 往前多看几段：前面开始的对话可能还在接着说
