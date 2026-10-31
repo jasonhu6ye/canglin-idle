@@ -1219,7 +1219,4 @@ export const EN_TEXT: Record<string, string> = {
   "快武器（匕首、单手斧、单手战弓）在低阶不再一家独大；重武器（阔剑、战镰、巨斧、大锤、弩、十字弩）在低阶加强、在高阶略微削弱。剑、长枪、长弓攻击力略提高。": "Fast weapons (dagger, hatchet, warbow) no longer dominate the low tiers. Heavy weapons (broadsword, war scythe, greataxe, warhammer, crossbow, arbalest) are stronger at low tiers and slightly weaker at high tiers. Sword, spear and longbow damage is slightly higher.",
   "装备说明里多了一项「每几秒一击」，比较武器时可以看到出手速度。": "Weapon details now show how many seconds each hit takes, so you can compare attack speed.",
   "每 {0} 秒一击": "1 hit / {0}s",
-  "修复：低阶武器攻击力为 0": "Fix: low-tier weapons with 0 damage",
-  "修复 T1 单手斧、单手战弓攻击力显示为 0 的问题。所有武器攻击力统一提高 12 点，低阶武器提升明显，高阶影响很小。": "Fixed T1 hatchets and warbows showing 0 damage. Every weapon's damage is raised by 12, a noticeable boost at low tiers and barely any change at high tiers.",
-  "平衡重新校对了一遍，T1 也算进去：每一阶所有武器的效率都在剑的 92%-109% 之间，单手斧仍是这个版本最强的近战（约 108%）。": "Balance was rechecked with T1 included: at every tier, every weapon is now between 92% and 109% of the sword. The hatchet is still the strongest melee weapon this version (about 108%).",
 };
