@@ -480,7 +480,7 @@ TIERS.forEach((t, i) => {
       tier: i,
       equip: {
         slot: e.slot, skill: e.skill, level: t.level,
-        attack: Math.round(p * (st.attack ?? 0)), strength: Math.max(0, Math.round(p * (st.strength ?? 0) + (st.strFlat ?? 0))), defence: Math.round(p * (st.defence ?? 0)),
+        attack: Math.round(p * (st.attack ?? 0)), strength: st.strength ? Math.max(1, Math.round(p * st.strength + (st.strFlat ?? 0))) : 0, defence: Math.round(p * (st.defence ?? 0)),
         style: st.style, speed: st.speed ? TOOL_SPEED[i] : undefined, attackMs: st.attackMs,
         ...(st.haste ? { haste: TORCH_HASTE[i] } : {}), ...(st.twoHanded ? { twoHanded: true } : {}), ...(st.leech ? { leech: st.leech } : {}), ...(st.threat ? { threat: st.threat } : {}),
         ...(st.armor ? { armor: st.armor, defPct: pct3(ARMOR_PCT[i] * st.defPct!), dmgPct: pct3(ARMOR_PCT[i] * st.dmgPct!) } : {}),

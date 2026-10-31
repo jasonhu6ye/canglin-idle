@@ -1219,4 +1219,6 @@ export const EN_TEXT: Record<string, string> = {
   "快武器（匕首、单手斧、单手战弓）在低阶不再一家独大；重武器（阔剑、战镰、巨斧、大锤、弩、十字弩）在低阶加强、在高阶略微削弱。剑、长枪、长弓攻击力略提高。": "Fast weapons (dagger, hatchet, warbow) no longer dominate the low tiers. Heavy weapons (broadsword, war scythe, greataxe, warhammer, crossbow, arbalest) are stronger at low tiers and slightly weaker at high tiers. Sword, spear and longbow damage is slightly higher.",
   "装备说明里多了一项「每几秒一击」，比较武器时可以看到出手速度。": "Weapon details now show how many seconds each hit takes, so you can compare attack speed.",
   "每 {0} 秒一击": "1 hit / {0}s",
+  "修复：T1 单手斧攻击力为 0": "Fix: T1 hatchet with 0 damage",
+  "T1 单手斧（和 T1 单手战弓）攻击力显示为 0，改为 1。其他武器数值不变。": "The T1 hatchet (and T1 warbow) showed 0 damage; it is now 1. No other weapon stats changed.",
 };

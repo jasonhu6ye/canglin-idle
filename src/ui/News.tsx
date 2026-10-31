@@ -8,6 +8,12 @@ import { tl } from '../i18n';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-10-31-z2', date: tl('10 月 31 日'), title: tl("修复：T1 单手斧攻击力为 0"),
+    lines: [
+      tl("T1 单手斧（和 T1 单手战弓）攻击力显示为 0，改为 1。其他武器数值不变。"),
+    ],
+  },
+  {
     id: '2026-10-31-y', date: tl('10 月 31 日'), title: tl("武器平衡调整"),
     lines: [
       tl("全部武器重新平衡：在每一阶（T2、T4、T6、T8）都实测打同阶所有怪的效率，以剑为基准，所有近战、远程、魔法武器都在 95%-108% 之间，不再有某一阶特别强或特别弱的武器。"),
