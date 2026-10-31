@@ -1,5 +1,5 @@
 import { ACTIONS, ITEMS, MONSTERS, NODES, SKILLS, standOf, WALK_TILES_PER_SEC, type MapNode } from '../core/data';
-import { baseOf } from '../core/quality';
+import { baseOf, qid } from '../core/quality';
 import { APT_MAX, APT_MIN, horseItem } from '../core/ranch';
 import type { EquipSlot, SkillId } from '../core/types';
 import { XP_TABLE } from '../core/xp';
@@ -68,8 +68,8 @@ export function botName(r: () => number, taken: Set<string>): string {
 }
 
 // ---- 等级、装备 ----
-/** 某个技能玩了多少小时 → 等级（按 xp.ts 里挂机速度的估算插值） */
-const HOURS_LV: [number, number][] = [[0, 1], [0.1, 10], [0.83, 30], [4, 50], [20, 70], [145, 95], [800, 120], [3000, 140]];
+/** 某个技能玩了多少小时 → 等级（用户 10-31：越往上越难，每级要的时间越来越长） */
+const HOURS_LV: [number, number][] = [[0, 1], [0.15, 8], [1.2, 25], [6, 40], [30, 58], [180, 80], [1000, 105], [5000, 125], [20000, 140]];
 function levelOfHours(h: number) {
   if (h <= 0) return 1;
   for (let i = 1; i < HOURS_LV.length; i++) {
@@ -99,6 +99,19 @@ function gearOf(slot: EquipSlot) {
     BY_SLOT.set(slot, list);
   }
   return list;
+}
+
+/** 各格子有装备的可能（玩久了） */
+const SLOT_HAVE: Partial<Record<EquipSlot, number>> = {
+  weapon: 1, body: 0.9, head: 0.75, feet: 0.7, hands: 0.6, offhand: 0.6, neck: 0.3, ring: 0.25,
+  pickaxe: 0.8, axe: 0.75, rod: 0.6, sickle: 0.4, knife: 0.4,
+};
+/** AI 身上装备的品质（百分比）：普通 80、良好 14、优秀 4.5、史诗 1.2、传说 0.25、神话 0.05 */
+const BOT_Q = [80, 14, 4.5, 1.2, 0.25, 0.05];
+function qualityRoll(r: number) {
+  let x = r * 100;
+  for (let q = 0; q < BOT_Q.length; q++) if ((x -= BOT_Q[q]) < 0) return q;
+  return 0;
 }
 
 export interface BotProfile {
@@ -147,11 +160,18 @@ export function botProfile(b: AiPlayer, t = Date.now()): BotProfile {
   const total = SKILL_IDS.reduce((a, k) => a + levels[k], 0);
   const combat = Math.max(1, Math.floor((Math.max(levels.melee, levels.ranged, levels.magic) * 1.3 + levels.defence + levels.hitpoints) / 3.3));
   const equip: Partial<Record<EquipSlot, string>> = {};
+  // 用户 10-31：不是人人都穿齐——玩得越久格子越满，饰品和副手最少见；也不总是最好的那件
+  const grown = Math.min(1, 0.35 + hours / 60);
   GEAR.forEach((slot, i) => {
     const ok = gearOf(slot).filter((g) => g.level <= levels[g.skill] && (!g.style || slot === 'neck' || slot === 'ring' || g.style === style));
-    if (!ok.length || (slot === 'offhand' && style !== 'melee' && rnd(s, 30) < 0.5) || ((slot === 'neck' || slot === 'ring') && rnd(s, 31, i) < 0.4)) return;
-    // 大多穿着够得着的最好的几件之一
-    equip[slot] = ok[Math.max(0, ok.length - 1 - Math.floor(rnd(s, 40, i) ** 2 * 4))].id;
+    if (!ok.length || (slot === 'offhand' && style !== 'melee' && rnd(s, 30) < 0.5)) return;
+    // 工具看这个技能练了多少：基本没碰过的技能多半没买工具
+    const tool = ['pickaxe', 'axe', 'rod', 'sickle', 'knife'].includes(slot) ? Math.min(1, levels[ok[0].skill] / 15) : 1;
+    if (slot !== 'weapon' && rnd(s, 32, i) >= (SLOT_HAVE[slot] ?? 0.6) * grown * tool) return;
+    const g = ok[Math.max(0, ok.length - 1 - Math.floor(rnd(s, 40, i, ok.length) ** 1.5 * 5))];
+    // 品质：大多普通，偶尔良好、优秀，史诗以上很少见
+    const q = qualityRoll(rnd(s, 41, i, g.level));
+    equip[slot] = q && ITEMS[qid(g.id, q)] ? qid(g.id, q) : g.id;
   });
   const mount = combat >= 15 || total >= 300 ? horseItem(APT_MIN + Math.floor(rnd(s, 6) ** 1.5 * (APT_MAX - APT_MIN))) : undefined;
   if (mount && ITEMS[mount]) equip.mount = mount;
