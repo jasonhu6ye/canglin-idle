@@ -434,6 +434,54 @@ export function botChat(bots: AiPlayer[], from: number, to: number): ChatMsg[] {
   return out.sort((x, y) => x.at - y.at);
 }
 
+// ---- 接真人的话（用户 10-31）：说英文才有人用英文回，说别的语言只会得到「?」 ----
+const strHash = (t: string) => { let h = 7; for (let i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 0x01000193); return h; };
+/** 英文：有字母，且没有中日韩等非拉丁文字 */
+export const isEnglish = (t: string) => /[a-z]/i.test(t) && !/[^\x00-\x7f‘-”…]/.test(t.replace(/[\u{1F300}-\u{1FAFF}☀-➿]/gu, ''));
+const HUH = ['?', '??', 'huh?', 'what?', 'wut', 'english pls?', 'sorry i only speak english', 'idk what that means lol', '???', 'eng?'];
+/** 关键词 → 几种回法；按顺序找第一个对上的 */
+const TOPICS: [RegExp, string[]][] = [
+  [/\b(bot|ai|robot|npc)s?\b/i, ['lol no', 'beep boop jk', 'r u calling me a bot lol', 'im as real as it gets', 'lmao what']],
+  [/\b(thx|thanks|thank you|ty|tysm)\b/i, ['np', 'np!', 'anytime', 'yw', 'no prob']],
+  [/\b(hi|hello|hey|yo|sup|hiya|howdy)\b/i, ['hey!', 'yo', 'hi :)', 'hey hey', 'sup', 'hello!']],
+  [/\b(gm|good morning)\b/i, ['gm!', 'gm gm', 'morning :)']],
+  [/\b(gn|good night|night)\b/i, ['gn!', 'night', 'sleep well']],
+  [/\b(where|wat|what).{0,12}\b(from|live)\b|\bwhere (are|r) (u|you)\b/i, ['uk', 'us, east coast', 'germany', 'canada', 'australia lol', 'philippines']],
+  [/\b(how old|age)\b/i, ['24', 'old enough lol', '30 ugh', 'why lol']],
+  [/\b(how are|how r|hows it going|how u doing|wyd)\b/i, ['good u?', 'tired lol', 'grinding as always', 'not bad', 'chillin']],
+  [/\b(mount|horse|ride)\b/i, ['ranch foals, takes like an hour', 'kill wild horses for a foal', 'my horse is so slow lol']],
+  [/\b(money|coins?|gold|rich)\b/i, ['sell ingots', 'salvage old gear', 'cooking is decent money', 'i am broke lol']],
+  [/\b(dungeon|boss)\b/i, ['bring lots of food', 'combat 20+ for the first one', 'i can join later', 'chest rng is pain']],
+  [/\b(guild)\b/i, ['dm me ill invite u', 'im not in one rn', 'which guild u in?']],
+  [/\b(lvl|level|xp|exp)\b/i, ['just afk it overnight', 'grind grind grind', 'gz!', 'whats ur total lvl?']],
+  [/\b(fish|fishing)\b/i, ['fishing is so chill', 'try the pond north of town', 'need a better rod for that']],
+  [/\b(mine|mining|ore|pickaxe)\b/i, ['mining is the best', 'upgrade ur pickaxe asap', 'copper is east of town']],
+  [/\b(party|group|team)\b/i, ['sure add me', 'maybe later', 'busy rn sorry']],
+  [/\b(lol|lmao|haha|xd|rofl)\b/i, ['lol', 'lmao', 'haha', 'xD']],
+  [/\b(gg|gz|grats|congrats)\b/i, ['ty!', 'thx :)', 'gg']],
+  [/\b(trade|sell|buy)\b/i, ['what u selling', 'how much?', 'not rn sorry', 'got any ingots?']],
+  [/\?/, ['idk tbh', 'not sure', 'check the handbook maybe', 'good question lol', 'no clue sorry', 'hmm idk']],
+];
+const GENERIC = ['true', 'fr', 'ya', 'lol', 'nice', 'same', 'facts', 'ok', 'real', 'mood'];
+/** 真人在世界频道说了一句：哪个 AI 接、说什么、几秒后（各家算出来一样）；点到名的 AI 一定回 */
+export function botReplies(m: ChatMsg, bots: AiPlayer[]): ChatMsg[] {
+  if (!bots.length || m.channel !== 'world' || isBotId(m.playerId)) return [];
+  const h = strHash(m.id + m.text);
+  const low = m.text.toLowerCase();
+  // 名字长的先比，免得 Kai 抢了 Kairo 的话
+  const named = [...bots].sort((a, b) => b.name.length - a.name.length).find((b) => b.name.length >= 3 && low.includes(b.name.toLowerCase()));
+  const en = isEnglish(m.text);
+  const topic = en ? TOPICS.find(([re]) => re.test(m.text)) : undefined;
+  const chance = named ? 1 : !en ? 0.45 : topic ? (topic[1] === TOPICS[TOPICS.length - 1][1] ? 0.55 : 0.7) : 0.25;
+  if (rnd(h, 1) >= chance) return [];
+  const who = named ?? bots[Math.floor(rnd(h, 2) * bots.length)];
+  const text = !en ? pick(HUH, rnd(h, 3)) : pick(topic ? topic[1] : GENERIC, rnd(h, 4));
+  const at = m.at + 3_000 + Math.floor(rnd(h, 5) * (en ? 12_000 : 6_000));
+  // 有些回话会带上对方名字
+  const out = en && rnd(h, 6) < 0.4 ? `${m.name} ${text}` : text;
+  return [{ id: `bot-re-${m.id}`, channel: 'world', playerId: botKey(who.id), name: who.name, text: styled(out, who), at }];
+}
+
 // ---- 混进联机接口 ----
 let list: AiPlayer[] = [];
 let loadedAt = 0;
@@ -494,7 +542,14 @@ export function withBots(base: OnlineApi): OnlineApi {
     },
     onChat(f) {
       ensure();
-      const off = base.onChat(f);
+      // 真人在世界频道说的话：等名单在了再看要不要接话（回复时间到了才发）
+      const seen = new Set<string>();
+      const heard: ChatMsg[] = [];
+      const timers = new Set<ReturnType<typeof setTimeout>>();
+      const off = base.onChat((m) => {
+        f(m);
+        if (m.channel === 'world' && !isBotId(m.playerId) && !seen.has(m.id)) { seen.add(m.id); heard.push(m); }
+      });
       let last = Date.now() - 20 * MIN;
       const tick = () => {
         const now = Date.now();
@@ -502,11 +557,19 @@ export function withBots(base: OnlineApi): OnlineApi {
         if (!list.length) { last = Math.max(last, now - 20 * MIN); return; }
         for (const m of botChat(list, last + 1, now)) f(m);
         last = now;
+        for (const m of heard.splice(0)) {
+          for (const r of botReplies(m, list)) {
+            const wait = r.at - Date.now();
+            if (wait <= 0) { f(r); continue; }
+            const h = setTimeout(() => { timers.delete(h); f(r); }, wait);
+            timers.add(h);
+          }
+        }
       };
       // 等名单拉下来再补最近 20 分钟的
       void refreshBots().then(tick);
-      const t = setInterval(tick, 5000);
-      return () => { off(); clearInterval(t); };
+      const t = setInterval(tick, 2000);
+      return () => { off(); clearInterval(t); timers.forEach(clearTimeout); };
     },
     async joinedAt(playerId) {
       const b = isBotId(playerId) ? findBot(playerId) : undefined;
