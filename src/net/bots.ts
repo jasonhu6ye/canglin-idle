@@ -318,56 +318,185 @@ export function mergeBoard(real: RankRow[], bots: AiPlayer[], board: Board, limi
   return rows.slice(0, limit).map((r, i) => ({ ...r, rank: i + 1 }));
 }
 
-// ---- 世界频道闲聊（英文，用户 10-31） ----
-const LINES = [
-  'anyone else grinding mining rn?', 'finally got my pickaxe upgraded', 'this fishing spot is so relaxing', 'gm everyone',
-  'morning all', 'just hit a new level in woodcutting', 'how long does the dungeon usually take?', 'lol i died to a wolf again',
-  'the sunset in this game is so pretty', 'anyone want to party up for some fights?', 'need more ingots, smithing eats everything',
-  'tip: eat food before long fights', 'my bank is getting full lol', 'brb dinner', 'back', 'cooking is underrated tbh',
-  'the halloween pumpkin mount looks sick', 'is the world boss up today?', 'love the pixel art in this game', 'afk mining overnight again',
-  'just found a rare drop!!', 'whats the best place to train ranged?', 'magic feels strong at higher levels', 'hunting gives so much leather',
-  'anyone know a good spot for herbs?', 'waystones save so much walking', 'got a horse from the ranch, so much faster now',
-  'my horse has 170% speed, pretty happy with it', 'guild recruiting! dm me', 'which guild is the most active?', 'gg', 'nice',
-  'thieving is risky but fun', 'got stunned stealing again haha', 'smithing to 50 took forever', 'night time monsters are scary',
-  'does anyone sell bait?', 'the new towns are huge', 'I keep getting lost lol', 'map is massive now', 'fletching arrows all day',
-  'just crafted my first full set', 'anyone up?', 'hello from europe', 'hi from canada', 'chilling at the pond', 'so many trees to chop',
-  'the leaderboard is competitive lol', 'catching up on skills while at work', 'idle games are the best', 'finally out of the starter area',
-  'weather changed, its raining here', 'the snow region is beautiful', 'lava zone is no joke', 'dungeon chest gave me nothing again',
-  'how do i get more bag space?', 'backpack upgrade is worth it', 'my farm is doing well this week', 'potatoes for days',
-  'grats on the levels everyone', 'took a break, now back to grinding', 'whats everyone working on?', 'just chilling and fishing',
+// ---- 世界频道闲聊（英文，用户 10-31：要接地气，聊游戏也聊家常八卦，多用简写） ----
+// {X} 换成另一个 AI 的名字。10-31 用户：别老问游戏问题，多聊家常、八卦、吃喝、风景、工作
+/** 游戏相关的，少说一点（约两成），而且基本不提问 */
+const GAME_LINES = [
+  'finally got my pickaxe upgraded', 'this fishing spot is so relaxing', 'lol i died to a wolf again', 'the sunset in this game is so pretty',
+  'my bank is getting full lol', 'afk mining overnight again', 'just found a rare drop!!', 'rng hates me today', 'one more lvl then bed. ok maybe two',
+  'idk why but chopping trees is so calming', 'chilling at the pond', 'the snow area at night looks so good', 'my horse is faster than my wifi lol',
+  '{X} gz on the lvl!', 'thx for the help earlier {X}', 'wb {X}', '{X} is always online lol do u ever sleep', 'gg', 'nice', 'lol', 'rip',
+];
+/** 家常、吃喝、风景、工作、八卦 */
+const LIFE_LINES = [
+  // 打招呼、来去
+  'gm everyone', 'gm gm', 'morning all', 'evening all', 'just woke up, gm', 'brb', 'back', 'bk', 'brb dinner', 'brb gotta walk the dog',
+  'afk 10 min, laundry', 'ok im back what did i miss', 'gn all, early shift tmr', 'so tired lol', 'cant sleep so here i am',
+  // 吃喝
+  'ordered pizza, best decision today', 'coffee #3 today and its only 10am', 'making pasta, smells so good', 'ramen again lol student life',
+  'just had the best tacos of my life', 'my mom made dumplings, im in heaven', 'trying to eat healthy... ate a whole bag of chips', 'idk what to have for dinner',
+  'pumpkin spice everything rn lol', 'bubble tea run brb', 'burnt my toast, great start to the day', 'bbq at my uncles this weekend',
+  'my roommate ate my leftovers again smh', 'hot chocolate weather finally', 'anyone else eat cereal for dinner or just me', 'sushi night',
+  'learning to bake bread, its going badly lol', 'grandma sent cookies', 'too much candy already and its not even halloween night',
+  // 风景、天气
+  'its raining here irl, perfect game weather', 'it snowed here already wtf', 'sunset outside my window is insane rn', 'leaves are all orange here, so pretty',
+  'went hiking today, my legs are dead', 'went to the beach this morning, freezing but worth it', 'thunderstorm outside, hope my power stays on',
+  'so foggy here i cant see the street', 'full moon tonight, go look', 'first frost this morning', 'heatwave here lol, 35 degrees in october',
+  'went for a walk by the lake, so peaceful', 'the stars are so clear tonight',
+  // 工作、学习
+  'just got home from work, time to relax', 'my boss thinks im working rn lmao', 'anyone else on their lunch break?', 'monday again huh', 'tgif',
+  'meetings all day, my brain is mush', 'overtime again ugh', 'got a raise today!!', 'first day at the new job tmr, nervous', 'quit my job lol wish me luck',
+  'school tmr ugh', 'exams next week and im here mining copper', 'finished my essay at 2am, never again', 'my coworker microwaved fish again',
+  'working from home is great until the neighbor starts drilling', 'night shift is killing me', 'weekend vibes', 'only 2 more days till friday',
+  // 家常
+  'my cat keeps walking on my keyboard lol', 'its 3am here and im still playing, send help', 'my mom just yelled at me to eat lol',
+  'kids finally asleep, peace at last', 'my dog just stole my sandwich', 'my roommate thinks this game is a screensaver lol', 'gonna touch grass brb',
+  'my gf is watching me play and judging my outfit lol', 'my little brother wants my account smh', 'birthday today ^^', 'my wifi is trash today',
+  'phone at 5% dont leave me', 'cleaned my whole room, feel like a new person', 'my plants are dying again', 'adopted a kitten today!!',
+  'my grandpa just learned to use emojis, its chaos', 'dentist tmr, pray for me', 'moving apartments this weekend, so much stuff',
+  'happy halloween everyone!!', 'carved a pumpkin irl today', 'my neighbor has the scariest halloween decor', 'binge watching a show while afk fishing',
+  // 八卦
+  'did u see {X} on the leaderboard?? insane', 'heard {X} has like 3 accounts lol jk', '{X} and their horse are inseparable lol',
+  'my sister is dating a guy who plays this game lol small world', 'my coworker just got engaged at the office party, so cute',
+  'my neighbor got caught sneaking out lmao', 'saw my ex at the grocery store, hid behind the cereal lol', 'my friend just dyed her hair green',
+  'apparently my roommate has a secret girlfriend lol', 'my cousin got a dog that looks exactly like him',
 ];
 /** 问一句，过一会有别的 AI 接话 */
 const PAIRS: [string, string[]][] = [
-  ['where do you guys train combat?', ['the wolves outside town are good early on', 'i go to the forest east of town', 'dungeons once you have decent gear']],
-  ['how do I get a mount?', ['raise a foal at the ranch', 'fight wild horses for a foal, then raise it at the ranch']],
-  ['is magic or ranged better?', ['both are fine, pick what you like', 'ranged is easier early imo', 'magic hits hard later']],
-  ['how do you make money fast?', ['sell ingots', 'salvage gear you dont need', 'fishing and cooking is steady coins']],
-  ['anyone want to group for a dungeon?', ['sure, add me', 'maybe later, busy mining', 'i can join in a bit']],
-  ['what level should I be for the dungeon?', ['combat 20ish for the first one', 'bring food and you will be fine']],
-  ['hi everyone, new here', ['welcome!', 'welcome, have fun', 'hey! check the handbook, its helpful']],
-  ['is it worth leveling cooking?', ['yes, food buffs are great', 'definitely, you need food for fights']],
+  ['what time is it for u guys?', ['9pm here', 'like 4am lol', 'lunch time', 'noon here']],
+  ['what are u guys eating', ['ramen again lol', 'nothing, too lazy', 'tacos', 'leftover pizza', 'my moms curry']],
+  ['hows the weather where u are', ['raining nonstop', 'sunny and cold', 'snowing lol', 'hot af']],
+  ['anyone doing anything fun this weekend?', ['road trip', 'sleeping lol', 'working sadly', 'my friends wedding']],
+  ['what do u guys do for work', ['nurse', 'still in school', 'office job, boring', 'chef lol']],
+  ['anyone watching a good show rn?', ['rewatching the office', 'some anime my friend recommended', 'nah just youtube']],
+  ['coffee or tea?', ['coffee always', 'tea gang', 'energy drinks lol']],
+  ['hi everyone', ['hey!', 'yo', 'hi :)', 'hey hey']],
 ];
+/** 几个人你一句我一句：A/B/C 是不同的 AI，{A}{B}{C} 换成他们的名字 */
+const CONVOS: [number, string][][] = [
+  [[0, 'are u from the us?'], [1, 'nah uk lol'], [0, 'oh nice, its so late there'], [1, 'ya i should sleep but one more lvl']],
+  [[0, 'omg my cat just knocked my drink over'], [1, 'lmaooo'], [2, 'classic cat'], [0, 'all over my desk too smh']],
+  [[0, 'anyone know whats up with {C}? havent seen them in days'], [1, 'idk maybe on vacation'], [2, 'i saw them yesterday lol'], [0, 'ah ok']],
+  [[0, 'did u guys hear {C} left their guild?'], [1, 'wait what really'], [0, 'ya some drama lol'], [1, 'oof'], [2, 'tea pls']],
+  [[0, 'ugh work tmr'], [1, 'same :('], [0, 'what do u do'], [1, 'nurse, night shifts'], [0, 'respect']],
+  [[0, 'gonna go eat, brb'], [1, 'enjoy'], [0, 'thx']],
+  [[0, 'is anyone else getting rained on irl'], [1, 'ya storm here'], [2, 'sunny here lol'], [0, 'jealous']],
+  [[0, 'my kid just asked if the horse in my game is real lol'], [1, 'haha cute'], [2, 'tell them yes'], [0, 'lol i did']],
+  [[0, 'are u guys doing anything for halloween?'], [1, 'party at a friends'], [2, 'staying home giving out candy'], [0, 'nice, im just gaming lol']],
+  [[0, 'good night everyone'], [1, 'gn!'], [2, 'night'], [0, 'cya tmr']],
+  [[0, 'anyone know a good movie'], [1, 'what genre'], [0, 'idc anything scary'], [2, 'it follows is good'], [0, 'ty ill check it']],
+  [[0, 'just made homemade pizza'], [1, 'pics or it didnt happen'], [0, 'lol trust me its ugly but tasty'], [2, 'pineapple?'], [0, 'obviously'], [1, 'ew lol']],
+  [[0, 'my boss just called me on my day off'], [1, 'dont answer'], [0, 'too late lol'], [2, 'rip ur weekend']],
+  [[0, 'went to the mountains today'], [1, 'jealous, how was it'], [0, 'so pretty, all the leaves are red'], [1, 'need a trip like that']],
+  [[0, 'so my neighbor is building a giant halloween skeleton'], [1, 'how big'], [0, 'like 3 meters lol'], [2, 'thats amazing'], [1, 'i need one']],
+  [[0, 'first snow here today'], [1, 'already?? where u live'], [0, 'canada lol'], [1, 'ah that explains it']],
+  [[0, 'my coworker brought donuts'], [1, 'best coworker'], [0, 'i ate 3 dont tell anyone'], [2, 'ur secret is safe lol']],
+  [[0, 'lowkey think {C} has a crush on someone in their guild'], [1, 'LOL who'], [0, 'not saying'], [2, 'spill'], [0, 'nope']],
+  [[0, 'my mom wants me to visit this weekend'], [1, 'go! free food'], [0, 'true lol'], [2, 'moms cooking hits different']],
+  [[0, 'anyone else hate mondays'], [1, 'everyone hates mondays'], [2, 'i work weekends so monday is my friday lol'], [0, 'lucky']],
+  [[0, 'just got caught in the rain without an umbrella'], [1, 'f'], [2, 'hot shower time'], [0, 'already on it lol']],
+  [[0, 'tried sushi for the first time'], [1, 'and??'], [0, 'kinda good actually'], [1, 'welcome to the club']],
+];
+/** 有一半的 AI 打字全小写、不打句号 */
+function styled(text: string, b: AiPlayer) {
+  if (rnd(b.seed, 90) < 0.5) return text.toLowerCase().replace(/\.$/, '');
+  return text;
+}
 const SLOT = 75_000;
+const lineAt = (i: number, k: number) => pick(rnd(788, i, k) < 0.2 ? GAME_LINES : LIFE_LINES, rnd(785, i, k));
 /** 某个时间段里 AI 说的话（按时间排好） */
 export function botChat(bots: AiPlayer[], from: number, to: number): ChatMsg[] {
   if (!bots.length) return [];
   const out: ChatMsg[] = [];
   const p = Math.min(0.8, 0.05 + bots.length * 0.04);
-  for (let i = Math.floor(from / SLOT) - 1; i <= Math.floor(to / SLOT); i++) {
+  // 往前多看几段：前面开始的对话可能还在接着说
+  for (let i = Math.floor(from / SLOT) - 4; i <= Math.floor(to / SLOT); i++) {
     if (rnd(777, i) >= p) continue;
     const a = bots[Math.floor(rnd(778, i) * bots.length)];
     const at = i * SLOT + Math.floor(rnd(779, i) * 50_000);
+    // 对话里出现的其他人：不重复的几个 AI
+    const cast = [a];
+    for (let j = 0; j < 6 && cast.length < 4 && cast.length < bots.length; j++) {
+      const c = bots[Math.floor(rnd(786, i, j) * bots.length)];
+      if (!cast.includes(c)) cast.push(c);
+    }
+    const fill = (text: string) => text
+      .replace(/\{A\}/g, cast[0].name).replace(/\{B\}/g, (cast[1] ?? cast[0]).name)
+      .replace(/\{C\}/g, (cast[3] ?? cast[2] ?? cast[1] ?? cast[0]).name).replace(/\{X\}/g, (cast[1] ?? cast[0]).name);
     const say = (text: string, b: AiPlayer, t: number, suf: string) => {
-      if (t >= from && t <= to) out.push({ id: `bot-${i}${suf}`, channel: 'world', playerId: botKey(b.id), name: b.name, text, at: t });
+      if (t >= from && t <= to) out.push({ id: `bot-${i}${suf}`, channel: 'world', playerId: botKey(b.id), name: b.name, text: styled(fill(text), b), at: t });
     };
-    if (rnd(780, i) < 0.2 && bots.length > 1) {
-      const [q, answers] = pick(PAIRS, rnd(781, i));
+    const r = rnd(780, i);
+    if (r < 0.3 && cast.length >= 3) {
+      // {C} 是被聊到的人，不在对话里：三个人说话，第四个人被八卦
+      const ok = cast.length >= 4 ? CONVOS : CONVOS.filter((c) => !c.some(([, x]) => x.includes('{C}')));
+      const convo = pick(ok, rnd(781, i));
+      let t = at;
+      convo.forEach(([who, text], k) => {
+        if (k) t += 6_000 + Math.floor(rnd(787, i, k) * 22_000);
+        say(text, cast[Math.min(who, 2)], t, `c${k}`);
+      });
+    } else if (r < 0.38 && cast.length > 1) {
+      const [q, answers] = pick(PAIRS, rnd(782, i));
       say(q, a, at, '');
-      const others = bots.filter((x) => x !== a);
-      say(pick(answers, rnd(782, i)), pick(others, rnd(783, i)), at + 12_000 + Math.floor(rnd(784, i) * 30_000), 'r');
-    } else say(pick(LINES, rnd(785, i)), a, at, '');
+      say(pick(answers, rnd(783, i)), cast[1], at + 10_000 + Math.floor(rnd(784, i) * 25_000), 'r');
+    } else {
+      // 和前两段抽到的不一样，免得两个人前后脚说同一句
+      let line = lineAt(i, 0);
+      for (let k = 1; k < 4 && (line === lineAt(i - 1, 0) || line === lineAt(i - 2, 0)); k++) line = lineAt(i, k);
+      if (line.includes('{X}') && cast.length < 2) continue;
+      say(line, a, at, '');
+    }
   }
   return out.sort((x, y) => x.at - y.at);
+}
+
+// ---- 接真人的话（用户 10-31）：说英文才有人用英文回，说别的语言只会得到「?」 ----
+const strHash = (t: string) => { let h = 7; for (let i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 0x01000193); return h; };
+/** 英文：有字母，且没有中日韩等非拉丁文字 */
+export const isEnglish = (t: string) => /[a-z]/i.test(t) && !/[^\x00-\x7f‘-”…]/.test(t.replace(/[\u{1F300}-\u{1FAFF}☀-➿]/gu, ''));
+const HUH = ['?', '??', 'huh?', 'what?', 'wut', 'english pls?', 'sorry i only speak english', 'idk what that means lol', '???', 'eng?'];
+/** 关键词 → 几种回法；按顺序找第一个对上的 */
+const TOPICS: [RegExp, string[]][] = [
+  [/\b(bot|ai|robot|npc)s?\b/i, ['lol no', 'beep boop jk', 'r u calling me a bot lol', 'im as real as it gets', 'lmao what']],
+  [/\b(thx|thanks|thank you|ty|tysm)\b/i, ['np', 'np!', 'anytime', 'yw', 'no prob']],
+  [/\b(hi|hello|hey|yo|sup|hiya|howdy)\b/i, ['hey!', 'yo', 'hi :)', 'hey hey', 'sup', 'hello!']],
+  [/\b(gm|good morning)\b/i, ['gm!', 'gm gm', 'morning :)']],
+  [/\b(gn|good night|night)\b/i, ['gn!', 'night', 'sleep well']],
+  [/\b(where|wat|what).{0,12}\b(from|live)\b|\bwhere (are|r) (u|you)\b/i, ['uk', 'us, east coast', 'germany', 'canada', 'australia lol', 'philippines']],
+  [/\b(how old|age)\b/i, ['24', 'old enough lol', '30 ugh', 'why lol']],
+  [/\b(how are|how r|hows it going|how u doing|wyd)\b/i, ['good u?', 'tired lol', 'grinding as always', 'not bad', 'chillin']],
+  [/\b(mount|horse|ride)\b/i, ['ranch foals, takes like an hour', 'kill wild horses for a foal', 'my horse is so slow lol']],
+  [/\b(money|coins?|gold|rich)\b/i, ['sell ingots', 'salvage old gear', 'cooking is decent money', 'i am broke lol']],
+  [/\b(dungeon|boss)\b/i, ['bring lots of food', 'combat 20+ for the first one', 'i can join later', 'chest rng is pain']],
+  [/\b(guild)\b/i, ['dm me ill invite u', 'im not in one rn', 'which guild u in?']],
+  [/\b(lvl|level|xp|exp)\b/i, ['just afk it overnight', 'grind grind grind', 'gz!', 'whats ur total lvl?']],
+  [/\b(fish|fishing)\b/i, ['fishing is so chill', 'try the pond north of town', 'need a better rod for that']],
+  [/\b(mine|mining|ore|pickaxe)\b/i, ['mining is the best', 'upgrade ur pickaxe asap', 'copper is east of town']],
+  [/\b(party|group|team)\b/i, ['sure add me', 'maybe later', 'busy rn sorry']],
+  [/\b(lol|lmao|haha|xd|rofl)\b/i, ['lol', 'lmao', 'haha', 'xD']],
+  [/\b(gg|gz|grats|congrats)\b/i, ['ty!', 'thx :)', 'gg']],
+  [/\b(trade|sell|buy)\b/i, ['what u selling', 'how much?', 'not rn sorry', 'got any ingots?']],
+  [/\?/, ['idk tbh', 'not sure', 'check the handbook maybe', 'good question lol', 'no clue sorry', 'hmm idk']],
+];
+const GENERIC = ['true', 'fr', 'ya', 'lol', 'nice', 'same', 'facts', 'ok', 'real', 'mood'];
+/** 真人在世界频道说了一句：哪个 AI 接、说什么、几秒后（各家算出来一样）；点到名的 AI 一定回 */
+export function botReplies(m: ChatMsg, bots: AiPlayer[]): ChatMsg[] {
+  if (!bots.length || m.channel !== 'world' || isBotId(m.playerId)) return [];
+  const h = strHash(m.id + m.text);
+  const low = m.text.toLowerCase();
+  // 名字长的先比，免得 Kai 抢了 Kairo 的话
+  const named = [...bots].sort((a, b) => b.name.length - a.name.length).find((b) => b.name.length >= 3 && low.includes(b.name.toLowerCase()));
+  const en = isEnglish(m.text);
+  const topic = en ? TOPICS.find(([re]) => re.test(m.text)) : undefined;
+  const chance = named ? 1 : !en ? 0.45 : topic ? (topic[1] === TOPICS[TOPICS.length - 1][1] ? 0.55 : 0.7) : 0.25;
+  if (rnd(h, 1) >= chance) return [];
+  const who = named ?? bots[Math.floor(rnd(h, 2) * bots.length)];
+  const text = !en ? pick(HUH, rnd(h, 3)) : pick(topic ? topic[1] : GENERIC, rnd(h, 4));
+  const at = m.at + 3_000 + Math.floor(rnd(h, 5) * (en ? 12_000 : 6_000));
+  // 有些回话会带上对方名字
+  const out = en && rnd(h, 6) < 0.4 ? `${m.name} ${text}` : text;
+  return [{ id: `bot-re-${m.id}`, channel: 'world', playerId: botKey(who.id), name: who.name, text: styled(out, who), at }];
 }
 
 // ---- 混进联机接口 ----
@@ -430,7 +559,14 @@ export function withBots(base: OnlineApi): OnlineApi {
     },
     onChat(f) {
       ensure();
-      const off = base.onChat(f);
+      // 真人在世界频道说的话：等名单在了再看要不要接话（回复时间到了才发）
+      const seen = new Set<string>();
+      const heard: ChatMsg[] = [];
+      const timers = new Set<ReturnType<typeof setTimeout>>();
+      const off = base.onChat((m) => {
+        f(m);
+        if (m.channel === 'world' && !isBotId(m.playerId) && !seen.has(m.id)) { seen.add(m.id); heard.push(m); }
+      });
       let last = Date.now() - 20 * MIN;
       const tick = () => {
         const now = Date.now();
@@ -438,11 +574,19 @@ export function withBots(base: OnlineApi): OnlineApi {
         if (!list.length) { last = Math.max(last, now - 20 * MIN); return; }
         for (const m of botChat(list, last + 1, now)) f(m);
         last = now;
+        for (const m of heard.splice(0)) {
+          for (const r of botReplies(m, list)) {
+            const wait = r.at - Date.now();
+            if (wait <= 0) { f(r); continue; }
+            const h = setTimeout(() => { timers.delete(h); f(r); }, wait);
+            timers.add(h);
+          }
+        }
       };
       // 等名单拉下来再补最近 20 分钟的
       void refreshBots().then(tick);
-      const t = setInterval(tick, 5000);
-      return () => { off(); clearInterval(t); };
+      const t = setInterval(tick, 2000);
+      return () => { off(); clearInterval(t); timers.forEach(clearTimeout); };
     },
     async joinedAt(playerId) {
       const b = isBotId(playerId) ? findBot(playerId) : undefined;

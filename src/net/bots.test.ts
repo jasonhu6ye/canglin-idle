@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ITEMS, MAP_H, MAP_W } from '../core/data';
-import { botChat, botDoing, botName, botPresence, botProfile, mergeBoard, withBots } from './bots';
+import { botChat, botDoing, botReplies, isEnglish, botName, botPresence, botProfile, mergeBoard, withBots } from './bots';
 import { LocalApi } from './local';
 import type { AiPlayer } from './api';
 
@@ -71,6 +71,26 @@ describe('AI 玩家', () => {
     // 分两段取和一次取一样（不重复不漏）
     const a = botChat(bots, T0, T0 + 1800_000), b = botChat(bots, T0 + 1800_001, T0 + 3600_000);
     expect([...a, ...b].map((m) => m.id)).toEqual(msgs.map((m) => m.id));
+  });
+  it('接真人的话：英文回英文，别的语言只回问号', () => {
+    const msg = (i: number, text: string) => ({ id: `m${i}`, channel: 'world' as const, playerId: 'real', name: 'Jay', text, at: T0 });
+    expect(isEnglish('hi guys, where r u from?')).toBe(true);
+    expect(isEnglish('大家好')).toBe(false);
+    expect(isEnglish('hello 大家')).toBe(false);
+    let zh = 0, en = 0;
+    for (let i = 0; i < 200; i++) {
+      for (const r of botReplies(msg(i, '有人一起打副本吗'), bots)) { zh++; expect(['?', '??', 'huh?', 'what?', 'wut', 'english pls?', 'sorry i only speak english', 'idk what that means lol', '???', 'eng?']).toContain(r.text); }
+      for (const r of botReplies(msg(i, 'hey everyone'), bots)) { en++; expect(r.text).not.toMatch(/[\u4e00-\u9fff]/); expect(r.at).toBeGreaterThan(T0); }
+    }
+    expect(zh).toBeGreaterThan(40);
+    expect(en).toBeGreaterThan(80);
+    // 点名一定回，而且是被点到的那个
+    const r = botReplies(msg(1, 'Bot7 thx for the help'), bots);
+    expect(r.length).toBe(1);
+    expect(r[0].name).toBe('Bot7');
+    expect(botReplies(msg(1, 'Bot7 thx for the help'), bots)).toEqual(r);
+    // AI 不回 AI
+    expect(botReplies({ ...msg(2, 'hi'), playerId: 'bot-x' }, bots)).toEqual([]);
   });
   it('withBots：在线人数、名片、加好友', async () => {
     const mem = new Map<string, string>();
