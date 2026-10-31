@@ -68,8 +68,8 @@ export function botName(r: () => number, taken: Set<string>): string {
 }
 
 // ---- 等级、装备 ----
-/** 某个技能玩了多少小时 → 等级（用户 10-31：越往上越难，每级要的时间越来越长） */
-const HOURS_LV: [number, number][] = [[0, 1], [0.15, 8], [1.2, 25], [6, 40], [30, 58], [180, 80], [1000, 105], [5000, 125], [20000, 140]];
+/** 某个技能挂了多少小时 → 等级（按 xp.ts 里挂机速度的估算插值，越往上每级越慢） */
+const HOURS_LV: [number, number][] = [[0, 1], [0.1, 10], [0.83, 30], [4, 50], [20, 70], [145, 95], [800, 120], [3000, 140]];
 function levelOfHours(h: number) {
   if (h <= 0) return 1;
   for (let i = 1; i < HOURS_LV.length; i++) {
@@ -130,6 +130,8 @@ export interface BotProfile {
   spots: { n: MapNode; acts: string[] }[];
 }
 
+/** 每天折算成一个技能满速挂机的小时数（真人不会一直挂最优的动作）；第 11 天中位战斗约 56、总等级约 600，约真人（作者 71/666）的八成 */
+const HABIT_HOURS = { hardcore: 5.5, regular: 4, casual: 2.8, rare: 1.2 } as const;
 const profiles = new Map<string, BotProfile>();
 /** 一个 AI 某个小时的样子（从新号开始，等级随时间慢慢涨） */
 export function botProfile(b: AiPlayer, t = Date.now()): BotProfile {
@@ -139,9 +141,10 @@ export function botProfile(b: AiPlayer, t = Date.now()): BotProfile {
   if (hit) return hit;
   if (profiles.size > 2000) profiles.clear();
   const s = b.seed;
-  // 加进来时是新号（玩了几分钟到半小时），之后每天再玩 0.3-2.3 小时，玩得越久涨得越慢
+  // 加进来时是新号（玩了几分钟到半小时），之后按上线习惯每天挂几小时；等级越高每级越慢
   const h0 = 0.05 + 0.45 * rnd(s, 1) ** 2;
-  const rate = 0.3 + 2 * rnd(s, 2) ** 1.5;
+  // 用户 10-31：升级速度约真人的 80%
+  const rate = HABIT_HOURS[habitOf(b)] * (0.75 + 0.5 * rnd(s, 2));
   const hours = h0 + (rate * Math.max(0, hour * 3600_000 - b.at)) / DAY;
   const style = pick(ATTACK, rnd(s, 3)) as Style;
   const w = {} as Record<SkillId, number>;
