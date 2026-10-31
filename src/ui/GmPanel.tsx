@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { GM_KINDS, GM_KIND_NAME, GM_PCT_MAX } from '../core/gm';
 import type { GmKind } from '../core/types';
-import { online, type GmInput, type GmMailRow, type GmRow } from '../net';
+import { online, type AiPlayer, type GmInput, type GmMailRow, type GmRow } from '../net';
+import { aiPlayers, botDoing, botName, botPresence, botProfile, refreshBots } from '../net/bots';
+import { actionName } from './format';
+import { emitToGame } from './GameCanvas';
 import { ITEMS } from '../core/data';
 import type { ItemStack } from '../core/types';
 import { fmtNum } from './format';
@@ -42,7 +45,7 @@ const left = (ms: number) => {
 };
 
 export function GmPanel({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<'buff' | 'mail' | 'gear'>('buff');
+  const [tab, setTab] = useState<'buff' | 'mail' | 'gear' | 'ai'>('buff');
   return (
     <div className="page guild gm-panel">
       <div className="sheet-head">
@@ -54,8 +57,9 @@ export function GmPanel({ onClose }: { onClose: () => void }) {
         <button className={`pill ${tab === 'buff' ? 'on' : ''}`} onClick={() => setTab('buff')}>{tl('增益')}</button>
         <button className={`pill ${tab === 'mail' ? 'on' : ''}`} onClick={() => setTab('mail')}>{tl('赠送物品')}</button>
         <button className={`pill ${tab === 'gear' ? 'on' : ''}`} onClick={() => setTab('gear')}>{tl('赠送装备')}</button>
+        <button className={`pill ${tab === 'ai' ? 'on' : ''}`} onClick={() => setTab('ai')}>{tl('AI 玩家')}</button>
       </div>
-      {tab === 'buff' ? <BuffTab /> : <MailTab key={tab} gear={tab === 'gear'} />}
+      {tab === 'buff' ? <BuffTab /> : tab === 'ai' ? <AiTab onClose={onClose} /> : <MailTab key={tab} gear={tab === 'gear'} />}
     </div>
   );
 }
@@ -356,6 +360,109 @@ function MailTab({ gear }: { gear: boolean }) {
           </li>
         ))}
       </ul>
+    </>
+  );
+}
+
+const AI_MAX = 200;
+/**
+ * AI 玩家（用户 10-31）：加几个、删几个、改名。名字外观等级都随机，所有人看到的一样：
+ * 在地图上干活走动、算进在线人数、上排行榜、偶尔在世界频道说英文。
+ */
+function AiTab({ onClose }: { onClose: () => void }) {
+  const [rows, setRows] = useState<AiPlayer[] | null>(null);
+  const [n, setN] = useState('5');
+  const [edit, setEdit] = useState<{ id: string; name: string } | null>(null);
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [, tick] = useState(0);
+  const load = async () => {
+    try {
+      await refreshBots(true);
+      setRows([...aiPlayers()]);
+    } catch (e) {
+      setMsg({ text: (e as Error).message, ok: false });
+      setRows([]);
+    }
+  };
+  useEffect(() => { void load(); }, []);
+  // 「正在干什么」每 5 秒刷新
+  useEffect(() => { const t = setInterval(() => tick((x) => x + 1), 5000); return () => clearInterval(t); }, []);
+  const run = async (f: () => Promise<void>, ok: string) => {
+    setBusy(true);
+    try {
+      await f();
+      setMsg({ text: ok, ok: true });
+      await load();
+    } catch (e) {
+      setMsg({ text: (e as Error).message, ok: false });
+    }
+    setBusy(false);
+  };
+  const list = rows ?? [];
+  const k = Math.floor(Number(n) || 0);
+  const add = () => {
+    if (!(k > 0)) return setMsg({ text: tl('填要加几个'), ok: false });
+    if (list.length + k > AI_MAX) return setMsg({ text: tl`最多 ${AI_MAX} 个 AI 玩家`, ok: false });
+    const taken = new Set(list.map((b) => b.name.toLowerCase()));
+    const r = () => Math.random();
+    const add = Array.from({ length: k }, () => ({ name: botName(r, taken), seed: Math.floor(Math.random() * 2 ** 31) }));
+    void run(() => online.aiAdd(add), tl`加了 ${k} 个 AI 玩家`);
+  };
+  const del = (ids: string[], ok: string) => void run(() => online.aiDelete(ids), ok);
+  const delNewest = () => {
+    if (!(k > 0) || !list.length) return;
+    const ids = list.slice(-k).map((b) => b.id);
+    if (confirm(tl`删掉最新加的 ${ids.length} 个 AI 玩家？`)) del(ids, tl`删了 ${ids.length} 个 AI 玩家`);
+  };
+  const rename = () => {
+    if (!edit) return;
+    const name = edit.name.trim();
+    if (!/^[\p{L}\p{N}_]{2,12}$/u.test(name)) return setMsg({ text: tl('名字 2-12 个字，只能用文字、数字和下划线'), ok: false });
+    void run(async () => { await online.aiRename(edit.id, name); setEdit(null); }, tl`已改名为 ${name}`);
+  };
+  return (
+    <>
+      <h3>{tl('AI 玩家')} <small className="muted">{tl('所有人看到的一样：在地图上干活走动，算进在线人数和排行榜，偶尔在世界频道说英文')}</small></h3>
+      <div className="gm-form frame">
+        <label><span>{tl('数量')}</span><input inputMode="numeric" value={n} onChange={(e) => { setN(e.target.value.replace(/\D/g, '').slice(0, 3)); setMsg(null); }} /></label>
+        <div className="gm-actions">
+          <button className="primary" disabled={busy} onClick={add}>{tl('增加')}</button>
+          <button disabled={busy || !list.length} onClick={delNewest}>{tl('删除最新的')}</button>
+          <button disabled={busy || !list.length} onClick={() => confirm(tl`删掉全部 ${list.length} 个 AI 玩家？`) && del(list.map((b) => b.id), tl('已删除全部 AI 玩家'))}>{tl('全部删除')}</button>
+        </div>
+        <p className="muted">{tl`现在有 ${list.length} 个 AI 玩家。名字、外观、等级随机，加进来后每天慢慢升级`}</p>
+        {msg && <p className={msg.ok ? 'good' : 'warn'}>{msg.text}</p>}
+      </div>
+      <h3>{tl('名单')}</h3>
+      {rows == null ? <p className="muted">{tl('读取中…')}</p> : !list.length ? <p className="muted">{tl('还没有 AI 玩家')}</p> : (
+        <ul className="gm-list">
+          {[...list].reverse().map((b) => {
+            const p = botProfile(b);
+            const now = botPresence(b);
+            const idle = botDoing(p, b.seed)?.idle;
+            return (
+              <li key={b.id} className="frame">
+                {edit?.id === b.id ? (
+                  <div className="gm-seg">
+                    <input maxLength={12} value={edit.name} onChange={(e) => setEdit({ id: b.id, name: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && rename()} autoFocus />
+                    <button className="pill" disabled={busy} onClick={rename}>{tl('保存')}</button>
+                    <button className="pill" onClick={() => setEdit(null)}>{tl('取消')}</button>
+                  </div>
+                ) : (
+                  <div><b>{b.name}</b> <small className="muted">#{p.pid} · {tl`总等级 ${p.total} · 战斗 ${p.combat}`}</small></div>
+                )}
+                <small className="muted">{now?.action ? tl`正在：${actionName(now.action)}` : idle ? tl('在城里挂机') : tl('正在赶路')}</small>
+                <div className="gm-row-tools">
+                  {now && <button className="pill" onClick={() => { emitToGame('walktile', Math.round(now.x), Math.round(now.y)); onClose(); }}>{tl('寻路过去')}</button>}
+                  <button className="pill" onClick={() => setEdit({ id: b.id, name: b.name })}>{tl('改名')}</button>
+                  <button className="pill" disabled={busy} onClick={() => confirm(tl`删除 AI 玩家 ${b.name}？`) && del([b.id], tl`已删除 ${b.name}`)}>{tl('删除')}</button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </>
   );
 }

@@ -1,5 +1,5 @@
 import type { GameState } from '../core/types';
-import type { GmInput, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
+import type { AiPlayer, GmInput, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { GUILD_MAX, levelSnapshot } from './api';
 import { tl } from '../i18n';
 import { ITEMS } from '../core/data';
@@ -30,6 +30,7 @@ interface Db {
   chat: ChatMsg[];
   gm?: GmRow[];
   gmMail?: GmMailRow[];
+  ai?: AiPlayer[];
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -398,6 +399,20 @@ export class LocalApi implements OnlineApi {
   }
   async gmMailDelete(id: string) {
     this.db.gmMail = (this.db.gmMail ?? []).filter((x) => x.id !== id);
+    this.flush();
+  }
+  // AI 玩家（10-31）
+  async aiList() { return [...(this.db.ai ?? [])]; }
+  async aiAdd(list: { name: string; seed: number }[]) {
+    this.db.ai = [...(this.db.ai ?? []), ...list.map((b, i) => ({ ...b, id: uid(), at: Date.now() + i }))];
+    this.flush();
+  }
+  async aiRename(id: string, name: string) {
+    this.db.ai = (this.db.ai ?? []).map((b) => (b.id === id ? { ...b, name } : b));
+    this.flush();
+  }
+  async aiDelete(ids: string[]) {
+    this.db.ai = (this.db.ai ?? []).filter((b) => !ids.includes(b.id));
     this.flush();
   }
 }
