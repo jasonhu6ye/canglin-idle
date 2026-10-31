@@ -40,6 +40,11 @@ describe('武器平衡（10-31）', () => {
       expect(lamp, `T${ti + 1} 链刃+提灯`).toBeGreaterThan(lan);
       expect(lamp, `T${ti + 1} 链刃+提灯`).toBeLessThanOrEqual(120);
     }
+    // 品质越高连斩概率越高（用户 10-31）
+    const ch = [0, 1, 2, 3, 4, 5].map((q) => ITEMS[`t7_chainblade${q ? `@q${q}` : ''}`]?.equip?.chain ?? ITEMS[`${TIERS[6].id}_chainblade${q ? `@q${q}` : ''}`].equip!.chain!);
+    expect(ch[0]).toBe(0.17);
+    expect(ch[5]).toBe(0.34);
+    for (let q = 1; q < 6; q++) expect(ch[q]).toBeGreaterThan(ch[q - 1]);
   });
 
   it('每一阶所有输出武器都在剑的 92%-112% 之间', () => {

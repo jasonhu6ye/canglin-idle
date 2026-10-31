@@ -963,6 +963,6 @@ export const EN_UI: Record<string, string> = {
   "武器特效触发 +{0}%": "Weapon effect chance +{0}%",
   " · 布甲和装备 +{0}": " · cloth & gear +{0}",
   "连斩": "Double strike",
-  "幽魂链刃 17% · 提灯 +{0}": "Chainblade 17% · Spirit Lamp +{0}",
+  "幽魂链刃 {0} · 提灯 +{1}": "Chainblade {0} · Spirit Lamp +{1}",
   "幽魂链刃：打中后再砍一刀": "Phantom Chainblade: strikes again on hit",
 };

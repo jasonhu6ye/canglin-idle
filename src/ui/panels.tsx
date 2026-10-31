@@ -401,7 +401,7 @@ function Attributes({ s }: { s: GameState }) {
             {row(tl('暴击'), `${pct(0.05 + perks.crit)} · ×1.5`, <>{tl('基础 5%')}{perks.crit > 0 && <>{tl` · 布甲和装备 +${pct(perks.crit)}`}</>}</>)}
             {row(tl('闪避'), pct(perks.dodge), <>{tl('基础 3%')}{perks.dodge > 0.03 && <>{tl` · 装备 +${pct(perks.dodge - 0.03)}`}</>}</>)}
             {row(tl('减伤'), pct(perks.reduce), perks.reduce > 0 ? tl('板甲每件 3%') : tl('穿板甲每件减 3%'))}
-            {chainChance(s) > 0 && row(tl('连斩'), pct(chainChance(s)), gearSum(s, 'proc') > 0 ? tl`幽魂链刃 17% · 提灯 +${pct(gearSum(s, 'proc'))}` : tl('幽魂链刃：打中后再砍一刀'))}
+            {chainChance(s) > 0 && row(tl('连斩'), pct(chainChance(s)), gearSum(s, 'proc') > 0 ? tl`幽魂链刃 ${pct(chainChance(s) - gearSum(s, 'proc'))} · 提灯 +${pct(gearSum(s, 'proc'))}` : tl('幽魂链刃：打中后再砍一刀'))}
             {gearSum(s, 'leech') > 0 && row(tl('吸血'), pct(gearSum(s, 'leech')), tl('灯笼：打出伤害的这部分回成生命'))}
           </>;
         })()}

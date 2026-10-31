@@ -1,7 +1,7 @@
 import type {
   ActionDef, ArmorKind, Buff, BuffKind, CombatStyle, Drop, EquipSlot, ItemCategory, ItemDef, ItemStack, LootTable, MonsterDef, RegionId, SkillGroup, SkillId, ToolSlot,
 } from './types';
-import { QUALITY_NAME, QUALITY_STAT, QUALITY_SPEED, QUALITY_VALUE, qid } from './quality';
+import { CHAIN_QUALITY, QUALITY_NAME, QUALITY_STAT, QUALITY_SPEED, QUALITY_VALUE, qid } from './quality';
 import { FORM_FAMILY, isAnimal, SPECIES, WORLD_SKILL, type Family, type Species } from './bestiary';
 import { doorOf, FACILITY_NAME, townAt, TOWNS, type Facility, type TownDef } from './towns';
 
@@ -753,6 +753,8 @@ for (const it of itemList.filter((x) => x.equip && !x.equip.move && x.equip.slot
         speed: e.speed ? Math.round(e.speed * QUALITY_SPEED[q] * 1000) / 1000 : undefined,
         ...(e.haste ? { haste: Math.round(e.haste * QUALITY_SPEED[q] * 1000) / 1000 } : {}),
         ...(e.hp ? { hp: Math.round(e.hp * QUALITY_STAT[q]) } : {}),
+        // 幽魂链刃（用户 10-31：材料难拿、高品质难做，品质高的要明显更强）：连斩概率随品质涨，普通 17% → 神话 34%
+        ...(e.chain ? { chain: Math.round(e.chain * CHAIN_QUALITY[q] * 100) / 100 } : {}),
         ...Object.fromEntries((['xp', 'luck', 'crit', 'dodge', 'work', 'defPct', 'dmgPct'] as const).filter((k) => e[k] && !(k === 'crit' && e.slot === 'offhand')).map((k) => [k, Math.round(e[k]! * QUALITY_SPEED[q] * 1000) / 1000])),
       },
     };

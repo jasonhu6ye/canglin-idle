@@ -11,6 +11,8 @@ export const QUALITY_COLOR = ['#e8e8e8', '#5ad05a', '#4a9aff', '#b060ff', '#ffb0
 export const QUALITY_STAT = [1, 1.1, 1.22, 1.36, 1.55, 1.8];
 /** 工具速度加成乘这个 */
 export const QUALITY_SPEED = [1, 1.1, 1.2, 1.32, 1.48, 1.7];
+/** 幽魂链刃的连斩概率乘这个（10-31）：17% → 19/21/24/28/34% */
+export const CHAIN_QUALITY = [1, 1.12, 1.25, 1.42, 1.65, 2];
 /** 卖价、分解金币乘这个 */
 export const QUALITY_VALUE = [1, 1.5, 2.5, 4, 7, 12];
 /** T1 的出货率（百分比）：普通 60、良好 26、优秀 9.5、史诗 3.2、传说 1、神话 0.3 */
