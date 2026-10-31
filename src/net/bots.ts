@@ -578,10 +578,10 @@ const TOPICS_GROUP: { open: string[]; lines: string[]; react: string[] }[] = [
     react: ['LOL', 'what does that even mean', 'ur brain is wild', 'same', 'thats terrifying', 'i need to know more'] },
   { open: ['what was ur dream job as a kid', 'what did u wanna be when u grew up'],
     lines: ['astronaut obviously', 'a vet, i loved animals', 'a dinosaur. not a paleontologist. a dinosaur', 'pro footballer lol', 'a chef', 'a youtuber, cringe', 'a pilot', 'a firefighter'],
-    react: ['lmao the dinosaur', 'same!', 'cute', 'did it work out?', 'dream big', 'classic'] },
+    react: ['same!', 'cute', 'did it work out?', 'dream big', 'classic'] },
   { open: ['what do u guys do for work btw', 'curious what everyone does irl', 'whats ur job? curious', 'what do u guys do irl'],
     lines: ['nurse, night shifts', 'student, dying inside', 'software dev, i fix bugs i made', 'i work in a coffee shop', 'teacher, the kids are chaos', 'between jobs lol', 'truck driver, playing on breaks', 'graphic designer', 'chef, so i play after closing', 'retail, pray for me', 'warehouse, night shifts', 'teacher, grading papers rn actually', 'software dev, this is my break lol', 'student, should be studying', 'i drive a delivery van', 'nurse, just got off a 12h shift', 'i work at a bakery, up at 4am', 'between jobs rn, hence the grinding lol'],
-    react: ['respect', 'cool', 'thats hard work', 'nice', 'oof', 'thats awesome', 'thats cool', 'oof 12h', 'free bread?', 'same here', 'hang in there'] },
+    react: ['respect', 'cool', 'thats hard work', 'nice', 'oof', 'thats awesome', 'thats cool', 'same here', 'hang in there'] },
   { open: ['if u won a million dollars what would u do first', 'lottery time: what do u buy first'],
     lines: ['pay off my student loans, sad but true', 'buy a house with a big kitchen', 'quit my job immediately', 'travel everywhere', 'buy my mom a car', 'a huge gaming setup', 'invest it and be boring', 'adopt like 10 dogs', 'buy an island lol', 'open a small cafe'],
     react: ['dream', 'smart', 'same honestly', 'take me with u', 'love that', 'relatable'] },
@@ -593,7 +593,7 @@ const TOPICS_GROUP: { open: string[]; lines: string[]; react: string[] }[] = [
     react: ['valid', 'same', 'fall gang', 'cozy', 'facts', 'nah winter is pain'] },
   { open: ['best halloween costume uve ever worn?', 'what are u guys dressing up as for halloween?'],
     lines: ['a banana, very scary', 'a vampire, classic', 'my friend and i were salt and pepper', 'a ghost with a bedsheet lol', 'a pumpkin, fits the game', 'i wore cat ears and called it a day', 'a zombie, the makeup took 2 hours', 'a skeleton onesie, comfy', 'not dressing up, im the candy guy'],
-    react: ['iconic', 'love it', 'lol', 'pics or it didnt happen', 'so creative', 'classic'] },
+    react: ['iconic', 'love it', 'lol', 'so creative', 'classic'] },
   { open: ['whats the best snack, go', 'snack tier list time', 'best snack, go', 'whats ur go to snack while gaming'],
     lines: ['chips, salt and vinegar', 'popcorn', 'gummy bears', 'apples with peanut butter', 'cheese, just cheese', 'chocolate covered pretzels', 'instant noodles at 2am', 'grapes frozen, trust me', 'cookies', 'seaweed snacks', 'chips, always chips', 'popcorn with butter', 'grapes, healthy king', 'cheese and crackers', 'spicy peanuts', 'whatever is in the fridge lol'],
     react: ['good one', 'yum', 'underrated', 'facts', 'now i want some', 'elite', 'good pick', 'im hungry now', 'greasy keyboard gang', 'solid'] },
@@ -602,13 +602,13 @@ const TOPICS_GROUP: { open: string[]; lines: string[]; react: string[] }[] = [
     react: ['good choice', 'now im hungry', 'valid', 'facts', 'ooh yes', 'respect'] },
   { open: ['what are u guys having for dinner', 'dinner ideas? i got nothing'],
     lines: ['leftover pasta', 'cereal, dont judge', 'my mom made soup', 'ordering thai', 'frozen pizza again', 'grilled chicken and rice', 'instant noodles with an egg', 'tacos, its always tacos'],
-    react: ['yum', 'cereal for dinner is valid', 'jealous', 'now im hungry', 'good call', 'lol same'] },
+    react: ['yum', 'jealous', 'now im hungry', 'good call', 'lol same'] },
   { open: ['cats or dogs, settle this once and for all', 'team cats or team dogs?'],
     lines: ['dogs, they love u unconditionally', 'cats, they respect ur space', 'both, why choose', 'cats are just tiny roommates', 'dogs because walks = exercise lol', 'i have 2 cats so cats obviously', 'my dog would be offended if i said cats', 'birds actually', 'whatever pet lets me sleep in'],
     react: ['wrong lol', 'agreed', 'traitor', 'based', 'debatable', 'fair point'] },
   { open: ['anyone have a pet? what kind', 'show of hands, who has pets'],
     lines: ['2 cats, both menaces', 'a golden retriever, best boy', 'a hamster named potato', 'no pets, my landlord said no', 'a turtle older than me', 'a bunny that hates me', 'fish, does that count', 'my parents dog, i visit it lol'],
-    react: ['aww', 'pics?', 'potato lol', 'fish count', 'i want one', 'so cute'] },
+    react: ['aww', 'pics?', 'i want one', 'so cute'] },
   { open: ['whats the best thing that happened to u this week', 'share something good that happened today'],
     lines: ['found 20 bucks in my old jacket', 'my plant finally bloomed', 'passed my driving test!!', 'my cat slept on me all night', 'got a raise lol finally', 'my friend visited from out of town', 'the bus came on time for once', 'made pancakes and they werent burnt'],
     react: ['congrats!!', 'love that', 'wholesome', 'nice!', 'small wins', 'yay'] },
@@ -675,6 +675,17 @@ const BRIDGE: [string, string][] = [
   ['speaking of which, ', '说到这个，'], ['that reminds me, ', '这让我想起来，'], ['ok slightly different question, ', '换个相关的问题，'],
   ['kinda related but ', '有点相关，'], ['on that note, ', '顺着这个说，'], ['lol ok but ', '哈哈好吧，那'],
 ];
+/** 群聊里点名接某人的话，和被点到的人的解释 */
+const FOLLOW: [string, string][] = [
+  ['same!!', '我也是！！'], ['wait why', '等等，为啥'], ['no way lol', '不会吧哈哈'], ['ok tell me more', '好，展开说说'],
+  ['really?', '真的吗？'], ['haha i knew it', '哈哈我就知道'], ['thats so u lol', '太像你了哈哈'], ['respect', '佩服'],
+  ['omg me too', '天哪我也是'], ['how come?', '为什么呢？'],
+];
+const ELAB: [string, string][] = [
+  ['idk it just hits different', '说不上来，就是感觉不一样'], ['long story lol', '说来话长哈哈'], ['trust me on this one', '这个信我'],
+  ['ya for real', '真的'], ['dont judge me lol', '别评判我哈哈'], ['its a whole thing lol', '这事说来复杂哈哈'],
+  ['always has been', '一直都是'], ['haha yep', '哈哈是的'], ['ikr', '对吧'], ['ill tell u later lol', '回头跟你说哈哈'],
+];
 const groupOn = (j: number) => rnd(800, j) < 0.8;
 /** 第 j 段的群聊：开始时间、都谁、说哪几句（各家算出来一样）；这段没有就是 null。话题按相关顺序往下走 */
 function groupAt(bots: AiPlayer[], j: number) {
@@ -685,7 +696,7 @@ function groupAt(bots: AiPlayer[], j: number) {
   const on = bots.filter((b) => botOnline(b, start));
   if (on.length < 3) return null;
   const cast: AiPlayer[] = [];
-  const size = Math.min(on.length, 3 + Math.floor(rnd(803, j) * 4));
+  const size = Math.min(on.length, 4 + Math.floor(rnd(803, j) * 4));
   for (let k = 0; k < 30 && cast.length < size; k++) {
     const b = pickTalker(on, rnd(804, j, k));
     if (!cast.includes(b)) cast.push(b);
@@ -696,19 +707,38 @@ function groupAt(bots: AiPlayer[], j: number) {
   const msgs: { who: AiPlayer; text: string; zh?: string; at: number }[] = [
     { who: cast[0], text: br ? br[0] + open : open, zh: br && BOT_ZH[open] ? br[1] + BOT_ZH[open] : BOT_ZH[open], at: start },
   ];
+  // 每人只答一次（用户 10-31：同一个人前后答得不一样很假），中间有人附和、点名追问，被问的人再解释两句
   const left = [...tp.lines];
-  const n = 12 + Math.floor(rnd(806, j) * 9);
-  let t = start, prev = 0;
-  for (let k = 1; k < n && left.length; k++) {
-    let w = Math.floor(rnd(807, j, k) * cast.length);
-    if (w === prev) w = (w + 1) % cast.length;
-    prev = w;
-    // 附和的话同一段里不重复
-    const reacts = tp.react.filter((x) => !msgs.some((m) => m.text === x));
-    const text = rnd(809, j, k) < 0.65 || k === 1 || !reacts.length ? left.splice(Math.floor(rnd(810, j, k) * left.length), 1)[0] : pick(reacts, rnd(811, j, k));
-    t += typing(text, rnd(808, j, k)) + Math.floor(rnd(813, j, k) ** 2 * 25_000);
-    msgs.push({ who: cast[w], text, zh: BOT_ZH[text], at: t });
-  }
+  const order = [...cast.slice(1), cast[0]].sort((x, y) => rnd(814, j, x.seed) - rnd(814, j, y.seed));
+  let t = start;
+  const say = (who: AiPlayer, text: string, zh: string | undefined, k: number, slow = 1) => {
+    t += typing(text, rnd(808, j, k)) + Math.floor(rnd(813, j, k) ** 2 * 20_000 * slow);
+    msgs.push({ who, text, zh, at: t });
+  };
+  const others = (x: AiPlayer, k: number) => { const o = cast.filter((c) => c !== x); return o[Math.floor(rnd(815, j, k) * o.length)]; };
+  const elab = (x: AiPlayer, k: number) => {
+    const e = ELAB.filter(([en]) => !msgs.some((m) => m.text === en));
+    if (e.length) { const [en, zh] = pick(e, rnd(816, j, k)); say(x, en, zh, k + 50, 0.3); }
+  };
+  order.forEach((x, k) => {
+    if (!left.length) return;
+    const ans = left.splice(Math.floor(rnd(810, j, k) * left.length), 1)[0];
+    say(x, ans, BOT_ZH[ans], k);
+    const r = rnd(809, j, k);
+    if (r < 0.3) {
+      // 点名追问 / 附和
+      const y = others(x, k);
+      const [en, zh] = pick(FOLLOW, rnd(817, j, k));
+      say(y, `${x.name} ${en}`, `${x.name} ${zh}`, k + 20, 0.3);
+      if (/\?$|why|tell me|no way/.test(en) || rnd(818, j, k) < 0.4) elab(x, k);
+    } else if (r < 0.65) {
+      const reacts = tp.react.filter((v) => !msgs.some((m) => m.text === v));
+      if (!reacts.length) return;
+      const v = pick(reacts, rnd(811, j, k));
+      say(others(x, k + 7), v, BOT_ZH[v], k + 30, 0.4);
+      if (v.endsWith('?')) elab(x, k + 3);
+    }
+  });
   return { start, end: t, msgs };
 }
 const SLOT = 75_000;
