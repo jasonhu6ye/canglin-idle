@@ -712,6 +712,11 @@ const ELAB: [string, string][] = [
   ['ya for real', '真的'], ['dont judge me lol', '别评判我哈哈'], ['its a whole thing lol', '这事说来复杂哈哈'],
   ['always has been', '一直都是'], ['haha yep', '哈哈是的'], ['ikr', '对吧'], ['ill tell u later lol', '回头跟你说哈哈'],
 ];
+/** 有人接了自己的话，再回一句 */
+const BACK: [string, string][] = [
+  ['ikr', '对吧'], ['right??', '是吧？？'], ['lol ya', '哈哈是的'], ['haha exactly', '哈哈没错'], ['tell me about it', '可不是嘛'],
+  ['ya its crazy', '对啊很离谱'], ['lol i know', '哈哈我知道'], ['fr tho', '真的'], ['glad im not the only one', '还好不是只有我'], ['thats what i said', '我也是这么说的'],
+];
 const groupOn = (j: number) => rnd(800, j) < 0.8;
 /** 第 j 段的群聊：开始时间、都谁、说哪几句（各家算出来一样）；这段没有就是 null。话题按相关顺序往下走 */
 function groupAt(bots: AiPlayer[], j: number) {
@@ -758,7 +763,7 @@ function groupAt(bots: AiPlayer[], j: number) {
       const y = others(x, k);
       const [en, zh] = pick(FOLLOW, rnd(817, j, k));
       say(y, `${x.name} ${en}`, `${x.name} ${zh}`, k + 20, 0.3);
-      if (/\?$|why|tell me|no way/.test(en) || rnd(818, j, k) < 0.4) elab(x, k);
+      if (/\?$|why|tell me|no way/.test(en)) elab(x, k);
     } else if (r < 0.65) {
       const reacts = tp.react.filter((v) => !msgs.some((m) => m.text === v));
       if (!reacts.length) return;
@@ -835,7 +840,16 @@ function lineUsedRecently(en: string, i: number) {
   for (let w = 1; w <= RECENT; w++) if (kindAt(i - w) === 'line' && lineAt(i - w, 0).en === en) return true;
   return false;
 }
-const slotOn = (i: number, n: number) => rnd(777, i) < Math.min(0.6, 0.05 + n * 0.035);
+/**
+ * 自己起话头（用户 10-31：没人理还一句接一句换话题很尬）：每人每 40 分钟最多起一次，话少的大多不起；
+ * 这一段有人能起话头才说
+ */
+const START_BLOCK = 32;
+const mayStart = (b: AiPlayer, i: number) => {
+  const blk = Math.floor(i / START_BLOCK);
+  return i - blk * START_BLOCK === Math.floor(rnd(b.seed, 120, blk) * START_BLOCK) && rnd(b.seed, 121, blk) < Math.min(0.9, chattyOf(b) * 0.6);
+};
+const slotOn = (i: number, on: AiPlayer[]) => rnd(777, i) < 0.7 && on.some((b) => mayStart(b, i));
 /** 某个时间段里 AI 说的话（按时间排好） */
 export function botChat(bots: AiPlayer[], from: number, to: number): ChatMsg[] {
   if (!bots.length) return [];
@@ -864,12 +878,12 @@ export function botChat(bots: AiPlayer[], from: number, to: number): ChatMsg[] {
   for (let i = Math.floor(from / SLOT) - 5; i <= Math.floor(to / SLOT); i++) {
     const at = i * SLOT + Math.floor(rnd(779, i) * 50_000);
     const on = bots.filter((b) => botOnline(b, at));
-    if (!on.length || !slotOn(i, on.length)) continue;
+    if (!on.length || !slotOn(i, on)) continue;
     // 前两段刚有人起了话头就别再另起一个（用户 10-31：别一句一个话题）
-    if (slotOn(i - 1, on.length) || slotOn(i - 2, on.length)) continue;
+    if (slotOn(i - 1, on) || slotOn(i - 2, on)) continue;
     // 大家正在群聊、或者刚聊完时别插别的话题
     if (groups.some((g) => at > g.start - MIN && at < g.end + 3 * MIN)) continue;
-    const a = pickTalker(on, rnd(778, i));
+    const a = pickTalker(on.filter((b) => mayStart(b, i)), rnd(778, i));
     // 对话里出现的其他人：不重复的几个 AI（话多的更常出来）
     const cast = [a];
     for (let j = 0; j < 10 && cast.length < 4 && cast.length < on.length; j++) {
@@ -881,6 +895,8 @@ export function botChat(bots: AiPlayer[], from: number, to: number): ChatMsg[] {
       .replace(/\{C\}/g, (cast[3] ?? cast[2] ?? cast[1] ?? cast[0]).name).replace(/\{X\}/g, (cast[1] ?? cast[0]).name);
     const say = (text: string, b: AiPlayer, t: number, suf: string, zh = BOT_ZH[text]) => push(`bot-${i}${suf}`, b, fill(text), zh && fill(zh), t);
     let kind = kindAt(i);
+    // 人少的时候少聊天马行空的，多说说自己在干嘛
+    if (kind === 'line' && on.length <= 4 && rnd(831, i) < 0.5) kind = 'act';
     if ((kind === 'convo' || kind === 'pair' || kind === 'story') && usedRecently(kind, i)) kind = 'line';
     if (kind === 'convo' && (cast.length < 3 || (cast.length < 4 && cyc(CONVOS, i, 825).some(([, x]) => x.includes('{C}'))))) kind = 'line';
     if (kind === 'convo') {
@@ -925,11 +941,19 @@ export function botChat(bots: AiPlayer[], from: number, to: number): ChatMsg[] {
         t += 2_500 + Math.floor(rnd(817, i) * 3_000);
         say(`*${typo.fix}`, a, t, 'f', `*${typo.fix}`);
       } else say(line.en, a, t, '', line.zh);
-      // 别的 AI 有时会接一两句
-      for (let k = 0; k < 2 && cast.length > k + 1 && rnd(790, i, k) < (k ? 0.35 : 0.6); k++) {
+      // 别人要么不理，要么感兴趣才接（用户 10-31）：说到吃的、宠物、天气这些有共鸣的话题才常有人接；接了的话说的人再回一句
+      let got = false;
+      const hot = CHIME.some(([re]) => re.test(fill(line.en)));
+      for (let k = 0; k < 2 && cast.length > k + 1 && rnd(790, i, k) < (k ? 0.3 : hot ? 0.65 : 0.15); k++) {
         const re = chimeFor(fill(line.en), rnd(792, i, k));
         t += typing(re, rnd(791, i, k));
         say(re, cast[k + 1], t, `j${k}`);
+        got = true;
+      }
+      if (got && rnd(793, i) < 0.45) {
+        const [en, zh] = pick(BACK, rnd(818, i));
+        t += typing(en, rnd(819, i));
+        say(en, a, t, 'b', zh);
       }
     }
   }
