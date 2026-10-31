@@ -8,6 +8,12 @@ import { tl } from '../i18n';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-10-31-c', date: tl('10 月 31 日'), title: tl("聊天逐句翻译"),
+    lines: [
+      tl("聊天里每条消息旁边多了一个「译」按钮：英文消息翻成中文，中文消息翻成英文，译文显示在原句下面，再点一下收起。和外国玩家聊天更方便了。"),
+    ],
+  },
+  {
     id: '2026-10-31-b', date: tl('10 月 31 日'), title: tl("聊天栏优化"),
     lines: [
       tl("聊天页重新排版：同一个人连着说的话合在一起，名字和时间只显示一次；自己的消息靠右；跨天有日期分隔线。"),
