@@ -400,11 +400,25 @@ const TL = (key: string, name: string, slot: EquipSlot, skill: SkillId, maker: S
 
 export const EQUIP_TYPES: EquipType[] = [
   // 近战：精炼锭
+  /*
+   * 近战武器分工（用户 10-31 重新规划）：单手武器能配副手，出手快、单下伤害低；双手重武器不能用副手，出手慢、单下伤害高。
+   * 低阶时出手快的更占便宜（伤害公式里有一截固定底数），高阶时双手重武器每秒伤害比单手高两三成。
+   * 系数：命中、攻击力、出手间隔（毫秒）
+   */
+  // 短剑：轻快好上手，命中高
+  W('shortsword', tl('短剑'), 'melee', 'smithing', [['bar', 1]], 0, 1.1, 0.75, 2100, 'melee'),
   W('sword', tl('剑'), 'melee', 'smithing', [['bar', 2]], 1, 1.0, 1.0, 2400, 'melee'),
-  W('spear', tl('长枪'), 'melee', 'smithing', [['bar', 2], ['plank', 1]], 3, 0.8, 1.4, 3000, 'melee'),
+  // 阔剑：双手大剑，剑系里最重，命中照样稳
+  { ...W('broadsword', tl('阔剑'), 'melee', 'smithing', [['bar', 3], ['leather', 1]], 4, 1.0, 2.3, 3200, 'melee'), stats: { attack: 1.0, strength: 2.3, attackMs: 3200, style: 'melee', twoHanded: true } },
+  // 长枪：隔半格出手，单下伤害比剑高
+  W('spear', tl('长枪'), 'melee', 'smithing', [['bar', 2], ['plank', 1]], 3, 0.85, 1.5, 3000, 'melee'),
   W('dagger', tl('匕首'), 'melee', 'smithing', [['bar', 1]], 0, 1.25, 0.65, 2000, 'melee'),
-  // 单手斧（用户 10-25）：伤害偏高、稍慢，单手，能配副手
-  W('handaxe', tl('单手斧'), 'melee', 'smithing', [['bar', 2], ['plank', 1]], 2, 0.85, 1.2, 2600, 'melee'),
+  // 单手斧（用户 10-31 改）：近战里出手最快，单下伤害最低，命中偏低，能配副手
+  W('handaxe', tl('单手斧'), 'melee', 'smithing', [['bar', 2], ['plank', 1]], 2, 0.8, 0.5, 1700, 'melee'),
+  // 巨斧：双手长柄大斧，比阔剑更重更猛，命中差一点
+  { ...W('greataxe', tl('巨斧'), 'melee', 'smithing', [['bar', 3], ['plank', 2]], 5, 0.85, 3.0, 3700, 'melee'), stats: { attack: 0.85, strength: 3.0, attackMs: 3700, style: 'melee', twoHanded: true } },
+  // 大锤：双手战锤，近战里单下伤害最高、出手最慢、命中最低
+  { ...W('warhammer', tl('大锤'), 'melee', 'smithing', [['bar', 4], ['plank', 1]], 6, 0.7, 4.0, 4400, 'melee'), stats: { attack: 0.7, strength: 4.0, attackMs: 4400, style: 'melee', twoHanded: true } },
   // 双手大盾（用户 10-25）：攻击低、防御很高，双手持握，装上就不能用副手
   { ...W('greatshield', tl('双手大盾'), 'melee', 'smithing', [['bar', 4], ['plank', 1]], 5, 0.55, 0.6, 2800, 'melee'), stats: { attack: 0.55, strength: 0.6, defence: 1.5, attackMs: 2800, style: 'melee', twoHanded: true, threat: 150 } },
   // 远程：皮革 + 加工木材

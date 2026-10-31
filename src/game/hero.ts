@@ -234,7 +234,7 @@ const STEEL = ['#3e444c', '#7a828c', '#bcc4ce', '#f4f8fc'];
 const BELT = ['#1e120a', '#3a2414', '#5a3a20'];
 
 export type HeroDir = 'down' | 'up' | 'side';
-export type HeroTool = 'pickaxe' | 'axe' | 'hoe' | 'sickle' | 'rod' | 'hammer' | 'knife' | 'sword' | 'spear' | 'dagger' | 'bow' | 'staff' | 'handaxe' | 'greatshield' | 'longbow' | 'crossbow' | 'warbow' | 'arbalest' | 'scythe' | 'none';
+export type HeroTool = 'pickaxe' | 'axe' | 'hoe' | 'sickle' | 'rod' | 'hammer' | 'knife' | 'sword' | 'spear' | 'dagger' | 'bow' | 'staff' | 'handaxe' | 'shortsword' | 'broadsword' | 'greataxe' | 'warhammer' | 'greatshield' | 'longbow' | 'crossbow' | 'warbow' | 'arbalest' | 'scythe' | 'none';
 
 interface Pose {
   dir: HeroDir;
@@ -576,6 +576,44 @@ function drawTool(p: Pix, tool: HeroTool, hx: number, hy: number, a: number, pos
       p.set(ex, ey, STEEL[3]);
       p.set(...along(10.4), STEEL[3]);
     }
+  } else if (tool === 'shortsword') {
+    // 短剑：短握柄、小护手、短刃
+    handle(-2, 0.4, [WOOD[0], WOOD[1]]);
+    p.set(...along(-2.4), GOLD[2]);
+    strip(0.8, -1.6, 1.6, (k) => (k < 0.2 || k > 0.8 ? GOLD[1] : GOLD[2]));
+    const [bx, by] = along(1.6);
+    const [ex, ey] = along(7.4);
+    rod(p, bx, by, ex, ey, a, [STEEL[1], STEEL[2], STEEL[3]]);
+    p.set(ex, ey, STEEL[3]);
+  } else if (tool === 'broadsword') {
+    // 阔剑：两手握的长柄、宽护手，刃有三像素宽，一直伸到 13 格外
+    handle(-4.4, 0.4, [WOOD[0], WOOD[1]]);
+    p.set(...along(-4.8), GOLD[2]);
+    strip(0.8, -3, 3, (k) => (k < 0.12 || k > 0.88 ? GOLD[1] : GOLD[2]));
+    for (let t = 1.4; t <= 13.4; t += 0.4) {
+      const w = t > 11.6 ? Math.max(0, (13.4 - t) * 0.75) : 1.35;
+      strip(t, -w, w, (k) => (k < 0.3 ? STEEL[3] : k > 0.72 ? STEEL[1] : STEEL[2]));
+    }
+    strip(2, -0.4, 0.4, () => STEEL[0]);
+  } else if (tool === 'greataxe') {
+    // 巨斧：长柄，斧头比单手斧大一圈，刃口亮，背面一根尖刺
+    handle(-4.5, 12.6);
+    for (let i = 0; i <= 6; i++) {
+      const t = 8.4 + i * 0.7;
+      const out = 3.6 + (i === 0 || i === 6 ? 1 : i === 1 || i === 5 ? 0.4 : 0);
+      strip(t, -0.5, -out, (k) => (k > 0.82 ? STEEL[3] : k > 0.4 ? STEEL[2] : STEEL[1]));
+    }
+    for (let i = 0; i <= 2; i++) strip(10 + i * 0.6, 0.5, 2.6 - i * 0.8, () => STEEL[1]);
+    strip(12.8, -0.6, 0.6, () => STEEL[2]);
+    p.set(...along(-4.8), GOLD[1]);
+  } else if (tool === 'warhammer') {
+    // 大锤：长柄，顶上一个横着的方锤头，锤顶一根短刺
+    handle(-4.5, 10);
+    for (let t = 10; t <= 13; t += 0.4) strip(t, -3, 3, (k) => (t > 12.6 ? STEEL[0] : k < 0.25 ? STEEL[3] : k < 0.7 ? STEEL[2] : STEEL[1]));
+    strip(10.6, -3.2, 3.2, () => STEEL[0]);
+    strip(13.4, -0.5, 0.5, () => STEEL[2]);
+    strip(13.9, -0.3, 0.3, () => STEEL[3]);
+    p.set(...along(-4.8), GOLD[1]);
   } else if (tool === 'handaxe') {
     // 单手斧：短柄，斧刃朝挥砍的方向，带一个下勾的斧须
     handle(-1.5, 6.6);
@@ -2694,12 +2732,16 @@ const ride = (dir: HeroDir, run: boolean): HeroAnim => ({
  * 出手只在真正攻击的那一下播一遍（地图场景按攻速缩放），两次攻击之间停在架势里不乱挥。
  * 出手动作开头的蓄力要短，hit 是打中的时刻（0-1），特效在这时候放。
  */
-export type FightWeapon = 'sword' | 'spear' | 'dagger' | 'handaxe' | 'greatshield' | 'shortbow' | 'longbow' | 'crossbow' | 'warbow' | 'arbalest' | 'staff' | 'fist';
+export type FightWeapon = 'sword' | 'spear' | 'dagger' | 'handaxe' | 'shortsword' | 'broadsword' | 'greataxe' | 'warhammer' | 'greatshield' | 'shortbow' | 'longbow' | 'crossbow' | 'warbow' | 'arbalest' | 'staff' | 'fist';
 export const FIGHT: Record<FightWeapon, { hit: number; ms: number }> = {
   sword: { hit: 0.42, ms: 640 },
   spear: { hit: 0.4, ms: 700 },
   dagger: { hit: 0.3, ms: 560 },
-  handaxe: { hit: 0.45, ms: 680 },
+  handaxe: { hit: 0.4, ms: 520 },
+  shortsword: { hit: 0.38, ms: 520 },
+  broadsword: { hit: 0.5, ms: 820 },
+  greataxe: { hit: 0.52, ms: 900 },
+  warhammer: { hit: 0.58, ms: 1000 },
   greatshield: { hit: 0.45, ms: 760 },
   shortbow: { hit: 0.55, ms: 720 },
   longbow: { hit: 0.6, ms: 900 },
@@ -2711,7 +2753,7 @@ export const FIGHT: Record<FightWeapon, { hit: number; ms: number }> = {
 };
 /** 战斗站位（用户 10-25）：离怪多远开打，单位格。近战贴身，长枪隔半格，远程隔几格 */
 export const FIGHT_RANGE: Record<FightWeapon, number> = {
-  sword: 0, spear: 0.6, dagger: 0, handaxe: 0, greatshield: 0, fist: 0,
+  sword: 0, spear: 0.6, dagger: 0, handaxe: 0, shortsword: 0, broadsword: 0.2, greataxe: 0.3, warhammer: 0.3, greatshield: 0, fist: 0,
   shortbow: 3, longbow: 4, crossbow: 3.5, warbow: 3, arbalest: 4.5, staff: 3,
 };
 /** 装备的武器 id（已去掉品质后缀）对应哪套动作 */
@@ -2765,6 +2807,57 @@ const FIGHT_ANIMS: HeroAnim[] = [
       legF: keys([[0, 0.45], [0.45, 0.8], [1, 0.45]], t), legB: -0.45,
       crouch: t > 0.42 && t < 0.72 ? 2 : 0, cape: t > 0.3 ? 2 : 1,
     })),
+  // 短剑：剑尖朝前端在身前；出手是一记快速的斜劈接前刺
+  ...fight('shortsword', 8,
+    (t) => ({ dir: 'side', tool: 'shortsword', armF: 1.3, elbowF: 0.5, toolTurn: 0.5, armB: 0.4, legF: 0.5, legB: -0.4, bob: breathe(t), cape: 1 }),
+    (t) => ({
+      dir: 'side', tool: 'shortsword', armB: 0.4, legF: keys([[0, 0.5], [0.35, 0.8], [1, 0.5]], t), legB: -0.45,
+      armF: keys([[0, 1.3], [0.18, 2.6], [0.38, 1.0], [0.6, 1.6], [1, 1.3]], t),
+      elbowF: keys([[0, 0.5], [0.18, 0.1], [0.38, 0], [0.6, 0], [1, 0.5]], t),
+      toolTurn: keys([[0, 0.5], [0.18, 0.4], [0.38, 0], [0.6, -0.1], [1, 0.5]], t),
+      reach: keys([[0, 0], [0.38, 1], [0.6, 3], [1, 0]], t), cape: t > 0.3 ? 2 : 1,
+    })),
+  // 阔剑：双手握剑竖在身前；出手是举过头顶、整个人压下去的一记重劈
+  ...fight('broadsword', 12,
+    (t) => ({ dir: 'side', tool: 'broadsword', armF: 1.1, elbowF: 0.5, armB: 1.0, elbowB: 0.5, toolTurn: 1.0, legF: 0.55, legB: -0.5, bob: breathe(t), cape: 1 }),
+    (t) => {
+      const a = keys([[0, 1.1], [0.32, 3.6], [0.5, 0.6], [0.75, 0.65], [1, 1.1]], t);
+      const e = keys([[0, 0.5], [0.32, 0.1], [0.5, 0], [0.75, 0.1], [1, 0.5]], t);
+      return {
+        dir: 'side', tool: 'broadsword', armF: a, elbowF: e, armB: a - 0.15, elbowB: e,
+        toolTurn: keys([[0, 1.0], [0.32, 0.4], [0.5, 0.2], [0.75, 0.2], [1, 1.0]], t),
+        legF: keys([[0, 0.55], [0.5, 0.95], [0.8, 0.9], [1, 0.55]], t), legB: keys([[0, -0.5], [0.5, -0.75], [1, -0.5]], t),
+        crouch: t > 0.45 && t < 0.8 ? 2 : 0, cape: t > 0.35 ? 2 : 1,
+      };
+    }),
+  // 巨斧：斧头扛在肩上；出手是后仰蓄满力、从头顶抡一整圈砸下去
+  ...fight('greataxe', 12,
+    (t) => ({ dir: 'side', tool: 'greataxe', armF: 2.2, elbowF: 0.7, armB: 2.0, elbowB: 0.7, toolTurn: 0.4, legF: 0.5, legB: -0.45, bob: breathe(t), cape: 1 }),
+    (t) => {
+      const a = keys([[0, 2.2], [0.35, 4.0], [0.52, 0.75], [0.78, 0.75], [1, 2.2]], t);
+      const e = keys([[0, 0.7], [0.35, 0.3], [0.52, 0], [0.78, 0], [1, 0.7]], t);
+      return {
+        dir: 'side', tool: 'greataxe', armF: a, elbowF: e, armB: a - 0.2, elbowB: e,
+        toolTurn: keys([[0, 0.4], [0.35, 0.6], [0.52, 0.35], [0.78, 0.35], [1, 0.4]], t),
+        reach: keys([[0, 0], [0.35, -1.5], [0.52, 1.5], [1, 0]], t),
+        legF: keys([[0, 0.5], [0.52, 1.0], [0.8, 0.95], [1, 0.5]], t), legB: keys([[0, -0.45], [0.52, -0.8], [1, -0.45]], t),
+        crouch: t > 0.48 && t < 0.82 ? 2 : 0, cape: t > 0.35 ? 2 : 1,
+      };
+    }),
+  // 大锤：锤扛在肩上；出手是慢慢举过头顶、跳起来狠狠砸到身前的地上
+  ...fight('warhammer', 14,
+    (t) => ({ dir: 'side', tool: 'warhammer', armF: 2.0, elbowF: 0.8, armB: 1.8, elbowB: 0.8, toolTurn: 0.9, legF: 0.55, legB: -0.5, bob: breathe(t) }),
+    (t) => {
+      const a = keys([[0, 2.0], [0.4, 3.8], [0.58, 0.85], [0.85, 0.9], [1, 2.0]], t);
+      const e = keys([[0, 0.8], [0.4, 0.3], [0.58, 0], [0.85, 0], [1, 0.8]], t);
+      return {
+        dir: 'side', tool: 'warhammer', armF: a, elbowF: e, armB: a - 0.15, elbowB: e,
+        toolTurn: keys([[0, 0.9], [0.4, 0.8], [0.58, 0.5], [0.85, 0.5], [1, 0.9]], t),
+        hop: t > 0.42 && t < 0.56 ? -1 : 0,
+        legF: keys([[0, 0.55], [0.58, 1.0], [0.85, 0.95], [1, 0.55]], t), legB: keys([[0, -0.5], [0.58, -0.85], [1, -0.5]], t),
+        crouch: keys([[0, 0], [0.35, 0], [0.58, 3], [0.85, 2], [1, 0]], t), cape: t > 0.4 ? 2 : 1,
+      };
+    }),
   // 双手大盾：盾牌竖在身前顶住；出手是往后蓄一下再整个人撞过去
   ...fight('greatshield', 10,
     (t) => ({ dir: 'side', tool: 'greatshield', armF: 1.5, elbowF: -0.2, armB: 1.3, elbowB: 0.2, crouch: 1, legF: 0.6, legB: -0.55, bob: breathe(t) }),

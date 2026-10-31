@@ -604,6 +604,126 @@ function tool(p: Pix, key: string, t: number) {
 
 // ---- 副手和新武器（用户 10-25）：单手斧、双手大盾、火把、副手盾、箭袋、魔法书 ----
 
+/*
+ * 近战新武器（用户 10-31）：短剑、阔剑、巨斧、大锤。和其他武器一样每阶造型不同。
+ */
+function shortsword(p: Pix, t: number) {
+  // 短剑：刃短，握柄短，护手小；整体往右上挪一点居中
+  const M = ramp(METAL[t]);
+  const A = ramp(ACCENT[t]);
+  const W = ramp(WOODS[t]);
+  const o = 1.5;
+  const end = o + [15, 16, 16, 17, 16.5, 17, 17.5, 17.5][t];
+  // 刃形：t0 圆头木片、t1 叶形、t2 罗马短剑（直刃三角尖）、t3 直刃血槽、t4 前宽后窄、t5 符文直刃、t6 波浪刃、t7 宽刃金脊
+  const shape = [
+    (q: number) => (q > 0.85 ? 1.9 * Math.sqrt(Math.max(0, 1 - ((q - 0.85) / 0.15) ** 2)) : 1.9),
+    (q: number) => (q < 0.8 ? 1.3 + Math.sin(q * Math.PI) * 1 : 1.9 * (1 - q) / 0.2),
+    taper(1.8, 0.72),
+    taper(1.6, 0.8),
+    (q: number) => (q < 0.75 ? 1.2 + q * 1.1 : 2 * (1 - q) / 0.25),
+    taper(1.7, 0.78),
+    (q: number) => (q < 0.8 ? 1.5 + Math.sin(q * 20) * 0.45 : 1.7 * (1 - q) / 0.2),
+    taper(2.2, 0.75),
+  ][t];
+  const parts: Part[] = [
+    grip(o, o + 4.5, 0.9, t >= 3 ? A[1] : '#5a3a22', t >= 3 ? A[2] : '#7a5232'),
+    ball(o - 0.5, 0, t >= 5 ? 1.4 : 1.1, t >= 5 ? A : M),
+    t === 2 ? ball(o + 5, 0, 1.9, ramp('#8a6a40')) : bar(o + 5, [2, 2.2, 0, 2.6, 2.4, 2.8, 2.6, 3.2][t], 0.7, M, t === 4 ? -1 : t === 5 ? 1.4 : 0),
+    blade(o + 5.6, end, shape, t === 0 ? W : M, { fuller: t === 3 ? M[1] : t === 7 ? M[4] : undefined, edge: t === 6 ? A[3] : undefined }),
+  ];
+  if (t === 5) parts.push(dots(o + 7.5, end - 3, 2.4, 0, A[3]));
+  if (t === 7) parts.push(ball(o + 5, 0, 1.1, A));
+  axis(p, parts);
+}
+function broadsword(p: Pix, t: number) {
+  // 阔剑：双手大剑，长握柄、宽护手、宽刃一直顶到格子角上
+  const M = ramp(METAL[t]);
+  const A = ramp(ACCENT[t]);
+  const W = ramp(WOODS[t]);
+  const wide = [2.4, 2.6, 2.5, 2.7, 2.4, 2.8, 2.6, 3.1][t];
+  const shape = [
+    (q: number) => (q > 0.88 ? wide * Math.sqrt(Math.max(0, 1 - ((q - 0.88) / 0.12) ** 2)) : wide),
+    (q: number) => (q < 0.8 ? wide - 0.4 + Math.sin(q * Math.PI) * 0.7 : wide * (1 - q) / 0.2),
+    taper(wide, 0.85),
+    taper(wide, 0.82),
+    (q: number) => (q < 0.8 ? wide - 0.8 + q * 1.2 : (wide + 0.2) * (1 - q) / 0.2),
+    taper(wide, 0.84),
+    (q: number) => (q < 0.85 ? wide + Math.sin(q * 26) * 0.5 : wide * (1 - q) / 0.15),
+    (q: number) => (q < 0.8 ? wide : q < 0.9 ? wide * 0.75 : wide * 0.75 * (1 - q) / 0.1),
+  ][t];
+  const parts: Part[] = [
+    grip(-3.2, 4, 1, t >= 2 ? A[1] : '#5a3a22', t >= 2 ? A[2] : '#7a5232', 1.6),
+    ball(-3.6, 0, t >= 4 ? 1.6 : 1.3, t >= 4 ? A : M),
+    bar(4.6, [3.4, 3.8, 4.2, 4.6, 4.2, 4.8, 4.6, 5.4][t], 1, t === 0 ? W : M, [0, 0, 0, 0, -1.6, 2.4, 0, 1.4][t]),
+    blade(5.6, 24, shape, t === 0 ? W : M, { fuller: t === 3 || t === 2 ? M[1] : t === 7 ? M[4] : undefined, edge: t === 6 ? A[3] : undefined, c: t === 4 ? (q) => -q * q * 1.6 : undefined }),
+  ];
+  // 剑根的护刃（ricasso）上加一段皮套 / 符文 / 宝石
+  if (t >= 3) parts.push(grip(5.6, 7.4, wide - 0.6, M[1], M[2], 0.9));
+  if (t === 5) parts.push(dots(9, 21, 2.6, 0, A[3]));
+  if (t === 6) parts.push(dots(8.5, 21, 3, 0, A[2]));
+  if (t === 7) parts.push(ball(4.6, 0, 1.4, A), ball(4.6, 3.8, 0.9, A), ball(4.6, -3.8, 0.9, A));
+  axis(p, parts, 4, 20);
+}
+function greataxe(p: Pix, t: number) {
+  // 巨斧：长柄，斧头比单手斧大一圈，高阶是双刃
+  const M = ramp(METAL[t]);
+  const A = ramp(ACCENT[t]);
+  const W = ramp(WOODS[t]);
+  const parts: Part[] = [shaft(-3, 20.5, 0.95, W), grip(-3, 3, 1.05, t >= 2 ? A[1] : W[1], t >= 2 ? A[2] : W[3])];
+  const reach = [6.6, 7, 7, 7.4, 7.4, 7.6, 7.6, 7.8][t];
+  const c = 15.5;
+  const head = (u: number, v: number) => {
+    if (v < 0.8 || v > reach) return false;
+    const r = v / reach;
+    // t0 方刃、t1 胡子斧、t2 月牙、t3 宽刃、t4 长弧、t5 双月牙、t6 锯齿、t7 宽月牙双刃
+    const half = [2.4 + r * 1.4, 2 + r * 2.8, 1.6 + r * r * 4.6, 2.6 + r * 2.6, 1.8 + r * 3.4, 1.6 + r * r * 4.8, 2.2 + r * 3.2, 1.8 + r * r * 5.4][t];
+    const off = t === 1 ? -r * r * 2.4 : t === 4 ? r * 1.2 : 0;
+    if (t === 6 && v > reach - 1.4 && Math.floor(u) % 2 === 0) return false;
+    return Math.abs(u - c - off) <= half;
+  };
+  parts.push((u, v) => (head(u, v) ? (v > reach - 1.2 ? M[4] : u > c ? M[3] : M[2]) : null));
+  if (t >= 5) parts.push((u, v) => (head(u, -v) ? (-v > reach - 1.2 ? M[4] : u > c ? M[3] : M[1]) : null));
+  else if (t >= 2) parts.push((u, v) => (v < -0.6 && v > -3.6 && Math.abs(u - c) < (3.8 + v) * 0.45 + 0.3 ? M[2] : null));
+  parts.push(bar(c, 1.3, 2.4, M));
+  // 柄头尖、斧颈宝石、符文
+  if (t >= 3) parts.push((u, v) => (u > 20.5 && u < 23 && Math.abs(v) < (23 - u) * 0.5 ? M[3] : null));
+  if (t >= 4) parts.push(ball(c, 0, 1, A));
+  if (t === 5 || t === 7) parts.push(ball(-3.4, 0, 1.2, A));
+  if (t === 6) parts.push((u, v) => (v > 1.5 && v < reach - 1.8 && Math.abs(u - c) < 0.5 ? A[3] : null));
+  axis(p, parts, 4, 20);
+}
+function warhammer(p: Pix, t: number) {
+  // 大锤：长柄，顶端一个横着的大锤头；每阶锤头造型不同
+  const M = ramp(METAL[t]);
+  const A = ramp(ACCENT[t]);
+  const W = ramp(WOODS[t]);
+  const parts: Part[] = [shaft(-3, 19, 0.95, W), grip(-3, 3, 1.05, t >= 2 ? A[1] : W[1], t >= 2 ? A[2] : W[3])];
+  const c = 18.5;
+  const len = [4.6, 5, 5.4, 5.6, 5.4, 5.8, 6, 6.4][t];
+  const thick = [3.2, 2.8, 3, 3.2, 3, 3.4, 3.2, 3.6][t];
+  const pal = t === 0 ? W : M;
+  // 锤头：t0 圆木槌、t1 铜方锤、t2 一头方一头尖、t3 带凸缘、t4 八角晶锤、t5 符文方锤、t6 狼牙刺锤、t7 金色双头大锤
+  parts.push((u, v) => {
+    const du = u - c;
+    let hw = thick;
+    if (t === 0) hw = thick * Math.sqrt(Math.max(0, 1 - (v / (len + 0.4)) ** 2)) + 0.6;
+    if (t === 2 && v < -1.5) hw = thick * Math.max(0, (len + v) / (len - 1.5));
+    if (t === 4 && Math.abs(v) > len - 1.6) hw = thick - (Math.abs(v) - (len - 1.6)) * 1.2;
+    if (t === 7 && Math.abs(v) > len - 1.2) hw = thick + 0.8;
+    if (Math.abs(v) > len || Math.abs(du) > hw) return null;
+    if (Math.abs(v) > len - 0.9) return pal[4];
+    if (t === 3 && Math.abs(v) < len - 1 && Math.floor(Math.abs(v)) % 2 === 1 && Math.abs(du) > hw - 0.9) return pal[1];
+    return du > hw * 0.35 ? pal[3] : du < -hw * 0.35 ? pal[1] : pal[2];
+  });
+  if (t === 3) parts.push(bar(c, 1.4, thick + 1, M));
+  if (t === 5) parts.push((u, v) => (Math.abs(u - c) < 0.6 && Math.abs(v) < len - 1.5 && Math.floor(v + 10) % 2 === 0 ? A[3] : null));
+  if (t === 6) for (const sv of [-3, 0, 3]) for (const su of [-1, 1]) parts.push((u, v) => (Math.abs(v - sv) < 0.6 && (u - c) * su > thick && (u - c) * su < thick + 1.6 ? M[3] : null));
+  if (t >= 4) parts.push(ball(c, 0, 1.1, A));
+  if (t === 7) parts.push(ball(-3.4, 0, 1.3, A));
+  // 锤顶的尖刺（t2 以上）
+  if (t >= 2) parts.push((u, v) => (u > c + thick && u < c + thick + 2.6 && Math.abs(v) < (c + thick + 2.6 - u) * 0.45 ? M[3] : null));
+  axis(p, parts, 4, 20);
+}
 function handaxe(p: Pix, t: number) {
   // 单手斧：短柄，斧头比工具斧大，背面带尖刺或第二片刃，每阶刃形不同
   const M = ramp(METAL[t]);
@@ -1543,6 +1663,10 @@ export function equipIconUrl(key: string, tier: number): string | null {
   else if (key === 'arbalest') arbalest(p, tier);
   else if (key === 'staff') staff(p, tier);
   else if (key === 'handaxe') handaxe(p, tier);
+  else if (key === 'shortsword') shortsword(p, tier);
+  else if (key === 'broadsword') broadsword(p, tier);
+  else if (key === 'greataxe') greataxe(p, tier);
+  else if (key === 'warhammer') warhammer(p, tier);
   else if (key === 'greatshield') greatshield(p, tier);
   else if (key === 'buckler') buckler(p, tier);
   else if (key === 'torch') torch(p, tier);
