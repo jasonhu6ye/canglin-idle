@@ -1149,6 +1149,12 @@ h2.dg-blue { color: #6ab4ff; }
 button.chat-who { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
 .chat-msg.me .chat-who { color: var(--gold); }
 .chat-text { background: rgba(255, 240, 210, 0.06); border: 1px solid rgba(255, 230, 190, 0.1); border-radius: 2px 8px 8px 8px; padding: 4px 9px; font-size: 13px; line-height: 1.5; word-break: break-word; white-space: pre-wrap; max-width: 86%; }
+.chat-line { display: flex; align-items: flex-start; gap: 4px; }
+.chat-msg.me .chat-line { flex-direction: row-reverse; }
+.chat-line .chat-text { max-width: 80%; }
+.chat-tr { margin-top: 3px; padding-top: 3px; border-top: 1px dashed rgba(255, 230, 190, 0.2); color: #cfe6a8; font-size: 12px; }
+.chat-tr-btn { flex: none; font-size: 10px; line-height: 1; padding: 3px 4px; margin-top: 3px; background: transparent; border: 1px solid rgba(255, 230, 190, 0.2); color: var(--muted, #a89a80); border-radius: 3px; opacity: 0.7; }
+.chat-tr-btn.on, .chat-tr-btn:hover { opacity: 1; color: #cfe6a8; border-color: #cfe6a8; }
 .chat-msg.me .chat-text { background: rgba(232, 200, 120, 0.16); border-color: rgba(232, 200, 120, 0.3); border-radius: 8px 2px 8px 8px; }
 .chat-day { align-self: stretch; display: flex; align-items: center; gap: 8px; margin: 8px 0 2px; font-size: 11px; color: #8a7a68; }
 .chat-day::before, .chat-day::after { content: ''; flex: 1; height: 1px; background: rgba(255, 230, 190, 0.12); }

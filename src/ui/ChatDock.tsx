@@ -3,6 +3,7 @@ import type { ChatChannel } from '../net';
 import { online } from '../net';
 import { channelMsgs, closeChat, openChat, send, useSocial } from '../net/social';
 import { errText } from './Login';
+import { translate } from '../net/translate';
 import { tl } from '../i18n';
 
 /**
@@ -68,6 +69,15 @@ export function ChatPage({ onClose }: { onClose: () => void }) {
   const [lastSent, setLastSent] = useState(0);
   const [atBottom, setAtBottom] = useState(true);
   const [seenLen, setSeenLen] = useState(0);
+  // 逐句翻译（10-31）：消息 id → 译文，null 是正在翻
+  const [tr, setTr] = useState<Record<string, string | null>>({});
+  const toggleTr = async (id: string, text: string, zh?: string) => {
+    if (id in tr) { setTr(({ [id]: _, ...rest }) => rest); return; }
+    setTr((x) => ({ ...x, [id]: null }));
+    let out: string;
+    try { out = await translate(text, zh); } catch { out = tl('翻译失败，稍后再试'); }
+    setTr((x) => (id in x ? { ...x, [id]: out } : x));
+  };
   const box = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const friends = st.friends.filter((f) => f.accepted);
@@ -152,7 +162,13 @@ export function ChatPage({ onClose }: { onClose: () => void }) {
                     <small className="muted">{time(m.at)}</small>
                   </div>
                 )}
-                <div className="chat-text">{m.text}</div>
+                <div className="chat-line">
+                  <div className="chat-text">
+                    {m.text}
+                    {m.id in tr && <div className="chat-tr">{tr[m.id] ?? tl('翻译中…')}</div>}
+                  </div>
+                  <button className={`chat-tr-btn ${m.id in tr ? 'on' : ''}`} title={tl('翻译')} onClick={() => void toggleTr(m.id, m.text, m.zh)}>{tl('译')}</button>
+                </div>
               </div>
             );
           })}

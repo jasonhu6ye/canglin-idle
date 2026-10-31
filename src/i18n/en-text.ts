@@ -1191,4 +1191,7 @@ export const EN_TEXT: Record<string, string> = {
   "往上翻旧消息时不会再被新消息拉回底部，右下角会提示有几条新消息，点一下回到最新。": "Scrolling up to read older messages no longer jumps back to the bottom when new ones arrive. A button in the corner shows how many new messages there are; tap it to jump to the latest.",
   "加了快捷短语（组队吗？、谢谢！等），手机上不用打字；点别人的名字可以看玩家名片。世界频道每 3 秒最多发一句，防止刷屏。": "Added quick phrases (Party up?, Thanks! and more) so you don't have to type on mobile, and you can tap a player's name to see their card. World chat allows one message every 3 seconds to prevent spam.",
   "地图左下角的聊天条加了频道标签，来新消息时会闪一下。": "The chat bar at the bottom left of the map now shows a channel tag and flashes when a new message arrives.",
+  '聊天逐句翻译': 'Chat Translation',
+  '聊天里每条消息旁边多了一个「译」按钮：英文消息翻成中文，中文消息翻成英文，译文显示在原句下面，再点一下收起。和外国玩家聊天更方便了。': 'Every chat message now has a "Tr" button: English messages are translated into Chinese and Chinese into English, with the translation shown under the original. Tap again to hide it. Chatting with players from other countries just got easier.',
+  '翻译：每条聊天消息旁边有个「译」按钮，英文翻成中文、中文翻成英文，再点一下收起。': 'Translation: every chat message has a "Tr" button that translates English into Chinese and Chinese into English. Tap again to hide it.',
 };

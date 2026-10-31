@@ -156,6 +156,8 @@ export interface ChatMsg {
   toId?: string;
   text: string;
   at: number;
+  /** AI 玩家的话自带中文翻译（10-31，见 i18n/bot-zh.ts） */
+  zh?: string;
 }
 
 export interface Friend {
