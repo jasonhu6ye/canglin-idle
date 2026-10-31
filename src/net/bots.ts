@@ -126,9 +126,9 @@ export function botProfile(b: AiPlayer, t = Date.now()): BotProfile {
   if (hit) return hit;
   if (profiles.size > 2000) profiles.clear();
   const s = b.seed;
-  // 加进来时是新号（玩了几分钟到一个多小时），之后每天再玩 0.5-4.5 小时
-  const h0 = 0.05 + 1.2 * rnd(s, 1) ** 2;
-  const rate = 0.5 + 4 * rnd(s, 2);
+  // 加进来时是新号（玩了几分钟到半小时），之后每天再玩 0.3-2.3 小时，玩得越久涨得越慢
+  const h0 = 0.05 + 0.45 * rnd(s, 1) ** 2;
+  const rate = 0.3 + 2 * rnd(s, 2) ** 1.5;
   const hours = h0 + (rate * Math.max(0, hour * 3600_000 - b.at)) / DAY;
   const style = pick(ATTACK, rnd(s, 3)) as Style;
   const w = {} as Record<SkillId, number>;
@@ -139,9 +139,8 @@ export function botProfile(b: AiPlayer, t = Date.now()): BotProfile {
   w.defence = 0.5 + rnd(s, 5) * 0.7;
   w.hitpoints = 0;
   const sum = Object.values(w).reduce((a, x) => a + x, 0);
-  // 一边干活一边离线结算，各技能加起来的时间比实际在线还多一些
   const levels = {} as Record<SkillId, number>;
-  for (const k of SKILL_IDS) levels[k] = levelOfHours((hours * 1.6 * w[k]) / sum);
+  for (const k of SKILL_IDS) levels[k] = levelOfHours((hours * w[k]) / sum);
   levels.hitpoints = Math.max(10, Math.round((levels[style] + levels.defence) / 2 + 3));
   const xp = {} as Record<SkillId, number>;
   for (const k of SKILL_IDS) xp[k] = XP_TABLE[levels[k]] + Math.floor(rnd(s, 20, k.charCodeAt(1)) * (XP_TABLE[levels[k] + 1] - XP_TABLE[levels[k]]));
