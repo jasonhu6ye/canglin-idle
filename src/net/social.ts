@@ -2,6 +2,7 @@ import { setPartySize } from '../core/party';
 import { fieldKey, pushMateHit, setAggroMates, setDgCrew, setFieldCrew, threatOf } from '../core/aggro';
 import type { GameState } from '../core/types';
 import { useEffect, useState } from 'react';
+import { worldResetAt } from './bots';
 import { online, type DungeonPresence, type Presence, type ChatChannel, type ChatMsg, type Friend, type Party, type PartyInvite, type Trade } from './index';
 import { ACTIONS, ITEMS } from '../core/data';
 import { store } from '../store';
@@ -74,7 +75,10 @@ export function syncSocial() {
   if (!me) { emit(); return; }
   offs.push(online.onChat((m) => {
     if (st.msgs.some((x) => x.id === m.id)) return;
-    st.msgs = [...st.msgs, m].sort((a, b) => a.at - b.at).slice(-KEEP);
+    // 世界频道每天北京时间 0 点清空
+    if (m.channel === 'world' && m.at < worldResetAt()) return;
+    const cut = worldResetAt();
+    st.msgs = [...st.msgs, m].filter((x) => x.channel !== 'world' || x.at >= cut).sort((a, b) => a.at - b.at).slice(-KEEP);
     const seen = st.open && st.channel === m.channel && (m.channel !== 'private' || st.to === m.playerId || m.playerId === me.id);
     if (!seen && m.playerId !== me.id && Date.now() - m.at < 60_000) st.unread[m.channel]++;
     emit();
