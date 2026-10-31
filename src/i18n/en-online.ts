@@ -365,6 +365,7 @@ export const EN_ONLINE: Record<string, string> = {
   '总等级 {0} · 战斗 {1}': 'Total Lv{0} · Combat {1}',
   '正在：{0}': 'Doing: {0}',
   '正在赶路': 'Traveling',
+  '在城里挂机': 'Idling in town',
   '删除 AI 玩家 {0}？': 'Remove AI player {0}?',
   '已删除 {0}': 'Removed {0}',
 };

@@ -4,7 +4,7 @@ import { APT_MAX, APT_MIN, horseItem } from '../core/ranch';
 import type { EquipSlot, SkillId } from '../core/types';
 import { XP_TABLE } from '../core/xp';
 import { fightWeapon, OUTFITS } from '../game/hero';
-import { findPath } from '../game/world';
+import { findPath, isWalkable } from '../game/world';
 import type { AiPlayer, Board, ChatMsg, OnlineApi, Presence, RankRow } from './api';
 
 /**
@@ -177,7 +177,14 @@ export interface BotDoing {
   frac?: number;
   /** 这一段路的编号（缓存寻路用） */
   leg: string;
+  /** 在城里站着挂机（10-31 用户要求） */
+  idle?: boolean;
 }
+
+/** 挂机待的地方：各城的仓库、家园传送门、商人门口 */
+const IDLE_SPOTS = NODES.filter((n) => n.town && !n.sea && (n.opens === 'bank' || n.portal || n.shop));
+/** 每个 AI 挂机的频率不一样：大多偶尔挂一会，少数经常站在城里 */
+const afkOf = (seed: number) => 0.05 + 0.4 * rnd(seed, 70) ** 2;
 
 const dist = (a: Pt, b: Pt) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 export function botDoing(p: BotProfile, seed: number, t = Date.now()): BotDoing | null {
@@ -185,6 +192,8 @@ export function botDoing(p: BotProfile, seed: number, t = Date.now()): BotDoing 
   const off = rnd(seed, 50) * SESSION;
   const si = Math.floor((t + off) / SESSION);
   let tt = si * SESSION - off;
+  // 这一段在线干脆在城里挂机
+  if (IDLE_SPOTS.length && rnd(seed, si, 71) < afkOf(seed)) return { node: pick(IDLE_SPOTS, rnd(seed, si, 72)), leg: `${si}:idle`, idle: true };
   // 城里做东西的地点少去一些，大多在野外
   const field = p.spots.filter((x) => !x.n.town);
   const town = p.spots.filter((x) => x.n.town);
@@ -234,14 +243,38 @@ function pathOf(key: string, a: Pt, b: Pt) {
   return v;
 }
 
+/**
+ * 每个 AI 在地点周围几格内各找一个站位（10-31 用户反馈都挤在一格上）：
+ * 城里的作坊门口左右散开，野外散得开一些；找不到能走的格子就站原位
+ */
+const spots = new Map<string, Pt>();
+function spotOf(n: MapNode, seed: number, wide = false): Pt {
+  const key = `${n.id}:${seed}:${wide}`;
+  const hit = spots.get(key);
+  if (hit) return hit;
+  if (spots.size > 3000) spots.clear();
+  const at = standOf(n);
+  let out = at;
+  const rx = wide ? 6 : n.town ? 3 : 4, ry = wide ? 4 : n.town ? 2 : 4;
+  for (let i = 0; i < 16; i++) {
+    const x = at.x + Math.round((rnd(seed, 60, i) * 2 - 1) * rx);
+    const y = at.y + (n.town && !wide ? Math.floor(rnd(seed, 61, i) * (ry + 1)) : Math.round((rnd(seed, 61, i) * 2 - 1) * ry));
+    let ok = false;
+    try { ok = isWalkable(x, y); } catch { ok = false; }
+    if (ok) { out = { x, y }; break; }
+  }
+  spots.set(key, out);
+  return out;
+}
+
 /** 一个 AI 现在的在线状态（和真人的 Presence 一样画在地图上） */
 export function botPresence(b: AiPlayer, t = Date.now()): Presence | null {
   const p = botProfile(b, t);
   const d = botDoing(p, b.seed, t);
   if (!d) return null;
-  let at: Pt = standOf(d.node);
+  let at: Pt = spotOf(d.node, b.seed, d.idle);
   if (d.from && d.frac != null) {
-    const a = standOf(d.from), z = at;
+    const a = spotOf(d.from, b.seed), z = at;
     const lin = { x: a.x + (z.x - a.x) * d.frac, y: a.y + (z.y - a.y) * d.frac };
     at = lin;
     if (viewer && dist(lin, viewer) < VIEW) {
@@ -259,7 +292,7 @@ export function botPresence(b: AiPlayer, t = Date.now()): Presence | null {
   }
   // 城里做东西时下马，免得作坊门口挤满马
   return {
-    playerId: botKey(b.id), name: p.name, outfit: p.outfit, x: at.x, y: at.y, mounted: d.action && d.node.town ? undefined : p.mount, action: d.action,
+    playerId: botKey(b.id), name: p.name, outfit: p.outfit, x: at.x, y: at.y, mounted: (d.action || d.idle) && d.node.town ? undefined : p.mount, action: d.action,
     anim: d.action ? animOf(d.action, p) : undefined, flip: false, pid: p.pid, total: p.total, combat: p.combat,
     equip: { ...p.equip }, at: t, bot: true,
   };

@@ -31,8 +31,8 @@ describe('AI 玩家', () => {
       expect(p.joined).toBeLessThan(b.at);
     }
   });
-  it('一天里位置都在地图上，会干活也会走路，走路时位置连续', () => {
-    let work = 0, walk = 0;
+  it('一天里位置都在地图上，会干活、走路，也会在城里挂机', () => {
+    let work = 0, walk = 0, idle = 0;
     for (const b of bots.slice(0, 8)) {
       const p = botProfile(b, T0);
       let prev: { x: number; y: number } | null = null;
@@ -43,13 +43,15 @@ describe('AI 玩家', () => {
         expect(at.x).toBeLessThan(MAP_W);
         expect(at.y).toBeLessThan(MAP_H);
         const d = botDoing(p, b.seed, t)!;
-        if (d.action) work++; else walk++;
+        if (d.action) work++; else if (d.idle) idle++; else walk++;
         prev = at;
       }
       expect(prev).toBeTruthy();
     }
     expect(work).toBeGreaterThan(walk);
     expect(walk).toBeGreaterThan(0);
+    expect(idle).toBeGreaterThan(0);
+    expect(idle).toBeLessThan(work);
   });
   it('排行榜混进 AI 并重排名次', () => {
     const real = [{ rank: 1, playerId: 'a', name: 'Real', value: 99999 }, { rank: 2, playerId: 'b', name: 'Low', value: 1 }];

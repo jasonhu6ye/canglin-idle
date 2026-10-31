@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { GM_KINDS, GM_KIND_NAME, GM_PCT_MAX } from '../core/gm';
 import type { GmKind } from '../core/types';
 import { online, type AiPlayer, type GmInput, type GmMailRow, type GmRow } from '../net';
-import { aiPlayers, botName, botPresence, botProfile, refreshBots } from '../net/bots';
+import { aiPlayers, botDoing, botName, botPresence, botProfile, refreshBots } from '../net/bots';
 import { actionName } from './format';
 import { emitToGame } from './GameCanvas';
 import { ITEMS } from '../core/data';
@@ -440,6 +440,7 @@ function AiTab({ onClose }: { onClose: () => void }) {
           {[...list].reverse().map((b) => {
             const p = botProfile(b);
             const now = botPresence(b);
+            const idle = botDoing(p, b.seed)?.idle;
             return (
               <li key={b.id} className="frame">
                 {edit?.id === b.id ? (
@@ -451,7 +452,7 @@ function AiTab({ onClose }: { onClose: () => void }) {
                 ) : (
                   <div><b>{b.name}</b> <small className="muted">#{p.pid} · {tl`总等级 ${p.total} · 战斗 ${p.combat}`}</small></div>
                 )}
-                <small className="muted">{now?.action ? tl`正在：${actionName(now.action)}` : tl('正在赶路')}</small>
+                <small className="muted">{now?.action ? tl`正在：${actionName(now.action)}` : idle ? tl('在城里挂机') : tl('正在赶路')}</small>
                 <div className="gm-row-tools">
                   {now && <button className="pill" onClick={() => { emitToGame('walktile', Math.round(now.x), Math.round(now.y)); onClose(); }}>{tl('寻路过去')}</button>}
                   <button className="pill" onClick={() => setEdit({ id: b.id, name: b.name })}>{tl('改名')}</button>
