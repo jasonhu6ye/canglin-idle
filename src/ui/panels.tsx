@@ -215,6 +215,7 @@ export function gearStats(id: string) {
   const out: string[] = [];
   if (e.strength) out.push(tl`攻击力 ${e.strength}`);
   if (e.attack) out.push(tl`命中 +${hitPct(e.attack)}%`);
+  if (e.slot === 'weapon' && e.attackMs) out.push(tl`每 ${(e.attackMs / 1000).toFixed(1)} 秒一击`);
   if (e.defence) out.push(tl`防御 ${e.defence}`);
   if (e.defPct) out.push(tl`防御加成 +${Math.round(e.defPct * 1000) / 10}%`);
   if (e.dmgPct) out.push(tl`伤害 +${Math.round(e.dmgPct * 1000) / 10}%`);

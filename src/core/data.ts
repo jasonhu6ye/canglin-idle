@@ -365,15 +365,17 @@ export interface EquipType {
   maker: SkillId;
   mats: [Mat, number][];
   plus: number;
-  stats: { attack?: number; strength?: number; defence?: number; style?: CombatStyle; speed?: boolean; attackMs?: number; haste?: boolean; twoHanded?: boolean; leech?: number;
+  stats: { attack?: number; strength?: number;
+    /** 攻击力的固定部分（10-31 平衡）：攻击力 = 本阶强度 × strength + strFlat。重武器加、快武器减，让每一阶的强弱都差不多 */
+    strFlat?: number; defence?: number; style?: CombatStyle; speed?: boolean; attackMs?: number; haste?: boolean; twoHanded?: boolean; leech?: number;
     /** 护甲（10-26）：防御加成、伤害加成、攻速加成的系数，乘每阶的 ARMOR_PCT */
     armor?: ArmorKind; defPct?: number; dmgPct?: number; hastePct?: number; dodgePct?: number;
     /** 嘲讽值（10-26，固定点数，不随阶级品质变） */
     threat?: number };
   group: string;
 }
-const W = (key: string, name: string, skill: SkillId, maker: SkillId, mats: [Mat, number][], plus: number, attack: number, strength: number, attackMs: number, style: CombatStyle): EquipType =>
-  ({ key, name, slot: 'weapon', skill, maker, mats, plus, stats: { attack, strength, attackMs, style }, group: tl('武器') });
+const W = (key: string, name: string, skill: SkillId, maker: SkillId, mats: [Mat, number][], plus: number, attack: number, strength: number, attackMs: number, style: CombatStyle, strFlat = 0, twoHanded = false): EquipType =>
+  ({ key, name, slot: 'weapon', skill, maker, mats, plus, stats: { attack, strength, strFlat, attackMs, style, ...(twoHanded ? { twoHanded } : {}) }, group: tl('武器') });
 const ARMOR_SLOTS: [EquipSlot, number, number][] = [
   // [部位, 防御占比, 制作多加几级]
   ['head', 0.3, 2], ['body', 0.5, 6], ['feet', 0.2, 3], ['hands', 0.15, 1],
@@ -401,36 +403,42 @@ const TL = (key: string, name: string, slot: EquipSlot, skill: SkillId, maker: S
 export const EQUIP_TYPES: EquipType[] = [
   // 近战：精炼锭
   /*
-   * 近战武器分工（用户 10-31 重新规划）：单手武器能配副手，出手快、单下伤害低；双手重武器不能用副手，出手慢、单下伤害高。
-   * 低阶时出手快的更占便宜（伤害公式里有一截固定底数），高阶时双手重武器每秒伤害比单手高两三成。
-   * 系数：命中、攻击力、出手间隔（毫秒）
+   * 武器平衡（用户 10-31：各有优劣，可以有的稍强，但不许差太多、不许超模；这个版本单手斧可以强一点）。
+   * 参数：命中系数、攻击力系数、出手间隔（毫秒）、攻击力固定部分、双手。
+   * 伤害公式里有一截固定底数，出手快的武器在低阶天然占便宜，所以快武器的攻击力固定部分是负的、重武器是正的，
+   * 每一阶的强弱才拉得平。用 src/core/balance.test.ts 的扫描（同阶板甲 + 灯笼，打同阶所有怪的每小时击杀数）调到：
+   * 以剑为 100，所有近战和远程武器在 T2/T4/T6/T8 都在 95-108 之间；单手斧各阶约 107，是这个版本最强的近战。
+   * 双手大盾是坦克，不参与输出对比。
    */
-  // 短剑：轻快好上手，命中高
-  W('shortsword', tl('短剑'), 'melee', 'smithing', [['bar', 1]], 0, 1.1, 0.75, 2100, 'melee'),
-  W('sword', tl('剑'), 'melee', 'smithing', [['bar', 2]], 1, 1.0, 1.0, 2400, 'melee'),
-  // 阔剑：双手大剑，剑系里最重，命中照样稳
-  { ...W('broadsword', tl('阔剑'), 'melee', 'smithing', [['bar', 3], ['leather', 1]], 4, 1.0, 2.3, 3200, 'melee'), stats: { attack: 1.0, strength: 2.3, attackMs: 3200, style: 'melee', twoHanded: true } },
+  // ---- 近战：单手（能配副手） ----
+  W('dagger', tl('匕首'), 'melee', 'smithing', [['bar', 1]], 0, 1.2, 0.7, 2100, 'melee', -3),
+  // 短剑：命中高、出手较快
+  W('shortsword', tl('短剑'), 'melee', 'smithing', [['bar', 1]], 0, 1.1, 0.8, 2200, 'melee'),
+  // 剑：标准
+  W('sword', tl('剑'), 'melee', 'smithing', [['bar', 2]], 1, 1.0, 1.1, 2400, 'melee'),
+  // 单手斧：出手最快，单下伤害不低，这个版本的强势武器
+  W('handaxe', tl('单手斧'), 'melee', 'smithing', [['bar', 2], ['plank', 1]], 2, 0.9, 1.0, 2000, 'melee', -7),
   // 长枪：隔半格出手，单下伤害比剑高
-  W('spear', tl('长枪'), 'melee', 'smithing', [['bar', 2], ['plank', 1]], 3, 0.85, 1.5, 3000, 'melee'),
-  W('dagger', tl('匕首'), 'melee', 'smithing', [['bar', 1]], 0, 1.25, 0.65, 2000, 'melee'),
-  // 单手斧（用户 10-31 改）：近战里出手最快，单下伤害最低，命中偏低，能配副手
-  W('handaxe', tl('单手斧'), 'melee', 'smithing', [['bar', 2], ['plank', 1]], 2, 0.8, 0.5, 1700, 'melee'),
-  // 巨斧：双手长柄大斧，比阔剑更重更猛，命中差一点
-  { ...W('greataxe', tl('巨斧'), 'melee', 'smithing', [['bar', 3], ['plank', 2]], 5, 0.85, 3.0, 3700, 'melee'), stats: { attack: 0.85, strength: 3.0, attackMs: 3700, style: 'melee', twoHanded: true } },
-  // 大锤：双手战锤，近战里单下伤害最高、出手最慢、命中最低
-  { ...W('warhammer', tl('大锤'), 'melee', 'smithing', [['bar', 4], ['plank', 1]], 6, 0.7, 4.0, 4400, 'melee'), stats: { attack: 0.7, strength: 4.0, attackMs: 4400, style: 'melee', twoHanded: true } },
-  // 战镰（用户 10-31）：双手长柄镰，和长枪一样隔半格出手；每秒伤害比阔剑略低，换来攻击距离。叫「战镰」是因为「镰刀」已经是采集工具
-  { ...W('warscythe', tl('战镰'), 'melee', 'smithing', [['bar', 2], ['plank', 2]], 5, 0.9, 2.5, 3500, 'melee'), stats: { attack: 0.9, strength: 2.5, attackMs: 3500, style: 'melee', twoHanded: true } },
+  W('spear', tl('长枪'), 'melee', 'smithing', [['bar', 2], ['plank', 1]], 3, 0.95, 1.55, 2900, 'melee', 10),
+  // ---- 近战：双手（不能用副手），出手慢、单下伤害高，高阶比单手略强 ----
+  // 阔剑：双手大剑，命中稳
+  W('broadsword', tl('阔剑'), 'melee', 'smithing', [['bar', 3], ['leather', 1]], 4, 1.0, 2.2, 3200, 'melee', 20, true),
+  // 战镰（用户 10-31）：双手长柄镰，和长枪一样隔半格出手。叫「战镰」是因为「镰刀」已经是采集工具
+  W('warscythe', tl('战镰'), 'melee', 'smithing', [['bar', 2], ['plank', 2]], 5, 0.95, 2.25, 3400, 'melee', 24, true),
+  // 巨斧：双手长柄大斧
+  W('greataxe', tl('巨斧'), 'melee', 'smithing', [['bar', 3], ['plank', 2]], 5, 0.85, 2.7, 3600, 'melee', 28, true),
+  // 大锤：单下伤害最高、出手最慢、命中最低
+  W('warhammer', tl('大锤'), 'melee', 'smithing', [['bar', 4], ['plank', 1]], 6, 0.75, 3.3, 4200, 'melee', 42, true),
   // 双手大盾（用户 10-25）：攻击低、防御很高，双手持握，装上就不能用副手
   { ...W('greatshield', tl('双手大盾'), 'melee', 'smithing', [['bar', 4], ['plank', 1]], 5, 0.55, 0.6, 2800, 'melee'), stats: { attack: 0.55, strength: 0.6, defence: 1.5, attackMs: 2800, style: 'melee', twoHanded: true, threat: 150 } },
-  // 远程：皮革 + 加工木材
-  W('shortbow', tl('短弓'), 'ranged', 'fletching', [['plank', 2], ['leather', 1]], 1, 1.0, 1.1, 2200, 'ranged'),
-  W('longbow', tl('长弓'), 'ranged', 'fletching', [['plank', 3], ['leather', 1]], 4, 1.25, 1.3, 2800, 'ranged'),
-  W('crossbow', tl('弩'), 'ranged', 'fletching', [['plank', 3], ['leather', 2]], 6, 0.85, 1.8, 3400, 'ranged'),
+  // ---- 远程：皮革 + 加工木材 ----
+  W('shortbow', tl('短弓'), 'ranged', 'fletching', [['plank', 2], ['leather', 1]], 1, 1.0, 1.0, 2200, 'ranged'),
+  W('longbow', tl('长弓'), 'ranged', 'fletching', [['plank', 3], ['leather', 1]], 4, 1.2, 1.4, 2800, 'ranged', 8),
+  W('crossbow', tl('弩'), 'ranged', 'fletching', [['plank', 3], ['leather', 2]], 6, 0.9, 1.8, 3200, 'ranged', 18),
   // 单手战弓（用户 10-26）：远程里出手最快，单发伤害低，单手（配箭袋、火把都行）
-  W('warbow', tl('单手战弓'), 'ranged', 'fletching', [['plank', 2], ['leather', 1]], 2, 0.95, 0.6, 1700, 'ranged'),
+  W('warbow', tl('单手战弓'), 'ranged', 'fletching', [['plank', 2], ['leather', 1]], 2, 0.95, 0.95, 2000, 'ranged', -7),
   // 十字弩（用户 10-26）：最重的远程，出手最慢、单发伤害最高、命中准，双手持握不能用副手；带金属件
-  { ...W('arbalest', tl('十字弩'), 'ranged', 'fletching', [['plank', 2], ['bar', 2], ['leather', 1]], 7, 1.3, 3.6, 4400, 'ranged'), stats: { attack: 1.3, strength: 3.6, attackMs: 4400, style: 'ranged', twoHanded: true } },
+  W('arbalest', tl('十字弩'), 'ranged', 'fletching', [['plank', 2], ['bar', 2], ['leather', 1]], 7, 1.2, 2.9, 4200, 'ranged', 40, true),
   // 魔法：加工木材 + 布料
   W('staff', tl('法杖'), 'magic', 'crafting', [['plank', 2], ['cloth', 1]], 4, 1.0, 1.1, 2400, 'magic'),
   // 护甲：头、身、脚、手
@@ -472,7 +480,7 @@ TIERS.forEach((t, i) => {
       tier: i,
       equip: {
         slot: e.slot, skill: e.skill, level: t.level,
-        attack: Math.round(p * (st.attack ?? 0)), strength: Math.round(p * (st.strength ?? 0)), defence: Math.round(p * (st.defence ?? 0)),
+        attack: Math.round(p * (st.attack ?? 0)), strength: Math.max(0, Math.round(p * (st.strength ?? 0) + (st.strFlat ?? 0))), defence: Math.round(p * (st.defence ?? 0)),
         style: st.style, speed: st.speed ? TOOL_SPEED[i] : undefined, attackMs: st.attackMs,
         ...(st.haste ? { haste: TORCH_HASTE[i] } : {}), ...(st.twoHanded ? { twoHanded: true } : {}), ...(st.leech ? { leech: st.leech } : {}), ...(st.threat ? { threat: st.threat } : {}),
         ...(st.armor ? { armor: st.armor, defPct: pct3(ARMOR_PCT[i] * st.defPct!), dmgPct: pct3(ARMOR_PCT[i] * st.dmgPct!) } : {}),
