@@ -365,6 +365,7 @@ export const EN_DATA: Record<string, string> = {
   '阔剑': 'Broadsword',
   '巨斧': 'Greataxe',
   '大锤': 'Warhammer',
+  '战镰': 'War Scythe',
   '长枪': 'Spear',
   '匕首': 'Dagger',
   '短弓': 'Shortbow',

@@ -724,6 +724,40 @@ function warhammer(p: Pix, t: number) {
   if (t >= 2) parts.push((u, v) => (u > c + thick && u < c + thick + 2.6 && Math.abs(v) < (c + thick + 2.6 - u) * 0.45 ? M[3] : null));
   axis(p, parts, 4, 20);
 }
+function warscythe(p: Pix, t: number) {
+  // 战镰：长柄，杆顶一片往左上弯下来的长刃；每阶刃的长短弧度、杆和点缀不同，精金是双刃
+  const M = ramp(METAL[t]);
+  const A = ramp(ACCENT[t]);
+  const W = ramp(WOODS[t]);
+  const top = 20;
+  const parts: Part[] = [shaft(-3, top, 0.85, W), grip(-3, 2.5, 1, t >= 2 ? A[1] : W[1], t >= 2 ? A[2] : W[3])];
+  const len = [9, 10, 10.5, 11, 11.5, 12, 12, 12.5][t];
+  const bend = [3, 4, 5, 4.5, 6, 5.5, 6.5, 6][t];
+  const pts: [number, number, number][] = [];
+  for (let i = 0; i <= 40; i++) {
+    const q = i / 40;
+    pts.push([top - 0.5 - q * q * bend, -q * len, (t === 6 ? 1.5 + Math.sin(q * 18) * 0.35 : 1.7) * (1 - q) + 0.35]);
+  }
+  const bladeAt = (u: number, v: number, sign: number) => {
+    let best = 9;
+    let bq = 0;
+    pts.forEach(([pu, pv, w], i) => {
+      const d = Math.hypot(u - pu, v - pv * sign) - w;
+      if (d < best) { best = d; bq = i / 40; }
+    });
+    if (best > 0) return null;
+    // 刃口在弯的内侧（朝下），亮；刀背暗
+    return best > -0.55 ? (u < top - bq * bq * bend ? M[4] : M[1]) : M[2];
+  };
+  parts.push((u, v) => bladeAt(u, v, 1));
+  if (t === 7) parts.push((u, v) => (v > 0 ? bladeAt(u, v, -0.6) : null));
+  parts.push(bar(top - 0.5, 1.4, 1.3, M));
+  if (t >= 4) parts.push(ball(top - 0.5, 0, 1, A));
+  if (t === 5) parts.push((u, v) => { for (const q of [0.25, 0.5, 0.72]) { const [pu, pv] = pts[Math.round(q * 40)]; if (Math.hypot(u - pu, v - pv) < 0.6) return A[3]; } return null; });
+  if (t === 6) parts.push((u, v) => { for (const [pu, pv] of pts.filter((_, i) => i % 4 === 0 && i < 34)) if (Math.hypot(u - pu + 0.9, v - pv) < 0.5) return A[3]; return null; });
+  if (t >= 5) parts.push(ball(-3.4, 0, 1.2, A));
+  axis(p, parts, 4, 20);
+}
 function handaxe(p: Pix, t: number) {
   // 单手斧：短柄，斧头比工具斧大，背面带尖刺或第二片刃，每阶刃形不同
   const M = ramp(METAL[t]);
@@ -1667,6 +1701,7 @@ export function equipIconUrl(key: string, tier: number): string | null {
   else if (key === 'broadsword') broadsword(p, tier);
   else if (key === 'greataxe') greataxe(p, tier);
   else if (key === 'warhammer') warhammer(p, tier);
+  else if (key === 'warscythe') warscythe(p, tier);
   else if (key === 'greatshield') greatshield(p, tier);
   else if (key === 'buckler') buckler(p, tier);
   else if (key === 'torch') torch(p, tier);

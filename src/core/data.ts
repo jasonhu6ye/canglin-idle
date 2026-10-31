@@ -419,6 +419,8 @@ export const EQUIP_TYPES: EquipType[] = [
   { ...W('greataxe', tl('巨斧'), 'melee', 'smithing', [['bar', 3], ['plank', 2]], 5, 0.85, 3.0, 3700, 'melee'), stats: { attack: 0.85, strength: 3.0, attackMs: 3700, style: 'melee', twoHanded: true } },
   // 大锤：双手战锤，近战里单下伤害最高、出手最慢、命中最低
   { ...W('warhammer', tl('大锤'), 'melee', 'smithing', [['bar', 4], ['plank', 1]], 6, 0.7, 4.0, 4400, 'melee'), stats: { attack: 0.7, strength: 4.0, attackMs: 4400, style: 'melee', twoHanded: true } },
+  // 战镰（用户 10-31）：双手长柄镰，和长枪一样隔半格出手；每秒伤害比阔剑略低，换来攻击距离。叫「战镰」是因为「镰刀」已经是采集工具
+  { ...W('warscythe', tl('战镰'), 'melee', 'smithing', [['bar', 2], ['plank', 2]], 5, 0.9, 2.5, 3500, 'melee'), stats: { attack: 0.9, strength: 2.5, attackMs: 3500, style: 'melee', twoHanded: true } },
   // 双手大盾（用户 10-25）：攻击低、防御很高，双手持握，装上就不能用副手
   { ...W('greatshield', tl('双手大盾'), 'melee', 'smithing', [['bar', 4], ['plank', 1]], 5, 0.55, 0.6, 2800, 'melee'), stats: { attack: 0.55, strength: 0.6, defence: 1.5, attackMs: 2800, style: 'melee', twoHanded: true, threat: 150 } },
   // 远程：皮革 + 加工木材

@@ -234,7 +234,7 @@ const STEEL = ['#3e444c', '#7a828c', '#bcc4ce', '#f4f8fc'];
 const BELT = ['#1e120a', '#3a2414', '#5a3a20'];
 
 export type HeroDir = 'down' | 'up' | 'side';
-export type HeroTool = 'pickaxe' | 'axe' | 'hoe' | 'sickle' | 'rod' | 'hammer' | 'knife' | 'sword' | 'spear' | 'dagger' | 'bow' | 'staff' | 'handaxe' | 'shortsword' | 'broadsword' | 'greataxe' | 'warhammer' | 'greatshield' | 'longbow' | 'crossbow' | 'warbow' | 'arbalest' | 'scythe' | 'none';
+export type HeroTool = 'pickaxe' | 'axe' | 'hoe' | 'sickle' | 'rod' | 'hammer' | 'knife' | 'sword' | 'spear' | 'dagger' | 'bow' | 'staff' | 'handaxe' | 'shortsword' | 'broadsword' | 'greataxe' | 'warhammer' | 'warscythe' | 'greatshield' | 'longbow' | 'crossbow' | 'warbow' | 'arbalest' | 'scythe' | 'none';
 
 interface Pose {
   dir: HeroDir;
@@ -613,6 +613,21 @@ function drawTool(p: Pix, tool: HeroTool, hx: number, hy: number, a: number, pos
     strip(10.6, -3.2, 3.2, () => STEEL[0]);
     strip(13.4, -0.5, 0.5, () => STEEL[2]);
     strip(13.9, -0.3, 0.3, () => STEEL[3]);
+    p.set(...along(-4.8), GOLD[1]);
+  } else if (tool === 'warscythe') {
+    // 战镰：木长杆，杆顶一圈铁箍，月牙刀刃往一侧探出去再垂下来（刃形和死神巨镰同一条曲线，但是朴素的钢刃）
+    const flip = pose.bladeFlip ?? 1;
+    handle(-4.5, 12);
+    strip(11.2, -1, 1, () => STEEL[1]);
+    strip(12, -0.9, 0.9, () => STEEL[2]);
+    for (let i = 0; i <= 40; i++) {
+      const s = i / 40;
+      const [h, u, th] = scytheBlade(s);
+      for (let w = 0; w <= th * 0.85; w += 0.4) {
+        const [x, y] = along(12 + h - w);
+        p.set(...perp(x, y, u * flip * 0.9), w < 0.5 ? STEEL[1] : w > th * 0.85 - 0.6 || s > 0.9 ? STEEL[3] : STEEL[2]);
+      }
+    }
     p.set(...along(-4.8), GOLD[1]);
   } else if (tool === 'handaxe') {
     // 单手斧：短柄，斧刃朝挥砍的方向，带一个下勾的斧须
@@ -2732,7 +2747,7 @@ const ride = (dir: HeroDir, run: boolean): HeroAnim => ({
  * 出手只在真正攻击的那一下播一遍（地图场景按攻速缩放），两次攻击之间停在架势里不乱挥。
  * 出手动作开头的蓄力要短，hit 是打中的时刻（0-1），特效在这时候放。
  */
-export type FightWeapon = 'sword' | 'spear' | 'dagger' | 'handaxe' | 'shortsword' | 'broadsword' | 'greataxe' | 'warhammer' | 'greatshield' | 'shortbow' | 'longbow' | 'crossbow' | 'warbow' | 'arbalest' | 'staff' | 'fist';
+export type FightWeapon = 'sword' | 'spear' | 'dagger' | 'handaxe' | 'shortsword' | 'broadsword' | 'greataxe' | 'warhammer' | 'warscythe' | 'greatshield' | 'shortbow' | 'longbow' | 'crossbow' | 'warbow' | 'arbalest' | 'staff' | 'fist';
 export const FIGHT: Record<FightWeapon, { hit: number; ms: number }> = {
   sword: { hit: 0.42, ms: 640 },
   spear: { hit: 0.4, ms: 700 },
@@ -2742,6 +2757,7 @@ export const FIGHT: Record<FightWeapon, { hit: number; ms: number }> = {
   broadsword: { hit: 0.5, ms: 820 },
   greataxe: { hit: 0.52, ms: 900 },
   warhammer: { hit: 0.58, ms: 1000 },
+  warscythe: { hit: 0.5, ms: 860 },
   greatshield: { hit: 0.45, ms: 760 },
   shortbow: { hit: 0.55, ms: 720 },
   longbow: { hit: 0.6, ms: 900 },
@@ -2753,7 +2769,7 @@ export const FIGHT: Record<FightWeapon, { hit: number; ms: number }> = {
 };
 /** 战斗站位（用户 10-25）：离怪多远开打，单位格。近战贴身，长枪隔半格，远程隔几格 */
 export const FIGHT_RANGE: Record<FightWeapon, number> = {
-  sword: 0, spear: 0.6, dagger: 0, handaxe: 0, shortsword: 0, broadsword: 0.2, greataxe: 0.3, warhammer: 0.3, greatshield: 0, fist: 0,
+  sword: 0, spear: 0.6, dagger: 0, handaxe: 0, shortsword: 0, broadsword: 0.2, greataxe: 0.3, warhammer: 0.3, warscythe: 0.6, greatshield: 0, fist: 0,
   shortbow: 3, longbow: 4, crossbow: 3.5, warbow: 3, arbalest: 4.5, staff: 3,
 };
 /** 装备的武器 id（已去掉品质后缀）对应哪套动作 */
@@ -2856,6 +2872,20 @@ const FIGHT_ANIMS: HeroAnim[] = [
         hop: t > 0.42 && t < 0.56 ? -1 : 0,
         legF: keys([[0, 0.55], [0.58, 1.0], [0.85, 0.95], [1, 0.55]], t), legB: keys([[0, -0.5], [0.58, -0.85], [1, -0.5]], t),
         crouch: keys([[0, 0], [0.35, 0], [0.58, 3], [0.85, 2], [1, 0]], t), cape: t > 0.4 ? 2 : 1,
+      };
+    }),
+  // 战镰：镰刃高举在身后；出手是往后一拧腰，把镰刃从上往前下方整个横扫过去，再顺势收回来
+  ...fight('warscythe', 12,
+    (t) => ({ dir: 'side', tool: 'warscythe', armF: 1.4, elbowF: 0.5, armB: 1.2, elbowB: 0.5, toolTurn: 0.7, legF: 0.55, legB: -0.5, bob: breathe(t), cape: 1 }),
+    (t) => {
+      const a = keys([[0, 1.4], [0.3, 3.2], [0.5, 1.1], [0.72, 0.7], [1, 1.4]], t);
+      const e = keys([[0, 0.5], [0.3, 0.3], [0.5, 0], [0.72, 0.2], [1, 0.5]], t);
+      return {
+        dir: 'side', tool: 'warscythe', armF: a, elbowF: e, armB: a - 0.2, elbowB: e,
+        toolTurn: keys([[0, 0.7], [0.3, 0.9], [0.5, 0.2], [0.72, -0.2], [1, 0.7]], t),
+        reach: keys([[0, 0], [0.3, -1.5], [0.5, 2.5], [0.72, 2], [1, 0]], t),
+        legF: keys([[0, 0.55], [0.5, 0.95], [0.8, 0.9], [1, 0.55]], t), legB: keys([[0, -0.5], [0.5, -0.8], [1, -0.5]], t),
+        crouch: t > 0.45 && t < 0.8 ? 1 : 0, cape: t > 0.3 ? 2 : 1,
       };
     }),
   // 双手大盾：盾牌竖在身前顶住；出手是往后蓄一下再整个人撞过去

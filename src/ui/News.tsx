@@ -8,6 +8,13 @@ import { tl } from '../i18n';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-10-31-x', date: tl('10 月 31 日'), title: tl("新近战武器：战镰"),
+    lines: [
+      tl("铁匠铺新增双手长柄「战镰」，T1 到 T8 每阶造型不同。和长枪一样隔半格出手，出招是把镰刃从头顶往前下方横扫过去。"),
+      tl("每秒伤害比阔剑略低，换来更远的攻击距离；双手持握，不能装副手。采集用的「镰刀」还是工具，不受影响。"),
+    ],
+  },
+  {
     id: '2026-10-31-w', date: tl('10 月 31 日'), title: tl("新近战武器：短剑、阔剑、巨斧、大锤"),
     lines: [
       tl("铁匠铺新增四种近战武器，T1 到 T8 每阶都有，每阶造型都不一样，打怪时也有各自的出招动作："),
