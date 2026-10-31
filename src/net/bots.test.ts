@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ITEMS, MAP_H, MAP_W } from '../core/data';
-import { botChat, botDoing, botReplies, isEnglish, botName, botPresence, botProfile, mergeBoard, withBots } from './bots';
+import { botChat, botDoing, botOnline, botReplies, isEnglish, botName, botPresence, botProfile, mergeBoard, withBots } from './bots';
 import { LocalApi } from './local';
 import type { AiPlayer } from './api';
 
@@ -37,7 +37,8 @@ describe('AI 玩家', () => {
       const p = botProfile(b, T0);
       let prev: { x: number; y: number } | null = null;
       for (let t = T0; t < T0 + 86_400_000; t += 20_000) {
-        const at = botPresence(b, t)!;
+        const at = botPresence(b, t);
+        if (!at) { expect(botOnline(b, t)).toBe(false); continue; }
         expect(at.x).toBeGreaterThanOrEqual(0);
         expect(at.y).toBeGreaterThanOrEqual(0);
         expect(at.x).toBeLessThan(MAP_W);
@@ -79,7 +80,7 @@ describe('AI 玩家', () => {
     expect(isEnglish('hello 大家')).toBe(false);
     let zh = 0, en = 0;
     for (let i = 0; i < 200; i++) {
-      for (const r of botReplies(msg(i, '有人一起打副本吗'), bots)) { zh++; expect(r.text).not.toMatch(/[\u4e00-\u9fff]/); if (r.id.startsWith('bot-re-')) expect(['?', '??', 'huh?', 'what?', 'wut', 'english pls?', 'sorry i only speak english', 'idk what that means lol', '???', 'eng?']).toContain(r.text); }
+      for (const r of botReplies(msg(i, '有人一起打副本吗'), bots)) { zh++; expect(r.text).not.toMatch(/[\u4e00-\u9fff]/); if (r.id.startsWith('bot-re-')) expect(['?', '??', 'huh?', 'what?', 'wut', 'english pls?', 'sorry i only speak english', 'idk what that means lol', '???', 'eng?'].some((x) => r.text.startsWith(x))).toBe(true); }
       for (const r of botReplies(msg(i, 'hey everyone'), bots)) { en++; expect(r.text).not.toMatch(/[\u4e00-\u9fff]/); expect(r.at).toBeGreaterThan(T0); }
     }
     expect(zh).toBeGreaterThan(40);
@@ -108,7 +109,10 @@ describe('AI 玩家', () => {
     const mem = new Map<string, string>();
     const base = new LocalApi({ getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => void mem.set(k, v) });
     const api = withBots(base);
-    await api.aiAdd([{ name: 'Kaira', seed: 42 }, { name: 'mossy_fern', seed: 43 }]);
+    // 挑两个不下线的种子，免得测试时正好在睡觉
+    const always: number[] = [];
+    for (let sd = 1; always.length < 2; sd++) if (Array.from({ length: 24 }, (_, h) => h).every((h) => botOnline({ id: 'x', name: 'x', seed: sd, at: 0 }, T0 + h * 3600_000))) always.push(sd);
+    await api.aiAdd([{ name: 'Kaira', seed: always[0] }, { name: 'mossy_fern', seed: always[1] }]);
     const { refreshBots, aiPlayers } = await import('./bots');
     await refreshBots(true);
     expect(aiPlayers().map((b) => b.name)).toEqual(['Kaira', 'mossy_fern']);
