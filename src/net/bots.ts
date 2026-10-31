@@ -1033,6 +1033,8 @@ let loadedAt = 0;
 let loading: Promise<void> | null = null;
 let api: OnlineApi | null = null;
 const REFRESH_MS = 120_000;
+const BACKFILL = 4 * HOUR;
+const BACKFILL_N = 60;
 /** 现在的 AI 玩家（按加入时间排，各家顺序一样） */
 export const aiPlayers = () => list;
 export function refreshBots(force = false): Promise<void> {
@@ -1097,12 +1099,15 @@ export function withBots(base: OnlineApi): OnlineApi {
         f(m);
         if (m.channel === 'world' && !isBotId(m.playerId) && !seen.has(m.id)) { seen.add(m.id); heard.push(m); }
       });
-      let last = Date.now() - 20 * MIN;
+      // AI 的话不存，打开时按规则把前几个小时的算出来（只补最近几十句，用户 10-31：记录别一打开就没了）
+      let last = 0;
       const tick = () => {
         const now = Date.now();
         // 名单还没拉下来时先不往前走，拉到了再补
-        if (!list.length) { last = Math.max(last, now - 20 * MIN); return; }
-        for (const m of botChat(list, last + 1, now)) f(m);
+        if (!list.length) return;
+        const back = !last;
+        const ms = botChat(list, back ? now - BACKFILL : last + 1, now);
+        for (const m of back ? ms.slice(-BACKFILL_N) : ms) f(m);
         last = now;
         for (const m of heard.splice(0)) {
           const rs = botReplies(m, list, lastTo.get(m.playerId));
@@ -1116,7 +1121,7 @@ export function withBots(base: OnlineApi): OnlineApi {
           }
         }
       };
-      // 等名单拉下来再补最近 20 分钟的
+      // 等名单拉下来再补前面的
       void refreshBots().then(tick);
       const t = setInterval(tick, 2000);
       return () => { off(); clearInterval(t); timers.forEach(clearTimeout); };
