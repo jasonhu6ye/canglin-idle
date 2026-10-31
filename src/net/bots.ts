@@ -561,42 +561,63 @@ const chimeFor = (text: string, r: number) => pick(CHIME.find(([re]) => re.test(
  * lines 是各人的说法（每句只说一次），react 是穿插的附和
  */
 const TOPICS_GROUP: { open: string[]; lines: string[]; react: string[] }[] = [
-  { open: ['ok whats everyones favorite food, go', 'random question: favorite food?'],
-    lines: ['pizza no contest', 'my grandmas dumplings', 'sushi every day if i could', 'tacos, any kind', 'mac and cheese, dont judge', 'pho on a cold day', 'honestly just a good burger', 'spicy noodles, the spicier the better', 'my own cooking lol jk its terrible', 'fresh bread with butter'],
-    react: ['good choice', 'now im hungry', 'valid', 'facts', 'ooh yes', 'respect'] },
-  { open: ['whats the weirdest dream uve had', 'had the weirdest dream last night, anyone else get weird dreams?'],
-    lines: ['i dreamt my teeth fell out, classic', 'i was a pigeon running a bakery', 'my cat could talk and it was mean', 'i showed up to school without shoes', 'i dreamt i was in this game lol mining forever', 'being chased by a giant goose', 'i won the lottery and woke up broke', 'i was flying but only like 1 meter off the ground'],
-    react: ['LOL', 'what does that even mean', 'ur brain is wild', 'same', 'thats terrifying', 'i need to know more'] },
-  { open: ['cats or dogs, settle this once and for all', 'team cats or team dogs?'],
-    lines: ['dogs, they love u unconditionally', 'cats, they respect ur space', 'both, why choose', 'cats are just tiny roommates', 'dogs because walks = exercise lol', 'i have 2 cats so cats obviously', 'my dog would be offended if i said cats', 'birds actually', 'whatever pet lets me sleep in'],
-    react: ['wrong lol', 'agreed', 'traitor', 'based', 'debatable', 'fair point'] },
-  { open: ['if u won a million dollars what would u do first', 'lottery time: what do u buy first'],
-    lines: ['pay off my student loans, sad but true', 'buy a house with a big kitchen', 'quit my job immediately', 'travel everywhere', 'buy my mom a car', 'a huge gaming setup', 'invest it and be boring', 'adopt like 10 dogs', 'buy an island lol', 'open a small cafe'],
-    react: ['dream', 'smart', 'same honestly', 'take me with u', 'love that', 'relatable'] },
-  { open: ['whats everyone doing this weekend', 'any weekend plans?'],
-    lines: ['sleeping as much as possible', 'working sadly', 'hiking if it doesnt rain', 'family dinner', 'cleaning my apartment, its a disaster', 'concert on saturday!', 'nothing and i love it', 'my friends birthday party', 'halloween party obviously', 'gaming all weekend lol'],
-    react: ['nice', 'have fun', 'jealous', 'rip', 'sounds perfect', 'mood'] },
-  { open: ['best halloween costume uve ever worn?', 'what are u guys dressing up as for halloween?'],
-    lines: ['a banana, very scary', 'a vampire, classic', 'my friend and i were salt and pepper', 'a ghost with a bedsheet lol', 'a pumpkin, fits the game', 'i wore cat ears and called it a day', 'a zombie, the makeup took 2 hours', 'a skeleton onesie, comfy', 'not dressing up, im the candy guy'],
-    react: ['iconic', 'love it', 'lol', 'pics or it didnt happen', 'so creative', 'classic'] },
-  { open: ['what do u guys do for work btw', 'curious what everyone does irl'],
-    lines: ['nurse, night shifts', 'student, dying inside', 'software dev, i fix bugs i made', 'i work in a coffee shop', 'teacher, the kids are chaos', 'between jobs lol', 'truck driver, playing on breaks', 'graphic designer', 'chef, so i play after closing', 'retail, pray for me'],
-    react: ['respect', 'cool', 'thats hard work', 'nice', 'oof', 'thats awesome'] },
-  { open: ['what music do u guys listen to while playing', 'drop ur grinding playlist vibe'],
-    lines: ['lofi beats always', 'old rock, my dads influence', 'kpop lol', 'game soundtracks', 'podcasts actually', 'metal, it makes me grind faster', 'classical, very fancy', 'whatever spotify throws at me', 'the game music, its nice', 'rain sounds lol'],
-    react: ['good taste', 'same', 'interesting', 'nice', 'ooh', 'valid'] },
-  { open: ['unpopular opinion time', 'ok share an unpopular opinion'],
-    lines: ['cold pizza is better than hot pizza', 'mornings are actually nice', 'i dont like chocolate', 'sequels are often better', 'cereal before milk is wrong... wait', 'winter is the best season', 'i hate the beach, sand everywhere', 'tea is better than coffee', 'pineapple on pizza is great', 'naps are overrated'],
-    react: ['WHAT', 'ok this is a crime', 'i kinda agree', 'nope', 'hot take', 'blocked lol'] },
-  { open: ['where would u travel if u could go anywhere tmr', 'dream travel destination?'],
-    lines: ['japan, for the food', 'iceland to see the northern lights', 'italy, pasta tour', 'new zealand for the mountains', 'somewhere with a beach and no wifi', 'korea', 'peru, machu picchu', 'norway fjords', 'just home to see my family honestly', 'the moon lol'],
-    react: ['take me', 'great choice', 'so jealous', 'add it to my list', 'beautiful', 'yesss'] },
-  { open: ['whats the best snack, go', 'snack tier list time'],
-    lines: ['chips, salt and vinegar', 'popcorn', 'gummy bears', 'apples with peanut butter', 'cheese, just cheese', 'chocolate covered pretzels', 'instant noodles at 2am', 'grapes frozen, trust me', 'cookies', 'seaweed snacks'],
-    react: ['good one', 'yum', 'underrated', 'facts', 'now i want some', 'elite'] },
+  { open: ['how long have u guys been playing today', 'anyone else been on all day lol'],
+    lines: ['like 3 hours oops', 'just logged in', 'since breakfast lol', 'on and off all day', '30 min, on my lunch break', 'too long, dont tell my mom', 'i left it running overnight'],
+    react: ['lol', 'same', 'addicted', 'no life gang', 'touch grass lol', 'respect'] },
   { open: ['what was ur first video game', 'oldest game u remember playing?'],
     lines: ['pokemon on gameboy', 'some flash games at school lol', 'mario kart', 'minecraft, im young lol', 'tetris on my dads phone', 'the sims', 'runescape back in the day', 'a pirate game on pc', 'zelda', 'solitaire counts right'],
     react: ['classic', 'nostalgia', 'oh man', 'good times', 'that takes me back', 'legend'] },
+  { open: ['what music do u guys listen to while playing', 'drop ur grinding playlist vibe'],
+    lines: ['lofi beats always', 'old rock, my dads influence', 'kpop lol', 'game soundtracks', 'podcasts actually', 'metal, it makes me grind faster', 'classical, very fancy', 'whatever spotify throws at me', 'the game music, its nice', 'rain sounds lol'],
+    react: ['good taste', 'same', 'interesting', 'nice', 'ooh', 'valid'] },
+  { open: ['favorite movie of all time?', 'whats a movie u can rewatch forever'],
+    lines: ['shrek, no shame', 'spirited away', 'the lord of the rings, extended', 'back to the future', 'any harry potter tbh', 'interstellar, cried twice', 'home alone every christmas', 'mean girls lol'],
+    react: ['classic', 'good taste', 'omg yes', 'never seen it', 'u have to watch it', 'legendary'] },
+  { open: ['whats the weirdest dream uve had', 'had the weirdest dream last night, anyone else get weird dreams?'],
+    lines: ['i dreamt my teeth fell out, classic', 'i was a pigeon running a bakery', 'my cat could talk and it was mean', 'i showed up to school without shoes', 'i dreamt i was in this game lol mining forever', 'being chased by a giant goose', 'i won the lottery and woke up broke', 'i was flying but only like 1 meter off the ground'],
+    react: ['LOL', 'what does that even mean', 'ur brain is wild', 'same', 'thats terrifying', 'i need to know more'] },
+  { open: ['what was ur dream job as a kid', 'what did u wanna be when u grew up'],
+    lines: ['astronaut obviously', 'a vet, i loved animals', 'a dinosaur. not a paleontologist. a dinosaur', 'pro footballer lol', 'a chef', 'a youtuber, cringe', 'a pilot', 'a firefighter'],
+    react: ['lmao the dinosaur', 'same!', 'cute', 'did it work out?', 'dream big', 'classic'] },
+  { open: ['what do u guys do for work btw', 'curious what everyone does irl', 'whats ur job? curious', 'what do u guys do irl'],
+    lines: ['nurse, night shifts', 'student, dying inside', 'software dev, i fix bugs i made', 'i work in a coffee shop', 'teacher, the kids are chaos', 'between jobs lol', 'truck driver, playing on breaks', 'graphic designer', 'chef, so i play after closing', 'retail, pray for me', 'warehouse, night shifts', 'teacher, grading papers rn actually', 'software dev, this is my break lol', 'student, should be studying', 'i drive a delivery van', 'nurse, just got off a 12h shift', 'i work at a bakery, up at 4am', 'between jobs rn, hence the grinding lol'],
+    react: ['respect', 'cool', 'thats hard work', 'nice', 'oof', 'thats awesome', 'thats cool', 'oof 12h', 'free bread?', 'same here', 'hang in there'] },
+  { open: ['if u won a million dollars what would u do first', 'lottery time: what do u buy first'],
+    lines: ['pay off my student loans, sad but true', 'buy a house with a big kitchen', 'quit my job immediately', 'travel everywhere', 'buy my mom a car', 'a huge gaming setup', 'invest it and be boring', 'adopt like 10 dogs', 'buy an island lol', 'open a small cafe'],
+    react: ['dream', 'smart', 'same honestly', 'take me with u', 'love that', 'relatable'] },
+  { open: ['where would u travel if u could go anywhere tmr', 'dream travel destination?'],
+    lines: ['japan, for the food', 'iceland to see the northern lights', 'italy, pasta tour', 'new zealand for the mountains', 'somewhere with a beach and no wifi', 'korea', 'peru, machu picchu', 'norway fjords', 'just home to see my family honestly', 'the moon lol'],
+    react: ['take me', 'great choice', 'so jealous', 'add it to my list', 'beautiful', 'yesss'] },
+  { open: ['favorite season and why', 'summer or winter?'],
+    lines: ['autumn, the colors are so nice', 'winter, hot chocolate season', 'summer, beach every weekend', 'spring, not too hot not too cold', 'winter but only when it snows', 'summer, i hate being cold', 'fall for the halloween vibes'],
+    react: ['valid', 'same', 'fall gang', 'cozy', 'facts', 'nah winter is pain'] },
+  { open: ['best halloween costume uve ever worn?', 'what are u guys dressing up as for halloween?'],
+    lines: ['a banana, very scary', 'a vampire, classic', 'my friend and i were salt and pepper', 'a ghost with a bedsheet lol', 'a pumpkin, fits the game', 'i wore cat ears and called it a day', 'a zombie, the makeup took 2 hours', 'a skeleton onesie, comfy', 'not dressing up, im the candy guy'],
+    react: ['iconic', 'love it', 'lol', 'pics or it didnt happen', 'so creative', 'classic'] },
+  { open: ['whats the best snack, go', 'snack tier list time', 'best snack, go', 'whats ur go to snack while gaming'],
+    lines: ['chips, salt and vinegar', 'popcorn', 'gummy bears', 'apples with peanut butter', 'cheese, just cheese', 'chocolate covered pretzels', 'instant noodles at 2am', 'grapes frozen, trust me', 'cookies', 'seaweed snacks', 'chips, always chips', 'popcorn with butter', 'grapes, healthy king', 'cheese and crackers', 'spicy peanuts', 'whatever is in the fridge lol'],
+    react: ['good one', 'yum', 'underrated', 'facts', 'now i want some', 'elite', 'good pick', 'im hungry now', 'greasy keyboard gang', 'solid'] },
+  { open: ['ok whats everyones favorite food, go', 'random question: favorite food?'],
+    lines: ['pizza no contest', 'my grandmas dumplings', 'sushi every day if i could', 'tacos, any kind', 'mac and cheese, dont judge', 'pho on a cold day', 'honestly just a good burger', 'spicy noodles, the spicier the better', 'my own cooking lol jk its terrible', 'fresh bread with butter'],
+    react: ['good choice', 'now im hungry', 'valid', 'facts', 'ooh yes', 'respect'] },
+  { open: ['what are u guys having for dinner', 'dinner ideas? i got nothing'],
+    lines: ['leftover pasta', 'cereal, dont judge', 'my mom made soup', 'ordering thai', 'frozen pizza again', 'grilled chicken and rice', 'instant noodles with an egg', 'tacos, its always tacos'],
+    react: ['yum', 'cereal for dinner is valid', 'jealous', 'now im hungry', 'good call', 'lol same'] },
+  { open: ['cats or dogs, settle this once and for all', 'team cats or team dogs?'],
+    lines: ['dogs, they love u unconditionally', 'cats, they respect ur space', 'both, why choose', 'cats are just tiny roommates', 'dogs because walks = exercise lol', 'i have 2 cats so cats obviously', 'my dog would be offended if i said cats', 'birds actually', 'whatever pet lets me sleep in'],
+    react: ['wrong lol', 'agreed', 'traitor', 'based', 'debatable', 'fair point'] },
+  { open: ['anyone have a pet? what kind', 'show of hands, who has pets'],
+    lines: ['2 cats, both menaces', 'a golden retriever, best boy', 'a hamster named potato', 'no pets, my landlord said no', 'a turtle older than me', 'a bunny that hates me', 'fish, does that count', 'my parents dog, i visit it lol'],
+    react: ['aww', 'pics?', 'potato lol', 'fish count', 'i want one', 'so cute'] },
+  { open: ['whats the best thing that happened to u this week', 'share something good that happened today'],
+    lines: ['found 20 bucks in my old jacket', 'my plant finally bloomed', 'passed my driving test!!', 'my cat slept on me all night', 'got a raise lol finally', 'my friend visited from out of town', 'the bus came on time for once', 'made pancakes and they werent burnt'],
+    react: ['congrats!!', 'love that', 'wholesome', 'nice!', 'small wins', 'yay'] },
+  { open: ['whats everyone doing this weekend', 'any weekend plans?', 'whats everyone doing this weekend?'],
+    lines: ['sleeping as much as possible', 'working sadly', 'hiking if it doesnt rain', 'family dinner', 'cleaning my apartment, its a disaster', 'concert on saturday!', 'nothing and i love it', 'my friends birthday party', 'halloween party obviously', 'gaming all weekend lol', 'sleeping in, thats the whole plan', 'my cousins birthday party', 'working both days ugh', 'gonna try a new hiking trail', 'cleaning my room finally', 'movie night with friends', 'nothing, just grinding here lol', 'farmers market then nap'],
+    react: ['nice', 'have fun', 'jealous', 'rip', 'sounds perfect', 'mood', 'sounds fun', 'enjoy!', 'relaxing, love it'] },
+  { open: ['unpopular opinion time', 'ok share an unpopular opinion'],
+    lines: ['cold pizza is better than hot pizza', 'mornings are actually nice', 'i dont like chocolate', 'sequels are often better', 'cereal before milk is wrong... wait', 'winter is the best season', 'i hate the beach, sand everywhere', 'tea is better than coffee', 'pineapple on pizza is great', 'naps are overrated'],
+    react: ['WHAT', 'ok this is a crime', 'i kinda agree', 'nope', 'hot take', 'blocked lol'] },
 ];
 /** 长句子（用户 10-31：不只说短句） */
 const LONG_LINES = [
@@ -649,32 +670,44 @@ const ACT_LINES: Record<string, string[]> = {
 const TOPIC_SLOT = 18 * MIN;
 /** 打字要时间：越长的话等得越久 */
 const typing = (text: string, r: number) => 3_000 + text.length * 170 + Math.floor(r * 12_000);
-/** 第 j 段的群聊：开始时间、都谁、说哪几句（各家算出来一样）；这段没有就是 null */
+/** 换话题时的过渡（用户 10-31：真人聊一个话题，慢慢才拐到别的） */
+const BRIDGE: [string, string][] = [
+  ['speaking of which, ', '说到这个，'], ['that reminds me, ', '这让我想起来，'], ['ok slightly different question, ', '换个相关的问题，'],
+  ['kinda related but ', '有点相关，'], ['on that note, ', '顺着这个说，'], ['lol ok but ', '哈哈好吧，那'],
+];
+const groupOn = (j: number) => rnd(800, j) < 0.8;
+/** 第 j 段的群聊：开始时间、都谁、说哪几句（各家算出来一样）；这段没有就是 null。话题按相关顺序往下走 */
 function groupAt(bots: AiPlayer[], j: number) {
-  if (rnd(800, j) >= 0.55) return null;
-  const tp = cyc(TOPICS_GROUP, j, 828);
-  // 前几个小时聊过的话题先不聊
-  for (let w = 1; w <= 8; w++) if (rnd(800, j - w) < 0.55 && cyc(TOPICS_GROUP, j - w, 828) === tp) return null;
-  const start = j * TOPIC_SLOT + Math.floor(rnd(802, j) * 8 * MIN);
+  if (!groupOn(j)) return null;
+  const N = TOPICS_GROUP.length;
+  const tp = TOPICS_GROUP[((j % N) + N) % N];
+  const start = j * TOPIC_SLOT + Math.floor(rnd(802, j) * 3 * MIN);
   const on = bots.filter((b) => botOnline(b, start));
-  if (on.length < 4) return null;
+  if (on.length < 3) return null;
   const cast: AiPlayer[] = [];
-  const size = Math.min(on.length, 4 + Math.floor(rnd(803, j) * 3));
+  const size = Math.min(on.length, 3 + Math.floor(rnd(803, j) * 4));
   for (let k = 0; k < 30 && cast.length < size; k++) {
     const b = pickTalker(on, rnd(804, j, k));
     if (!cast.includes(b)) cast.push(b);
   }
-  const msgs: { who: AiPlayer; text: string; at: number }[] = [{ who: cast[0], text: pick(tp.open, rnd(805, j)), at: start }];
+  const open = pick(tp.open, rnd(805, j));
+  // 上一段也在聊：顺着过渡过来，不是突然换
+  const br = groupOn(j - 1) && rnd(801, j) < 0.7 ? pick(BRIDGE, rnd(812, j)) : null;
+  const msgs: { who: AiPlayer; text: string; zh?: string; at: number }[] = [
+    { who: cast[0], text: br ? br[0] + open : open, zh: br && BOT_ZH[open] ? br[1] + BOT_ZH[open] : BOT_ZH[open], at: start },
+  ];
   const left = [...tp.lines];
-  const n = 8 + Math.floor(rnd(806, j) * 7);
+  const n = 12 + Math.floor(rnd(806, j) * 9);
   let t = start, prev = 0;
   for (let k = 1; k < n && left.length; k++) {
     let w = Math.floor(rnd(807, j, k) * cast.length);
     if (w === prev) w = (w + 1) % cast.length;
     prev = w;
-    const text = rnd(809, j, k) < 0.7 || k === 1 ? left.splice(Math.floor(rnd(810, j, k) * left.length), 1)[0] : pick(tp.react, rnd(811, j, k));
-    t += typing(text, rnd(808, j, k));
-    msgs.push({ who: cast[w], text, at: t });
+    // 附和的话同一段里不重复
+    const reacts = tp.react.filter((x) => !msgs.some((m) => m.text === x));
+    const text = rnd(809, j, k) < 0.65 || k === 1 || !reacts.length ? left.splice(Math.floor(rnd(810, j, k) * left.length), 1)[0] : pick(reacts, rnd(811, j, k));
+    t += typing(text, rnd(808, j, k)) + Math.floor(rnd(813, j, k) ** 2 * 25_000);
+    msgs.push({ who: cast[w], text, zh: BOT_ZH[text], at: t });
   }
   return { start, end: t, msgs };
 }
@@ -744,6 +777,7 @@ function lineUsedRecently(en: string, i: number) {
   for (let w = 1; w <= RECENT; w++) if (kindAt(i - w) === 'line' && lineAt(i - w, 0).en === en) return true;
   return false;
 }
+const slotOn = (i: number, n: number) => rnd(777, i) < Math.min(0.6, 0.05 + n * 0.035);
 /** 某个时间段里 AI 说的话（按时间排好） */
 export function botChat(bots: AiPlayer[], from: number, to: number): ChatMsg[] {
   if (!bots.length) return [];
@@ -757,7 +791,7 @@ export function botChat(bots: AiPlayer[], from: number, to: number): ChatMsg[] {
     const g = groupAt(bots, j);
     if (!g) continue;
     groups.push(g);
-    g.msgs.forEach((m, k) => push(`bot-g${j}-${k}`, m.who, m.text, BOT_ZH[m.text], m.at));
+    g.msgs.forEach((m, k) => push(`bot-g${j}-${k}`, m.who, m.text, m.zh, m.at));
   }
   // 上线打招呼、下线说再见
   for (const b of bots) {
@@ -770,9 +804,11 @@ export function botChat(bots: AiPlayer[], from: number, to: number): ChatMsg[] {
   for (let i = Math.floor(from / SLOT) - 5; i <= Math.floor(to / SLOT); i++) {
     const at = i * SLOT + Math.floor(rnd(779, i) * 50_000);
     const on = bots.filter((b) => botOnline(b, at));
-    if (!on.length || rnd(777, i) >= Math.min(0.8, 0.05 + on.length * 0.045)) continue;
-    // 大家正在群聊时别插别的话题
-    if (groups.some((g) => at > g.start - 60_000 && at < g.end + 30_000)) continue;
+    if (!on.length || !slotOn(i, on.length)) continue;
+    // 前两段刚有人起了话头就别再另起一个（用户 10-31：别一句一个话题）
+    if (slotOn(i - 1, on.length) || slotOn(i - 2, on.length)) continue;
+    // 大家正在群聊、或者刚聊完时别插别的话题
+    if (groups.some((g) => at > g.start - MIN && at < g.end + 3 * MIN)) continue;
     const a = pickTalker(on, rnd(778, i));
     // 对话里出现的其他人：不重复的几个 AI（话多的更常出来）
     const cast = [a];
@@ -819,6 +855,8 @@ export function botChat(bots: AiPlayer[], from: number, to: number): ChatMsg[] {
       let line = lineAt(i, 0);
       for (let k = 1; k < 5 && lineUsedRecently(line.en, i); k++) line = lineAt(i, k);
       if (line.en.includes('{X}') && cast.length < 2) continue;
+      // 单独抛个问题没人接很怪，问题留给一问一答和群聊
+      if (/\?$/.test(line.en)) continue;
       let t = at;
       // 偶尔打错字，紧接着补一句改正
       const typo = typoOf(fill(line.en), rnd(814, i), rnd(815, i));
@@ -828,7 +866,7 @@ export function botChat(bots: AiPlayer[], from: number, to: number): ChatMsg[] {
         say(`*${typo.fix}`, a, t, 'f', `*${typo.fix}`);
       } else say(line.en, a, t, '', line.zh);
       // 别的 AI 有时会接一两句
-      for (let k = 0; k < 2 && cast.length > k + 1 && rnd(790, i, k) < (k ? 0.3 : 0.45); k++) {
+      for (let k = 0; k < 2 && cast.length > k + 1 && rnd(790, i, k) < (k ? 0.35 : 0.6); k++) {
         const re = chimeFor(fill(line.en), rnd(792, i, k));
         t += typing(re, rnd(791, i, k));
         say(re, cast[k + 1], t, `j${k}`);
@@ -878,13 +916,22 @@ const TOPICS: [RegExp, string[]][] = [
   [/\b(lol|lmao|haha|xd|rofl)\b/i, ['lol', 'lmao', 'haha', 'xD']],
   [/\b(gg|gz|grats|congrats)\b/i, ['ty!', 'thx :)', 'gg']],
   [/\b(trade|sell|buy)\b/i, ['what u selling', 'how much?', 'not rn sorry', 'got any ingots?']],
+  [/\b(discord|update|patch|news|announcement|changelog)\b/i, ['ooh whats in it?', 'nice, when is it coming?', 'havent seen it, link?', 'any new skills?', 'pls be a new map', 'oh nice ty for the heads up', 'wait is there a discord?', 'hope they buff fishing lol']],
+  [/\b(did|have|ha) (u|you) (see|seen|hear|heard)\b|\bu see\b/i, ['nope what happened?', 'no what is it', 'not yet, tell me', 'yea saw it', 'missed it, whats up?', 'no?? whats going on']],
+  [/\b(anyone|any1|anybody|someone)\b/i, ['me maybe', 'what u need?', 'depends lol', 'i can help', 'whats up?']],
+  [/\bhow (do|to|can|did)\b/i, ['i think u just keep doing it lol', 'check the handbook, it explains it', 'idk i just clicked stuff', 'took me ages to figure out too', 'hmm good question']],
+  [/^why\b|\bbut why\b/i, ['no idea lol', 'good question', 'just how the game is i guess', 'dont ask me lol']],
   [/\?/, ['idk tbh', 'not sure', 'check the handbook maybe', 'good question lol', 'no clue sorry', 'hmm idk']],
 ];
 /** 问哪里人的那一条在 TOPICS 里的位置 */
 const WHERE_TOPIC = TOPICS.findIndex(([re]) => re.test('where are you from'));
-const GENERIC = ['true', 'fr', 'ya', 'lol', 'nice', 'same', 'facts', 'ok', 'real', 'mood'];
+const GENERIC = ['true', 'fr', 'ya', 'lol', 'nice', 'same', 'facts', 'ok', 'real', 'mood', 'oh nice', 'cool cool', 'ooh', 'wait really?', 'interesting', 'haha nice', 'oh word?', 'thats cool'];
+/** 像在问问题：问号，或者用疑问词开头 */
+const ASKS = /\?|^(do|does|did|are|is|was|can|could|would|will|what|wat|how|why|who|when|where|which|anyone|any1|r u|are u|u)\b/i;
+/** 真人刚和某个 AI 聊过几句：接着说话时多半还是这个 AI 回（各家看到的聊天一样，算出来也一样） */
+export interface ReplyCtx { bot: string; at: number }
 /** 真人在世界频道说了一句：哪个 AI 接、说什么、几秒后（各家算出来一样）；点到名的 AI 一定回 */
-export function botReplies(m: ChatMsg, all: AiPlayer[]): ChatMsg[] {
+export function botReplies(m: ChatMsg, all: AiPlayer[], prev?: ReplyCtx): ChatMsg[] {
   if (m.channel !== 'world' || isBotId(m.playerId)) return [];
   // 只有在线的 AI 会回
   const bots = all.filter((b) => botOnline(b, m.at));
@@ -892,10 +939,12 @@ export function botReplies(m: ChatMsg, all: AiPlayer[]): ChatMsg[] {
   const h = strHash(m.id + m.text);
   const low = m.text.toLowerCase();
   // 名字长的先比，免得 Kai 抢了 Kairo 的话
-  const named = [...bots].sort((a, b) => b.name.length - a.name.length).find((b) => b.name.length >= 3 && low.includes(b.name.toLowerCase()));
+  const called = [...bots].sort((a, b) => b.name.length - a.name.length).find((b) => b.name.length >= 3 && low.includes(b.name.toLowerCase()));
+  const named = called ?? (prev && m.at - prev.at < 4 * MIN ? bots.find((b) => b.id === prev.bot) : undefined);
   const en = isEnglish(m.text);
-  const topic = en ? TOPICS.find(([re]) => re.test(m.text)) : undefined;
-  const chance = named ? 1 : !en ? 0.45 : topic ? (topic[1] === TOPICS[TOPICS.length - 1][1] ? 0.55 : 0.7) : 0.25;
+  const topic = en ? TOPICS.find(([re]) => re.test(m.text.trim())) : undefined;
+  // 用户 10-31：真人说话别被晾着——问问题、聊到点子上基本都有人接
+  const chance = called ? 1 : named ? 0.95 : !en ? 0.5 : topic ? 0.9 : ASKS.test(m.text.trim()) ? 0.85 : 0.6;
   if (rnd(h, 1) >= chance) return [];
   const who = named ?? pickTalker(bots, rnd(h, 2));
   let text = !en ? pick(HUH, rnd(h, 3)) : pick(topic ? topic[1] : GENERIC, rnd(h, 4));
@@ -982,6 +1031,7 @@ export function withBots(base: OnlineApi): OnlineApi {
       // 真人在世界频道说的话：等名单在了再看要不要接话（回复时间到了才发）
       const seen = new Set<string>();
       const heard: ChatMsg[] = [];
+      const lastTo = new Map<string, ReplyCtx>();
       const timers = new Set<ReturnType<typeof setTimeout>>();
       const off = base.onChat((m) => {
         f(m);
@@ -995,7 +1045,10 @@ export function withBots(base: OnlineApi): OnlineApi {
         for (const m of botChat(list, last + 1, now)) f(m);
         last = now;
         for (const m of heard.splice(0)) {
-          for (const r of botReplies(m, list)) {
+          const rs = botReplies(m, list, lastTo.get(m.playerId));
+          const first = rs[0] && findBot(rs[0].playerId);
+          if (first) lastTo.set(m.playerId, { bot: first.id, at: m.at });
+          for (const r of rs) {
             const wait = r.at - Date.now();
             if (wait <= 0) { f(r); continue; }
             const h = setTimeout(() => { timers.delete(h); f(r); }, wait);

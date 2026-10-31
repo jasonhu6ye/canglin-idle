@@ -90,6 +90,15 @@ describe('AI 玩家', () => {
     expect(r.length).toBeGreaterThanOrEqual(1);
     expect(r[0].name).toBe('Bot7');
     expect(botReplies(msg(1, 'Bot7 thx for the help'), bots)).toEqual(r);
+    // 真人说的话大多有人接（用户 10-31 截图：没人理）
+    let got = 0;
+    for (let i = 0; i < 200; i++) if (botReplies(msg(i, 'man did u see discord  i post next update'), bots).length) got++;
+    expect(got).toBeGreaterThan(150);
+    // 刚和某个 AI 聊过，接着说多半还是它回
+    const b0 = bots.find((b) => botReplies(msg(1, 'Bot7 hi'), bots).length && b.name === 'Bot7')!;
+    let same = 0;
+    for (let i = 0; i < 100; i++) { const rs = botReplies({ ...msg(i, 'so what do u do for work'), at: T0 + 60_000 }, bots, { bot: b0.id, at: T0 }); if (rs[0]?.name === 'Bot7') same++; }
+    expect(same).toBeGreaterThan(80);
     // AI 不回 AI
     expect(botReplies({ ...msg(2, 'hi'), playerId: 'bot-x' }, bots)).toEqual([]);
   });
