@@ -368,6 +368,9 @@ export const EN_ONLINE: Record<string, string> = {
   '在城里挂机': 'Idling in town',
   '删除 AI 玩家 {0}？': 'Remove AI player {0}?',
   '已删除 {0}': 'Removed {0}',
+  // 世界频道每天清空（10-31）
+  '世界频道每天清空': 'World chat resets daily',
+  '世界频道的聊天记录每天北京时间 0 点清空一次，打开聊天能看到当天的记录。公会、队伍和私聊不受影响。': 'World chat history is cleared once a day at midnight Beijing time (16:00 UTC); open chat to see everything from today. Guild, party and private chats are not affected.',
   // 聊天逐句翻译（10-31）
   '翻译失败，稍后再试': "Couldn't translate, try again later",
   '翻译中…': 'Translating…',

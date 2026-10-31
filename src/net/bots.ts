@@ -1033,8 +1033,9 @@ let loadedAt = 0;
 let loading: Promise<void> | null = null;
 let api: OnlineApi | null = null;
 const REFRESH_MS = 120_000;
-const BACKFILL = 4 * HOUR;
-const BACKFILL_N = 60;
+/** 世界频道每天北京时间 0 点清空（用户 10-31）：这一刻之后的才显示 */
+export const worldResetAt = (t = Date.now()) => Math.floor((t + 8 * HOUR) / DAY) * DAY - 8 * HOUR;
+const BACKFILL_N = 200;
 /** 现在的 AI 玩家（按加入时间排，各家顺序一样） */
 export const aiPlayers = () => list;
 export function refreshBots(force = false): Promise<void> {
@@ -1099,15 +1100,21 @@ export function withBots(base: OnlineApi): OnlineApi {
         f(m);
         if (m.channel === 'world' && !isBotId(m.playerId) && !seen.has(m.id)) { seen.add(m.id); heard.push(m); }
       });
-      // AI 的话不存，打开时按规则把前几个小时的算出来（只补最近几十句，用户 10-31：记录别一打开就没了）
+      // AI 的话不存，打开时按规则把今天（清空以后）的算出来，用户 10-31：记录别一打开就没了
       let last = 0;
       const tick = () => {
         const now = Date.now();
         // 名单还没拉下来时先不往前走，拉到了再补
         if (!list.length) return;
-        const back = !last;
-        const ms = botChat(list, back ? now - BACKFILL : last + 1, now);
-        for (const m of back ? ms.slice(-BACKFILL_N) : ms) f(m);
+        let ms: ChatMsg[];
+        if (!last) {
+          // 从现在往前一段段算，够了就停，免得手机上一打开就卡
+          ms = [];
+          const cut = worldResetAt(now);
+          for (let to = now; to > cut && ms.length < BACKFILL_N; to -= 2 * HOUR) ms = [...botChat(list, Math.max(cut, to - 2 * HOUR + 1), to), ...ms];
+          ms = ms.slice(-BACKFILL_N);
+        } else ms = botChat(list, last + 1, now);
+        for (const m of ms) f(m);
         last = now;
         for (const m of heard.splice(0)) {
           const rs = botReplies(m, list, lastTo.get(m.playerId));
