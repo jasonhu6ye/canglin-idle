@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ITEMS, MAP_H, MAP_W } from '../core/data';
 import { botChat, botDoing, botOnline, botReplies, isEnglish, botName, botPresence, botProfile, mergeBoard, withBots } from './bots';
 import { LocalApi } from './local';
@@ -33,7 +33,10 @@ describe('AI 玩家', () => {
   });
   it('一天里位置都在地图上，会干活、走路，也会在城里挂机', () => {
     let work = 0, walk = 0, idle = 0;
-    for (const b of bots.slice(0, 8)) {
+    // 偶尔玩的可能一整天都不上线，挑这天上过线的
+    const days = bots.filter((b) => Array.from({ length: 96 }, (_, k) => botOnline(b, T0 + k * 900_000)).some(Boolean));
+    expect(days.length).toBeGreaterThan(8);
+    for (const b of days) {
       const p = botProfile(b, T0);
       let prev: { x: number; y: number } | null = null;
       for (let t = T0; t < T0 + 86_400_000; t += 20_000) {
@@ -86,25 +89,27 @@ describe('AI 玩家', () => {
     expect(zh).toBeGreaterThan(40);
     expect(en).toBeGreaterThan(80);
     // 点名一定回，而且是被点到的那个
-    const r = botReplies(msg(1, 'Bot7 thx for the help'), bots);
+    // 点名的得在线：挑一个这时在线的
+    const nm = bots.find((b) => botOnline(b, T0) && botOnline(b, T0 + 60_000))!.name;
+    const r = botReplies(msg(1, `${nm} thx for the help`), bots);
     expect(r.length).toBeGreaterThanOrEqual(1);
-    expect(r[0].name).toBe('Bot7');
-    expect(botReplies(msg(1, 'Bot7 thx for the help'), bots)).toEqual(r);
+    expect(r[0].name).toBe(nm);
+    expect(botReplies(msg(1, `${nm} thx for the help`), bots)).toEqual(r);
     // 真人说的话大多有人接（用户 10-31 截图：没人理）
     let got = 0;
     for (let i = 0; i < 200; i++) if (botReplies(msg(i, 'man did u see discord  i post next update'), bots).length) got++;
     expect(got).toBeGreaterThan(150);
     // 刚和某个 AI 聊过，接着说多半还是它回
-    const b0 = bots.find((b) => botReplies(msg(1, 'Bot7 hi'), bots).length && b.name === 'Bot7')!;
+    const b0 = bots.find((b) => b.name === nm)!;
     let same = 0;
-    for (let i = 0; i < 100; i++) { const rs = botReplies({ ...msg(i, 'so what do u do for work'), at: T0 + 60_000 }, bots, { bot: b0.id, at: T0 }); if (rs[0]?.name === 'Bot7') same++; }
+    for (let i = 0; i < 100; i++) { const rs = botReplies({ ...msg(i, 'so what do u do for work'), at: T0 + 60_000 }, bots, { bot: b0.id, at: T0 }); if (rs[0]?.name === nm) same++; }
     expect(same).toBeGreaterThan(80);
     // AI 不回 AI
     expect(botReplies({ ...msg(2, 'hi'), playerId: 'bot-x' }, bots)).toEqual([]);
   });
   it('AI 说的每一句都有中文翻译', () => {
     const msgs = botChat(bots, T0, T0 + 3 * 86_400_000);
-    expect(msgs.length).toBeGreaterThan(1000);
+    expect(msgs.length).toBeGreaterThan(300);
     const miss = [...new Set(msgs.filter((m) => !m.zh).map((m) => m.text))];
     expect(miss).toEqual([]);
     for (const m of msgs) expect(m.zh).not.toMatch(/\{\w+\}/);
@@ -118,9 +123,11 @@ describe('AI 玩家', () => {
     const mem = new Map<string, string>();
     const base = new LocalApi({ getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => void mem.set(k, v) });
     const api = withBots(base);
-    // 挑两个不下线的种子，免得测试时正好在睡觉
+    // 挑两个 T0 在线的种子，把时钟拨到 T0
     const always: number[] = [];
-    for (let sd = 1; always.length < 2; sd++) if (Array.from({ length: 24 }, (_, h) => h).every((h) => botOnline({ id: 'x', name: 'x', seed: sd, at: 0 }, T0 + h * 3600_000))) always.push(sd);
+    for (let sd = 1; always.length < 2; sd++) if (botOnline({ id: 'x', name: 'x', seed: sd, at: 0 }, T0) && botOnline({ id: 'x', name: 'x', seed: sd, at: 0 }, T0 + 600_000)) always.push(sd);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(T0);
     await api.aiAdd([{ name: 'Kaira', seed: always[0] }, { name: 'mossy_fern', seed: always[1] }]);
     const { refreshBots, aiPlayers } = await import('./bots');
     await refreshBots(true);
@@ -132,5 +139,6 @@ describe('AI 玩家', () => {
     await api.aiDelete(aiPlayers().map((b) => b.id));
     await refreshBots(true);
     expect(aiPlayers().length).toBe(0);
+    vi.useRealTimers();
   });
 });

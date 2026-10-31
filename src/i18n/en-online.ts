@@ -373,6 +373,10 @@ export const EN_ONLINE: Record<string, string> = {
   '翻译中…': 'Translating…',
   '翻译': 'Translate',
   '译': 'Tr',
-  '现在有 {0} 个 AI 玩家，{1} 个在线。名字、外观、等级随机，加进来后每天慢慢升级；每个 AI 有自己的时区，当地夜里会下线睡觉': '{0} AI players, {1} online. Names, looks and levels are random and they level up a little every day; each one has its own time zone and goes offline to sleep at local night',
-  '离线（{0}，当地夜里在睡觉）': 'Offline ({0}, asleep at local night)',
+  '现在有 {0} 个 AI 玩家，{1} 个在线。名字、外观、等级随机，加进来后每天慢慢升级；每个 AI 有自己的时区和习惯：有的天天肝，有的隔几天才上来一次，三分之一基本不说话': '{0} AI players, {1} online. Names, looks and levels are random and they level up a little every day; each has its own time zone and habits: some play all day, some only show up every few days, and about a third barely talk',
+  '离线（{0}，{1}）': 'Offline ({0}, {1})',
+  '天天肝': 'plays all day',
+  '常玩': 'regular',
+  '休闲': 'casual',
+  '偶尔玩': 'plays rarely',
 };
