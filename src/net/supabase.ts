@@ -542,6 +542,20 @@ export class SupabaseApi implements OnlineApi {
     const r = ok(await this.sb.from('gm_mail').delete().eq('id', id).select('id'));
     if (!r?.length) throw new Error(tl('没有权限，或者这条已经删掉了'));
   }
+  // ---- AI 玩家（10-31）----
+  async aiList() {
+    const rows: Row[] = ok(await this.sb.from('ai_players').select('id,name,seed,created_at').order('created_at').limit(500));
+    return rows.map((r) => ({ id: r.id, name: r.name, seed: Number(r.seed), at: Date.parse(r.created_at) }));
+  }
+  async aiAdd(list: { name: string; seed: number }[]) { ok(await this.sb.from('ai_players').insert(list)); }
+  async aiRename(id: string, name: string) {
+    const r = ok(await this.sb.from('ai_players').update({ name }).eq('id', id).select('id'));
+    if (!r?.length) throw new Error(tl('没有权限，或者这条已经删掉了'));
+  }
+  async aiDelete(ids: string[]) {
+    const r = ok(await this.sb.from('ai_players').delete().in('id', ids).select('id'));
+    if (!r?.length) throw new Error(tl('没有权限，或者这条已经删掉了'));
+  }
 }
 const toGmMail = (r: Row): GmMail => ({
   id: r.id, title: r.title, body: r.body ?? '', at: Date.parse(r.created_at),

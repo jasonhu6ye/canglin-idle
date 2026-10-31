@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { levelSnapshot, online, type DungeonPresence, type Presence } from '../net';
+import { setBotViewer } from '../net/bots';
 import { moveCadence } from '../net/presenceSync';
 import { rallyTime, takeFieldHits, updateAggro, type FieldMateHit } from '../net/social';
 import { maxHp } from '../core/sim';
@@ -35,6 +36,7 @@ export function onFieldHit(f: FieldHitFn) {
 function watchers(x: number, y: number, dg?: DungeonPresence) {
   let n = 0;
   for (const p of everyone) {
+    if (p.bot) continue;
     if (dg ? p.dg?.gate === dg.gate : !p.dg && Math.abs(p.x - x) <= VIEW_TILES + 10 && Math.abs(p.y - y) <= VIEW_TILES + 10) n++;
   }
   return n;
@@ -270,6 +272,7 @@ export class OtherPlayers {
   }
 
   step(delta: number, near: { x: number; y: number }) {
+    if (!this.place) setBotViewer(near);
     const seen = new Set<string>();
     // 同一格上一起干活、打怪的人各站各的位置（自己占第 0 个位置），远程往后站（用户 10-25）
     const crowd = new Map<string, number>();

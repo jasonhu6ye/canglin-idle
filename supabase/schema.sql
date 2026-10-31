@@ -1127,3 +1127,21 @@ language sql stable security definer set search_path = public as $$
   from profiles where id = auth.uid()
 $$;
 grant execute on function public.my_guild_day() to authenticated;
+
+-- ============ AI 玩家（10-31）============
+-- 只存名字和种子；外观、等级、去哪干活、世界频道说什么，各家按种子和时间算出来（src/net/bots.ts）
+create table if not exists public.ai_players (
+  id uuid primary key default gen_random_uuid(),
+  name text not null check (char_length(name) between 2 and 12),
+  seed bigint not null,
+  created_at timestamptz not null default now()
+);
+alter table public.ai_players enable row level security;
+drop policy if exists "ai_players 所有人可看" on public.ai_players;
+create policy "ai_players 所有人可看" on public.ai_players for select using (true);
+drop policy if exists "ai_players 管理员加" on public.ai_players;
+create policy "ai_players 管理员加" on public.ai_players for insert with check (public.is_gm());
+drop policy if exists "ai_players 管理员改" on public.ai_players;
+create policy "ai_players 管理员改" on public.ai_players for update using (public.is_gm()) with check (public.is_gm());
+drop policy if exists "ai_players 管理员删" on public.ai_players;
+create policy "ai_players 管理员删" on public.ai_players for delete using (public.is_gm());

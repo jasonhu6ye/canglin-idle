@@ -118,6 +118,8 @@ export interface Presence {
   /** 野外组队打怪（10-27）：打的哪个点的怪（动作 id）、第几只、对它累计打了多少、最近一下暴击没有 */
   fd?: FieldHit;
   at: number;
+  /** AI 玩家（10-31，见 bots.ts） */
+  bot?: boolean;
   /** 发送序号（发送方的毫秒时钟，单调递增）：在线状态和移动广播谁新用谁，见 presenceSync.ts */
   s?: number;
 }
@@ -317,7 +319,16 @@ export interface OnlineApi {
   gmMailList(): Promise<GmMailRow[]>;
   gmMailSend(m: GmMailInput): Promise<void>;
   gmMailDelete(id: string): Promise<void>;
+
+  /** AI 玩家（10-31）：所有人都能读名单，管理员能加、改名、删 */
+  aiList(): Promise<AiPlayer[]>;
+  aiAdd(list: { name: string; seed: number }[]): Promise<void>;
+  aiRename(id: string, name: string): Promise<void>;
+  aiDelete(ids: string[]): Promise<void>;
 }
+
+/** AI 玩家：服务器只存名字和种子，其余按种子和时间算（见 bots.ts）；at 是加入时间 */
+export interface AiPlayer { id: string; name: string; seed: number; at: number }
 
 export interface GmMail { id: string; title: string; body: string; items: ItemStack[]; at: number }
 export interface GmMailRow extends GmMail { targetPid: number; targetName?: string; claimedAt: number | null }
