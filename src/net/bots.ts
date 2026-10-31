@@ -408,7 +408,7 @@ const GAME_LINES = [
   'finally got my pickaxe upgraded', 'this fishing spot is so relaxing', 'lol i died to a wolf again', 'the sunset in this game is so pretty',
   'my bank is getting full lol', 'afk mining overnight again', 'just found a rare drop!!', 'rng hates me today', 'one more lvl then bed. ok maybe two',
   'idk why but chopping trees is so calming', 'chilling at the pond', 'the snow area at night looks so good', 'my horse is faster than my wifi lol',
-  '{X} gz on the lvl!', 'thx for the help earlier {X}', 'wb {X}', '{X} is always online lol do u ever sleep', 'gg', 'nice', 'lol', 'rip',
+  '{X} is always online lol do u ever sleep',
 ];
 /** 家常、吃喝、风景、工作、八卦 */
 const LIFE_LINES = [
@@ -458,10 +458,8 @@ const PAIRS: [string, string[]][] = [
   ['pineapple on pizza yes or no', ['yes and im proud', 'absolutely not', 'only with ham']],
   ['if u could live anywhere where would it be', ['japan', 'a cabin in the woods', 'by the beach', 'right here lol']],
   ['whats everyone listening to', ['lofi', 'old rock', 'kpop lol', 'the game music actually']],
-  ['would u rather fight 1 horse sized duck or 100 duck sized horses', ['100 tiny horses easy', 'the big duck, i believe in myself', 'neither lol run']],
   ['early bird or night owl?', ['night owl obviously its 3am', 'early bird, 6am gym', 'neither, i just never sleep lol']],
   ['whats ur comfort food', ['mac and cheese', 'my moms soup', 'instant noodles lol', 'ice cream']],
-  ['anyone have a weird talent', ['i can touch my nose with my tongue', 'i can whistle really loud', 'i can sleep anywhere lol']],
 ];
 /** 几个人你一句我一句：A/B/C 是不同的 AI，{A}{B}{C} 换成他们的名字 */
 const CONVOS: [number, string][][] = [
@@ -487,10 +485,6 @@ const CONVOS: [number, string][][] = [
   [[0, 'anyone else hate mondays'], [1, 'everyone hates mondays'], [2, 'i work weekends so monday is my friday lol'], [0, 'lucky']],
   [[0, 'just got caught in the rain without an umbrella'], [1, 'f'], [2, 'hot shower time'], [0, 'already on it lol']],
   [[0, 'tried sushi for the first time'], [1, 'and??'], [0, 'kinda good actually'], [1, 'welcome to the club']],
-  [[0, 'fun fact: octopuses have 3 hearts'], [1, 'wait really'], [0, 'ya and blue blood'], [2, 'theyre basically aliens'], [1, 'learned something today']],
-  [[0, 'is a hotdog a sandwich'], [1, 'no'], [2, 'yes technically'], [1, 'absolutely not'], [0, 'this is gonna start a war lol']],
-  [[0, 'a duck followed me home today'], [1, 'keep it'], [2, 'name it bob'], [0, 'bob is now my best friend']],
-  [[0, 'why dont skeletons fight each other'], [1, 'why'], [0, 'they dont have the guts'], [1, 'boooo'], [2, 'lmao that was bad']],
   [[0, 'just booked a trip to japan!!'], [1, 'omg jealous'], [2, 'eat all the ramen'], [0, 'thats the plan lol']],
   [[0, 'learning guitar, any tips'], [1, 'practice every day even 10 min'], [2, 'ur fingers will hurt, its normal'], [0, 'they already do lol']],
   [[0, 'my parrot learned to copy my ringtone'], [1, 'lmao'], [0, 'i keep checking my phone for nothing'], [2, 'thats evil, i love it']],
@@ -499,21 +493,8 @@ const CONVOS: [number, string][][] = [
   [[0, 'cats or dogs, go'], [1, 'cats'], [2, 'dogs'], [1, 'wrong answer lol'], [2, 'how dare u']],
   [[0, 'went to the gym first time in months'], [1, 'proud of u'], [0, 'cant lift my arms to type'], [2, 'and yet here u are typing lol']],
 ];
-/** 10-31 用户：还要聊很多有趣的事，不一定和游戏有关——音乐、影视、运动、旅行、宠物、冷知识、脑洞、冷笑话、爱好 */
+/** 10-31 用户：还要聊很多有趣的事，不一定和游戏有关——音乐、影视、运动、旅行、宠物、爱好。冷知识、脑洞、冷笑话凭空冒出来很怪，去掉了 */
 const FUN_LINES = [
-  // 冷知识
-  'fun fact: octopuses have three hearts', 'did u know honey never spoils? they found 3000 year old honey in egypt', 'apparently cows have best friends',
-  'fun fact: bananas are berries but strawberries arent', 'sea otters hold hands when they sleep so they dont drift apart', 'a group of crows is called a murder lol',
-  'wombat poop is cube shaped, look it up', 'there are more trees on earth than stars in the milky way apparently', 'flamingos are pink because of what they eat',
-  'scotland has a unicorn as its national animal lol', 'sharks are older than trees, wild', 'a day on venus is longer than its year',
-  // 脑洞
-  'shower thought: we never see our own face, only reflections', 'if u think about it, a hotdog is a taco', 'why do we park on driveways and drive on parkways',
-  'what if dogs think we go hunting every time we leave the house', 'is cereal a soup? discuss', 'if u clean a vacuum, are u the vacuum now',
-  'imagine being the first person to milk a cow. like what made u do that', 'does anyone else talk to their plants or just me',
-  // 冷笑话
-  'why dont skeletons fight each other? they dont have the guts', 'i told my wife she draws her eyebrows too high. she looked surprised',
-  'what do u call a fake noodle? an impasta', 'i used to hate facial hair but then it grew on me', 'why did the scarecrow win an award? outstanding in his field',
-  'my friend told me a joke about construction. still working on it', 'i only know 25 letters of the alphabet. i dont know y',
   // 音乐
   'anyone got music recs? need new stuff for grinding', 'cant stop listening to lofi while playing', 'went to a concert last night, ears still ringing',
   'learning guitar, my fingers hurt so much', 'my neighbor plays drums at 11pm every night', 'the music in this game slaps ngl', 'karaoke night tmr, im so bad lol',
@@ -544,10 +525,8 @@ const FILL: Record<string, string[]> = {
   show: ['a cooking show', 'a true crime doc', 'an old sitcom', 'a space documentary', 'a dating show lol', 'a nature doc about penguins'],
 };
 const TEMPLATES = [
-  'had {food} for {meal} again lol', 'craving {food} so bad rn', 'anyone else think {food} is overrated? just me?', 'made {food} from scratch today, nailed it',
-  'my {pet} is sleeping on my arm, cant move', 'my {pet} just knocked {thing} off the table', 'cant find {thing} anywhere, again', 'someday ill visit {place}',
-  'my friend just got back from {place}, so jealous', 'watching {show} while i grind', 'stayed up way too late watching {show}', 'if i won the lottery id move to {place}',
-  'thinking about getting a {pet}', 'my neighbor has a {pet} that screams every morning lol', '{food} for {meal}? yes', 'lost {thing} for an hour, it was in my hand',
+  'had {food} for {meal} again lol', 'craving {food} so bad rn', 'made {food} from scratch today, nailed it',
+  'my {pet} is sleeping on my arm, cant move', 'my {pet} just knocked {thing} off the table', 'cant find {thing} anywhere, again', 'my friend just got back from {place}, so jealous', 'watching {show} while i grind', 'stayed up way too late watching {show}', 'thinking about getting a {pet}', 'my neighbor has a {pet} that screams every morning lol', 'lost {thing} for an hour, it was in my hand',
 ];
 /**
  * 打字习惯（用户 10-31：要像真人）：一半的 AI 全小写；有人爱在句尾加 lol、xD、:) 之类，
@@ -564,8 +543,6 @@ function styled(text: string, b: AiPlayer, r = 0) {
 }
 /** 别的 AI 跳出来接一句（用户 10-31）：按说的内容挑反应 */
 const CHIME: [RegExp, string[]][] = [
-  [/fun fact|did u know|apparently|look it up|wild$|older than|longer than/i, ['wait really?', 'TIL', 'no way', 'thats so cool', 'how do u even know this lol', 'mind blown']],
-  [/why (dont|did|do)|what do u call|i told my|grew on me|still working on it|dont know y|impasta/i, ['boooo', 'lmao', 'that was terrible', 'im leaving', 'ok that got me', 'dad joke alert']],
   [/\b(cat|dog|parrot|hamster|bunny|kitten|puppy|turtle|duck|frog|squirrel|pet)\b/i, ['aww', 'pics?', 'so cute', 'lol animals are the best', 'i need a pet']],
   [/\b(pizza|ramen|tacos|sushi|curry|pancakes|burgers|dumplings|pho|cookies|bread|pasta|food|eat|dinner|lunch|breakfast|candy|chips|donuts|bbq|chicken|lasagna|stew)\b/i, ['now im hungry', 'sounds so good', 'save me some', 'yum', 'ok im ordering food now lol']],
   [/\b(rain|snow|storm|sunset|stars|moon|fog|leaves|beach|lake|hiking|mountains|frost|heatwave|northern lights)\b/i, ['jealous', 'sounds nice', 'same here', 'wish i was there', 'so pretty']],
@@ -575,10 +552,10 @@ const CHIME: [RegExp, string[]][] = [
   [/\b(music|concert|guitar|drums|karaoke|lofi|song)\b/i, ['nice', 'what do u listen to?', 'rock on', 'drop a song rec']],
   [/\b(show|movie|anime|book|read)\b/i, ['which one?', 'no spoilers pls', 'i need recs', 'adding it to my list']],
   [/\b(gz|grats|rare drop|raise)\b/i, ['gz!', 'nice!', 'lucky', 'congrats!!']],
-  [/\b(brb|afk|back|bk)\b/i, ['wb', 'k', 'wb!']],
+  [/\b(brb|afk)\b/i, ['k', 'cya', 'take ur time']],
+  [/^(back|bk|ok im back what did i miss)$/i, ['wb', 'wb!', 'welcome back']],
   [/\b(gm|morning)\b/i, ['gm!', 'morning :)', 'gm gm']],
   [/\b(gn|night)\b/i, ['gn!', 'night', 'sleep well']],
-  [/\?$/, ['idk tbh', 'good question', 'hmm', 'no clue lol', 'interesting']],
 ];
 const CHIME_ANY = ['lol', 'same', 'fr', 'mood', 'real', 'haha', 'true', 'lmao', 'ok but same'];
 const chimeFor = (text: string, r: number) => pick(CHIME.find(([re]) => re.test(text))?.[1] ?? CHIME_ANY, r);
@@ -689,7 +666,7 @@ const ACT_LINES: Record<string, string[]> = {
   woodcutting: ['chopping {what}, so relaxing', 'still on {what}, need more logs'],
   fishing: ['fishing {what}, nothing is biting', 'caught so many {what} already lol'],
   craft: ['doing {what} rn, eating all my mats', 'grinding {what}, almost lvl up'],
-  combat: ['farming {what} rn, they keep hitting me lol', '{what} dropped nothing again smh', 'anyone else killing {what}? where r u'],
+  combat: ['farming {what} rn, they keep hitting me lol', '{what} dropped nothing again smh'],
   walk: ['on my way to a new spot', 'running across the map lol'],
   idle: ['just chilling in town', 'afk in town, getting snacks'],
 };
@@ -870,8 +847,18 @@ export function botChat(bots: AiPlayer[], from: number, to: number): ChatMsg[] {
     // 潜水的很少打招呼
     const p = Math.min(0.5, 0.1 + chattyOf(b) * 0.15);
     for (const z of sessionsIn(b, from, to)) {
-      if (rnd(b.seed, 97, strHash(z.key)) < p) { const en = pick(BYE, rnd(b.seed, 98, strHash(z.key))); push(`bot-bye-${b.id}-${z.key}`, b, en, BOT_ZH[en], z.off - 40_000); }
-      if (rnd(b.seed, 99, strHash(z.key)) < p) { const en = pick(HELLO, rnd(b.seed, 100, strHash(z.key))); push(`bot-hi-${b.id}-${z.key}`, b, en, BOT_ZH[en], z.on + 30_000); }
+      const h = strHash(z.key);
+      // 有人打招呼、说再见，偶尔有在线的人回一句
+      const answer = (id: string, t: number, lines: string[], r: number) => {
+        if (rnd(b.seed, 109, h, r) >= 0.4) return;
+        const on = bots.filter((o) => o !== b && botOnline(o, t));
+        if (!on.length) return;
+        const o = pickTalker(on, rnd(b.seed, 110, h, r));
+        const en = pick(lines, rnd(b.seed, 111, h, r));
+        push(id, o, en, BOT_ZH[en], t + typing(en, rnd(b.seed, 112, h, r)));
+      };
+      if (rnd(b.seed, 97, h) < p) { const en = pick(BYE, rnd(b.seed, 98, h)); push(`bot-bye-${b.id}-${z.key}`, b, en, BOT_ZH[en], z.off - 40_000); answer(`bot-bye-${b.id}-${z.key}-r`, z.off - 40_000, ['gn!', 'night', 'cya', 'bye!', 'sleep well'], 1); }
+      if (rnd(b.seed, 99, h) < p) { const en = pick(HELLO, rnd(b.seed, 100, h)); push(`bot-hi-${b.id}-${z.key}`, b, en, BOT_ZH[en], z.on + 30_000); answer(`bot-hi-${b.id}-${z.key}-r`, z.on + 30_000, ['hey', 'yo', 'hi!', 'hey hey', 'wb'], 2); }
     }
   }
   // 往前多看几段：前面开始的对话可能还在接着说
@@ -925,7 +912,7 @@ export function botChat(bots: AiPlayer[], from: number, to: number): ChatMsg[] {
       const act = actLine(a, at, rnd(798, i));
       if (!act) continue;
       say(act.en, a, at, '', act.zh);
-      if (cast.length > 1 && rnd(799, i) < 0.35) say(chimeFor(act.en, rnd(812, i)), cast[1], at + typing('nice', rnd(813, i)), 'aj');
+      if (cast.length > 1 && CHIME.some(([re]) => re.test(act.en)) && rnd(799, i) < 0.5) say(chimeFor(act.en, rnd(812, i)), cast[1], at + typing('nice', rnd(813, i)), 'aj');
     } else {
       // 和前两段抽到的不一样，免得两个人前后脚说同一句
       let line = lineAt(i, 0);
@@ -944,7 +931,7 @@ export function botChat(bots: AiPlayer[], from: number, to: number): ChatMsg[] {
       // 别人要么不理，要么感兴趣才接（用户 10-31）：说到吃的、宠物、天气这些有共鸣的话题才常有人接；接了的话说的人再回一句
       let got = false;
       const hot = CHIME.some(([re]) => re.test(fill(line.en)));
-      for (let k = 0; k < 2 && cast.length > k + 1 && rnd(790, i, k) < (k ? 0.3 : hot ? 0.65 : 0.15); k++) {
+      for (let k = 0; k < 2 && cast.length > k + 1 && hot && rnd(790, i, k) < (k ? 0.3 : 0.65); k++) {
         const re = chimeFor(fill(line.en), rnd(792, i, k));
         t += typing(re, rnd(791, i, k));
         say(re, cast[k + 1], t, `j${k}`);

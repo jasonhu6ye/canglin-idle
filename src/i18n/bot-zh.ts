@@ -1012,6 +1012,12 @@ export const BOT_ZH: Record<string, string> = {
   'cereal for dinner is valid': '晚饭吃麦片很合理',
   'good call': '好主意',
   'lol same': '哈哈我也是',
+  'take ur time': '慢慢来',
+  'cya': '回见',
+  'welcome back': '欢迎回来',
+  'bye!': '拜拜！',
+  'hi!': '嗨！',
+  'hey': '嘿',
 };
 
 /** 模板里的词 */
