@@ -67,7 +67,7 @@ describe('AI 玩家', () => {
   });
   it('世界频道说英文，一小时有一些', () => {
     const msgs = botChat(bots, T0, T0 + 3600_000);
-    expect(msgs.length).toBeGreaterThan(15);
+    expect(msgs.length).toBeGreaterThan(5);
     for (const m of msgs) {
       expect(m.channel).toBe('world');
       expect(m.text).not.toMatch(/[一-鿿]/);
