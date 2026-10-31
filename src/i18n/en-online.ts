@@ -368,4 +368,9 @@ export const EN_ONLINE: Record<string, string> = {
   '在城里挂机': 'Idling in town',
   '删除 AI 玩家 {0}？': 'Remove AI player {0}?',
   '已删除 {0}': 'Removed {0}',
+  // 聊天逐句翻译（10-31）
+  '翻译失败，稍后再试': "Couldn't translate, try again later",
+  '翻译中…': 'Translating…',
+  '翻译': 'Translate',
+  '译': 'Tr',
 };

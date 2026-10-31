@@ -6,6 +6,7 @@ import { XP_TABLE } from '../core/xp';
 import { fightWeapon, OUTFITS } from '../game/hero';
 import { findPath, isWalkable } from '../game/world';
 import type { AiPlayer, Board, ChatMsg, OnlineApi, Presence, RankRow } from './api';
+import { BOT_ZH, FILL_ZH } from '../i18n/bot-zh';
 
 /**
  * AI 玩家（用户 10-31）：服务器 ai_players 表只存名字和种子，外观、等级、装备、去哪干活、世界频道说什么，
@@ -560,13 +561,19 @@ function groupAt(bots: AiPlayer[], j: number) {
   return { start, end: t, msgs };
 }
 const SLOT = 75_000;
-function lineAt(i: number, k: number) {
+/** 单句：原句和中文（模板按抽到的词拼好） */
+function lineAt(i: number, k: number): { en: string; zh: string } {
   const r = rnd(788, i, k);
-  if (r < 0.15) return pick(GAME_LINES, rnd(785, i, k));
-  if (r < 0.5) return pick(LIFE_LINES, rnd(785, i, k));
-  if (r < 0.8) return pick(FUN_LINES, rnd(785, i, k));
+  const plain = (en: string) => ({ en, zh: BOT_ZH[en] ?? '' });
+  if (r < 0.15) return plain(pick(GAME_LINES, rnd(785, i, k)));
+  if (r < 0.5) return plain(pick(LIFE_LINES, rnd(785, i, k)));
+  if (r < 0.8) return plain(pick(FUN_LINES, rnd(785, i, k)));
+  const tpl = pick(TEMPLATES, rnd(785, i, k));
+  const words: Record<string, string> = {};
   let j = 0;
-  return pick(TEMPLATES, rnd(785, i, k)).replace(/\{(\w+)\}/g, (all, w: string) => (FILL[w] ? pick(FILL[w], rnd(789, i, k, j++)) : all));
+  const en = tpl.replace(/\{(\w+)\}/g, (all, w: string) => (FILL[w] ? (words[w] = pick(FILL[w], rnd(789, i, k, j++))) : all));
+  const zh = (BOT_ZH[tpl] ?? '').replace(/\{(\w+)\}/g, (all, w: string) => (words[w] ? FILL_ZH[words[w]] ?? words[w] : all));
+  return { en, zh };
 }
 /** 某个时间段里 AI 说的话（按时间排好） */
 export function botChat(bots: AiPlayer[], from: number, to: number): ChatMsg[] {
@@ -580,7 +587,7 @@ export function botChat(bots: AiPlayer[], from: number, to: number): ChatMsg[] {
     if (!g) continue;
     groups.push(g);
     g.msgs.forEach((m, k) => {
-      if (m.at >= from && m.at <= to) out.push({ id: `bot-g${j}-${k}`, channel: 'world', playerId: botKey(m.who.id), name: m.who.name, text: styled(m.text, m.who), at: m.at });
+      if (m.at >= from && m.at <= to) out.push({ id: `bot-g${j}-${k}`, channel: 'world', playerId: botKey(m.who.id), name: m.who.name, text: styled(m.text, m.who), zh: BOT_ZH[m.text], at: m.at });
     });
   }
   // 往前多看几段：前面开始的对话可能还在接着说
@@ -599,8 +606,8 @@ export function botChat(bots: AiPlayer[], from: number, to: number): ChatMsg[] {
     const fill = (text: string) => text
       .replace(/\{A\}/g, cast[0].name).replace(/\{B\}/g, (cast[1] ?? cast[0]).name)
       .replace(/\{C\}/g, (cast[3] ?? cast[2] ?? cast[1] ?? cast[0]).name).replace(/\{X\}/g, (cast[1] ?? cast[0]).name);
-    const say = (text: string, b: AiPlayer, t: number, suf: string) => {
-      if (t >= from && t <= to) out.push({ id: `bot-${i}${suf}`, channel: 'world', playerId: botKey(b.id), name: b.name, text: styled(fill(text), b), at: t });
+    const say = (text: string, b: AiPlayer, t: number, suf: string, zh = BOT_ZH[text]) => {
+      if (t >= from && t <= to) out.push({ id: `bot-${i}${suf}`, channel: 'world', playerId: botKey(b.id), name: b.name, text: styled(fill(text), b), zh: zh && fill(zh), at: t });
     };
     const r = rnd(780, i);
     if (r < 0.3 && cast.length >= 3) {
@@ -619,14 +626,14 @@ export function botChat(bots: AiPlayer[], from: number, to: number): ChatMsg[] {
     } else {
       // 和前两段抽到的不一样，免得两个人前后脚说同一句
       let line = lineAt(i, 0);
-      for (let k = 1; k < 4 && (line === lineAt(i - 1, 0) || line === lineAt(i - 2, 0)); k++) line = lineAt(i, k);
-      if (line.includes('{X}') && cast.length < 2) continue;
-      say(line, a, at, '');
+      for (let k = 1; k < 4 && (line.en === lineAt(i - 1, 0).en || line.en === lineAt(i - 2, 0).en); k++) line = lineAt(i, k);
+      if (line.en.includes('{X}') && cast.length < 2) continue;
+      say(line.en, a, at, '', line.zh);
       // 别的 AI 有时会接一两句
       let t = at;
       for (let k = 0; k < 2 && cast.length > k + 1 && rnd(790, i, k) < (k ? 0.3 : 0.45); k++) {
         t += 5_000 + Math.floor(rnd(791, i, k) * 20_000);
-        say(chimeFor(fill(line), rnd(792, i, k)), cast[k + 1], t, `j${k}`);
+        say(chimeFor(fill(line.en), rnd(792, i, k)), cast[k + 1], t, `j${k}`);
       }
     }
   }
@@ -677,14 +684,16 @@ export function botReplies(m: ChatMsg, bots: AiPlayer[]): ChatMsg[] {
   const text = !en ? pick(HUH, rnd(h, 3)) : pick(topic ? topic[1] : GENERIC, rnd(h, 4));
   const at = m.at + 3_000 + Math.floor(rnd(h, 5) * (en ? 12_000 : 6_000));
   // 有些回话会带上对方名字
-  const out = en && rnd(h, 6) < 0.4 ? `${m.name} ${text}` : text;
-  const res: ChatMsg[] = [{ id: `bot-re-${m.id}`, channel: 'world', playerId: botKey(who.id), name: who.name, text: styled(out, who), at }];
+  const named2 = en && rnd(h, 6) < 0.4;
+  const out = named2 ? `${m.name} ${text}` : text;
+  const zh = BOT_ZH[text] && (named2 ? `${m.name} ${BOT_ZH[text]}` : BOT_ZH[text]);
+  const res: ChatMsg[] = [{ id: `bot-re-${m.id}`, channel: 'world', playerId: botKey(who.id), name: who.name, text: styled(out, who), zh, at }];
   // 有时另一个 AI 也跟着接一句
   if (bots.length > 1 && rnd(h, 7) < (en ? 0.35 : 0.25)) {
     const other = bots.filter((b) => b !== who);
     const b2 = pick(other, rnd(h, 8));
     const t2 = !en ? pick(['lol', '??', 'what language is that', 'no idea either lol', 'google translate time'], rnd(h, 9)) : chimeFor(m.text, rnd(h, 9));
-    res.push({ id: `bot-re2-${m.id}`, channel: 'world', playerId: botKey(b2.id), name: b2.name, text: styled(t2, b2), at: at + 4_000 + Math.floor(rnd(h, 10) * 12_000) });
+    res.push({ id: `bot-re2-${m.id}`, channel: 'world', playerId: botKey(b2.id), name: b2.name, text: styled(t2, b2), zh: BOT_ZH[t2], at: at + 4_000 + Math.floor(rnd(h, 10) * 12_000) });
   }
   return res;
 }

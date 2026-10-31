@@ -92,6 +92,18 @@ describe('AI 玩家', () => {
     // AI 不回 AI
     expect(botReplies({ ...msg(2, 'hi'), playerId: 'bot-x' }, bots)).toEqual([]);
   });
+  it('AI 说的每一句都有中文翻译', () => {
+    const msgs = botChat(bots, T0, T0 + 3 * 86_400_000);
+    expect(msgs.length).toBeGreaterThan(1000);
+    const miss = [...new Set(msgs.filter((m) => !m.zh).map((m) => m.text))];
+    expect(miss).toEqual([]);
+    for (const m of msgs) expect(m.zh).not.toMatch(/\{\w+\}/);
+    for (let i = 0; i < 300; i++) {
+      for (const t of ['hey everyone', 'thx', 'where r u from?', '你好', 'lol', 'any guild?', 'ok']) {
+        for (const r of botReplies({ id: `q${i}`, channel: 'world', playerId: 'real', name: 'Jay', text: t, at: T0 }, bots)) expect(r.zh).toBeTruthy();
+      }
+    }
+  });
   it('withBots：在线人数、名片、加好友', async () => {
     const mem = new Map<string, string>();
     const base = new LocalApi({ getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => void mem.set(k, v) });
