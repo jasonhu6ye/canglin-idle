@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ITEMS, MONSTERS, NODES } from '../core/data';
-import { HW_ALTAR, HW_BOX, HW_COOLDOWN, HW_END, HW_MOUNT, HW_MOUNT_COST, HW_POINT, HW_SKIN, HW_SKIN_COST, HW_TIERS, hwBossId, hwFight, hwOpen, hwShopOpen, hwWait } from '../core/halloween';
-import { buyPumpkinMount, buyReaperSkin, combatEstimate, combatLevel, startNow, summonPumpkin } from '../core/sim';
+import { HW_ALTAR, HW_BOX, HW_COOLDOWN, HW_END, HW_MOUNT, HW_MOUNT_COST, HW_POINT, HW_SKINS, HW_TIERS, hwBossId, hwFight, hwHasSkin, hwOpen, hwShopOpen, hwWait } from '../core/halloween';
+import { buyHwSkin, buyPumpkinMount, combatEstimate, combatLevel, startNow, summonPumpkin } from '../core/sim';
 import { OUTFITS } from '../game/hero';
 import { HeroPreview } from './Wardrobe';
 import { pumpkinMountIconUrl } from '../game/pumpkinArt';
@@ -71,23 +71,31 @@ function PumpkinShop({ s, now }: { s: GameState; now: number }) {
   const pts = s.bank[HW_POINT] ?? 0;
   const got = !!s.halloween?.mount;
   const it = ITEMS[HW_MOUNT];
-  const skin = OUTFITS.find((o) => o.id === HW_SKIN)!;
-  const gotSkin = !!s.halloween?.skin;
+  const BLURB: Record<string, string> = {
+    reaper: tl('没有腿、飘在半空的死神，待机时掏出燃着魂火的巨镰舞一轮。兑换后在「更多 › 衣橱」里随时换。'),
+    coffin: tl('住在立棺里的红眼伯爵。站着不动时棺材自己晃、蹦跶、开盖放蝙蝠，再砰地倒下躺一会儿。兑换后在「更多 › 衣橱」里随时换。'),
+  };
   return (<>
-    <div className="hw-shop">
-      <div className="hw-shop-icon hw-shop-hero"><HeroPreview outfit={skin} scale={2} /></div>
-      <div>
-        <b>{skin.name}</b> <span className="good">{tl('限定外观')}</span>
-        <div className="muted small">{tl('没有腿、飘在半空的死神，待机时掏出燃着魂火的巨镰舞一轮。兑换后在「更多 › 衣橱」里随时换。')}</div>
-        <div className="hw-shop-row">
-          <span><img src={pumpkinPointUrl()} alt="" className="inline-icon" />{tl` ${fmtNum(HW_SKIN_COST)} 南瓜积分`}</span>
-          {gotSkin ? <span className="good">{tl('已兑换，在衣橱里')}</span>
-            : <button className="primary" disabled={pts < HW_SKIN_COST} onClick={() => store.dispatch((g) => buyReaperSkin(g, Date.now()))}>
-              {pts < HW_SKIN_COST ? tl`还差 ${fmtNum(HW_SKIN_COST - pts)} 积分` : tl('兑换')}
-            </button>}
+    {HW_SKINS.map(({ id, cost }) => {
+      const skin = OUTFITS.find((o) => o.id === id)!;
+      const gotSkin = hwHasSkin(s.halloween, id);
+      return (
+        <div className="hw-shop" key={id}>
+          <div className="hw-shop-icon hw-shop-hero"><HeroPreview outfit={skin} scale={2} /></div>
+          <div>
+            <b>{skin.name}</b> <span className="good">{tl('限定外观')}</span>
+            <div className="muted small">{BLURB[id]}</div>
+            <div className="hw-shop-row">
+              <span><img src={pumpkinPointUrl()} alt="" className="inline-icon" />{tl` ${fmtNum(cost)} 南瓜积分`}</span>
+              {gotSkin ? <span className="good">{tl('已兑换，在衣橱里')}</span>
+                : <button className="primary" disabled={pts < cost} onClick={() => store.dispatch((g) => buyHwSkin(g, id, Date.now()))}>
+                  {pts < cost ? tl`还差 ${fmtNum(cost - pts)} 积分` : tl('兑换')}
+                </button>}
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
+      );
+    })}
     <div className="hw-shop">
       <img className="hw-shop-icon" src={pumpkinMountIconUrl()} alt="" />
       <div>

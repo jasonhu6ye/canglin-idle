@@ -3,7 +3,7 @@ import { cleanGm, gmPct, setGmClock } from './gm';
 import { GUILD_MAX_LV, cleanTech, guildPct, utcDay } from './guild';
 import { APT_MAX, APT_MIN, FOAL, growMs, HORSE_XP, horseItem, RANCH, RANCH_PENS } from './ranch';
 import { baseOf, qid, QUALITY_VALUE, rollQuality } from './quality';
-import { HW_MOUNT, HW_MOUNT_COST, HW_POINT, HW_SKIN_COST, HW_TIERS, hwFight, hwOpen, hwShopOpen, hwTierOf, hwWait } from './halloween';
+import { HW_MOUNT, HW_MOUNT_COST, HW_POINT, HW_SKINS, HW_TIERS, hwFight, hwHasSkin, hwOpen, hwShopOpen, hwTierOf, hwWait } from './halloween';
 import { OLD_JEWELS, BAR_VALUE, inTownArea, KEY_SHOP, keyOf, OLD_ENH, SCROLL_TOWN, SHARD_PER_STONE, TIERS, ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAP_W, MID_BOX, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, MAT_DAILY, MAT_PRICE, MAT_SHOP, SCROLL_DAILY, SCROLL_PRICE, SEED_SHOP, seedLevel, seedPrice, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, fastest, planRoute, travelMs, type MapNode } from './data';
 import { nextRandom } from './rng';
 import { buffMob, coopMates, COOP_DEF, COOP_DMG, dungeonFloor, GATE_AFTER_CLEAR, GATE_CD, GATE_MAX, GATE_MS, GATE_REACH, legMs, rollChest, rollChestQuality, rollFloors, teamChest, teamChestQuality, type TeamMember } from './dungeon';
@@ -1750,16 +1750,18 @@ export function buyPumpkinMount(prev: GameState, now: number): GameState {
   return s;
 }
 
-/** 用南瓜积分兑换死神皮肤（用户 10-30）：公开以后才能换，每个存档一次，换完直接穿上 */
-export function buyReaperSkin(prev: GameState, now: number): GameState {
-  if (!hwShopOpen(now) || prev.halloween?.skin || (prev.bank[HW_POINT] ?? 0) < HW_SKIN_COST) return prev;
+/** 用南瓜积分兑换万圣节外观（用户 10-30 死神、10-31 棺材伯爵）：公开以后才能换，每套每个存档一次，换完直接穿上 */
+export function buyHwSkin(prev: GameState, id: string, now: number): GameState {
+  const it = HW_SKINS.find((x) => x.id === id);
+  if (!it || !hwShopOpen(now) || hwHasSkin(prev.halloween, id) || (prev.bank[HW_POINT] ?? 0) < it.cost) return prev;
   const s = clone(prev);
-  s.bank[HW_POINT] -= HW_SKIN_COST;
+  s.bank[HW_POINT] -= it.cost;
   if (!s.bank[HW_POINT]) delete s.bank[HW_POINT];
-  s.halloween = { ...s.halloween, skin: true };
-  s.settings = { ...s.settings, skin: 'reaper' };
+  s.halloween = { ...s.halloween, skins: [...(s.halloween?.skins ?? []), id] };
+  s.settings = { ...s.settings, skin: id };
   return s;
 }
+export const buyReaperSkin = (prev: GameState, now: number) => buyHwSkin(prev, 'reaper', now);
 
 /** 畜牧站（用户 10-24）：站在旁边才能放小马崽、牵马 */
 export const RANCH_NODE = NODES.find((n) => n.id === RANCH)!;

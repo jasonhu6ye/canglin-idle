@@ -1,4 +1,4 @@
-import { actionDuration, advance, buySeed, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour, openContainer, redeemCode, toggleMount, moveSpeed, rainBonus, summonPumpkin, buyPumpkinMount, buyReaperSkin, placeFoal, collectHorse, RANCH_NODE, bagRoomFor, playerAttackMs, playerBonuses, salvage, salvageValue, sortBank, SALVAGE_NODES, SALVAGE_BONUS, startAt } from './sim';
+import { actionDuration, advance, buySeed, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour, openContainer, redeemCode, toggleMount, moveSpeed, rainBonus, summonPumpkin, buyPumpkinMount, buyReaperSkin, buyHwSkin, placeFoal, collectHorse, RANCH_NODE, bagRoomFor, playerAttackMs, playerBonuses, salvage, salvageValue, sortBank, SALVAGE_NODES, SALVAGE_BONUS, startAt } from './sim';
 import { baseOf, qid, qualityOdds, rollQuality } from './quality';
 import { claimMail, clearMail, GIFTS, HW_DAILY_BOXES, stepMail, unreadMail } from './mail';
 import { HW_BOX, HW_END, HW_MOUNT, HW_MOUNT_COST, HW_POINT, HW_REVEAL, HW_SKIN_COST, HW_TIERS, hwFight } from './halloween';
@@ -913,13 +913,23 @@ describe('万圣节南瓜王', () => {
     expect(buyReaperSkin(s, HW_REVEAL - 1)).toBe(s);
     const a = buyReaperSkin(s, HW_REVEAL);
     expect(a.bank[HW_POINT]).toBe(3);
-    expect(a.halloween?.skin).toBe(true);
+    expect(a.halloween?.skins).toEqual(['reaper']);
     expect(a.settings.skin).toBe('reaper');
     a.bank[HW_POINT] = HW_SKIN_COST;
     expect(buyReaperSkin(a, HW_END + 1)).toBe(a);
     const poor = strong();
     poor.bank[HW_POINT] = HW_SKIN_COST - 1;
     expect(buyReaperSkin(poor, HW_REVEAL)).toBe(poor);
+    // 第二套棺材伯爵另算，老存档上 skin: true 的死神不会被再卖一次
+    const old = strong();
+    old.halloween = { skin: true };
+    old.bank[HW_POINT] = HW_SKIN_COST * 2;
+    expect(buyHwSkin(old, 'reaper', HW_REVEAL)).toBe(old);
+    const c = buyHwSkin(old, 'coffin', HW_REVEAL);
+    expect(c.halloween?.skins).toEqual(['coffin']);
+    expect(c.settings.skin).toBe('coffin');
+    expect(buyHwSkin(c, 'coffin', HW_REVEAL)).toBe(c);
+    expect(buyHwSkin(c, 'nope', HW_REVEAL)).toBe(c);
   });
   it('南瓜坐骑：公开前换不了，公开后积分够才能换，每个存档一只，移速 +200%', () => {
     const s = strong();

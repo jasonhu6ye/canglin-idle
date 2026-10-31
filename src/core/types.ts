@@ -354,7 +354,7 @@ export interface GameState {
   /** 畜牧站的栏位：每栏一匹小马崽，start 放进去的时间，ms 要长多久（放进去时按养殖等级算好） */
   ranch?: { pens: ({ start: number; ms: number } | null)[] };
   /** 万圣节活动：当前召唤出来的是第几档南瓜王（打赢就清掉）、上次召唤的时间 */
-  halloween?: { summoned?: number; last?: number; mount?: boolean; /** 已兑换死神皮肤 */ skin?: boolean };
+  halloween?: { summoned?: number; last?: number; mount?: boolean; /** 已兑换死神皮肤（老字段） */ skin?: boolean; /** 已兑换的万圣节外观 id */ skins?: string[] };
   /** 角色所在的格子（寻路的起点） */
   loc: { x: number; y: number };
   /** 存档时的地图边长；地图扩大后用来换算旧位置 */
