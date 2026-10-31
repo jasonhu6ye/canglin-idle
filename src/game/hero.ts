@@ -45,7 +45,7 @@ export interface Outfit {
   /** 镇上的村民：不背行囊 */
   npc?: boolean;
   /** 兑换码外观（用户 10-23）：特殊头部造型，hair 这时是头部主色 */
-  head?: 'pumpkin' | 'voidpumpkin' | 'paleknight' | 'jester' | 'bone' | 'voidhood' | 'reaper';
+  head?: 'pumpkin' | 'voidpumpkin' | 'paleknight' | 'jester' | 'bone' | 'voidhood' | 'reaper' | 'vampire';
   /** 袍子下摆、兜帽边的金线 */
   trim?: string;
   /** 不背行囊、没有围巾尾巴 */
@@ -57,7 +57,7 @@ export interface Outfit {
   /** 发光色（眼睛、脸、灯、粒子）：暗、中、亮 */
   glow?: string[];
   /** 粒子特效 */
-  fx?: 'embers' | 'wisps' | 'sparks' | 'mist' | 'confetti' | 'frostfire' | 'soulfire';
+  fx?: 'embers' | 'wisps' | 'sparks' | 'mist' | 'confetti' | 'frostfire' | 'soulfire' | 'bats';
   /** 衣服上的菱格花纹（小丑） */
   harlequin?: boolean;
   /** 要用这个兑换码解锁 */
@@ -68,6 +68,8 @@ export interface Outfit {
   float?: boolean;
   /** 活动解锁：万圣节祭坛用南瓜积分兑换 */
   event?: 'halloween';
+  /** 住在棺材里（用户 10-31 录屏）：角色站在一口立着的木棺材里，没有腿；待机时棺盖合上、棺材自己蹦、开盖、倒地再弹起来 */
+  coffin?: boolean;
 }
 
 export const OUTFITS: Outfit[] = [
@@ -125,6 +127,16 @@ export const OUTFITS: Outfit[] = [
     pack: ['#1c1628', '#2c2440', '#463a5c'], roll: '#1c1628',
     head: 'reaper', noPack: true, float: true, cloak: ['#0c0a12', '#181424', '#262034'],
     glow: ['#1a7a40', '#4ae080', '#d8ffe8'], fx: 'soulfire', event: 'halloween',
+  },
+  {
+    // 用户 10-31 录屏原型：立着的木棺材，棺盖上一个金十字；里面住着一个红眼吸血鬼。待机时棺材自己晃、蹦、小鬼探头、开盖放蝙蝠、倒地躺平、再弹起来
+    id: 'coffin', name: tl('棺材伯爵'), desc: tl('一口立着的旧木棺材，盖上钉着金十字，里面住着苍白的红眼伯爵。干活时开盖伸手，站着不动时棺材会自己晃、蹦跶，吱呀开盖放出蝙蝠，然后砰地倒在地上躺一会儿再弹起来。'),
+    skin: ['#9a9aa8', '#eceaf2'], hair: ['#08080c', '#141418', '#26262e'],
+    coat: ['#0e0c12', '#1c1a22', '#2c2a34', '#46444e'], shirt: ['#c8c0c8', '#f4f0f4'],
+    pants: ['#0e0c12', '#1c1a22'], boots: ['#0e0c12', '#1c1a22'], scarf: ['#6a0a14', '#b01a24'],
+    pack: ['#1c1a22', '#2c2a34', '#46444e'], roll: '#1c1a22',
+    head: 'vampire', noPack: true, coffin: true,
+    glow: ['#8a0a14', '#ff2a2a', '#ffb0a0'], fx: 'bats', event: 'halloween',
   },
   // ---- 兑换码「为爱发电」解锁的五套（用户 10-23 给的参考图和录屏，按本作画法重画） ----
   {
@@ -275,6 +287,15 @@ interface Pose {
   toolGrow?: number;
   /** 镰刀的刀刃朝哪一侧（1 / -1） */
   bladeFlip?: number;
+  /** 棺材皮肤（用户 10-31）：棺盖打开的程度 0-1（没写就是全开）、整口棺材倾倒的角度（正数往左倒）、里面的人是否只剩剪影、红眼亮度、小鬼探头高度 */
+  lid?: number;
+  tilt?: number;
+  dark?: boolean;
+  eyeGlow?: number;
+  ghost?: number;
+  /** 棺材待机阶段：晃、蹦、小鬼探头、吱呀开缝、开盖、龇牙、倒地、躺着、弹起、落定 */
+  cof?: 'sway' | 'hop' | 'ghost' | 'creak' | 'open' | 'grin' | 'fall' | 'lie' | 'rise' | 'settle';
+  cofK?: number;
   /** 这一帧在动作里的进度 0-1、帧序号（特效闪烁用，生成精灵表时填） */
   t?: number;
   seed?: number;
@@ -613,7 +634,7 @@ function rampsOf(o: Outfit): Ramps {
 const BANGS = [1.4, 0.4, 0.9, 1.6, 0.5, 1.2, 0.3, 1.0, 1.5, 0.6, 1.1];
 
 function drawHead(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose: Pose) {
-  if (o.head) return drawSpecialHead(p, o, R, cx, cy, pose);
+  if (o.head && o.head !== 'vampire') return drawSpecialHead(p, o, R, cx, cy, pose);
   const { dir } = pose;
   const side = dir === 'side';
   const wave = pose.cape ?? 0;
@@ -693,6 +714,27 @@ function drawHead(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose: Pos
     p.set(Math.round(cx - 1), Math.round(cy + 4.2), S[1]);
     p.set(Math.round(cx), Math.round(cy + 4.2), S[1]);
   }
+  if (o.head === 'vampire' && dir !== 'up') {
+    // 伯爵（用户 10-31）：背头正中一个尖的美人尖，眼睛是红的、亮度按 eyeGlow 来，嘴角两颗獠牙
+    const G = o.glow ?? ['#8a0a14', '#ff2a2a', '#ffb0a0'];
+    const glow = pose.eyeGlow ?? 0.5;
+    if (!side) {
+      p.set(Math.round(hx), Math.round(cy - 1.4), HR[1]);
+      p.set(Math.round(hx), Math.round(cy - 0.6), HR[0]);
+    }
+    for (let y = Math.round(cy - 1); y <= Math.round(cy + 3); y++) {
+      for (let x = Math.round(cx - 4); x <= Math.round(cx + 5); x++) {
+        if (p.get(x, y) !== EYE) continue;
+        p.set(x, y, glow > 0.6 ? G[1] : glow > 0.2 ? mix(G[0], G[1], 0.5) : G[0]);
+        if (glow > 0.75 && y === ey) { p.set(x, y, G[2]); }
+      }
+    }
+    const fx0 = side ? Math.round(hx + 2.4) : Math.round(hx - 0.5);
+    const fy0 = ey + 3;
+    p.set(fx0 - (side ? 0 : 1), fy0, '#ffffff');
+    if (!side) p.set(fx0 + 1, fy0, '#ffffff');
+    else p.set(fx0 + 1, fy0, '#ffffff');
+  }
 }
 
 export function drawFrame(pose: Pose, o: Outfit): Pix {
@@ -708,6 +750,8 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
   const wave = pose.cape ?? 0;
   const ground = HERO_FEET - 0.8;
   const float = !!o.float;
+  const coffin = !!o.coffin;
+  const noLegs = float || coffin;
 
   // ---- 先算腿：侧面两节腿，身体高度由更低的那只脚决定 ----
   const THIGH = 3.4;
@@ -720,8 +764,8 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
     : [];
   const reachDown = (a: number, k: number) => THIGH * Math.cos(a) + SHIN * Math.cos(a - k);
   // 飘着的死神没有腿：腰的高度固定，再加上浮动
-  const hipY = float
-    ? ground - 6 + crouch + (pose.hop ?? 0) + (pose.hover ?? -2)
+  const hipY = noLegs
+    ? ground - 6 + crouch + (pose.hop ?? 0) + (float ? pose.hover ?? -2 : 0)
     : side
       ? ground - Math.max(...legs.map(([a, k]) => reachDown(a, k)))
       : ground - 6 + crouch + (pose.hop ?? 0);
@@ -785,7 +829,7 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
   back?.draw();
 
   // ---- 腿 ----
-  if (float) {
+  if (noLegs) {
     // 没有腿，下身在身体之后画成一截袍尾
   } else if (side) {
     legs.forEach(([a, k], i) => {
@@ -1043,6 +1087,14 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
     ball(p, cx + 2.6, sy + 6.2, 1.2, 1.3, R.pack, 1);
   }
 
+  // ---- 伯爵的高领披风：肩上两片竖起来的黑领子，里子暗红 ----
+  if (o.head === 'vampire' && !up) {
+    for (const sg of side ? [-1] : [-1, 1]) {
+      const x0 = cx + sg * 4.4 + (side ? -0.4 : 0);
+      capsule(p, x0, sy + 1, x0 + sg * 0.8, sy - 4.6, 1.7, C, 1);
+      capsule(p, x0 - sg * 0.6, sy + 0.6, x0 - sg * 0.2, sy - 3.4, 0.7, ramp(o.scarf), 1);
+    }
+  }
   // ---- 围巾绕脖子 ----
   capsule(p, cx - (side ? 2.2 : 3), sy - 0.2, cx + (side ? 2.7 : 3), sy - 0.2, 1.2, R.scarf);
   if (down && !o.noPack) capsule(p, cx + 1.8, sy + 0.6, cx + 2.1 + wave * 0.2, sy + 3.8, 0.85, R.scarf);
@@ -1102,8 +1154,166 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
   }
   if (o.offhand === 'shield' && down) drawShield(p, cx - 5.6, sy + 3.2, 'front');
   if (o.offhand === 'shield' && up) drawShield(p, cx - 2.6, sy + 1.4, 'back');
-  const out = p.outlineTinted();
-  if (o.fx) drawFx(out, o, pose, { cx, sy, hipY, headY, lantern, hands, blade, scythe });
+  const out = (coffin ? composeCoffin(p, o, pose, cx, ground) : p).outlineTinted();
+  if (o.fx) drawFx(out, o, pose, { cx, sy, hipY, headY, lantern, hands, blade, scythe, ground });
+  return out;
+}
+
+// ---- 棺材皮肤（用户 10-31 录屏）：先把棺材的背板和红绒里子画在底图上，再把画好的人叠上去（合盖时人只剩剪影），最后盖棺盖、整口倾倒 ----
+const COF_T = 25.5;
+/** 棺材正面六角轮廓：离顶 d 格处的半宽 */
+const cofHalf = (d: number) => {
+  const k = Math.max(0, Math.min(1, d / COF_T));
+  return k < 0.28 ? lerp(3.6, 7.2, k / 0.28) : lerp(7.2, 4.4, (k - 0.28) / 0.72);
+};
+const COFWOOD = ['#2a1a10', '#4a3018', '#6a4a26', '#8a6436', '#a88048'];
+const COFLID = ['#3a2412', '#5c3c1e', '#7c5630', '#9a7040', '#b88a52'];
+const VELVET = ['#1c0810', '#3a0a16', '#5a1020', '#7a1a2a'];
+const COFRIM = '#1a100a';
+/** 小蝙蝠：两种拍翅姿势，5×3 */
+const BAT: number[][][] = [
+  [[1, 0, 0, 0, 1], [1, 1, 1, 1, 1], [0, 0, 1, 0, 0]],
+  [[0, 0, 0, 0, 0], [1, 1, 1, 1, 1], [1, 0, 1, 0, 1]],
+];
+function drawBat(put: (x: number, y: number, c: string) => void, x: number, y: number, flap: number, c = '#141018') {
+  const m = BAT[flap & 1];
+  for (let j = 0; j < 3; j++) for (let i = 0; i < 5; i++) if (m[j][i]) put(x + i - 2, y + j - 1, c);
+  put(x, y, '#2a2030');
+}
+function composeCoffin(p: Pix, o: Outfit, pose: Pose, cx: number, ground: number): Pix {
+  const base = new Pix(p.w, p.h);
+  base.ox = p.ox;
+  base.oy = p.oy;
+  const side = pose.dir === 'side';
+  const up = pose.dir === 'up';
+  const lid = Math.max(0, Math.min(1, pose.lid ?? 1));
+  const top = ground - COF_T + (pose.hop ?? 0);
+  const g = o.glow ?? ['#8a0a14', '#ff2a2a', '#ffb0a0'];
+  // ---- 小鬼探头：白布单子从棺材后面冒出来，两个黑眼睛，下摆几个波浪 ----
+  if (pose.ghost && pose.ghost > 0.05) {
+    const h = pose.ghost * 9;
+    const gx = cx + (side ? -1 : 5.5);
+    const gy = top + 2 - h;
+    for (let y = 0; y < 9; y++) {
+      const w = y < 2 ? 2 + y : 3.4;
+      for (let x = -Math.ceil(w); x <= Math.ceil(w); x++) {
+        if (y === 8 && ((x + 10) % 3 === 1)) continue;
+        if (Math.abs(x) > w + 0.3) continue;
+        base.set(gx + x, gy + y, x < -1.5 ? '#c8c8d8' : y < 7 ? '#f4f4fc' : '#dcdce8');
+      }
+    }
+    base.set(gx - 1, gy + 3, '#1a1a24');
+    base.set(gx + 1, gy + 3, '#1a1a24');
+    base.set(gx, gy + 5, '#8a8aa0');
+  }
+  if (side) {
+    // ---- 侧面：窄窄的木箱，背板几道横木纹；棺盖是前面那块板，开盖时整块往前（右）推出去 ----
+    const hw = 3.6;
+    for (let y = Math.floor(top); y <= ground; y++) {
+      const d = y - top;
+      const taper = d < 7 ? (7 - d) * 0.25 : d > 18 ? (d - 18) * 0.15 : 0;
+      for (let x = Math.floor(cx - hw + taper); x <= Math.ceil(cx + hw - taper); x++) {
+        const edge = x <= cx - hw + taper + 0.5 || x >= cx + hw - taper - 0.5 || d < 0.5 || y >= ground - 0.5;
+        base.set(x, y, edge ? COFRIM : d % 6 < 1 ? COFWOOD[1] : x < cx - 1 ? COFWOOD[3] : COFWOOD[2]);
+      }
+    }
+    // 里子：开盖后看得见一条红绒
+    if (lid > 0.1) for (let y = Math.floor(top + 1); y < ground; y++) for (let x = Math.floor(cx - 1); x <= Math.ceil(cx + hw - 0.5); x++) if (base.get(x, y) !== COFRIM) base.set(x, y, x > cx + 1 ? VELVET[2] : VELVET[1]);
+  } else {
+    // ---- 正面 / 背面：六角木棺，边一圈深色木框，里面铺暗红绒布（背面只有背板的木纹） ----
+    for (let y = Math.floor(top); y <= ground; y++) {
+      const d = y - top;
+      const hw = cofHalf(d);
+      for (let x = Math.floor(cx - hw); x <= Math.ceil(cx + hw); x++) {
+        const px = x + 0.5;
+        if (Math.abs(px - cx) > hw + 0.4) continue;
+        const rim = Math.abs(px - cx) > hw - 1 || d < 1 || y >= ground - 0.5;
+        if (rim) base.set(x, y, COFRIM);
+        else if (up) base.set(x, y, (x - Math.round(cx) + 20) % 4 === 0 ? COFWOOD[1] : (d % 9 < 1 ? COFWOOD[1] : px < cx - 2 ? COFWOOD[3] : COFWOOD[2]));
+        else {
+          const inner = Math.abs(px - cx) < hw - 3 && d > 3 && d < COF_T - 3;
+          base.set(x, y, inner ? VELVET[0] : Math.abs(px - cx) > hw - 2 ? VELVET[3] : VELVET[2]);
+        }
+      }
+    }
+  }
+  // ---- 把人叠上去：合盖时棺材里一片黑，只剩红眼和獠牙 ----
+  // 盖子合着的时候人完全看不见，背面全被背板挡住；开着时露在棺材后面（侧面是背板后面、正面是棺材顶上方）的部分也不画
+  const eyeC = new Set([g[1], g[2], '#ffffff']);
+  if (lid >= 0.15 && !up) {
+    for (let i = 0; i < p.data.length; i++) {
+      const c = p.data[i];
+      if (!c) continue;
+      const x = (i % p.w) - p.ox, y = Math.floor(i / p.w) - p.oy;
+      if (side ? x + 0.5 < cx - 2.8 : y < top) continue;
+      base.data[i] = pose.dark && !eyeC.has(c) ? mix(c, '#0c0810', 0.82) : c;
+    }
+  }
+  // ---- 棺盖 ----
+  if (!up && lid < 1) {
+    const open = ease(lid);
+    if (side) {
+      // 前面那块板往前推出去，越开越斜
+      const sh = open * 7;
+      for (let y = Math.floor(top); y <= ground; y++) {
+        const d = y - top;
+        const taper = d < 7 ? (7 - d) * 0.25 : d > 18 ? (d - 18) * 0.15 : 0;
+        const x0 = cx + 3.6 - taper + sh * (0.6 + 0.4 * (1 - d / COF_T));
+        base.set(x0, y, COFRIM);
+        base.set(x0 - 1, y, d % 6 < 1 ? COFLID[1] : COFLID[3]);
+        if (open > 0.3) base.set(x0 + 1, y, COFLID[0]);
+      }
+    } else {
+      // 正面：棺盖铰链在左边，开盖时整块往左转过去，看起来越来越窄、越来越暗；盖上钉着金十字，几道竖木纹
+      const w = 1 - open * 0.94;
+      for (let y = Math.floor(top + 1); y < ground; y++) {
+        const d = y - top;
+        const hw = cofHalf(d) - 1;
+        const left = cx - hw;
+        for (let x = Math.floor(left); x <= Math.ceil(cx + hw); x++) {
+          const px = x + 0.5;
+          if (px < left || px > cx + hw) continue;
+          // 盖子上这一格原本在哪一列
+          const ux = left + (px - left) / w;
+          if (ux > cx + hw + 0.5) continue;
+          const u = ux - cx;
+          const plank = ((Math.round(u) + 40) % 4 === 0) ? 1 : 0;
+          let c = plank ? COFLID[1] : u < -hw + 1.5 ? COFLID[4] : u > hw - 1.5 ? COFLID[1] : d < 2 ? COFLID[4] : COFLID[3 - (d > COF_T - 3 ? 1 : 0)];
+          // 金十字
+          const cross = (Math.abs(u) < 0.6 && d > 4.5 && d < 15) || (Math.abs(u) < 3 && d > 7.5 && d < 9.5);
+          if (cross) c = Math.abs(u) < 0.6 && u < 0 ? GOLD[3] : d < 8.5 && Math.abs(u) >= 0.6 ? GOLD[3] : GOLD[2];
+          if (open > 0) c = mix(c, '#100a08', open * 0.6);
+          base.set(x, y, c);
+        }
+        // 盖子的外沿
+        const r = left + (cx + hw + 0.5 - left) * w;
+        base.set(r, y, COFRIM);
+        if (open > 0.4) base.set(r - 1, y, COFLID[0]);
+      }
+      // 合着的时候盖缝里透出一线红光
+      if (pose.eyeGlow && open < 0.08) for (let y = Math.floor(top + 4); y < ground - 3; y += 2) if (phash(y, pose.seed ?? 0, 3) < pose.eyeGlow) base.set(cx + cofHalf(y - top) - 0.5, y, g[0]);
+    }
+  }
+  // ---- 整口倾倒：绕着底角转，越躺越扁 ----
+  const tilt = pose.tilt ?? 0;
+  if (Math.abs(tilt) < 0.01) return base;
+  const out = new Pix(p.w, p.h);
+  out.ox = p.ox;
+  out.oy = p.oy;
+  const pivX = cx - 4 * Math.max(-1, Math.min(1, tilt / 0.3));
+  const pivY = ground;
+  const sq = 1 - 0.62 * Math.abs(Math.sin(tilt));
+  const cs = Math.cos(tilt), sn = Math.sin(tilt);
+  for (let y = -p.oy; y < p.h - p.oy; y++) {
+    for (let x = -p.ox; x < p.w - p.ox; x++) {
+      const dx = x + 0.5 - pivX;
+      const dy = (y + 0.5 - pivY) / sq;
+      const sx = pivX + dx * cs - dy * sn;
+      const sy = pivY + dx * sn + dy * cs;
+      const c = base.get(Math.floor(sx), Math.floor(sy));
+      if (c) out.set(x, y, c);
+    }
+  }
   return out;
 }
 
@@ -1950,7 +2160,7 @@ function drawLantern(p: Pix, o: Outfit, hx: number, hy: number, pose: Pose, hidd
 }
 
 /** 粒子特效：画在描边之后，不带黑边；按帧进度循环，位置用哈希打散 */
-interface FxAt { cx: number; sy: number; hipY: number; headY: number; lantern: [number, number] | null; hands: [number, number][]; blade?: [number, number][]; scythe?: { hx: number; hy: number; a: number; grow: number; fade: number; flip: number } | null }
+interface FxAt { cx: number; sy: number; hipY: number; headY: number; lantern: [number, number] | null; hands: [number, number][]; blade?: [number, number][]; scythe?: { hx: number; hy: number; a: number; grow: number; fade: number; flip: number } | null; ground?: number }
 function drawFx(p: Pix, o: Outfit, pose: Pose, at: FxAt) {
   const t = pose.t ?? 0;
   const seed = pose.seed ?? 0;
@@ -1961,6 +2171,7 @@ function drawFx(p: Pix, o: Outfit, pose: Pose, at: FxAt) {
   };
   if (o.fx === 'frostfire') return drawFrostfireFx(p, o, pose, at, put);
   if (o.fx === 'soulfire') return drawSoulfireFx(p, o, pose, at, put);
+  if (o.fx === 'bats') return drawBatsFx(p, o, pose, at, put);
   if (o.fx === 'embers' || o.fx === 'wisps') {
     // 火星 / 鬼火：从灯里往上飘，越往上越暗，到头就灭
     const src: [number, number][] = [];
@@ -2212,6 +2423,81 @@ function drawSoulfireFx(p: Pix, o: Outfit, pose: Pose, at: FxAt, put: (x: number
   }
 }
 
+/**
+ * 棺材皮肤的特效（用户 10-31）：平时一只蝙蝠绕着棺材转、脚边一层紫雾；蹦起落地和倒地时扬起尘土；
+ * 开缝时盖缝透红光、开盖时一群蝙蝠从棺材里飞出来、龇牙时红眼闪光；躺着的时候一只蝙蝠落在棺材上
+ */
+function drawBatsFx(p: Pix, o: Outfit, pose: Pose, at: FxAt, put: (x: number, y: number, c: string) => void) {
+  const t = pose.t ?? 0;
+  const seed = pose.seed ?? 0;
+  const { cx, headY } = at;
+  const ground = at.ground ?? HERO_FEET - 0.8;
+  const empty = (x: number, y: number, c: string) => { if (!p.get(Math.round(x), Math.round(y))) put(x, y, c); };
+  const cf = pose.cof;
+  const k = pose.cofK ?? 1;
+  const flap = Math.floor(t * 24 + seed) & 1;
+  const DUST = ['#5a4a3a', '#8a7a62', '#b8a888'];
+  const MIST = ['#2a1434', '#3e2050', '#58306c'];
+  // 脚边的紫雾
+  for (let j = 0; j < 7; j++) {
+    const ph = (t + j / 7) % 1;
+    const x = Math.round(cx - 9 + ((j * 5 + ph * 18) % 18));
+    const y = Math.round(ground) - (j % 2) - Math.round(Math.sin(ph * TAU) * 0.6);
+    empty(x, y, MIST[(j + Math.floor(ph * 3)) % 3]);
+  }
+  // 常驻一只蝙蝠绕着飞（躺着时落在棺材上）
+  if (cf !== 'lie' && cf !== 'open' && cf !== 'grin' && cf !== 'fall') {
+    const a = t * TAU + seed * 0.01;
+    drawBat(put, Math.round(cx + Math.cos(a) * 13), Math.round(headY - 4 + Math.sin(a * 2) * 2.5), flap);
+  }
+  // 蹦起落地 / 倒地 / 弹起时扬起的尘土
+  const dust = (amt: number, x0: number, spread: number) => {
+    for (let j = 0; j < 8; j++) {
+      if (phash(j, 1, 5) > amt) continue;
+      const ph = amt;
+      const x = x0 + (j - 3.5) * spread * (0.5 + ph);
+      const y = ground - Math.abs(Math.sin(j * 1.7)) * (1 + ph * 4);
+      empty(x, y, ph < 0.5 ? DUST[2] : ph < 0.8 ? DUST[1] : DUST[0]);
+    }
+  };
+  if (cf === 'hop') {
+    const land = Math.abs(Math.sin(k * TAU));
+    if (land < 0.35 && pose.hop === 0) dust(1 - land / 0.35, cx, 2.2);
+  }
+  if (cf === 'fall' && k > 0.85) dust((k - 0.85) / 0.15, cx - 14, 2.4);
+  if (cf === 'lie' && k < 0.25) dust(1 - k / 0.25, cx - 12, 2.6);
+  if (cf === 'rise' && k > 0.8) dust((k - 0.8) / 0.2, cx, 2);
+  if (cf === 'lie') {
+    // 一只蝙蝠落在躺倒的棺材上，翅膀偶尔抖一下
+    drawBat(put, Math.round(cx - 12), Math.round(ground - 6.5), Math.floor(t * 30 + seed) % 7 === 0 ? 1 : 0);
+    // 旁边再飞走一只
+    if (k > 0.3) drawBat(put, Math.round(cx - 4 + (k - 0.3) * 20), Math.round(ground - 10 - (k - 0.3) * 18 + Math.sin(k * 30) * 1.5), flap);
+  }
+  if (cf === 'open' || cf === 'grin') {
+    // 一群蝙蝠从棺材里飞出来：开盖时往左上四散，龇牙时在头顶绕圈
+    const G = o.glow ?? ['#8a0a14', '#ff2a2a', '#ffb0a0'];
+    for (let j = 0; j < 4; j++) {
+      const d = phash(j, 2, 9);
+      const ph = cf === 'open' ? Math.max(0, k * 1.6 - j * 0.18) : 1;
+      if (ph <= 0) continue;
+      const ax = cx - 3 - ph * (8 + d * 10);
+      const ay = headY - 2 - ph * (4 + j * 3) + Math.sin(ph * 9 + j) * 1.5;
+      const bx = cf === 'grin' ? cx + Math.cos(t * TAU * 2 + j * 1.57) * (9 + j * 2) : ax;
+      const by = cf === 'grin' ? headY - 6 - j * 1.5 + Math.sin(t * TAU * 2 + j * 1.57) * 2.5 : ay;
+      drawBat(put, Math.round(bx), Math.round(by), (flap + j) & 1);
+    }
+    // 棺材里透出来的红光：围着开口一圈暗红亮点
+    for (let j = 0; j < 6; j++) {
+      const ph = (t * 2 + j * 0.17) % 1;
+      empty(cx - 5 + j * 2 + Math.sin(ph * 6 + j) * 1.2, ground - 2 + ph * 3, ph < 0.5 ? G[0] : MIST[1]);
+    }
+    if (cf === 'grin' && Math.floor(k * 10) % 3 === 0) {
+      // 眼睛闪一下：眼旁一格亮红
+      for (const dx of pose.dir === 'side' ? [3.5] : [-3, 2]) empty(cx + dx, headY + 1, G[1]);
+    }
+  }
+}
+
 // ---- 动作表 ----
 
 const TAU = Math.PI * 2;
@@ -2240,11 +2526,14 @@ const walk = (dir: HeroDir): HeroAnim => ({
         kneeF: 0.12 + Math.max(0, c) * 0.95, kneeB: 0.12 + Math.max(0, -c) * 0.95,
         armF: -s * 0.5, armB: s * 0.5, elbowF: 0.3 + Math.max(0, -s) * 0.45, elbowB: 0.3 + Math.max(0, s) * 0.45,
         cape: 1 + Math.abs(s), hover: -2 + (Math.abs(s) > 0.5 ? -1 : 0),
+        // 棺材：合着盖往前一跳一跳地挪，落地时前倾
+        lid: 0, dark: true, tilt: -0.1 - Math.max(0, -c) * 0.12,
       };
     }
     return {
       dir, hop: Math.abs(s) > 0.55 ? -1 : 0, legF: Math.max(0, s) * 2.4, legB: Math.max(0, -s) * 2.4,
       armLift: [Math.max(0, s) * 1.6, Math.max(0, -s) * 1.6], cape: s, hover: -2 + (Math.abs(s) > 0.5 ? -1 : 0),
+      lid: 0, dark: true, tilt: s * 0.1,
     };
   },
 });
@@ -2262,6 +2551,28 @@ const CAST_PHASES: [number, Pose['cast']][] = [[12, undefined], [18, 'rise'], [3
  */
 const REAP_PHASES: [number, Pose['reap']][] = [[20, undefined], [32, 'reach'], [40, 'summon'], [64, 'hold'], [80, 'spin'], [92, 'raise'], [100, 'slash'], [110, 'fade'], [120, 'lower']];
 const IDLE_FRAMES = 120;
+/**
+ * 棺材皮肤待机（用户 10-31 录屏，120 帧）：0-15 立着轻晃，16-27 蹦两下，28-39 小鬼从棺材后面探头又缩回去，40-51 棺盖吱呀开一条缝、里面亮起红眼，
+ * 52-65 棺盖大开、蝙蝠飞出来，66-75 伯爵剪影龇牙、眼睛闪光，76-85 整口棺材往左倒下去（盖子顺势合上），86-99 躺在地上，100-107 弹起来立住，108-119 落定晃两下
+ */
+const COF_PHASES: [number, Pose['cof']][] = [[16, 'sway'], [28, 'hop'], [40, 'ghost'], [52, 'creak'], [66, 'open'], [76, 'grin'], [86, 'fall'], [100, 'lie'], [108, 'rise'], [120, 'settle']];
+function coffinPose(i: number): Partial<Pose> {
+  const [cof, k] = phaseOf(COF_PHASES, i);
+  const e = ease(k);
+  const base: Partial<Pose> = { cof, cofK: k, lid: 0, dark: true, eyeGlow: 0, armLift: [0, 0] };
+  switch (cof) {
+    case 'sway': return { ...base, tilt: Math.sin(k * TAU * 2) * 0.07 };
+    case 'hop': { const h = Math.abs(Math.sin(k * TAU)); return { ...base, hop: h > 0.3 ? -Math.round(h * 3) : 0, tilt: Math.sin(k * TAU * 2) * 0.05 }; }
+    case 'ghost': return { ...base, ghost: Math.sin(k * Math.PI) };
+    case 'creak': return { ...base, lid: e * 0.3, eyeGlow: Math.min(1, k * 1.6) };
+    case 'open': return { ...base, lid: 0.3 + Math.min(1, k * 2.2) * 0.7, eyeGlow: 1 };
+    case 'grin': return { ...base, lid: 1, eyeGlow: 1 };
+    case 'fall': return { ...base, lid: Math.max(0, 1 - k * 2.2), eyeGlow: 1 - k, tilt: k * k * (Math.PI / 2) };
+    case 'lie': return { ...base, tilt: Math.PI / 2, hop: k < 0.12 ? -1 : 0 };
+    case 'rise': return { ...base, tilt: (1 - e) * (Math.PI / 2) - Math.sin(e * Math.PI) * 0.12 };
+    default: return { ...base, tilt: Math.sin(k * TAU * 1.5) * 0.08 * (1 - k) };
+  }
+}
 /** 按阶段表找出帧 i 所在的阶段和阶段内进度 */
 function phaseOf<T>(table: [number, T][], i: number): [T, number] {
   let from = 0;
@@ -2283,6 +2594,8 @@ const idle = (dir: HeroDir): HeroAnim => ({
       elbowF: 0.25, elbowB: 0.2, cape: Math.round(1 + b), blink: i === 6 || i === 79, cast, castK, reap, reapK,
       // 飘着的外观：慢慢上下浮
       hover: -2 + Math.round(Math.sin(t * TAU * 3) * 1.4),
+      // 棺材皮肤：按录屏的阶段表来（其他皮肤不看这些字段）
+      ...coffinPose(i),
     };
   },
 });
