@@ -291,29 +291,27 @@ const ZONES: { tz: number; en: string; zh: string }[] = [
 ];
 export const zoneOf = (b: AiPlayer) => pick(ZONES, rnd(b.seed, 92));
 const HOUR = 3600_000;
-/** 当地几点开始睡、睡几个小时；少数肝帝不下线（null） */
-function sleepOf(b: AiPlayer): [number, number] | null {
-  if (rnd(b.seed, 93) < 0.1) return null;
+/** 当地几点开始睡、睡几个小时 */
+function sleepOf(b: AiPlayer): [number, number] {
   return [22.5 + rnd(b.seed, 94) * 4, 5.5 + rnd(b.seed, 95) * 3];
 }
 /**
- * 玩家类型（用户 10-31：不是每个人都常在线）：
- * 肝帝醒着就在线；常玩的大多数天上来两三次、每次几小时；休闲的隔天上来一会；偶尔玩的几天才来一次
+ * 玩家类型（用户 10-31：不是每个人都常在线，别一直高强度在线）：
+ * 肝帝几乎每天上来、一天两三段每段几小时；常玩的大多数天上来一两次；休闲的隔天上来一会；偶尔玩的几天才来一次
  */
 type Habit = 'hardcore' | 'regular' | 'casual' | 'rare';
-export const habitOf = (b: AiPlayer): Habit => { const r = rnd(b.seed, 102); return r < 0.12 ? 'hardcore' : r < 0.45 ? 'regular' : r < 0.8 ? 'casual' : 'rare'; };
-const HABIT: Record<Exclude<Habit, 'hardcore'>, { days: number; n: [number, number]; len: [number, number] }> = {
-  regular: { days: 0.85, n: [1, 3], len: [1.5, 4] },
-  casual: { days: 0.55, n: [1, 2], len: [0.5, 2] },
-  rare: { days: 0.25, n: [1, 1], len: [0.3, 1.5] },
+export const habitOf = (b: AiPlayer): Habit => { const r = rnd(b.seed, 102); return r < 0.07 ? 'hardcore' : r < 0.35 ? 'regular' : r < 0.75 ? 'casual' : 'rare'; };
+const HABIT: Record<Habit, { days: number; n: [number, number]; len: [number, number] }> = {
+  hardcore: { days: 0.95, n: [2, 3], len: [2, 4.5] },
+  regular: { days: 0.75, n: [1, 2], len: [1, 2.5] },
+  casual: { days: 0.45, n: [1, 1], len: [0.4, 1.5] },
+  rare: { days: 0.2, n: [1, 1], len: [0.3, 1] },
 };
 /** 当地第 d 天的几段在线时间（当地小时，可能过了午夜） */
 function sessionsOf(b: AiPlayer, d: number): [number, number][] {
-  const h = habitOf(b);
-  const s = sleepOf(b) ?? [24, 6];
+  const s = sleepOf(b);
   const wake = (s[0] + s[1]) % 24, bed = s[0] + (s[0] < wake ? 24 : 0);
-  if (h === 'hardcore') return [[wake, bed]];
-  const c = HABIT[h];
+  const c = HABIT[habitOf(b)];
   if (rnd(b.seed, 103, d) >= c.days) return [];
   const n = c.n[0] + Math.floor(rnd(b.seed, 104, d) * (c.n[1] - c.n[0] + 1));
   const out: [number, number][] = [];
@@ -321,7 +319,7 @@ function sessionsOf(b: AiPlayer, d: number): [number, number][] {
     const len = c.len[0] + rnd(b.seed, 105, d, k) * (c.len[1] - c.len[0]);
     // 多半在下班后的晚上，也有午休、上午的
     const r = rnd(b.seed, 106, d, k);
-    const at = r < 0.6 ? Math.max(wake, 18) + rnd(b.seed, 107, d, k) * 3 : wake + rnd(b.seed, 107, d, k) * Math.max(1, 17 - wake);
+    const at = r < 0.55 ? Math.max(wake, 18) + rnd(b.seed, 107, d, k) * 3 : wake + rnd(b.seed, 107, d, k) * Math.max(1, 17 - wake);
     const st = Math.min(at, bed - len), en = Math.min(st + len, bed);
     if (en > st && !out.some(([x, y]) => st < y + 0.5 && en > x - 0.5)) out.push([st, en]);
   }
@@ -330,7 +328,6 @@ function sessionsOf(b: AiPlayer, d: number): [number, number][] {
 const localOf = (b: AiPlayer, t: number) => t / HOUR + zoneOf(b).tz;
 /** 这个 AI 现在在不在线 */
 export function botOnline(b: AiPlayer, t = Date.now()) {
-  if (habitOf(b) === 'hardcore' && !sleepOf(b)) return true;
   const L = localOf(b, t), d = Math.floor(L / 24), h = L - d * 24;
   return sessionsOf(b, d).some(([x, y]) => h >= x && h < y) || sessionsOf(b, d - 1).some(([x, y]) => h + 24 >= x && h + 24 < y);
 }
@@ -730,6 +727,8 @@ function groupAt(bots: AiPlayer[], j: number) {
     const b = pickTalker(on, rnd(804, j, k));
     if (!cast.includes(b)) cast.push(b);
   }
+  // 在线的大多潜水、凑不齐几个人聊就不聊
+  if (cast.length < 3) return null;
   const open = pick(tp.open, rnd(805, j));
   // 上一段也在聊：顺着过渡过来，不是突然换
   const br = groupOn(j - 1) && rnd(801, j) < 0.7 ? pick(BRIDGE, rnd(812, j)) : null;

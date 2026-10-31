@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ITEMS, MAP_H, MAP_W } from '../core/data';
 import { botChat, botDoing, botOnline, botReplies, isEnglish, botName, botPresence, botProfile, mergeBoard, withBots } from './bots';
 import { LocalApi } from './local';
@@ -36,7 +36,7 @@ describe('AI 玩家', () => {
     // 偶尔玩的可能一整天都不上线，挑这天上过线的
     const days = bots.filter((b) => Array.from({ length: 96 }, (_, k) => botOnline(b, T0 + k * 900_000)).some(Boolean));
     expect(days.length).toBeGreaterThan(8);
-    for (const b of days.slice(0, 8)) {
+    for (const b of days) {
       const p = botProfile(b, T0);
       let prev: { x: number; y: number } | null = null;
       for (let t = T0; t < T0 + 86_400_000; t += 20_000) {
@@ -109,7 +109,7 @@ describe('AI 玩家', () => {
   });
   it('AI 说的每一句都有中文翻译', () => {
     const msgs = botChat(bots, T0, T0 + 3 * 86_400_000);
-    expect(msgs.length).toBeGreaterThan(1000);
+    expect(msgs.length).toBeGreaterThan(300);
     const miss = [...new Set(msgs.filter((m) => !m.zh).map((m) => m.text))];
     expect(miss).toEqual([]);
     for (const m of msgs) expect(m.zh).not.toMatch(/\{\w+\}/);
@@ -123,9 +123,11 @@ describe('AI 玩家', () => {
     const mem = new Map<string, string>();
     const base = new LocalApi({ getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => void mem.set(k, v) });
     const api = withBots(base);
-    // 挑两个不下线的种子，免得测试时正好在睡觉
+    // 挑两个 T0 在线的种子，把时钟拨到 T0
     const always: number[] = [];
-    for (let sd = 1; always.length < 2; sd++) if (Array.from({ length: 24 }, (_, h) => h).every((h) => botOnline({ id: 'x', name: 'x', seed: sd, at: 0 }, T0 + h * 3600_000))) always.push(sd);
+    for (let sd = 1; always.length < 2; sd++) if (botOnline({ id: 'x', name: 'x', seed: sd, at: 0 }, T0) && botOnline({ id: 'x', name: 'x', seed: sd, at: 0 }, T0 + 600_000)) always.push(sd);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(T0);
     await api.aiAdd([{ name: 'Kaira', seed: always[0] }, { name: 'mossy_fern', seed: always[1] }]);
     const { refreshBots, aiPlayers } = await import('./bots');
     await refreshBots(true);
@@ -137,5 +139,6 @@ describe('AI 玩家', () => {
     await api.aiDelete(aiPlayers().map((b) => b.id));
     await refreshBots(true);
     expect(aiPlayers().length).toBe(0);
+    vi.useRealTimers();
   });
 });
