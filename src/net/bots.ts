@@ -7,6 +7,8 @@ import { fightWeapon, OUTFITS } from '../game/hero';
 import { findPath, isWalkable } from '../game/world';
 import type { AiPlayer, Board, ChatMsg, OnlineApi, Presence, RankRow } from './api';
 import { BOT_ZH, FILL_ZH } from '../i18n/bot-zh';
+import { LANG } from '../i18n';
+import { EN } from '../i18n/en';
 
 /**
  * AI 玩家（用户 10-31）：服务器 ai_players 表只存名字和种子，外观、等级、装备、去哪干活、世界频道说什么，
@@ -26,6 +28,19 @@ export function rnd(...k: number[]) {
   return (x >>> 0) / 4294967296;
 }
 const pick = <T>(a: readonly T[], r: number): T => a[Math.min(a.length - 1, Math.floor(r * a.length))];
+/**
+ * 轮着抽（10-31：同一段对话一小时里出现两次太假）：第 i 次从 list 里取一个，
+ * 每 list.length 次为一轮，一轮里每个都只出现一次，顺序每轮打乱
+ */
+function cyc<T>(list: readonly T[], i: number, salt: number): T {
+  const n = list.length;
+  const round = Math.floor(i / n);
+  let step = 1 + Math.floor(rnd(salt, round, 1) * (n - 1));
+  while (gcd(step, n) !== 1) step = (step % n) + 1;
+  const shift = Math.floor(rnd(salt, round, 2) * n);
+  return list[((((i % n) + n) % n) * step + shift) % n];
+}
+const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
 const DAY = 86_400_000;
 const MIN = 60_000;
 /** 游戏开服时间：AI 的注册时间不早于这天 */
@@ -268,8 +283,50 @@ function spotOf(n: MapNode, seed: number, wide = false): Pt {
   return out;
 }
 
+// ---- 上下线（用户 10-31：要像真人）：每个 AI 有自己的时区，当地夜里睡觉那几个小时不在线 ----
+const ZONES: { tz: number; en: string; zh: string }[] = [
+  { tz: -5, en: 'us, east coast', zh: '美国东海岸' }, { tz: -8, en: 'us, west coast', zh: '美国西海岸' }, { tz: -6, en: 'texas', zh: '得州' },
+  { tz: -5, en: 'canada', zh: '加拿大' }, { tz: -3, en: 'brazil', zh: '巴西' }, { tz: 0, en: 'uk', zh: '英国' }, { tz: 1, en: 'germany', zh: '德国' },
+  { tz: 1, en: 'france', zh: '法国' }, { tz: 1, en: 'poland', zh: '波兰' }, { tz: 2, en: 'finland', zh: '芬兰' }, { tz: 8, en: 'philippines', zh: '菲律宾' },
+  { tz: 8, en: 'singapore', zh: '新加坡' }, { tz: 9, en: 'japan', zh: '日本' }, { tz: 10, en: 'australia', zh: '澳大利亚' }, { tz: 7, en: 'vietnam', zh: '越南' },
+];
+export const zoneOf = (b: AiPlayer) => pick(ZONES, rnd(b.seed, 92));
+const HOUR = 3600_000;
+/** 当地几点开始睡、睡几个小时；少数肝帝不下线（null） */
+function sleepOf(b: AiPlayer): [number, number] | null {
+  if (rnd(b.seed, 93) < 0.1) return null;
+  return [22.5 + rnd(b.seed, 94) * 4, 5.5 + rnd(b.seed, 95) * 3];
+}
+/** 这个 AI 现在在不在线 */
+export function botOnline(b: AiPlayer, t = Date.now()) {
+  const s = sleepOf(b);
+  if (!s) return true;
+  const local = (((t / HOUR + zoneOf(b).tz) % 24) + 24) % 24;
+  return (((local - s[0]) % 24) + 24) % 24 >= s[1];
+}
+/** 一段时间里的下线、上线时刻（打招呼用） */
+function sleepsIn(b: AiPlayer, from: number, to: number) {
+  const s = sleepOf(b);
+  if (!s) return [];
+  const out: { day: number; off: number; on: number }[] = [];
+  for (let d = Math.floor(from / DAY) - 1; d <= Math.floor(to / DAY) + 1; d++) {
+    const off = d * DAY + (s[0] - zoneOf(b).tz) * HOUR;
+    out.push({ day: d, off, on: off + s[1] * HOUR });
+  }
+  return out;
+}
+/** 话多话少：有的 AI 一直在说，有的几乎不说话 */
+const chattyOf = (b: AiPlayer) => 0.15 + 3 * rnd(b.seed, 91) ** 2;
+function pickTalker(on: AiPlayer[], r: number) {
+  const total = on.reduce((a, b) => a + chattyOf(b), 0);
+  let x = r * total;
+  for (const b of on) if ((x -= chattyOf(b)) < 0) return b;
+  return on[on.length - 1];
+}
+
 /** 一个 AI 现在的在线状态（和真人的 Presence 一样画在地图上） */
 export function botPresence(b: AiPlayer, t = Date.now()): Presence | null {
+  if (!botOnline(b, t)) return null;
   const p = botProfile(b, t);
   const d = botDoing(p, b.seed, t);
   if (!d) return null;
@@ -467,10 +524,18 @@ const TEMPLATES = [
   'my friend just got back from {place}, so jealous', 'watching {show} while i grind', 'stayed up way too late watching {show}', 'if i won the lottery id move to {place}',
   'thinking about getting a {pet}', 'my neighbor has a {pet} that screams every morning lol', '{food} for {meal}? yes', 'lost {thing} for an hour, it was in my hand',
 ];
-/** 有一半的 AI 打字全小写、不打句号 */
-function styled(text: string, b: AiPlayer) {
-  if (rnd(b.seed, 90) < 0.5) return text.toLowerCase().replace(/\.$/, '');
-  return text;
+/**
+ * 打字习惯（用户 10-31：要像真人）：一半的 AI 全小写；有人爱在句尾加 lol、xD、:) 之类，
+ * 有人一激动就连打感叹号。r 是这条消息自己的随机数
+ */
+const TAILS = ['', ' lol', ' xD', ' :)', ' haha', ' lmao', ' :D', ' ^^'];
+function styled(text: string, b: AiPlayer, r = 0) {
+  let out = text;
+  if (rnd(b.seed, 102) < 0.4 && /!$/.test(out)) out = out.replace(/!+$/, '!!!');
+  const tail = TAILS[Math.floor(rnd(b.seed, 103) * TAILS.length)];
+  if (tail && rnd(r, 104) < 0.18 && out.length > 6 && !/(lol|lmao|haha|xd|:\)|:d|\^\^|[?!])$/i.test(out)) out += tail;
+  if (rnd(b.seed, 90) < 0.5) out = out.toLowerCase().replace(/\.$/, '');
+  return out;
 }
 /** 别的 AI 跳出来接一句（用户 10-31）：按说的内容挑反应 */
 const CHIME: [RegExp, string[]][] = [
@@ -534,16 +599,70 @@ const TOPICS_GROUP: { open: string[]; lines: string[]; react: string[] }[] = [
     lines: ['pokemon on gameboy', 'some flash games at school lol', 'mario kart', 'minecraft, im young lol', 'tetris on my dads phone', 'the sims', 'runescape back in the day', 'a pirate game on pc', 'zelda', 'solitaire counts right'],
     react: ['classic', 'nostalgia', 'oh man', 'good times', 'that takes me back', 'legend'] },
 ];
+/** 长句子（用户 10-31：不只说短句） */
+const LONG_LINES = [
+  'ok so i finally convinced my roommate to try this game and now he wont stop asking me where to find copper lol',
+  'honestly this is the only game i can play while working from home without my boss noticing, it just runs in the corner',
+  'just got back from a 12 hour shift and the first thing i did was check how much my character mined while i was gone',
+  'my little sister saw me playing and asked why my guy keeps hitting the same rock for an hour, couldnt really explain it',
+  'i swear every time i say ill just do one more level its suddenly 2am and i have work in five hours',
+  'went to my grandmas for dinner and she asked what game im always on, showed her and now she wants an account too',
+  'the weather has been so bad all week that i havent left the house except for groceries, at least i got a lot of levels',
+  'does anyone else feel weirdly proud when their character finishes a long task while youre asleep, like good job little guy',
+  'i tried to explain idle games to my dad and he said so you pay to watch a guy work, and honestly hes not wrong',
+  'my cat has decided that the warm spot next to my laptop is her bed now so i guess im not closing it tonight',
+  'spent the whole morning cleaning the apartment and now i deserve to sit here and chat with you guys for a bit',
+  'first time in weeks the sun is out so i took my laptop to the park, the wifi is terrible but the view is worth it',
+  'i keep telling myself ill go to bed early tonight and then i end up chatting here until the birds start singing lol',
+  'not gonna lie the music when it rains in game is so cozy i sometimes just leave it on while i read',
+  'had a really rough day at work but logging in and seeing everyone chatting here kinda makes it better ngl',
+  'my neighbors are having a halloween party and the bass is shaking my windows, so i guess im gaming till they stop',
+  'tried cooking a new recipe tonight, it was supposed to be a stew but it turned into something closer to soup, still good though',
+  'i think the best part of this game is that you can just chill and talk to people while your character does all the work',
+];
+/** 一个人连着说几句，讲件事 */
+const STORIES = [
+  ['so funny story', 'i was cooking dinner and my dog jumped up', 'and stole the entire chicken off the counter', 'didnt even look sorry lol'],
+  ['update on my plants', 'they are alive', 'barely, but alive'],
+  ['ok i need to rant real quick', 'my upstairs neighbor has been vacuuming at midnight', 'for 3 nights in a row', 'who does that'],
+  ['just had the weirdest conversation with a taxi driver', 'he spent 20 min telling me about his pet snake', 'it has its own instagram apparently'],
+  ['guess who got the job', 'ME', 'start on monday!!'],
+  ['so my mom finally learned to video call', 'she spent the whole call showing me her ceiling', 'love her tho'],
+  ['went to the store for milk', 'came back with snacks, candles and a plant', 'forgot the milk'],
+  ['ok confession', 'ive never actually finished a book i started this year', 'but i have 12 half read ones lol'],
+  ['the power went out for like an hour', 'had to actually talk to my family', 'they seem nice'],
+  ['so i tried to surprise my gf with breakfast in bed', 'set off the smoke alarm', 'she woke up anyway lol'],
+  ['booked a dentist appointment', 'canceled it', 'booked it again', 'adulting is hard'],
+];
+/** 上线、下线 */
+const HELLO = ['hi all', 'hey guys', 'morning everyone', 'back again lol', 'yo', 'hello hello', 'evening all'];
+const BYE = ['gn all', 'gotta go, cya', 'logging off, bye', 'ok sleep time, night', 'cya tmr guys', 'bed time, gn'];
+/** 说自己在游戏里干什么，{what} 换成正在挖的、砍的、打的东西 */
+const ACT_LINES: Record<string, string[]> = {
+  mining: ['mining {what} rn, its so slow lol', 'been mining {what} for like an hour'],
+  woodcutting: ['chopping {what}, so relaxing', 'still on {what}, need more logs'],
+  fishing: ['fishing {what}, nothing is biting', 'caught so many {what} already lol'],
+  craft: ['doing {what} rn, eating all my mats', 'grinding {what}, almost lvl up'],
+  combat: ['farming {what} rn, they keep hitting me lol', '{what} dropped nothing again smh', 'anyone else killing {what}? where r u'],
+  walk: ['on my way to a new spot', 'running across the map lol'],
+  idle: ['just chilling in town', 'afk in town, getting snacks'],
+};
 const TOPIC_SLOT = 18 * MIN;
+/** 打字要时间：越长的话等得越久 */
+const typing = (text: string, r: number) => 3_000 + text.length * 170 + Math.floor(r * 12_000);
 /** 第 j 段的群聊：开始时间、都谁、说哪几句（各家算出来一样）；这段没有就是 null */
 function groupAt(bots: AiPlayer[], j: number) {
-  if (bots.length < 4 || rnd(800, j) >= 0.55) return null;
-  const tp = pick(TOPICS_GROUP, rnd(801, j));
+  if (rnd(800, j) >= 0.55) return null;
+  const tp = cyc(TOPICS_GROUP, j, 828);
+  // 前几个小时聊过的话题先不聊
+  for (let w = 1; w <= 8; w++) if (rnd(800, j - w) < 0.55 && cyc(TOPICS_GROUP, j - w, 828) === tp) return null;
   const start = j * TOPIC_SLOT + Math.floor(rnd(802, j) * 8 * MIN);
+  const on = bots.filter((b) => botOnline(b, start));
+  if (on.length < 4) return null;
   const cast: AiPlayer[] = [];
-  const size = Math.min(bots.length, 4 + Math.floor(rnd(803, j) * 3));
-  for (let k = 0; k < 20 && cast.length < size; k++) {
-    const b = bots[Math.floor(rnd(804, j, k) * bots.length)];
+  const size = Math.min(on.length, 4 + Math.floor(rnd(803, j) * 3));
+  for (let k = 0; k < 30 && cast.length < size; k++) {
+    const b = pickTalker(on, rnd(804, j, k));
     if (!cast.includes(b)) cast.push(b);
   }
   const msgs: { who: AiPlayer; text: string; at: number }[] = [{ who: cast[0], text: pick(tp.open, rnd(805, j)), at: start }];
@@ -554,8 +673,8 @@ function groupAt(bots: AiPlayer[], j: number) {
     let w = Math.floor(rnd(807, j, k) * cast.length);
     if (w === prev) w = (w + 1) % cast.length;
     prev = w;
-    t += 5_000 + Math.floor(rnd(808, j, k) * 20_000);
     const text = rnd(809, j, k) < 0.7 || k === 1 ? left.splice(Math.floor(rnd(810, j, k) * left.length), 1)[0] : pick(tp.react, rnd(811, j, k));
+    t += typing(text, rnd(808, j, k));
     msgs.push({ who: cast[w], text, at: t });
   }
   return { start, end: t, msgs };
@@ -565,80 +684,174 @@ const SLOT = 75_000;
 function lineAt(i: number, k: number): { en: string; zh: string } {
   const r = rnd(788, i, k);
   const plain = (en: string) => ({ en, zh: BOT_ZH[en] ?? '' });
-  if (r < 0.15) return plain(pick(GAME_LINES, rnd(785, i, k)));
-  if (r < 0.5) return plain(pick(LIFE_LINES, rnd(785, i, k)));
-  if (r < 0.8) return plain(pick(FUN_LINES, rnd(785, i, k)));
-  const tpl = pick(TEMPLATES, rnd(785, i, k));
+  const n = i * 4 + k;
+  if (r < 0.1) return plain(cyc(GAME_LINES, n, 820));
+  if (r < 0.4) return plain(cyc(LIFE_LINES, n, 821));
+  if (r < 0.65) return plain(cyc(FUN_LINES, n, 822));
+  if (r < 0.82) return plain(cyc(LONG_LINES, n, 823));
+  const tpl = cyc(TEMPLATES, n, 824);
   const words: Record<string, string> = {};
   let j = 0;
   const en = tpl.replace(/\{(\w+)\}/g, (all, w: string) => (FILL[w] ? (words[w] = pick(FILL[w], rnd(789, i, k, j++))) : all));
   const zh = (BOT_ZH[tpl] ?? '').replace(/\{(\w+)\}/g, (all, w: string) => (words[w] ? FILL_ZH[words[w]] ?? words[w] : all));
   return { en, zh };
 }
+
+const CJK = /[\u3400-\u9fff]/;
+// 物品、怪物名字的中英文（界面是哪种语言，ACTIONS 里就是哪种）
+const REV = LANG === 'en' ? new Map(Object.entries(EN).map(([k, v]) => [v, k])) : null;
+const zhName = (n: string) => REV?.get(n) ?? n;
+const enName = (n: string) => (LANG === 'en' ? n : EN[n] ?? n).toLowerCase();
+/** 说说自己正在游戏里干什么：和它在地图上的样子对得上 */
+function actLine(b: AiPlayer, t: number, r: number): { en: string; zh: string } | null {
+  const d = botDoing(botProfile(b, t), b.seed, t);
+  if (!d) return null;
+  let key: string, what = '', whatZh = '';
+  if (d.idle) key = 'idle';
+  else if (!d.action) key = 'walk';
+  else {
+    const a = ACTIONS[d.action];
+    if (!a) return null;
+    if (a.kind === 'combat') { const m = MONSTERS[a.monster]; key = 'combat'; what = enName(m?.name ?? ''); whatZh = zhName(m?.name ?? ''); }
+    else {
+      key = a.skill in ACT_LINES ? a.skill : 'craft';
+      // 做东西的说技能名；采集的说东西名，翻不出英文就也说技能名
+      const sk = SKILLS[a.skill].name;
+      const useSkill = key === 'craft' || CJK.test(enName(a.name));
+      what = enName(useSkill ? sk : a.name); whatZh = zhName(useSkill ? sk : a.name);
+    }
+  }
+  if (!what || CJK.test(what)) return null;
+  const tpl = pick(ACT_LINES[key], r);
+  return { en: tpl.replace('{what}', what), zh: (BOT_ZH[tpl] ?? '').replace('{what}', whatZh) };
+}
+
+/** 第 i 段说哪一类：对话、一问一答、讲故事、说自己在干嘛、单句 */
+type Kind = 'convo' | 'pair' | 'story' | 'act' | 'line';
+function kindAt(i: number): Kind {
+  const r = rnd(780, i);
+  return r < 0.25 ? 'convo' : r < 0.32 ? 'pair' : r < 0.42 ? 'story' : r < 0.5 ? 'act' : 'line';
+}
+const ITEMS_OF = { convo: [CONVOS, 825], pair: [PAIRS, 826], story: [STORIES, 827] } as const;
+/** 往前一个半小时内说过的不再说（按「可能说过」算，宁可多避开） */
+const RECENT = 72;
+function usedRecently(kind: 'convo' | 'pair' | 'story', i: number) {
+  const [list, salt] = ITEMS_OF[kind];
+  const me = cyc<unknown>(list, i, salt);
+  for (let w = 1; w <= RECENT; w++) if (kindAt(i - w) === kind && cyc<unknown>(list, i - w, salt) === me) return true;
+  return false;
+}
+function lineUsedRecently(en: string, i: number) {
+  for (let w = 1; w <= RECENT; w++) if (kindAt(i - w) === 'line' && lineAt(i - w, 0).en === en) return true;
+  return false;
+}
 /** 某个时间段里 AI 说的话（按时间排好） */
 export function botChat(bots: AiPlayer[], from: number, to: number): ChatMsg[] {
   if (!bots.length) return [];
   const out: ChatMsg[] = [];
-  const p = Math.min(0.8, 0.05 + bots.length * 0.04);
+  const push = (id: string, b: AiPlayer, en: string, zh: string | undefined, t: number) => {
+    if (t >= from && t <= to) out.push({ id, channel: 'world', playerId: botKey(b.id), name: b.name, text: styled(en, b, strHash(id)), zh, at: t });
+  };
   // 群聊：开得早的可能还没聊完，往前多看一段
   const groups: { start: number; end: number }[] = [];
   for (let j = Math.floor(from / TOPIC_SLOT) - 1; j <= Math.floor(to / TOPIC_SLOT); j++) {
     const g = groupAt(bots, j);
     if (!g) continue;
     groups.push(g);
-    g.msgs.forEach((m, k) => {
-      if (m.at >= from && m.at <= to) out.push({ id: `bot-g${j}-${k}`, channel: 'world', playerId: botKey(m.who.id), name: m.who.name, text: styled(m.text, m.who), zh: BOT_ZH[m.text], at: m.at });
-    });
+    g.msgs.forEach((m, k) => push(`bot-g${j}-${k}`, m.who, m.text, BOT_ZH[m.text], m.at));
+  }
+  // 上线打招呼、下线说再见
+  for (const b of bots) {
+    for (const z of sleepsIn(b, from, to)) {
+      if (rnd(b.seed, 97, z.day) < 0.35) { const en = pick(BYE, rnd(b.seed, 98, z.day)); push(`bot-bye-${b.id}-${z.day}`, b, en, BOT_ZH[en], z.off - 40_000); }
+      if (rnd(b.seed, 99, z.day) < 0.35) { const en = pick(HELLO, rnd(b.seed, 100, z.day)); push(`bot-hi-${b.id}-${z.day}`, b, en, BOT_ZH[en], z.on + 30_000); }
+    }
   }
   // 往前多看几段：前面开始的对话可能还在接着说
-  for (let i = Math.floor(from / SLOT) - 4; i <= Math.floor(to / SLOT); i++) {
-    if (rnd(777, i) >= p) continue;
-    const a = bots[Math.floor(rnd(778, i) * bots.length)];
+  for (let i = Math.floor(from / SLOT) - 5; i <= Math.floor(to / SLOT); i++) {
     const at = i * SLOT + Math.floor(rnd(779, i) * 50_000);
+    const on = bots.filter((b) => botOnline(b, at));
+    if (!on.length || rnd(777, i) >= Math.min(0.8, 0.05 + on.length * 0.045)) continue;
     // 大家正在群聊时别插别的话题
     if (groups.some((g) => at > g.start - 60_000 && at < g.end + 30_000)) continue;
-    // 对话里出现的其他人：不重复的几个 AI
+    const a = pickTalker(on, rnd(778, i));
+    // 对话里出现的其他人：不重复的几个 AI（话多的更常出来）
     const cast = [a];
-    for (let j = 0; j < 6 && cast.length < 4 && cast.length < bots.length; j++) {
-      const c = bots[Math.floor(rnd(786, i, j) * bots.length)];
+    for (let j = 0; j < 10 && cast.length < 4 && cast.length < on.length; j++) {
+      const c = pickTalker(on, rnd(786, i, j));
       if (!cast.includes(c)) cast.push(c);
     }
     const fill = (text: string) => text
       .replace(/\{A\}/g, cast[0].name).replace(/\{B\}/g, (cast[1] ?? cast[0]).name)
       .replace(/\{C\}/g, (cast[3] ?? cast[2] ?? cast[1] ?? cast[0]).name).replace(/\{X\}/g, (cast[1] ?? cast[0]).name);
-    const say = (text: string, b: AiPlayer, t: number, suf: string, zh = BOT_ZH[text]) => {
-      if (t >= from && t <= to) out.push({ id: `bot-${i}${suf}`, channel: 'world', playerId: botKey(b.id), name: b.name, text: styled(fill(text), b), zh: zh && fill(zh), at: t });
-    };
-    const r = rnd(780, i);
-    if (r < 0.3 && cast.length >= 3) {
+    const say = (text: string, b: AiPlayer, t: number, suf: string, zh = BOT_ZH[text]) => push(`bot-${i}${suf}`, b, fill(text), zh && fill(zh), t);
+    let kind = kindAt(i);
+    if ((kind === 'convo' || kind === 'pair' || kind === 'story') && usedRecently(kind, i)) kind = 'line';
+    if (kind === 'convo' && (cast.length < 3 || (cast.length < 4 && cyc(CONVOS, i, 825).some(([, x]) => x.includes('{C}'))))) kind = 'line';
+    if (kind === 'convo') {
       // {C} 是被聊到的人，不在对话里：三个人说话，第四个人被八卦
-      const ok = cast.length >= 4 ? CONVOS : CONVOS.filter((c) => !c.some(([, x]) => x.includes('{C}')));
-      const convo = pick(ok, rnd(781, i));
+      const convo = cyc(CONVOS, i, 825);
       let t = at;
       convo.forEach(([who, text], k) => {
-        if (k) t += 6_000 + Math.floor(rnd(787, i, k) * 22_000);
+        if (k) t += typing(text, rnd(787, i, k));
         say(text, cast[Math.min(who, 2)], t, `c${k}`);
       });
-    } else if (r < 0.38 && cast.length > 1) {
-      const [q, answers] = pick(PAIRS, rnd(782, i));
+    } else if (kind === 'pair' && cast.length > 1) {
+      const [q, answers] = cyc(PAIRS, i, 826);
+      const ans = pick(answers, rnd(783, i));
       say(q, a, at, '');
-      say(pick(answers, rnd(783, i)), cast[1], at + 10_000 + Math.floor(rnd(784, i) * 25_000), 'r');
+      say(ans, cast[1], at + typing(ans, rnd(784, i)) + 5_000, 'r');
+    } else if (kind === 'story') {
+      // 一个人连着说好几句，讲件事
+      const story = cyc(STORIES, i, 827);
+      let t = at;
+      story.forEach((text, k) => {
+        if (k) t += typing(text, rnd(794, i, k) * 0.3);
+        say(text, a, t, `s${k}`);
+      });
+      if (cast.length > 1 && rnd(795, i) < 0.6) say(chimeFor(story.join(' '), rnd(796, i)), cast[1], t + typing('lol', rnd(797, i)), 'sj');
+    } else if (kind === 'act') {
+      const act = actLine(a, at, rnd(798, i));
+      if (!act) continue;
+      say(act.en, a, at, '', act.zh);
+      if (cast.length > 1 && rnd(799, i) < 0.35) say(chimeFor(act.en, rnd(812, i)), cast[1], at + typing('nice', rnd(813, i)), 'aj');
     } else {
       // 和前两段抽到的不一样，免得两个人前后脚说同一句
       let line = lineAt(i, 0);
-      for (let k = 1; k < 4 && (line.en === lineAt(i - 1, 0).en || line.en === lineAt(i - 2, 0).en); k++) line = lineAt(i, k);
+      for (let k = 1; k < 5 && lineUsedRecently(line.en, i); k++) line = lineAt(i, k);
       if (line.en.includes('{X}') && cast.length < 2) continue;
-      say(line.en, a, at, '', line.zh);
-      // 别的 AI 有时会接一两句
       let t = at;
+      // 偶尔打错字，紧接着补一句改正
+      const typo = typoOf(fill(line.en), rnd(814, i), rnd(815, i));
+      if (typo && rnd(816, i) < typoRate(a)) {
+        say(typo.text, a, t, '', line.zh);
+        t += 2_500 + Math.floor(rnd(817, i) * 3_000);
+        say(`*${typo.fix}`, a, t, 'f', `*${typo.fix}`);
+      } else say(line.en, a, t, '', line.zh);
+      // 别的 AI 有时会接一两句
       for (let k = 0; k < 2 && cast.length > k + 1 && rnd(790, i, k) < (k ? 0.3 : 0.45); k++) {
-        t += 5_000 + Math.floor(rnd(791, i, k) * 20_000);
-        say(chimeFor(fill(line.en), rnd(792, i, k)), cast[k + 1], t, `j${k}`);
+        const re = chimeFor(fill(line.en), rnd(792, i, k));
+        t += typing(re, rnd(791, i, k));
+        say(re, cast[k + 1], t, `j${k}`);
       }
     }
   }
   return out.sort((x, y) => x.at - y.at);
 }
+
+/** 打错字：挑一个长一点的词，换掉中间两个字母 */
+function typoOf(text: string, r1: number, r2: number) {
+  const words = text.split(' ').map((w, i) => [w, i] as const).filter(([w]) => /^[a-z]{5,}$/i.test(w));
+  if (!words.length) return null;
+  const [w, idx] = pick(words, r1);
+  const k = 1 + Math.floor(r2 * (w.length - 3));
+  const bad = w.slice(0, k) + w[k + 1] + w[k] + w.slice(k + 2);
+  if (bad === w) return null;
+  const parts = text.split(' ');
+  parts[idx] = bad;
+  return { text: parts.join(' '), fix: w };
+}
+const typoRate = (b: AiPlayer) => 0.03 + 0.25 * rnd(b.seed, 101) ** 2;
 
 // ---- 接真人的话（用户 10-31）：说英文才有人用英文回，说别的语言只会得到「?」 ----
 const strHash = (t: string) => { let h = 7; for (let i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 0x01000193); return h; };
@@ -668,10 +881,15 @@ const TOPICS: [RegExp, string[]][] = [
   [/\b(trade|sell|buy)\b/i, ['what u selling', 'how much?', 'not rn sorry', 'got any ingots?']],
   [/\?/, ['idk tbh', 'not sure', 'check the handbook maybe', 'good question lol', 'no clue sorry', 'hmm idk']],
 ];
+/** 问哪里人的那一条在 TOPICS 里的位置 */
+const WHERE_TOPIC = TOPICS.findIndex(([re]) => re.test('where are you from'));
 const GENERIC = ['true', 'fr', 'ya', 'lol', 'nice', 'same', 'facts', 'ok', 'real', 'mood'];
 /** 真人在世界频道说了一句：哪个 AI 接、说什么、几秒后（各家算出来一样）；点到名的 AI 一定回 */
-export function botReplies(m: ChatMsg, bots: AiPlayer[]): ChatMsg[] {
-  if (!bots.length || m.channel !== 'world' || isBotId(m.playerId)) return [];
+export function botReplies(m: ChatMsg, all: AiPlayer[]): ChatMsg[] {
+  if (m.channel !== 'world' || isBotId(m.playerId)) return [];
+  // 只有在线的 AI 会回
+  const bots = all.filter((b) => botOnline(b, m.at));
+  if (!bots.length) return [];
   const h = strHash(m.id + m.text);
   const low = m.text.toLowerCase();
   // 名字长的先比，免得 Kai 抢了 Kairo 的话
@@ -680,20 +898,23 @@ export function botReplies(m: ChatMsg, bots: AiPlayer[]): ChatMsg[] {
   const topic = en ? TOPICS.find(([re]) => re.test(m.text)) : undefined;
   const chance = named ? 1 : !en ? 0.45 : topic ? (topic[1] === TOPICS[TOPICS.length - 1][1] ? 0.55 : 0.7) : 0.25;
   if (rnd(h, 1) >= chance) return [];
-  const who = named ?? bots[Math.floor(rnd(h, 2) * bots.length)];
-  const text = !en ? pick(HUH, rnd(h, 3)) : pick(topic ? topic[1] : GENERIC, rnd(h, 4));
-  const at = m.at + 3_000 + Math.floor(rnd(h, 5) * (en ? 12_000 : 6_000));
+  const who = named ?? pickTalker(bots, rnd(h, 2));
+  let text = !en ? pick(HUH, rnd(h, 3)) : pick(topic ? topic[1] : GENERIC, rnd(h, 4));
+  let zh0 = BOT_ZH[text];
+  // 问哪里人：按这个 AI 的时区答，前后一致
+  if (topic === TOPICS[WHERE_TOPIC]) { const z = zoneOf(who); text = z.en; zh0 = z.zh; }
+  const at = m.at + typing(text, rnd(h, 5) * (en ? 1 : 0.4));
   // 有些回话会带上对方名字
   const named2 = en && rnd(h, 6) < 0.4;
   const out = named2 ? `${m.name} ${text}` : text;
-  const zh = BOT_ZH[text] && (named2 ? `${m.name} ${BOT_ZH[text]}` : BOT_ZH[text]);
-  const res: ChatMsg[] = [{ id: `bot-re-${m.id}`, channel: 'world', playerId: botKey(who.id), name: who.name, text: styled(out, who), zh, at }];
+  const zh = zh0 && (named2 ? `${m.name} ${zh0}` : zh0);
+  const res: ChatMsg[] = [{ id: `bot-re-${m.id}`, channel: 'world', playerId: botKey(who.id), name: who.name, text: styled(out, who, h), zh, at }];
   // 有时另一个 AI 也跟着接一句
   if (bots.length > 1 && rnd(h, 7) < (en ? 0.35 : 0.25)) {
     const other = bots.filter((b) => b !== who);
-    const b2 = pick(other, rnd(h, 8));
+    const b2 = pickTalker(other, rnd(h, 8));
     const t2 = !en ? pick(['lol', '??', 'what language is that', 'no idea either lol', 'google translate time'], rnd(h, 9)) : chimeFor(m.text, rnd(h, 9));
-    res.push({ id: `bot-re2-${m.id}`, channel: 'world', playerId: botKey(b2.id), name: b2.name, text: styled(t2, b2), zh: BOT_ZH[t2], at: at + 4_000 + Math.floor(rnd(h, 10) * 12_000) });
+    res.push({ id: `bot-re2-${m.id}`, channel: 'world', playerId: botKey(b2.id), name: b2.name, text: styled(t2, b2, h + 1), zh: BOT_ZH[t2], at: at + typing(t2, rnd(h, 10)) });
   }
   return res;
 }
@@ -741,7 +962,8 @@ export function withBots(base: OnlineApi): OnlineApi {
     onlineCount() {
       ensure();
       const n = base.onlineCount();
-      return n == null ? null : n + list.length;
+      const now = Date.now();
+      return n == null ? null : n + list.filter((b) => botOnline(b, now)).length;
     },
     async leaderboard(board, limit = 100) {
       ensure();

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { GM_KINDS, GM_KIND_NAME, GM_PCT_MAX } from '../core/gm';
 import type { GmKind } from '../core/types';
 import { online, type AiPlayer, type GmInput, type GmMailRow, type GmRow } from '../net';
-import { aiPlayers, botDoing, botName, botPresence, botProfile, refreshBots } from '../net/bots';
+import { aiPlayers, botDoing, botName, botOnline, botPresence, botProfile, refreshBots, zoneOf } from '../net/bots';
 import { actionName } from './format';
 import { emitToGame } from './GameCanvas';
 import { ITEMS } from '../core/data';
@@ -11,7 +11,7 @@ import { fmtNum } from './format';
 import { Icon } from './icons';
 import { pullGm } from '../net/social';
 import { baseOf, qid, qualityOf, QUALITY_COLOR, QUALITY_NAME } from '../core/quality';
-import { tl } from '../i18n';
+import { LANG, tl } from '../i18n';
 
 /**
  * GM 面板（用户 10-26）：只有管理员（gm_admins 表里的 UID）能打开。
@@ -431,7 +431,7 @@ function AiTab({ onClose }: { onClose: () => void }) {
           <button disabled={busy || !list.length} onClick={delNewest}>{tl('删除最新的')}</button>
           <button disabled={busy || !list.length} onClick={() => confirm(tl`删掉全部 ${list.length} 个 AI 玩家？`) && del(list.map((b) => b.id), tl('已删除全部 AI 玩家'))}>{tl('全部删除')}</button>
         </div>
-        <p className="muted">{tl`现在有 ${list.length} 个 AI 玩家。名字、外观、等级随机，加进来后每天慢慢升级`}</p>
+        <p className="muted">{tl`现在有 ${list.length} 个 AI 玩家，${list.filter((b) => botOnline(b)).length} 个在线。名字、外观、等级随机，加进来后每天慢慢升级；每个 AI 有自己的时区，当地夜里会下线睡觉`}</p>
         {msg && <p className={msg.ok ? 'good' : 'warn'}>{msg.text}</p>}
       </div>
       <h3>{tl('名单')}</h3>
@@ -452,7 +452,7 @@ function AiTab({ onClose }: { onClose: () => void }) {
                 ) : (
                   <div><b>{b.name}</b> <small className="muted">#{p.pid} · {tl`总等级 ${p.total} · 战斗 ${p.combat}`}</small></div>
                 )}
-                <small className="muted">{now?.action ? tl`正在：${actionName(now.action)}` : idle ? tl('在城里挂机') : tl('正在赶路')}</small>
+                <small className="muted">{!botOnline(b) ? tl`离线（${LANG === 'en' ? zoneOf(b).en : zoneOf(b).zh}，当地夜里在睡觉）` : now?.action ? tl`正在：${actionName(now.action)}` : idle ? tl('在城里挂机') : tl('正在赶路')}</small>
                 <div className="gm-row-tools">
                   {now && <button className="pill" onClick={() => { emitToGame('walktile', Math.round(now.x), Math.round(now.y)); onClose(); }}>{tl('寻路过去')}</button>}
                   <button className="pill" onClick={() => setEdit({ id: b.id, name: b.name })}>{tl('改名')}</button>
