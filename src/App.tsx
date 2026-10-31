@@ -30,7 +30,7 @@ import { PlayerPopup } from './ui/PlayerPopup';
 import { PartyInvitePopup, TradePopup } from './ui/SocialPopups';
 import { PLAYER_CLICK } from './game/MapScene';
 import { useSocial } from './net/social';
-import { ChatChip, ChatPage, onOpenChatPage, openChatPage } from './ui/ChatDock';
+import { ChatChip, ChatPage, onOpenChatPage, openChatPage, PLAYER_CARD } from './ui/ChatDock';
 import { CombatLog, onOpenCombatLog } from './ui/CombatLog';
 import { UpdateBanner } from './ui/UpdateBanner';
 import { DayClock } from './ui/DayClock';
@@ -174,6 +174,11 @@ function Game() {
   useEffect(() => onOpenGuild(() => pickTab('guild')), [pickTab]);
   const [playerPop, setPlayerPop] = useState<string | null>(null);
   useEffect(() => onGameEvent(PLAYER_CLICK, (id: string) => setPlayerPop(id)), []);
+  useEffect(() => {
+    const f = (e: Event) => setPlayerPop((e as CustomEvent<string>).detail);
+    window.addEventListener(PLAYER_CARD, f);
+    return () => window.removeEventListener(PLAYER_CARD, f);
+  }, []);
   useEffect(() => onOpenChatPage(() => { if (ui.current.tab !== 'chat' || !ui.current.panelOpen) pickTab('chat'); }), [pickTab]);
   const toasts = useToasts();
   const { region, banner } = useRegion();
