@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { saveTampered, store } from '../store';
 import { calibrate } from '../core/clock';
+import { tl } from '../i18n';
 import { newGame, setSettings } from '../core/sim';
 import type { GameState } from '../core/types';
-import { online } from './index';
+import { isRollbackError, online } from './index';
 import { syncSocial } from './social';
 
 /**
@@ -15,6 +16,9 @@ import { syncSocial } from './social';
  */
 const OWNER_KEY = 'canglin-save-owner';
 const SYNCED_KEY = 'canglin-save-synced';
+/** 服务器回档版本（11-01）：上传时带上，比服务器旧就会被拒，读回档后的存档 */
+const EPOCH_KEY = 'canglin-save-epoch';
+const epoch = () => Number(ls.get(EPOCH_KEY) ?? 0) || 0;
 const PUSH_EVERY_MS = 60_000;
 /** 传失败了多久后重试 */
 const RETRY_MS = 15_000;
@@ -85,9 +89,17 @@ export async function pushNow() {
       return;
     }
     const s = store.state;
-    await online.pushSave(s, deviceId());
+    await online.pushSave(s, deviceId(), epoch());
     ls.set(SYNCED_KEY, String(s.lastTick));
-  } catch {
+  } catch (e) {
+    // 服务器回档了：读回档后的存档（刷新页面）
+    if (isRollbackError(e)) {
+      const save = await online.pullSave().catch(() => null);
+      if (save) {
+        alert(tl('服务器已回档，正在读取回档后的存档。'));
+        return adoptSave(save, me.id);
+      }
+    }
     // 连不上：过一会儿就重试，不用等满一分钟
     lastPush = Date.now() - PUSH_EVERY_MS + RETRY_MS;
   }
@@ -96,6 +108,8 @@ export async function pushNow() {
 /** 换成这份存档（会刷新页面） */
 function adoptSave(s: GameState, ownerId: string) {
   ls.set(OWNER_KEY, ownerId);
+  const ep = Number((s as GameState & { _epoch?: number })._epoch);
+  if (ep > 0) ls.set(EPOCH_KEY, String(ep));
   ls.set(SYNCED_KEY, String(s.lastTick));
   store.replace(s);
 }
@@ -179,8 +193,29 @@ export async function retry() {
   try { await online.ready(); await afterAuth(); } catch { set('error'); }
 }
 
+/**
+ * 游戏加速检测（11-01）：系统时间（Date.now）走得比浏览器内部计时（performance.now）快，
+ * 连续 3 次（每 10 秒量一次）都快三成以上才算（电脑睡眠只会跳一次，不算）
+ */
+function watchSpeed() {
+  let w = Date.now(), p = performance.now(), streak = 0, sent = false;
+  setInterval(() => {
+    const w2 = Date.now(), p2 = performance.now();
+    const dw = w2 - w, dp = p2 - p;
+    w = w2; p = p2;
+    if (document.visibilityState !== 'visible' || dp < 5000) { streak = 0; return; }
+    const r = dw / dp;
+    streak = r > 1.3 && r < 50 ? streak + 1 : 0;
+    if (streak >= 3 && !sent && phase === 'play') {
+      sent = true;
+      void online.reportCheat('speed', { ratio: Math.round(r * 100) / 100 }).catch(() => {});
+    }
+  }, 10_000);
+}
+
 export function startSync() {
   store.beforeResume = () => syncClock();
+  watchSpeed();
   // 每 5 分钟对一次时间，顺便看看自己的状态
   setInterval(() => { if (phase === 'play') { void syncClock(); void refreshAc(); } }, 5 * 60_000);
   void retry();

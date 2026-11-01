@@ -1,6 +1,6 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js';
 import type { GameState, GmBuff } from '../core/types';
-import type { CheatKind, CheatRow, GmInput, GmMail, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildDay, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
+import type { CheatKind, CheatRow, GmTrade, Snapshot, GmInput, GmMail, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildDay, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { levelSnapshot } from './api';
 import type { TaskSpec } from '../core/guild';
 import { fastOf, readFast, slowKey, withMove, type Fast } from './presenceSync';
@@ -132,10 +132,11 @@ export class SupabaseApi implements OnlineApi {
     this.need().name = name;
   }
 
-  async pushSave(s: GameState, device?: string) {
+  async pushSave(s: GameState, device?: string, epoch?: number) {
     const id = this.need().id;
     const snap = levelSnapshot(s);
-    ok(await this.sb.from('saves').upsert({ player_id: id, data: device ? { ...s, _device: device } : s, last_tick: s.lastTick, updated_at: new Date().toISOString() }));
+    const data = { ...s, ...(device ? { _device: device } : {}), ...(epoch ? { _epoch: epoch } : {}) };
+    ok(await this.sb.from('saves').upsert({ player_id: id, data, last_tick: s.lastTick, updated_at: new Date().toISOString() }));
     void this.sb.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', id);
     ok(await this.sb.from('ranks').upsert({ player_id: id, total: snap.total, combat: snap.combat, skills: snap.skills, xp: snap.xp, updated_at: new Date().toISOString() }));
   }
@@ -584,6 +585,22 @@ export class SupabaseApi implements OnlineApi {
   async gmAcSet(playerId: string, action: 'hide' | 'unhide' | 'ban' | 'unban' | 'clear', note?: string) {
     ok(await this.sb.rpc('gm_ac_set', { p_player: playerId, p_action: action, p_note: note ?? null }));
   }
+  async gmTrades(who?: string) {
+    const rows = ok(await this.sb.rpc('gm_trades', { p_who: who?.trim() || null, p_limit: 200 })) as Row[];
+    const items = (o: unknown) => Object.fromEntries(Object.entries((o ?? {}) as Record<string, unknown>).map(([k, v]) => [k, Number(v)]));
+    return rows.map((r): GmTrade => ({
+      id: r.id, status: r.status, at: Date.parse(r.updated_at), createdAt: Date.parse(r.created_at),
+      a: { id: r.a, pid: Number(r.a_pid), name: r.a_name, items: items(r.a_items), value: Number(r.a_value) },
+      b: { id: r.b, pid: Number(r.b_pid), name: r.b_name, items: items(r.b_items), value: Number(r.b_value) },
+    }));
+  }
+  async gmSnapshots() {
+    const rows = ok(await this.sb.rpc('gm_snapshots')) as Row[];
+    return rows.map((r): Snapshot => ({ id: Number(r.id), label: r.label, auto: !!r.auto, players: Number(r.players), at: Date.parse(r.created_at), mb: Number(r.mb) }));
+  }
+  async gmSnapshotCreate(label: string) { ok(await this.sb.rpc('gm_snapshot_create', { p_label: label })); }
+  async gmSnapshotDelete(id: number) { ok(await this.sb.rpc('gm_snapshot_delete', { p_id: id })); }
+  async gmRollback(id: number, pid?: number) { return Number(ok(await this.sb.rpc('gm_rollback', { p_snapshot: id, p_pid: pid ?? null }))); }
 }
 const toGmMail = (r: Row): GmMail => ({
   id: r.id, title: r.title, body: r.body ?? '', at: Date.parse(r.created_at),

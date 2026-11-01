@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { GM_KINDS, GM_KIND_NAME, GM_PCT_MAX } from '../core/gm';
 import type { GmKind } from '../core/types';
-import { online, type AiPlayer, type CheatRow, type GmInput, type GmMailRow, type GmRow } from '../net';
+import { online, type AiPlayer, type CheatRow, type GmTrade, type Snapshot, type GmInput, type GmMailRow, type GmRow } from '../net';
 import { aiPlayers, botDoing, botsMuted, setBotsMuted, botName, botOnline, botPresence, botProfile, habitOf, refreshBots, zoneOf } from '../net/bots';
 import { actionName } from './format';
 import { emitToGame } from './GameCanvas';
@@ -45,7 +45,7 @@ const left = (ms: number) => {
 };
 
 export function GmPanel({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<'buff' | 'mail' | 'gear' | 'ai' | 'ac'>('buff');
+  const [tab, setTab] = useState<'buff' | 'mail' | 'gear' | 'ai' | 'ac' | 'trade' | 'snap'>('buff');
   return (
     <div className="page guild gm-panel">
       <div className="sheet-head">
@@ -59,8 +59,10 @@ export function GmPanel({ onClose }: { onClose: () => void }) {
         <button className={`pill ${tab === 'gear' ? 'on' : ''}`} onClick={() => setTab('gear')}>{tl('赠送装备')}</button>
         <button className={`pill ${tab === 'ai' ? 'on' : ''}`} onClick={() => setTab('ai')}>{tl('AI 玩家')}</button>
         <button className={`pill ${tab === 'ac' ? 'on' : ''}`} onClick={() => setTab('ac')}>{tl('防作弊')}</button>
+        <button className={`pill ${tab === 'trade' ? 'on' : ''}`} onClick={() => setTab('trade')}>{tl('交易记录')}</button>
+        <button className={`pill ${tab === 'snap' ? 'on' : ''}`} onClick={() => setTab('snap')}>{tl('服务器存档')}</button>
       </div>
-      {tab === 'buff' ? <BuffTab /> : tab === 'ai' ? <AiTab onClose={onClose} /> : tab === 'ac' ? <AcTab /> : <MailTab key={tab} gear={tab === 'gear'} />}
+      {tab === 'buff' ? <BuffTab /> : tab === 'ai' ? <AiTab onClose={onClose} /> : tab === 'ac' ? <AcTab /> : tab === 'trade' ? <TradeTab /> : tab === 'snap' ? <SnapTab /> : <MailTab key={tab} gear={tab === 'gear'} />}
     </div>
   );
 }
@@ -483,10 +485,14 @@ function AiTab({ onClose }: { onClose: () => void }) {
 const AC_KIND: Record<string, string> = {
   xp: tl('经验涨得太快'), coins: tl('金币涨得太快'), clock: tl('游戏时间比真实时间快（改系统时间）'), rank: tl('排行榜数据和存档对不上'),
   xp_drop: tl('经验变少了'), clock_local: tl('游戏中改了系统时间'), save_edit: tl('本地存档被改过'), speed: tl('游戏速度异常'),
+  items: tl('物品总价值涨得太快'), bad_item: tl('存档里有不存在或数量不对的物品'), rollback: tl('存档时间倒退（回档）'),
+  trade: tl('交易价值严重不对等'), trade_fake: tl('交易给出的东西比存档里还多'), spam: tl('世界频道刷屏'), multi: tl('同一台设备登录多个账号'),
 };
-const AC_DEFAULT = { xp_per_hour: 6000000, coins_per_hour: 50000000, drift_min: 30, auto_hide: 1 };
+const AC_DEFAULT = { xp_per_hour: 6000000, coins_per_hour: 50000000, value_per_hour: 50000000, trade_gap: 3000000, chat_per_min: 8, multi_accounts: 3, drift_min: 30, snap_keep_auto: 3, auto_hide: 1 };
 const AC_FIELDS: [keyof typeof AC_DEFAULT, string][] = [
-  ['xp_per_hour', tl('每小时经验上限')], ['coins_per_hour', tl('每小时金币上限')], ['drift_min', tl('游戏时间允许超前（分钟）')], ['auto_hide', tl('严重的自动移出排行榜（1 开 / 0 关）')],
+  ['xp_per_hour', tl('每小时经验上限')], ['coins_per_hour', tl('每小时金币上限')], ['value_per_hour', tl('每小时物品价值上限')],
+  ['trade_gap', tl('交易价值差多少算不对等')], ['chat_per_min', tl('世界频道每分钟最多几句')], ['multi_accounts', tl('一台设备几个账号算多开')],
+  ['drift_min', tl('游戏时间允许超前（分钟）')], ['snap_keep_auto', tl('每日自动存档保留几份')], ['auto_hide', tl('严重的自动移出排行榜（1 开 / 0 关）')],
 ];
 function acDetail(d: Record<string, unknown>) {
   const n = (k: string) => fmtNum(Number(d[k] ?? 0));
@@ -495,6 +501,12 @@ function acDetail(d: Record<string, unknown>) {
   if ('game_min' in d) return tl`真实 ${n('real_min')} 分钟，游戏走了 ${n('game_min')} 分钟`;
   if ('rank_xp' in d) return tl`排行榜经验 ${n('rank_xp')}，存档经验 ${n('save_xp')}`;
   if ('jump_min' in d) return tl`系统时间跳了 ${n('jump_min')} 分钟`;
+  if ('ratio' in d) return tl`系统时间走得是正常的 ${d.ratio} 倍`;
+  if ('back_min' in d) return d.traded ? tl`倒退 ${n('back_min')} 分钟，期间做过交易` : tl`倒退 ${n('back_min')} 分钟`;
+  if ('got' in d) return tl`从 ${String(d.from)} 收到价值 ${n('got')}，只给出 ${n('gave')}`;
+  if ('per_min' in d) return tl`一分钟 ${n('per_min')} 句`;
+  if ('accounts' in d) return tl`这台设备登录过 ${n('accounts')} 个账号`;
+  if (Array.isArray(d.items)) return (d.items as { id: string; n?: unknown; gave?: unknown; had?: unknown }[]).map((x) => 'gave' in x ? tl`${itemLabel(x.id)} 给出 ${fmtNum(Number(x.gave))}，存档里 ${fmtNum(Number(x.had))}` : `${itemLabel(x.id)} × ${String(x.n)}`).join(tl('；'));
   return Object.keys(d).length ? JSON.stringify(d) : '';
 }
 function AcTab() {
@@ -576,6 +588,109 @@ function AcTab() {
         <p className="muted">{tl('默认值按满级角色最快的经验和金币速度留了几倍余量；GM 经验增益期间自动按比例放宽，GM 邮件送的金币不算。超过上限 3 倍（金币 5 倍）算严重。')}</p>
         <div className="gm-actions"><button className="primary" disabled={busy} onClick={saveConf}>{tl('保存')}</button></div>
       </div>
+    </>
+  );
+}
+
+const itemLabel = (id: string) => (id === 'coins' ? tl('金币') : ITEMS[id]?.name ?? id);
+const itemsText = (o: Record<string, number>) => Object.entries(o).map(([k, v]) => `${itemLabel(k)} × ${fmtNum(v)}`).join(tl('、')) || tl('（没放东西）');
+const TRADE_STATUS: Record<GmTrade['status'], string> = { open: tl('进行中'), done: tl('已成交'), cancelled: tl('已取消') };
+
+/** 交易记录（11-01）：所有玩家之间的交易，可以按数字 ID 或名字搜 */
+function TradeTab() {
+  const [who, setWho] = useState('');
+  const [rows, setRows] = useState<GmTrade[] | null>(null);
+  const [err, setErr] = useState('');
+  const load = async (q = who) => {
+    setRows(null); setErr('');
+    try { setRows(await online.gmTrades(q)); } catch (e) { setErr((e as Error).message); setRows([]); }
+  };
+  useEffect(() => { void load(''); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const list = rows ?? [];
+  return (
+    <>
+      <h3>{tl('交易记录')} <small className="muted">{tl('所有玩家之间的交易，最近的在前；价值按服务器上的物品价格算')}</small></h3>
+      <div className="gm-form frame">
+        <label><span>{tl('玩家')}</span><input value={who} placeholder={tl('数字 ID 或名字，空着看全部')} onChange={(e) => setWho(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void load()} /></label>
+        <div className="gm-actions"><button className="primary" onClick={() => void load()}>{tl('搜索')}</button></div>
+        {err && <p className="warn">{err}</p>}
+      </div>
+      {rows == null ? <p className="muted">{tl('读取中…')}</p> : !list.length ? <p className="muted">{tl('没有交易记录')}</p> : (
+        <ul className="gm-list">
+          {list.map((t) => {
+            const lop = t.status === 'done' && Math.max(t.a.value, t.b.value) > 5 * Math.min(t.a.value, t.b.value) && Math.abs(t.a.value - t.b.value) > 100000;
+            return (
+              <li key={t.id} className="frame">
+                <div><b>{t.a.name}</b> <small className="muted">#{t.a.pid}</small> ⇄ <b>{t.b.name}</b> <small className="muted">#{t.b.pid}</small> <small className={t.status === 'done' ? 'good' : 'muted'}>{TRADE_STATUS[t.status]}</small>{lop && <b className="warn"> {tl('不对等')}</b>}</div>
+                <small className="muted">{new Date(t.at).toLocaleString()}</small>
+                <div className="gm-trade-side"><small>{tl`${t.a.name} 给出（价值 ${fmtNum(t.a.value)}）：`}{itemsText(t.a.items)}</small></div>
+                <div className="gm-trade-side"><small>{tl`${t.b.name} 给出（价值 ${fmtNum(t.b.value)}）：`}{itemsText(t.b.items)}</small></div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </>
+  );
+}
+
+/**
+ * 服务器存档（11-01）：全服存档快照。每天自动存一份，也能手动存；
+ * 出了大 bug / 大漏洞可以整个服务器回档，或者只回档某一个玩家。
+ */
+function SnapTab() {
+  const [rows, setRows] = useState<Snapshot[] | null>(null);
+  const [label, setLabel] = useState('');
+  const [pid, setPid] = useState('');
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = async () => {
+    try { setRows(await online.gmSnapshots()); } catch (e) { setMsg({ text: (e as Error).message, ok: false }); setRows([]); }
+  };
+  useEffect(() => { void load(); }, []);
+  const run = async (f: () => Promise<string>) => {
+    setBusy(true);
+    try { setMsg({ text: await f(), ok: true }); await load(); } catch (e) { setMsg({ text: (e as Error).message, ok: false }); }
+    setBusy(false);
+  };
+  const when = (x: Snapshot) => new Date(x.at).toLocaleString();
+  const rollAll = (x: Snapshot) => {
+    if (!confirm(tl`整个服务器回档到 ${when(x)}（${x.label}）？所有玩家这之后的进度都会没有。回档前会自动先存一份，回错了还能再回来。`)) return;
+    if (!confirm(tl('再确认一次：真的要全服回档吗？'))) return;
+    void run(async () => tl`已回档 ${await online.gmRollback(x.id)} 个玩家。在线的玩家一分钟内会自动读取回档后的存档`);
+  };
+  const rollOne = (x: Snapshot) => {
+    const n = Number(pid);
+    if (!(n > 0)) return setMsg({ text: tl('先在上面填要回档的玩家数字 ID'), ok: false });
+    if (!confirm(tl`把玩家 #${n} 回档到 ${when(x)}（${x.label}）？`)) return;
+    void run(async () => { await online.gmRollback(x.id, n); return tl`玩家 #${n} 已回档`; });
+  };
+  const list = rows ?? [];
+  return (
+    <>
+      <h3>{tl('服务器存档')} <small className="muted">{tl('把所有玩家的角色存档和排行榜存一份。每天自动存一次；出了大 bug 或大漏洞可以整个服务器回档，也能只回档一个玩家。公会仓库、交易、邮件、聊天不回档')}</small></h3>
+      <div className="gm-form frame">
+        <label><span>{tl('备注')}</span><input maxLength={40} value={label} placeholder={tl('比如：更新前')} onChange={(e) => setLabel(e.target.value)} /></label>
+        <div className="gm-actions"><button className="primary" disabled={busy} onClick={() => void run(async () => { await online.gmSnapshotCreate(label); setLabel(''); return tl('已存档'); })}>{tl('现在存一份')}</button></div>
+        <label><span>{tl('单个玩家')}</span><input inputMode="numeric" value={pid} placeholder={tl('只回档一个人时填数字 ID')} onChange={(e) => setPid(e.target.value.replace(/\D/g, '').slice(0, 9))} /></label>
+        {msg && <p className={msg.ok ? 'good' : 'warn'}>{msg.text}</p>}
+      </div>
+      <h3>{tl('存档列表')}</h3>
+      {rows == null ? <p className="muted">{tl('读取中…')}</p> : !list.length ? <p className="muted">{tl('还没有存档（有玩家上线后会自动存第一份）')}</p> : (
+        <ul className="gm-list">
+          {list.map((x) => (
+            <li key={x.id} className="frame">
+              <div><b>{x.label || tl('手动')}</b> {x.auto && <small className="muted">{tl('自动')}</small>}</div>
+              <small className="muted">{tl`${when(x)} · ${x.players} 个玩家 · ${x.mb} MB`}</small>
+              <div className="gm-row-tools">
+                <button className="pill" disabled={busy} onClick={() => rollAll(x)}>{tl('全服回档到这里')}</button>
+                <button className="pill" disabled={busy} onClick={() => rollOne(x)}>{tl('只回档这个玩家')}</button>
+                <button className="pill" disabled={busy} onClick={() => confirm(tl`删除 ${when(x)} 的存档？`) && void run(async () => { await online.gmSnapshotDelete(x.id); return tl('已删除'); })}>{tl('删除')}</button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </>
   );
 }
