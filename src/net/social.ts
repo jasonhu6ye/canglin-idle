@@ -4,7 +4,7 @@ import type { GameState } from '../core/types';
 import { useEffect, useState } from 'react';
 import { worldResetAt } from './bots';
 import { online, type DungeonPresence, type Presence, type ChatChannel, type ChatMsg, type Friend, type Party, type PartyInvite, type Trade } from './index';
-import { ACTIONS, ITEMS } from '../core/data';
+import { ACTIONS, ITEMS, NODES } from '../core/data';
 import { store } from '../store';
 import { setGmBuffs } from '../core/gm';
 import { sendMail } from '../core/mail';
@@ -173,6 +173,22 @@ export function lacking(items: Record<string, number>) {
   return Object.entries(items).filter(([id, n]) => ownCount(id) < n).map(([id]) => ITEMS[id]?.name ?? id);
 }
 
+/**
+ * 永冬冰原的限时精英和首领（用户 11-01「可以几个人攻击同一个怪」）：不用组队，
+ * 附近打同一只的所有人都算一起打——伤害互相记到对方的怪上，血量按人数加厚（和野外组队一样）。
+ */
+const SHARED = new Set(NODES.filter((n) => n.timed && (n.timed.kind === 'elite' || n.timed.kind === 'boss')).flatMap((n) => n.actions));
+export const sharedFight = (action: string | undefined) => !!action && SHARED.has(action);
+/** 最近一次收到的所有在线玩家（打冰原精英/首领时找一起打的人） */
+let lastAll: Presence[] = [];
+/** 一起打的人：队友，加上（冰原精英/首领时）附近所有人 */
+function fightMates(action: string | undefined, meId: string): { id: string; name: string }[] {
+  const out = new Map<string, string>();
+  for (const m of st.party?.members ?? []) if (m.playerId !== meId) out.set(m.playerId, m.name);
+  if (sharedFight(action)) for (const p of lastAll) if (p.playerId !== meId && !out.has(p.playerId)) out.set(p.playerId, p.name);
+  return [...out].map(([id, name]) => ({ id, name }));
+}
+
 let aggroAt = 0;
 /**
  * 嘲讽（用户 10-26）：找出正和我打同一个目标的队友，把他们的嘲讽值交给 sim。
@@ -193,14 +209,13 @@ export function updateAggro(s: GameState, x: number, y: number, fighting: boolea
     const p = online.presenceOf(m.id);
     return !!p && now - p.at < 30_000 && p.dg?.gate === run.gate.id;
   }).length : 0);
-  if (!me || !st.party || !inFight) {
+  if (!me || (!st.party && !sharedFight(action)) || !inFight) {
     setFieldCrew(0);
     return setAggroMates([]);
   }
   const out: number[] = [];
-  for (const m of st.party.members) {
-    if (m.playerId === me.id) continue;
-    const p = online.presenceOf(m.playerId);
+  for (const m of fightMates(action, me.id)) {
+    const p = online.presenceOf(m.id);
     if (!p || now - p.at > 60_000) continue;
     const same = dg
       ? p.dg && p.dg.gate === dg.gate && p.dg.floor === dg.floor && p.dg.idx === dg.idx && p.dg.phase === 'fight'
@@ -223,10 +238,10 @@ export function takeFieldHits(all: Presence[]): FieldMateHit[] {
   const s = store.state;
   const action = s.paused ? undefined : s.queue[0]?.action;
   const out: FieldMateHit[] = [];
-  if (!me || !st.party || !action || ACTIONS[action]?.kind !== 'combat' || s.dungeon) return out;
-  for (const [i, m] of st.party.members.entries()) {
-    if (m.playerId === me.id) continue;
-    const p = all.find((q) => q.playerId === m.playerId);
+  lastAll = all;
+  if (!me || (!st.party && !sharedFight(action)) || !action || ACTIONS[action]?.kind !== 'combat' || s.dungeon) return out;
+  for (const [i, m] of fightMates(action, me.id).entries()) {
+    const p = all.find((q) => q.playerId === m.id);
     const f = p?.fd;
     if (!p) continue;
     // 队友没在打（或打的别处）：记成空账，等他开打时从第一下算起

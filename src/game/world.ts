@@ -800,8 +800,19 @@ export const BUILDINGS: Building[] = [
   B('house', 194, 185, 5, 4), B('house2', 172, 196, 5, 4), B('house3', 186, 199, 5, 4), B('house', 156, 136, 5, 4),
   B('house2', 178, 137, 5, 4), B('windmill', 163, 193, 3, 4), B('barn', 127, 194, 5, 4), B('well', 140, 186, 1, 1),
   ...TOWN2_BUILDINGS(),
+  ...CAMP_BUILDINGS(),
   ...TOWNS.flatMap((t) => t.buildings.map((bd) => ({ kind: bd.kind as BuildingKind, x: t.c.x + bd.x, y: t.c.y + bd.y, w: bd.w, h: bd.h, theme: t.theme }))),
 ];
+
+/** 永冬营地（11-01）：雪堡风格的仓库、篝火、几顶帐篷和两座瞭望塔；仓库门口下方一格是 data.ts 的 realm_bank */
+function CAMP_BUILDINGS(): Building[] {
+  const C = (kind: BuildingKind, x: number, y: number, w: number, h: number): Building => ({ kind, x: CAMP.x + x, y: CAMP.y + y, w, h, theme: 'snowfort' });
+  return [
+    C('warehouse', 6, -11, 8, 5), C('bonfire', -1, -1, 3, 3),
+    C('tent', -26, 4, 4, 3), C('tent', -21, 11, 4, 3), C('tent', 17, 4, 4, 3), C('tent', 22, 11, 4, 3), C('tent', -9, 20, 4, 3),
+    C('watchtower', -30, -22, 3, 6), C('watchtower', 27, -22, 3, 6),
+  ];
+}
 
 /** 落霞城（用户 10-23 要的新大型城镇）：坐标按城中心 = (0, 0)，仓库、集市、珍材坊的门口对齐 data.ts 的点位 */
 function TOWN2_BUILDINGS(): Building[] {

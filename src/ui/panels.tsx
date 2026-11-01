@@ -955,7 +955,7 @@ export function NodeList({ s, onPick }: { s: GameState; onPick: (id: string) => 
   const shownTown = townPick !== 'auto' && TOWN_GROUPS.has(townPick) ? townPick : here;
   if (tab.id === 'town') {
     rows = (TOWN_GROUPS.get(shownTown) ?? []).map((n) => {
-      const kinds = n.portal ? [tl('进家园岛屿')] : n.waystone ? [tl('传送')] : n.farm ? [tl('种植')] : n.id === RANCH ? [tl('养马')] : n.salvage ? [tl('分解装备')] : [...new Set(n.actions.map((id) => { const a = ACTIONS[id]; return a.kind === 'skill' ? SKILLS[a.skill].name : tl('战斗'); }))];
+      const kinds = n.portal ? [tl('进家园岛屿')] : n.realmGate ? [tl('永冬传送门')] : n.waystone ? [tl('传送')] : n.farm ? [tl('种植')] : n.id === RANCH ? [tl('养马')] : n.salvage ? [tl('分解装备')] : [...new Set(n.actions.map((id) => { const a = ACTIONS[id]; return a.kind === 'skill' ? SKILLS[a.skill].name : tl('战斗'); }))];
       if (n.id.includes('market')) kinds.unshift(tl('买卖'));
       return { key: n.id, id: n.id, at: [n], name: n.waystone ? tl('传说石碑') : splitTown(n.name)?.[1] ?? n.name, sub: n.closed ? tl('暂未开放') : n.opens === 'bank' ? tl('存取物品') : kinds.join(tl('、')), dim: n.closed };
     });

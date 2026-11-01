@@ -8,8 +8,8 @@ import { CG_H, CG_LEN, CG_W, drawRealmIntroFrame, realmIntroTitleAlpha, warmReal
 export interface RealmIntroOpts { from: 'canglin' | 'duskhaven'; lang: 'zh' | 'en'; outfit?: string }
 
 const TEXT = {
-  zh: { title: '永冬冰原', sub: '永冬之裔 · 限时活动', skip: '跳过 ›', from: { canglin: '自苍岭城出发', duskhaven: '自暮色港出发' } },
-  en: { title: 'Everwinter Tundra', sub: 'Scions of Everwinter · Limited Event', skip: 'Skip ›', from: { canglin: 'From Canglin', duskhaven: 'From Duskhaven' } },
+  zh: { title: '永冬冰原', sub: '永冬之裔 · 限时活动', skip: '跳过 ›', from: { canglin: '自苍岭城出发', duskhaven: '自落霞城出发' } }, // i18n-ignore
+  en: { title: 'Everwinter Icefield', sub: 'Scions of Everwinter · Limited Event', skip: 'Skip ›', from: { canglin: 'From Canglin', duskhaven: 'From Duskhaven' } },
 };
 
 let playing: (() => void) | null = null;

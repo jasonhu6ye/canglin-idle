@@ -41,7 +41,7 @@ export const REALM_LEVELS: Record<RealmRegion, [number, number]> = {
 
 /** 区域形状点（冰原方框里的相对坐标） */
 export const REALM_SEEDS: [number, number, RealmRegion][] = [
-  [0.12, 0.92, 'tundra'], [0.3, 0.88, 'tundra'], [0.5, 0.9, 'tundra'], [0.7, 0.88, 'tundra'], [0.88, 0.92, 'tundra'], [0.5, 0.97, 'tundra'], [0.2, 0.97, 'tundra'], [0.8, 0.97, 'tundra'],
+  [0.12, 0.92, 'tundra'], [0.3, 0.88, 'tundra'], [0.5, 0.83, 'tundra'], [0.7, 0.88, 'tundra'], [0.88, 0.92, 'tundra'], [0.5, 0.97, 'tundra'], [0.2, 0.97, 'tundra'], [0.8, 0.97, 'tundra'],
   [0.12, 0.68, 'frostpine'], [0.26, 0.62, 'frostpine'], [0.38, 0.7, 'frostpine'], [0.16, 0.76, 'frostpine'], [0.3, 0.76, 'frostpine'],
   [0.62, 0.7, 'icelakes'], [0.74, 0.62, 'icelakes'], [0.88, 0.68, 'icelakes'], [0.7, 0.76, 'icelakes'], [0.84, 0.77, 'icelakes'],
   // 峡谷本身是深谷，形状点放在两岸
@@ -68,7 +68,7 @@ export const behindAirWall = (x: number, y: number) =>
   x >= MYSTERY_BOX.x - MYSTERY_WALL && x < MYSTERY_BOX.x + MYSTERY_BOX.size + MYSTERY_WALL && y < MYSTERY_BOX.y + MYSTERY_BOX.size + MYSTERY_WALL && y >= MYSTERY_BOX.y - MYSTERY_WALL;
 
 /** 永冬营地（安全区）：回程传送门、仓库、石碑都在这里 */
-export const CAMP = atR(0.5, 0.93);
+export const CAMP = atR(0.5, 0.9);
 export const CAMP_R = 34;
 
 /** 主大陆上的两座永冬传送门：苍岭城、落霞城城外，相对城中心的偏移由 data.ts 摆 */

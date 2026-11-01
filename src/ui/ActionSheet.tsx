@@ -1,4 +1,6 @@
 import { QualityOdds } from './Quality';
+import { RealmGateSheet } from './RealmGateSheet';
+import { RealmChestSheet } from './RealmChestSheet';
 import { AltarSheet } from './Halloween';
 import { RanchSheet } from './Ranch';
 import { ShopSheet } from './Dungeon';
@@ -51,6 +53,8 @@ const isLocked = (s: GameState, a: ActionDef) => a.kind === 'skill' && level(s, 
 export function ActionSheet({ s, nodeId, onClose }: { s: GameState; nodeId: string; onClose: () => void }) {
   const node = NODES.find((n) => n.id === nodeId) ?? homeNode(nodeId)!;
   if (node.portal) return <PortalSheet s={s} node={node} onClose={onClose} />;
+  if (node.realmGate) return <RealmGateSheet s={s} node={node} onClose={onClose} />;
+  if (node.timed?.kind === 'chest') return <RealmChestSheet s={s} node={node} onClose={onClose} />;
   if (node.farm) return <FarmSheet s={s} nodeId={nodeId} onClose={onClose} />;
   if (node.waystone) return <WaystoneSheet s={s} nodeId={nodeId} onClose={onClose} />;
   if (node.event) return <AltarSheet s={s} node={node} onClose={onClose} />;

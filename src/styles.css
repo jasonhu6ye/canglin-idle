@@ -79,6 +79,7 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .topbar .hp { color: var(--red); }
 
 .bar { display: inline-block; width: 52px; height: 7px; background: #0e0805; box-shadow: 0 0 0 1px #000, inset 0 1px 0 #000; vertical-align: middle; }
+.bar.rc-open { display: block; width: 100%; height: 10px; margin: 8px 0; }
 .bar i { display: block; height: 100%; background: linear-gradient(#a8e08a, var(--green) 50%, #4e9a48); transition: width 0.2s linear; }
 .hp .bar i, .bar.foe i { background: linear-gradient(#ff8a9a, var(--red) 50%, #a03040); }
 .bar.wide { width: 100%; display: block; margin-top: 3px; }
@@ -241,6 +242,11 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 @keyframes wm-mist { from { transform: translate(-4%, 2%) rotate(0deg); } to { transform: translate(4%, -3%) rotate(8deg); } }
 .wm-mystery b { position: relative; font-size: 22px; color: #b9a8ff; letter-spacing: 4px; text-shadow: 0 0 8px #6040c0, 0 0 2px #000; }
 .wm-mystery span { position: relative; font-size: 11px; color: #d8d0ff; letter-spacing: 1px; text-shadow: 0 1px 0 #000, 0 0 4px #000; white-space: nowrap; }
+.wm-card .good { color: #8ee08a; }
+.wm-node.off { opacity: 0.35; filter: grayscale(0.7); }
+.wm-gate { display: block; font-size: 16px; line-height: 1; color: #bff0ff; text-shadow: 0 0 4px #4ab8ff, 0 0 2px #000, 0 1px 0 #000; }
+.wm-gate.mini { display: inline-block; font-size: 12px; margin-right: 2px; }
+.wm-legend .off-mark { display: inline-block; width: 8px; height: 8px; background: #888; opacity: 0.4; transform: rotate(45deg); margin-right: 4px; }
 .wm-region {
   position: absolute; transform: translate(-50%, -50%); pointer-events: none; white-space: nowrap; font-size: 12px; font-weight: bold;
   color: #fff3c4; letter-spacing: 2px; text-shadow: 0 1px 0 #000, 0 0 4px #000, 0 0 8px #000;

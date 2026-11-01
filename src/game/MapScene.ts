@@ -1,7 +1,7 @@
 import { leaveHome } from '../core/home';
 import Phaser from 'phaser';
-import { ACTIONS, CROP_DEFS, CROPS, cropsOfField, FARM_PLOTS, PLOT_BY_ID, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, inTownArea, keyOf, DANGER, dangerLevel, nodeOfAction, nodesOfAction, planRoute, standOf, STONE_JUMP_MS, WAYSTONES, travelMs, WALK_TILES_PER_SEC, type MapNode, type Route } from '../core/data';
-import { unlockWaystone, useWaystone, WAYSTONE_REACH, actionDuration, combatLevel, combatStats, MONSTER_MOVES, isBankId, leaveWork, maxHp, moveSpeed, playerAttackMs, resumeWork, setLoc, startWalk, teleport as teleportState, walkPos } from '../core/sim';
+import { ACTIONS, CROP_DEFS, CROPS, cropsOfField, FARM_PLOTS, PLOT_BY_ID, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, inTownArea, keyOf, DANGER, dangerLevel, nodeOfAction, nodesOfAction, planRoute, standOf, STONE_JUMP_MS, WAYSTONES, REALM_GATES, hopsOf, jumpNode, travelMs, WALK_TILES_PER_SEC, type MapNode, type Route } from '../core/data';
+import { unlockWaystone, useWaystone, useGate, atGate, WAYSTONE_REACH, actionDuration, combatLevel, combatStats, MONSTER_MOVES, isBankId, leaveWork, maxHp, moveSpeed, playerAttackMs, resumeWork, setLoc, startWalk, teleport as teleportState, walkPos } from '../core/sim';
 import { pickSeed, plotGrowth, plotPhase, tendPlot } from '../core/farm';
 import { paintWaystone } from './waystoneArt';
 import { GATE_SIZE, paintGatePortal } from './dungeonArt';
@@ -36,6 +36,9 @@ import { online } from '../net';
 import type { FieldMateHit } from '../net/social';
 import { animateTileset, liquidIndex, paintTileset, T, TILESET, tileIndex, VARIANTS } from './tiles';
 import { addMysteryFog } from './mysteryFog';
+import { paintWinterPortal, paintWinterPortalSwirl, WPORTAL_EYE, WPORTAL_FOOT, WPORTAL_H } from './winterPortalArt';
+import { playRealmIntro } from '../ui/realmIntro';
+import { chestTier, nextWindow, PORTAL_MS, timedWindow } from '../core/realm';
 import {
   BUILDINGS, CHUNK, FIELDS, findPath, GROUNDS, groundIndex, hash, isWalkable, LIQUIDS, propsInChunk, reachableNear, regionAt, SPAWN, standTile,
   WANDERERS, type PropKind,
@@ -195,10 +198,16 @@ export class MapScene extends Phaser.Scene {
     this.makeTextures();
     this.buildTown();
     this.buildFields();
-    for (const n of NODES) this.addNode(n);
+    for (const n of NODES) {
+      const k0 = this.children.list.length;
+      this.addNode(n);
+      // 限时点（11-01）：刷出来才显示，记下这个点画出来的东西
+      if (n.timed) this.timedViz.set(n.id, this.children.list.slice(k0) as Phaser.GameObjects.GameObject[]);
+    }
     for (const w of WANDERERS) this.addWanderer(w.kind, w.x, w.y, w.radius);
     this.addMonsters();
     addMysteryFog(this);
+    this.time.addEvent({ delay: 1000, loop: true, callback: () => this.syncTimed() });
 
     const task = store.state.queue[0];
     // 地图改版后旧存档的位置可能落在水里或新盖的房子里：挪到最近能站的格子
@@ -295,6 +304,10 @@ export class MapScene extends Phaser.Scene {
       this.events.once('wake', () => fn(...a));
     };
     const onStone = awake((id: string) => this.stoneJump(id));
+    // 永冬传送门（11-01）：页面上点「进入」/「回城」
+    const onGate = awake((id: string) => this.gateJump(id, true));
+    this.game.events.on('realmgate', onGate);
+    this.unsub.push(() => this.game.events.off('realmgate', onGate));
     this.game.events.on('waystone', onStone);
     this.unsub.push(() => this.game.events.off('waystone', onStone));
     this.time.addEvent({ delay: 300, loop: true, callback: () => this.checkStones() });
@@ -322,12 +335,12 @@ export class MapScene extends Phaser.Scene {
       const old = this.walker;
       const dest = standTile(n);
       // 走到建筑、资源点、石碑旁边：自动打开它的页面（用户 10-23）
-      const opens = n.town || n.waystone || n.farm || n.actions.some((a) => ACTIONS[a].kind !== 'combat');
+      const opens = n.town || n.waystone || n.farm || n.timed?.kind === 'chest' || n.actions.some((a) => ACTIONS[a].kind !== 'combat');
       const onArrive = () => this.game.events.emit(NODE_CLICK, n.id);
       // 远路自动顺路用已激活的传送石碑（用户 10-23）；目的地本身是石碑也一样（10-25 用户反馈：站在石碑旁寻路去主城石碑却跑过去）
       const r: Route = planRoute(store.state.waystones, this.playerTile(), dest, moveSpeed(store.state));
-      if (r.via) {
-        this.viaStones(r.via, () => {
+      if (hopsOf(r).length) {
+        this.viaHops(hopsOf(r), () => {
           const before = this.walker;
           this.moveTo(dest.x, dest.y, false);
           if (!opens) return;
@@ -348,8 +361,8 @@ export class MapScene extends Phaser.Scene {
       const dest = (follow ? [at, ...near] : [...near, at]).find((t) => isWalkable(t.x, t.y));
       if (!dest) return;
       const r: Route = planRoute(store.state.waystones, this.playerTile(), dest, moveSpeed(store.state));
-      if (r.via) {
-        this.viaStones(r.via, () => this.moveTo(dest.x, dest.y, !follow));
+      if (hopsOf(r).length) {
+        this.viaHops(hopsOf(r), () => this.moveTo(dest.x, dest.y, !follow));
         return;
       }
       this.moveTo(dest.x, dest.y, !follow);
@@ -1242,6 +1255,10 @@ export class MapScene extends Phaser.Scene {
       this.addPortal(n);
       return;
     }
+    if (n.realmGate) {
+      this.addRealmGate(n);
+      return;
+    }
     this.addResources(n);
     const cx = n.x * T + T / 2;
     const cy = n.y * T + T / 2;
@@ -1259,6 +1276,11 @@ export class MapScene extends Phaser.Scene {
     }
     if (n.world) {
       this.addLair(n, cx, cy);
+      if (n.timed) this.addTimedClock(n, cx, cy - 170, true);
+      return;
+    }
+    if (n.timed?.kind === 'chest') {
+      this.addTimedChest(n, cx, cy);
       return;
     }
     if (n.event) {
@@ -1290,6 +1312,7 @@ export class MapScene extends Phaser.Scene {
       .setOrigin(0.5, 1)
       .setDepth(D_LABEL);
     this.nodeLabels.push({ node: n, text });
+    if (n.timed) this.addTimedClock(n, cx, cy - 34 - (boss ? 6 : 0), false);
     // 特色地点：头顶再标一个大字地名，远远就能看到
     if (n.site) {
       this.add.text(cx, cy - 34, tl`「${n.name}」`, {
@@ -1383,6 +1406,35 @@ export class MapScene extends Phaser.Scene {
     }).setOrigin(0.5, 1).setDepth(D_LABEL);
   }
 
+  /** 限时点头上的倒计时；首领的（always）没刷出来时也显示，所以不放进 timedViz */
+  private addTimedClock(n: MapNode, x: number, y: number, always: boolean) {
+    const t = this.add.text(x, y, '', {
+      fontFamily: FONT, fontSize: always ? '9px' : '7px', color: '#bff0ff', backgroundColor: '#0c1a2acc', padding: { x: 3, y: 1 }, resolution: 4,
+    }).setOrigin(0.5, 1).setDepth(D_LABEL);
+    this.timedClock.set(n.id, t);
+    if (always) this.time.delayedCall(0, () => { const l = this.timedViz.get(n.id); if (l) this.timedViz.set(n.id, l.filter((o) => o !== t)); });
+  }
+
+  /** 限时宝箱（11-01）：箱子按这一轮的品质上色（绿/蓝/金），头上飘光点 */
+  private addTimedChest(n: MapNode, cx: number, cy: number) {
+    const tierTint = { green: 0x8ee08a, blue: 0x7ab8ff, gold: 0xffd86a } as const;
+    const img = this.add.image(cx, cy + T / 2, 'chest').setOrigin(0.5, 1).setScale(1.6).setDepth(cy + T / 2 + 1000);
+    const glow = this.add.image(cx, cy - 4, 'glow').setBlendMode(Phaser.BlendModes.ADD).setDepth(cy + T / 2 + 1001).setAlpha(0.5);
+    const paint = () => {
+      const w = timedWindow(n, Date.now());
+      const tint = tierTint[chestTier(n.id, w?.round ?? 0)];
+      glow.setTint(tint);
+    };
+    paint();
+    this.time.addEvent({ delay: 5000, loop: true, callback: paint });
+    this.tweens.add({ targets: glow, alpha: 0.85, scale: 1.2, yoyo: true, repeat: -1, duration: 900 });
+    this.add.text(cx, cy - 18, n.name, {
+      fontFamily: FONT, fontSize: '7px', color: '#fff3c4', backgroundColor: '#1b120ccc', padding: { x: 3, y: 1 }, resolution: 4,
+    }).setOrigin(0.5, 1).setDepth(D_LABEL);
+    this.addTimedClock(n, cx, cy - 28, false);
+    this.add.zone(cx, cy - 4, T * 2.5, T * 2.5).setInteractive({ useHandCursor: true }).setData('node', n.id);
+  }
+
   /** 标签上的等级范围按危险度上色，战斗等级变化时重画 */
   private updateLabels() {
     const cl = combatLevel(store.state);
@@ -1467,12 +1519,50 @@ export class MapScene extends Phaser.Scene {
     // 活动祭坛的南瓜王要召唤了才出现，开打时再放出来
     if (n.event) return;
     const mons = n.actions.map((id) => ACTIONS[id]).filter((a) => a.kind === 'combat').map((a) => MONSTERS[(a as { monster: string }).monster]);
+    const made: Phaser.GameObjects.GameObject[] = [];
     mons.forEach((m, i) => {
       // 世界首领就站在骷髅头标记正下方
       const { x: ox, y: oy } = n.world ? { x: n.x, y: n.y + 1 } : spawnSpot(n, i, mons.length);
       const count = m.rank === 'normal' ? 2 : 1;
-      for (let k = 0; k < count; k++) this.addMonWanderer(m, ox + k * 3, oy + (k ? 2 : 0), m.rank === 'boss' ? 2 : 4);
+      for (let k = 0; k < count; k++) made.push(this.addMonWanderer(m, ox + k * 3, oy + (k ? 2 : 0), m.rank === 'boss' ? 2 : 4));
     });
+    if (n.timed) {
+      const on = this.timedOn.get(n.id) ?? !!timedWindow(n, Date.now());
+      for (const o of made) (o as unknown as Phaser.GameObjects.Components.Visible).setVisible(on);
+      this.timedViz.get(n.id)?.push(...made);
+    }
+  }
+
+  /** 限时点（11-01）：按时间显示/隐藏，刷出来时一道冰光；倒计时标签每秒更新 */
+  private timedViz = new Map<string, Phaser.GameObjects.GameObject[]>();
+  private timedOn = new Map<string, boolean>();
+  private timedClock = new Map<string, Phaser.GameObjects.Text>();
+  private syncTimed() {
+    const now = Date.now();
+    const view = this.cameras.main.worldView;
+    for (const [id, objs] of this.timedViz) {
+      const n = NODES.find((x) => x.id === id)!;
+      const win = timedWindow(n, now);
+      const on = !!win;
+      const was = this.timedOn.get(id);
+      if (was !== on) {
+        this.timedOn.set(id, on);
+        for (const o of objs) (o as unknown as Phaser.GameObjects.Components.Visible).setVisible(on);
+        if (on && was === false && view.contains(n.x * T, n.y * T)) {
+          const fx = this.add.image(n.x * T + T / 2, n.y * T, 'glow').setTint(0x9ae8ff).setBlendMode(Phaser.BlendModes.ADD).setDepth(D_FLOAT).setScale(0.3);
+          this.tweens.add({ targets: fx, scale: 3, alpha: 0, duration: 1200, onComplete: () => fx.destroy() });
+        }
+      }
+      // 倒计时：刷出来时「还剩」，首领没刷出来时也显示「下次」
+      const clock = this.timedClock.get(id);
+      if (!clock || !view.contains(clock.x, clock.y)) continue;
+      const mmss = (ms: number) => { const t = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
+      if (win) clock.setText(tl`⏳ ${mmss(win.end - now)}`).setVisible(true);
+      else if (n.timed?.kind === 'boss') {
+        const nx = nextWindow(n, now);
+        clock.setText(nx ? tl`下次出现 ${mmss(nx.start - now)}` : '').setVisible(true);
+      } else clock.setVisible(false);
+    }
   }
 
   /** 怪物游荡：走的时候播移动动画，停下来播待机 */
@@ -1902,10 +1992,10 @@ export class MapScene extends Phaser.Scene {
       else this.startWorking();
     };
     // 顺路用传送石碑（存档里算好的路线）：先走到第一座石碑，传过去，再走完剩下的
-    const via = st.travel?.to === node.id ? st.travel.via : undefined;
-    if (via) {
+    const hops = st.travel?.to === node.id ? hopsOf(st.travel) : [];
+    if (hops.length) {
       if (toBank) this.float(supply ? tl('回仓库拿食物') : tl('背包满了，回仓库'), '#e8b84a');
-      this.goViaStones(via, dest, done);
+      this.goViaHops(hops, dest, done);
       return;
     }
     const path = findPath(this.playerTile(), dest) ?? [dest];
@@ -1928,63 +2018,154 @@ export class MapScene extends Phaser.Scene {
     this.walkPath(path, done, speed);
   }
 
-  /** 自动寻路经过石碑：走到 a，传到 b，再走到 dest；快慢按存档里剩下的时间来，和离线结算一致 */
-  /** 手动寻路顺路用石碑：走到 A（已经站在 A 旁边就不走），传到 B，再接着 then */
-  private viaStones(via: [string, string], then: () => void) {
-    const A = WAYSTONES.find((x) => x.id === via[0])!;
+  /** 手动寻路顺路传送（石碑或永冬传送门，可能好几次）：依次走到 A（已经站在旁边就不走），传到 B，最后接着 then */
+  private viaHops(hops: [string, string][], then: () => void) {
+    if (!hops.length) return then();
+    const [[from, to], ...rest] = hops;
+    const A = jumpNode(from);
+    if (!A) return then();
     const a = standTile(A);
     const jump = () => {
       const p = this.playerTile();
       store.dispatch((g) => setLoc(leaveWork(g), p.x, p.y));
-      this.stoneJump(via[1]);
-      this.time.delayedCall(500, then);
+      const go = () => this.time.delayedCall(500, () => this.viaHops(rest, then));
+      if (A.realmGate) void this.gateJump(to, true).then((ok) => ok && go());
+      else {
+        this.stoneJump(to);
+        go();
+      }
     };
     const p = this.playerTile();
     if (Math.hypot(p.x - a.x, p.y - a.y) <= 3) return jump();
     const old = this.walker;
     this.moveTo(a.x, a.y);
     if (!this.walker || this.walker === old) return;
-    this.float(tl`顺路去${A.name}传送`, '#8ae8ff');
+    this.float(A.realmGate ? tl`去${A.name}` : tl`顺路去${A.name}传送`, '#8ae8ff');
     this.arrive = jump;
   }
 
-  private goViaStones(via: [string, string], dest: { x: number; y: number }, done: () => void) {
-    const A = WAYSTONES.find((n) => n.id === via[0]);
-    const B = WAYSTONES.find((n) => n.id === via[1]);
+  /**
+   * 自动寻路经过石碑/传送门：依次走到 A、传到 B，最后走到 dest；
+   * 快慢按存档里剩下的时间来，和离线结算一致；已经过了的几段直接跳过（人放到那次传送的终点）
+   */
+  private goViaHops(hops: [string, string][], dest: { x: number; y: number }, done: () => void) {
     const tr = store.state.travel;
-    if (!A || !B || !tr) return;
-    const elapsed = tr.total - tr.ms;
-    const t1 = travelMs(store.state.loc, standOf(A), moveSpeed(store.state));
+    if (!tr) return;
+    const speed = moveSpeed(store.state);
+    // 每段（走到 A + 传送）的时长
+    const legs: { A: MapNode; B: MapNode; walk: number; jump: number }[] = [];
+    let at: { x: number; y: number } = store.state.loc;
+    for (const [f, t] of hops) {
+      const A = jumpNode(f), B = jumpNode(t);
+      if (!A || !B) return;
+      legs.push({ A, B, walk: travelMs(at, standOf(A), speed), jump: A.realmGate ? PORTAL_MS : STONE_JUMP_MS });
+      at = standOf(B);
+    }
+    let elapsed = tr.total - tr.ms;
+    let k = 0;
+    while (k < legs.length && elapsed >= legs[k].walk + legs[k].jump) {
+      elapsed -= legs[k].walk + legs[k].jump;
+      k++;
+    }
+    if (k > 0) {
+      const b = standTile(legs[k - 1].B);
+      this.player.setPosition(b.x * T + T / 2, b.y * T + T / 2).setDepth(b.y * T + T / 2 + 1000);
+      this.cameras.main.centerOn(this.player.x, this.player.y);
+      this.recenterCameraOnly();
+    }
     const speedFor = (path: { x: number; y: number }[], ms: number) => (ms > 500 && path.length ? pathLength(this.playerTile(), path) / (ms / 1000) : undefined);
-    const leg2 = () => {
+    const last = () => {
       const path = findPath(this.playerTile(), dest) ?? [dest];
       this.drawRoute(path);
       this.walkPath(path, done, speedFor(path, store.state.travel?.ms ?? 0));
     };
-    if (elapsed >= t1 + STONE_JUMP_MS) {
-      const b = standTile(B);
-      if (Math.hypot(this.playerTile().x - b.x, this.playerTile().y - b.y) > 40) this.player.setPosition(b.x * T + T / 2, b.y * T + T / 2);
-      leg2();
-      return;
+    const step = (i: number, skip: number) => {
+      if (i >= legs.length) return last();
+      const { A, B, walk } = legs[i];
+      const path = findPath(this.playerTile(), standTile(A)) ?? [standTile(A)];
+      this.drawRoute(path);
+      this.float(A.realmGate ? tl`去${A.name}` : tl`顺路去${A.name}传送`, '#8ae8ff');
+      this.walkPath(path, () => {
+        this.clearRoute();
+        this.jumpFx(B, !!A.realmGate);
+        this.time.delayedCall(500, () => step(i + 1, 0));
+      }, speedFor(path, walk - skip));
+    };
+    step(k, elapsed);
+  }
+
+  /** 传送的光效：原地一道光，人出现在 B 旁边 */
+  private jumpFx(B: MapNode, gate: boolean) {
+    const tint = gate ? 0x9ad0ff : 0x6ad8f0;
+    const out = this.add.image(this.player.x, this.player.y - 8, 'glow').setTint(tint).setBlendMode(Phaser.BlendModes.ADD).setDepth(D_FLOAT).setScale(0.2);
+    this.tweens.add({ targets: out, scale: gate ? 3 : 2, alpha: 0, duration: gate ? 900 : 600, onComplete: () => out.destroy() });
+    const b = standTile(B);
+    this.player.setPosition(b.x * T + T / 2, b.y * T + T / 2).setDepth(b.y * T + T / 2 + 1000);
+    this.cameras.main.centerOn(this.player.x, this.player.y);
+    this.recenterCameraOnly();
+    const flash = this.add.image(this.player.x, this.player.y - 8, 'glow').setTint(0x9ae8ff).setBlendMode(Phaser.BlendModes.ADD).setDepth(D_FLOAT).setScale(0.2);
+    this.tweens.add({ targets: flash, scale: gate ? 2.6 : 1.8, alpha: 0, duration: 700, onComplete: () => flash.destroy() });
+    this.float(tl`传送到${B.name}`, '#8ae8ff', true);
+    this.idle();
+  }
+
+  /**
+   * 走永冬传送门（11-01）：站在门旁才行；从主大陆进冰原先播入场 CG（manual 时），播完再搬人。
+   * 返回有没有过去
+   */
+  private async gateJump(to: string, manual: boolean): Promise<boolean> {
+    const dest = REALM_GATES.find((n) => n.id === to);
+    if (!dest || this.mountBusy) return false;
+    const p = this.playerTile();
+    store.dispatch((g) => setLoc(leaveWork(g), p.x, p.y));
+    const from = atGate(store.state);
+    if (!from || from === dest) return false;
+    if (manual && dest.realmGate === 'camp' && from.realmGate !== 'camp') {
+      this.walker = undefined;
+      await playRealmIntro({ from: from.realmGate === 'duskhaven' ? 'duskhaven' : 'canglin', lang: isEn ? 'en' : 'zh', outfit: store.state.settings?.skin });
     }
-    const path = findPath(this.playerTile(), standTile(A)) ?? [standTile(A)];
-    this.drawRoute(path);
-    this.float(tl`顺路去${A.name}传送`, '#8ae8ff');
-    this.walkPath(path, () => {
-      this.clearRoute();
-      // 一道光，人出现在另一座石碑旁
-      const out = this.add.image(this.player.x, this.player.y - 8, 'glow').setTint(0x6ad8f0).setBlendMode(Phaser.BlendModes.ADD).setDepth(D_FLOAT).setScale(0.2);
-      this.tweens.add({ targets: out, scale: 2, alpha: 0, duration: 600, onComplete: () => out.destroy() });
-      const b = standTile(B);
-      this.player.setPosition(b.x * T + T / 2, b.y * T + T / 2).setDepth(b.y * T + T / 2 + 1000);
-      this.cameras.main.centerOn(this.player.x, this.player.y);
-      this.recenterCameraOnly();
-      const flash = this.add.image(this.player.x, this.player.y - 8, 'glow').setTint(0x9ae8ff).setBlendMode(Phaser.BlendModes.ADD).setDepth(D_FLOAT).setScale(0.2);
-      this.tweens.add({ targets: flash, scale: 1.8, alpha: 0, duration: 700, onComplete: () => flash.destroy() });
-      this.float(tl`传送到${B.name}`, '#8ae8ff', true);
-      this.idle();
-      this.time.delayedCall(500, leg2);
-    }, speedFor(path, t1 - elapsed));
+    const before = store.state.loc;
+    store.dispatch((g) => useGate(g, to));
+    const st = store.state;
+    if (st.loc.x === before.x && st.loc.y === before.y) return false;
+    this.walker = undefined;
+    this.clearRoute();
+    this.stopWorking();
+    this.manual = st.queue.length > 0;
+    this.wasPaused = !!st.paused;
+    this.travelTo = undefined;
+    this.jumpFx(dest, true);
+    return true;
+  }
+
+  /** 永冬传送门（11-01）：远古冰石巨门，门洞里转着冰蓝漩涡，头顶一片雪花标记 */
+  private addRealmGate(n: MapNode) {
+    const K = 0.5;
+    if (!this.textures.exists('winter-gate')) this.textures.addCanvas('winter-gate', paintWinterPortal(K));
+    if (!this.textures.exists('winter-swirl')) this.textures.addCanvas('winter-swirl', paintWinterPortalSwirl(K));
+    const cx = n.x * T + T / 2;
+    const foot = n.y * T + T;
+    const h = this.textures.get('winter-gate').getSourceImage().height;
+    // 贴图底边在门脚下面 (H - FOOT)*K 像素
+    const by = foot + (WPORTAL_H - WPORTAL_FOOT) * K;
+    const swirl = this.add.image(cx, foot - WPORTAL_EYE * K, 'winter-swirl').setDepth(foot + 998);
+    this.tweens.add({ targets: swirl, angle: 360, duration: 6000, repeat: -1 });
+    this.add.image(cx, by, 'winter-gate').setOrigin(0.5, 1).setDepth(foot + 999);
+    const glow = this.add.image(cx, foot - WPORTAL_EYE * K, 'glow').setTint(0x7ad8ff).setBlendMode(Phaser.BlendModes.ADD).setDepth(foot + 1001).setAlpha(0.35).setScale(1.6);
+    this.tweens.add({ targets: glow, alpha: 0.6, yoyo: true, repeat: -1, duration: 1600 });
+    const top = by - h;
+    this.add.text(cx, top - 2, tl`❄ ${n.name}`, {
+      fontFamily: FONT, fontSize: '8px', color: '#c8f0ff', backgroundColor: '#0c1a2acc', padding: { x: 3, y: 1 }, resolution: 4,
+    }).setOrigin(0.5, 1).setDepth(D_LABEL);
+    // 飘雪花
+    this.time.addEvent({
+      delay: 700, loop: true, callback: () => {
+        if (!this.cameras.main.worldView.contains(cx, foot)) return;
+        const f = this.add.image(cx + (Math.random() - 0.5) * 60, foot - 70 - Math.random() * 30, 'p-ember').setTint(0xe8f8ff).setDepth(D_PARTICLE);
+        this.tweens.add({ targets: f, y: f.y + 50, x: f.x + (Math.random() - 0.5) * 16, alpha: 0, duration: 2400, onComplete: () => f.destroy() });
+      },
+    });
+    this.add.zone(cx, foot - 30, 70, 70).setInteractive({ useHandCursor: true }).setData('node', n.id);
   }
 
   private route?: Phaser.GameObjects.Graphics;

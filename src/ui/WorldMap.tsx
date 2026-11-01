@@ -12,7 +12,7 @@ import { emitToGame } from './GameCanvas';
 import { MonsterIcon } from './Bestiary';
 import { store } from '../store';
 import { FINE_POINTER } from './itemOpen';
-import { inRealm, isRealmRegion, MYSTERY_BOX, REALM_BOX, REALM_SEEDS } from '../core/realm';
+import { inRealm, isRealmRegion, MYSTERY_BOX, nextWindow, REALM_BOX, REALM_SEEDS, timedWindow } from '../core/realm';
 import { isEn, tl } from '../i18n';
 
 /**
@@ -109,16 +109,17 @@ const TOWN_MARK: Record<string, string> = { smithy: tl('苍岭城'), market2: tl
 const MAX_ZOOM = 8;
 
 /** 世界地图筛选（用户 10-23）：按用途看地点 */
-type Filter = 'all' | 'stone' | 'town' | 'boss' | 'world' | 'event' | 'cave' | SkillId;
+type Filter = 'all' | 'stone' | 'town' | 'boss' | 'world' | 'event' | 'cave' | 'timed' | SkillId;
 const FILTERS: [Filter, string][] = [
   ['all', tl('全部')], ['stone', tl('传送石碑')], ['town', tl('城镇')], ['mining', tl('采矿')], ['woodcutting', tl('伐木')], ['fishing', tl('钓鱼')],
-  ['gathering', tl('采集')], ['hunting', tl('狩猎')], ['thieving', tl('偷窃')], ['boss', tl('首领')], ['world', tl('世界首领')], ['event', tl('活动')], ['cave', tl('洞窟')],
+  ['gathering', tl('采集')], ['hunting', tl('狩猎')], ['thieving', tl('偷窃')], ['boss', tl('首领')], ['world', tl('世界首领')], ['event', tl('活动')], ['timed', tl('限时')], ['cave', tl('洞窟')],
 ];
 const skillsOf = (n: MapNode) => new Set(n.actions.map((id) => ACTIONS[id]).flatMap((a) => (a.kind === 'skill' ? [a.skill] : [])));
 function passes(n: MapNode, f: Filter) {
   if (f === 'all') return true;
   if (f === 'stone') return !!n.waystone;
-  if (f === 'town') return !!TOWN_MARK[n.id];
+  if (f === 'town') return !!TOWN_MARK[n.id] || !!n.realmGate;
+  if (f === 'timed') return !!n.timed;
   if (f === 'cave') return !!n.cave;
   if (f === 'world') return !!n.world;
   if (f === 'event') return !!n.event;
@@ -141,6 +142,9 @@ export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: ()
   const V = VIEWS[view];
   const url = useMemo(() => overview(view), [view]);
   const cl = combatLevel(s);
+  // 限时点每 15 秒刷新一次明暗
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 15_000); return () => clearInterval(t); }, []);
   const here = inView(view, playerPos);
   const me = here ? { x: (playerPos.x - V.x) / V.w, y: (playerPos.y - V.y) / V.h } : { x: 0.5, y: 0.5 };
 
@@ -271,18 +275,20 @@ export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: ()
           {(Object.keys(LABELS) as RegionId[]).filter((r) => isRealmRegion(r) === (view === 'realm')).map((r) => (
             <span key={r} className="wm-region" data-pri={zoom < 2 ? 3 : 7} style={{ left: `${LABELS[r][0] * 100}%`, top: `${LABELS[r][1] * 100}%` }}>{REGIONS[r].name}</span>
           ))}
-          {NODES.filter((n) => inView(view, n) && (!n.town || n.pond || TOWN_MARK[n.id] || n.waystone || n.portal) && passes(n, filter)).map((n) => {
+          {NODES.filter((n) => inView(view, n) && (!n.town || n.pond || TOWN_MARK[n.id] || n.waystone || n.portal || n.realmGate) && passes(n, filter)).map((n) => {
             const d = n.town && !n.pond ? 0 : dangerLevel(n, cl);
             const lit = n.waystone && s.waystones?.includes(n.id);
             // 英文石碑名都带「Waystone: 」，图标已经能看出是石碑，标签上省掉，少占一半地方（用户 11-01 嫌英文满屏乱）
             const name = n.waystone ? (isEn ? n.name.replace(/^(Legendary )?Waystone:\s*/, '') : n.name.replace(tl('传说石碑·'), tl('石碑·'))) : TOWN_MARK[n.id] ?? n.name;
             const pri = sel === n.id ? 0 : TOWN_MARK[n.id] ? 1 : n.world || n.event ? 2 : n.site ? 4 : n.waystone ? 5 : 6;
-            const big = n.site || n.world || n.event || TOWN_MARK[n.id] || (n.waystone && filter === 'stone');
+            const big = n.site || n.world || n.event || TOWN_MARK[n.id] || n.realmGate || (n.waystone && filter === 'stone');
+            // 限时点（11-01）：没刷出来的画暗
+            const off = !!n.timed && !timedWindow(n, now);
             return (
-              <button key={n.id} className={`wm-node ${sel === n.id ? 'sel' : ''} ${n.cave ? 'cave' : ''} ${n.waystone ? `stone ${lit ? 'lit' : ''}` : ''}`} style={{ left: `${((n.x - V.x) / V.w) * 100}%`, top: `${((n.y - V.y) / V.h) * 100}%`, zIndex: pri <= 2 ? 3 : undefined }}
+              <button key={n.id} className={`wm-node ${sel === n.id ? 'sel' : ''} ${n.cave ? 'cave' : ''} ${n.waystone ? `stone ${lit ? 'lit' : ''}` : ''} ${off ? 'off' : ''}`} style={{ left: `${((n.x - V.x) / V.w) * 100}%`, top: `${((n.y - V.y) / V.h) * 100}%`, zIndex: pri <= 2 ? 3 : undefined }}
                 onClick={() => setSel(n.id)}>
                 {/* 世界首领：红色骷髅头（用户 10-24） */}
-                {n.event ? <img className="wm-skull wm-pumpkin" src={pumpkinPointUrl()} alt="" draggable={false} /> : n.world ? <img className="wm-skull" src={skullUrl()} alt="" draggable={false} /> : <i style={n.waystone ? undefined : { background: n.cave ? '#2a2030' : DANGER[d].color }} />}
+                {n.realmGate ? <b className="wm-gate">❄</b> : n.event ? <img className="wm-skull wm-pumpkin" src={pumpkinPointUrl()} alt="" draggable={false} /> : n.world ? <img className="wm-skull" src={skullUrl()} alt="" draggable={false} /> : <i style={n.waystone ? undefined : { background: n.cave ? '#2a2030' : DANGER[d].color }} />}
                 {/* 特色地点和城镇一直标名字 */}
                 {(zoom > 1 || big) && <span data-pri={pri} className={n.event ? 'site event' : n.world ? 'site world' : big ? 'site' : ''}>{n.world ? `☠ ${name}` : name}</span>}
               </button>
@@ -296,6 +302,7 @@ export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: ()
         <span><i className="stone-mark" />{tl('石碑（已激活）')}</span>
         <span><i className="stone-mark off" />{tl('石碑（未激活）')}</span>
         <span><img className="wm-skull-mini" src={skullUrl()} alt="" />{tl('世界首领')}</span>
+        {view === 'realm' ? <span><i className="off-mark" />{tl('限时点（未刷出）')}</span> : <span><b className="wm-gate mini">❄</b>{tl('永冬传送门')}</span>}
         <span><i className="me" />{tl('你')}</span>
         {FINE_POINTER && <span className="wm-hint">{tl('滚轮缩放 · 按住左键拖动')}</span>}
       </div>
@@ -305,6 +312,17 @@ export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: ()
       )}
     </div>
   );
+}
+
+/** 限时点的倒计时（11-01）：刷出来的显示还剩多久，没刷出来的显示下次什么时候 */
+const mmss = (ms: number) => { const t = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
+function TimedLine({ n }: { n: MapNode }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
+  const cur = timedWindow(n, now);
+  if (cur) return <span className="good">{tl`限时刷新中 · 还剩 ${mmss(cur.end - now)} 消失`}</span>;
+  const nx = nextWindow(n, now);
+  return <span className="muted">{nx ? tl`现在没有 · ${mmss(nx.start - now)} 后刷新` : tl('现在没有')}</span>;
 }
 
 function NodeCard({ s, nodeId, cl, onOpen, onWalk }: { s: GameState; nodeId: string; cl: number; onOpen: () => void; onWalk: () => void }) {
@@ -321,6 +339,8 @@ function NodeCard({ s, nodeId, cl, onOpen, onWalk }: { s: GameState; nodeId: str
       </div>
       <small className="muted">{REGIONS[n.region].name}{!n.town && !n.cave && ` · Lv${n.lv[0]}${n.lv[1] !== n.lv[0] ? `-${n.lv[1]}` : ''}`}</small>
       {n.cave && <span>{tl('大型洞窟 · 尚未开放，敬请期待')}</span>}
+      {n.realmGate && <span>{n.realmGate === 'camp' ? tl('回程门：回苍岭城或落霞城') : tl('通往永冬冰原（推荐 95 级以上）')}</span>}
+      {n.timed && <TimedLine n={n} />}
       {n.waystone && <span>{s.waystones?.includes(n.id) ? tl('已激活：站在任意一座激活过的石碑旁就能传送到这里') : tl('未激活：走到石碑旁边就会激活')}</span>}
       {skills.length > 0 && <span>{tl`可练：${skills.join(tl('、'))}`}</span>}
       {monsters.length > 0 && (

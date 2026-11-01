@@ -8,7 +8,7 @@ import { OLD_JEWELS, BAR_VALUE, inTownArea, KEY_SHOP, keyOf, OLD_ENH, SCROLL_TOW
 import { nextRandom } from './rng';
 import { buffMob, coopMates, COOP_DEF, COOP_DMG, dungeonFloor, GATE_AFTER_CLEAR, GATE_CD, GATE_MAX, GATE_MS, GATE_REACH, legMs, rollChest, rollChestQuality, rollFloors, teamChest, teamChestQuality, type TeamMember } from './dungeon';
 import { partySize } from './party';
-import { inRealm } from './realm';
+import { CHEST_OPEN_MS, chestTier, inRealm, timedWindow, type ChestTier } from './realm';
 import { aggroMates, dgCrew, fieldCrew, fieldKey, stopKey, takeMateHits, targetChance, threatOf } from './aggro';
 import { stepQuests } from './quests';
 import { migrateMail, sendMail } from './mail';
@@ -1825,6 +1825,57 @@ export function buyHwSkin(prev: GameState, id: string, now: number): GameState {
   return s;
 }
 export const buyReaperSkin = (prev: GameState, now: number) => buyHwSkin(prev, 'reaper', now);
+
+/**
+ * 永冬冰原的限时宝箱（用户 11-01）：站在箱子旁开 10 秒，每人每轮一次；
+ * 品质这一轮所有人一样（绿 70 / 蓝 25 / 金 5），奖励直接进仓库。开的时候走开就作废。
+ */
+export const REALM_CHEST_LOOT: Record<ChestTier, { coins: number; items: [string, number][] }> = {
+  green: { coins: 3000, items: [['chest_8', 1], ['luckybag_8', 1]] },
+  blue: { coins: 8000, items: [['chest_8', 2], ['bosschest_8', 1]] },
+  gold: { coins: 20000, items: [['bosschest_8', 2], ['chest_8', 2], ['luckybag_8', 2]] },
+};
+const chestNode = (id: string) => NODES.find((n) => n.id === id && n.timed?.kind === 'chest');
+/** 这个箱子这一轮还能不能开（刷出来了、站在旁边、这一轮没开过） */
+export function realmChestState(s: GameState, id: string, now: number): 'gone' | 'far' | 'got' | 'ok' {
+  const n = chestNode(id);
+  const w = n && timedWindow(n, now);
+  if (!n || !w) return 'gone';
+  if (s.realmChest?.got?.[id] === w.round) return 'got';
+  if (!nearNode(s, n)) return 'far';
+  return 'ok';
+}
+export function startRealmChest(prev: GameState, id: string, now: number): GameState {
+  if (realmChestState(prev, id, now) !== 'ok') return prev;
+  return { ...prev, realmChest: { ...prev.realmChest, opening: { id, at: now } } };
+}
+export function cancelRealmChest(prev: GameState): GameState {
+  if (!prev.realmChest?.opening) return prev;
+  return { ...prev, realmChest: { ...prev.realmChest, opening: undefined } };
+}
+/** 开满 10 秒：领奖。返回的新存档里 opening 清掉，got 记下这一轮 */
+export function finishRealmChest(prev: GameState, now: number): GameState {
+  const op = prev.realmChest?.opening;
+  if (!op || now - op.at < CHEST_OPEN_MS || realmChestState(prev, op.id, now) !== 'ok') return cancelRealmChest(prev);
+  const n = chestNode(op.id)!;
+  const w = timedWindow(n, now)!;
+  // 开箱开始时那一轮必须和现在是同一轮（跨轮的不算）
+  if (op.at < w.start) return cancelRealmChest(prev);
+  const loot = REALM_CHEST_LOOT[chestTier(n.id, w.round)];
+  const s = clone(prev);
+  s.bank.coins = (s.bank.coins ?? 0) + loot.coins;
+  for (const [item, q] of loot.items) if (ITEMS[item]) s.bank[item] = (s.bank[item] ?? 0) + q;
+  // 只留还在这一轮里的记录，存档不会越来越大
+  const got: Record<string, number> = {};
+  for (const [k, r] of Object.entries(s.realmChest?.got ?? {})) {
+    const m = chestNode(k);
+    const cur = m && timedWindow(m, now);
+    if (cur && cur.round === r) got[k] = r;
+  }
+  got[op.id] = w.round;
+  s.realmChest = { got };
+  return s;
+}
 
 /** 畜牧站（用户 10-24）：站在旁边才能放小马崽、牵马 */
 export const RANCH_NODE = NODES.find((n) => n.id === RANCH)!;
