@@ -1748,3 +1748,29 @@ begin
   return n;
 end $$;
 grant execute on function public.gm_rollback(bigint, bigint) to authenticated;
+
+-- ============ 管理员：真人玩家列表（11-01）============
+-- 新注册的在前；带注册时间、最后在线、等级、公会、防作弊状态。p_who 按数字 ID 或名字筛
+create or replace function public.gm_players(p_who text default null, p_limit int default 200)
+returns table (id uuid, pid bigint, name text, created_at timestamptz, last_seen timestamptz, total int, combat int,
+  guild_tag text, hidden boolean, banned boolean, flags bigint)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  return query
+    select p.id, p.pid, p.name, p.created_at, p.last_seen, r.total, r.combat, g.tag, p.ac_hidden, p.banned,
+      (select count(*) from cheat_flags f where f.player_id = p.id)
+    from profiles p left join ranks r on r.player_id = p.id left join guilds g on g.id = p.guild_id
+    where p_who is null or p_who = '' or p.pid::text = p_who or lower(p.name) like '%' || lower(p_who) || '%'
+    order by p.created_at desc
+    limit least(p_limit, 500);
+end $$;
+grant execute on function public.gm_players(text, int) to authenticated;
+
+create or replace function public.gm_player_count() returns table (total bigint, today bigint, week bigint)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  return query select count(*), count(*) filter (where created_at > now() - interval '1 day'), count(*) filter (where created_at > now() - interval '7 days') from profiles;
+end $$;
+grant execute on function public.gm_player_count() to authenticated;

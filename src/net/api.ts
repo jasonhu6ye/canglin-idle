@@ -345,6 +345,14 @@ export interface OnlineApi {
   gmSnapshotCreate(label: string): Promise<void>;
   gmSnapshotDelete(id: number): Promise<void>;
   gmRollback(id: number, pid?: number): Promise<number>;
+  /** 管理员：真人玩家，新注册的在前；人数统计 */
+  gmPlayers(who?: string): Promise<GmPlayer[]>;
+  gmPlayerCount(): Promise<{ total: number; today: number; week: number }>;
+}
+
+export interface GmPlayer {
+  id: string; pid: number; name: string; joined: number; lastSeen: number;
+  total: number | null; combat: number | null; guildTag: string | null; hidden: boolean; banned: boolean; flags: number;
 }
 
 export interface GmTrade {

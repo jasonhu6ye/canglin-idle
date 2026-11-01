@@ -1198,3 +1198,4 @@ button.chat-who { cursor: pointer; text-decoration: underline dotted; text-under
 .gm-ac-flags { margin: 4px 0; padding-left: 14px; font-size: 12px; } .gm-ac-flags li { margin: 2px 0; }
 .gm-form.gm-ac-form label > span:first-child { flex: 0 0 auto; max-width: 55%; } .gm-form.gm-ac-form label > input { min-width: 0; }
 .gm-trade-side { margin-top: 2px; line-height: 1.4; }
+.gm-count { margin: 4px 0 8px; font-weight: bold; } .gm-players li > small { display: block; }

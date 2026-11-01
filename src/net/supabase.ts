@@ -1,6 +1,6 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js';
 import type { GameState, GmBuff } from '../core/types';
-import type { CheatKind, CheatRow, GmTrade, Snapshot, GmInput, GmMail, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildDay, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
+import type { CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMail, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildDay, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { levelSnapshot } from './api';
 import type { TaskSpec } from '../core/guild';
 import { fastOf, readFast, slowKey, withMove, type Fast } from './presenceSync';
@@ -601,6 +601,18 @@ export class SupabaseApi implements OnlineApi {
   async gmSnapshotCreate(label: string) { ok(await this.sb.rpc('gm_snapshot_create', { p_label: label })); }
   async gmSnapshotDelete(id: number) { ok(await this.sb.rpc('gm_snapshot_delete', { p_id: id })); }
   async gmRollback(id: number, pid?: number) { return Number(ok(await this.sb.rpc('gm_rollback', { p_snapshot: id, p_pid: pid ?? null }))); }
+  async gmPlayers(who?: string) {
+    const rows = ok(await this.sb.rpc('gm_players', { p_who: who?.trim() || null, p_limit: 300 })) as Row[];
+    return rows.map((r): GmPlayer => ({
+      id: r.id, pid: Number(r.pid), name: r.name, joined: Date.parse(r.created_at), lastSeen: Date.parse(r.last_seen),
+      total: r.total == null ? null : Number(r.total), combat: r.combat == null ? null : Number(r.combat), guildTag: r.guild_tag ?? null,
+      hidden: !!r.hidden, banned: !!r.banned, flags: Number(r.flags ?? 0),
+    }));
+  }
+  async gmPlayerCount() {
+    const r = (ok(await this.sb.rpc('gm_player_count')) as Row[])[0] ?? {};
+    return { total: Number(r.total ?? 0), today: Number(r.today ?? 0), week: Number(r.week ?? 0) };
+  }
 }
 const toGmMail = (r: Row): GmMail => ({
   id: r.id, title: r.title, body: r.body ?? '', at: Date.parse(r.created_at),

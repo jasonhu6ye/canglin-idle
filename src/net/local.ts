@@ -1,5 +1,5 @@
 import type { GameState } from '../core/types';
-import type { AiPlayer, CheatKind, CheatRow, GmTrade, Snapshot, GmInput, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
+import type { AiPlayer, CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { GUILD_MAX, levelSnapshot } from './api';
 import { tl } from '../i18n';
 import { ITEMS } from '../core/data';
@@ -436,4 +436,6 @@ export class LocalApi implements OnlineApi {
   async gmSnapshotCreate() { /* 本地不做 */ }
   async gmSnapshotDelete() { /* 本地不做 */ }
   async gmRollback() { return 0; }
+  async gmPlayers(): Promise<GmPlayer[]> { return []; }
+  async gmPlayerCount() { return { total: 0, today: 0, week: 0 }; }
 }

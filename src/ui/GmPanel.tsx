@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { GM_KINDS, GM_KIND_NAME, GM_PCT_MAX } from '../core/gm';
 import type { GmKind } from '../core/types';
-import { online, type AiPlayer, type CheatRow, type GmTrade, type Snapshot, type GmInput, type GmMailRow, type GmRow } from '../net';
+import { online, type AiPlayer, type CheatRow, type GmPlayer, type GmTrade, type Snapshot, type GmInput, type GmMailRow, type GmRow } from '../net';
 import { aiPlayers, botDoing, botsMuted, setBotsMuted, botName, botOnline, botPresence, botProfile, habitOf, refreshBots, zoneOf } from '../net/bots';
 import { actionName } from './format';
 import { emitToGame } from './GameCanvas';
@@ -45,7 +45,7 @@ const left = (ms: number) => {
 };
 
 export function GmPanel({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<'buff' | 'mail' | 'gear' | 'ai' | 'ac' | 'trade' | 'snap'>('buff');
+  const [tab, setTab] = useState<'buff' | 'mail' | 'gear' | 'ai' | 'players' | 'ac' | 'trade' | 'snap'>('buff');
   return (
     <div className="page guild gm-panel">
       <div className="sheet-head">
@@ -58,11 +58,12 @@ export function GmPanel({ onClose }: { onClose: () => void }) {
         <button className={`pill ${tab === 'mail' ? 'on' : ''}`} onClick={() => setTab('mail')}>{tl('赠送物品')}</button>
         <button className={`pill ${tab === 'gear' ? 'on' : ''}`} onClick={() => setTab('gear')}>{tl('赠送装备')}</button>
         <button className={`pill ${tab === 'ai' ? 'on' : ''}`} onClick={() => setTab('ai')}>{tl('AI 玩家')}</button>
+        <button className={`pill ${tab === 'players' ? 'on' : ''}`} onClick={() => setTab('players')}>{tl('玩家')}</button>
         <button className={`pill ${tab === 'ac' ? 'on' : ''}`} onClick={() => setTab('ac')}>{tl('防作弊')}</button>
         <button className={`pill ${tab === 'trade' ? 'on' : ''}`} onClick={() => setTab('trade')}>{tl('交易记录')}</button>
         <button className={`pill ${tab === 'snap' ? 'on' : ''}`} onClick={() => setTab('snap')}>{tl('服务器存档')}</button>
       </div>
-      {tab === 'buff' ? <BuffTab /> : tab === 'ai' ? <AiTab onClose={onClose} /> : tab === 'ac' ? <AcTab /> : tab === 'trade' ? <TradeTab /> : tab === 'snap' ? <SnapTab /> : <MailTab key={tab} gear={tab === 'gear'} />}
+      {tab === 'buff' ? <BuffTab /> : tab === 'ai' ? <AiTab onClose={onClose} /> : tab === 'ac' ? <AcTab /> : tab === 'players' ? <PlayersTab /> : tab === 'trade' ? <TradeTab /> : tab === 'snap' ? <SnapTab /> : <MailTab key={tab} gear={tab === 'gear'} />}
     </div>
   );
 }
@@ -687,6 +688,57 @@ function SnapTab() {
                 <button className="pill" disabled={busy} onClick={() => rollOne(x)}>{tl('只回档这个玩家')}</button>
                 <button className="pill" disabled={busy} onClick={() => confirm(tl`删除 ${when(x)} 的存档？`) && void run(async () => { await online.gmSnapshotDelete(x.id); return tl('已删除'); })}>{tl('删除')}</button>
               </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
+/** 「多久以前」：刚刚 / 5 分钟前 / 3 小时前 / 2 天前 */
+function ago(t: number) {
+  const m = Math.floor((Date.now() - t) / 60000);
+  if (m < 2) return tl('刚刚');
+  if (m < 60) return tl`${m} 分钟前`;
+  if (m < 48 * 60) return tl`${Math.floor(m / 60)} 小时前`;
+  return tl`${Math.floor(m / 1440)} 天前`;
+}
+
+/** 真人玩家（11-01）：新注册的在前，带注册时间、最后在线、等级、公会、防作弊状态 */
+function PlayersTab() {
+  const [who, setWho] = useState('');
+  const [rows, setRows] = useState<GmPlayer[] | null>(null);
+  const [count, setCount] = useState<{ total: number; today: number; week: number } | null>(null);
+  const [err, setErr] = useState('');
+  const load = async (q = who) => {
+    setRows(null); setErr('');
+    try {
+      const [r, c] = await Promise.all([online.gmPlayers(q), online.gmPlayerCount()]);
+      setRows(r); setCount(c);
+    } catch (e) { setErr((e as Error).message); setRows([]); }
+  };
+  useEffect(() => { void load(''); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const list = rows ?? [];
+  return (
+    <>
+      <h3>{tl('玩家')} <small className="muted">{tl('真人玩家（不含 AI），新注册的在前')}</small></h3>
+      {count && <p className="gm-count">{tl`共 ${count.total} 人 · 今天新注册 ${count.today} · 7 天内 ${count.week}`}</p>}
+      <div className="gm-form frame">
+        <label><span>{tl('玩家')}</span><input value={who} placeholder={tl('数字 ID 或名字，空着看全部')} onChange={(e) => setWho(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void load()} /></label>
+        <div className="gm-actions"><button className="primary" onClick={() => void load()}>{tl('搜索')}</button></div>
+        {err && <p className="warn">{err}</p>}
+      </div>
+      {rows == null ? <p className="muted">{tl('读取中…')}</p> : !list.length ? <p className="muted">{tl('没有玩家')}</p> : (
+        <ul className="gm-list gm-players">
+          {list.map((p) => (
+            <li key={p.id} className="frame">
+              <div>
+                <b>{p.name}</b> <small className="muted">#{p.pid}</small>{p.guildTag && <small className="muted"> [{p.guildTag}]</small>}
+                {p.banned ? <b className="warn"> {tl('已封禁')}</b> : p.hidden ? <b className="warn"> {tl('已移出排行榜')}</b> : p.flags > 0 ? <small className="warn"> {tl`${p.flags} 条可疑记录`}</small> : null}
+              </div>
+              <small className="muted">{tl`注册：${new Date(p.joined).toLocaleString()}（${ago(p.joined)}）`}</small>
+              <small className="muted">{tl`最后在线：${ago(p.lastSeen)}`}{p.total != null ? tl` · 总等级 ${p.total} · 战斗 ${p.combat}` : tl(' · 还没上传过存档')}</small>
             </li>
           ))}
         </ul>
