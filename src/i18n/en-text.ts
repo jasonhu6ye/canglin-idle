@@ -1270,4 +1270,6 @@ export const EN_TEXT: Record<string, string> = {
   "大量冰晶、霜雪礼盒": "Lots of shards, Frost Gift Box",
   "活动还在制作中，开放时间、奖励和具体数值以正式更新公告为准。": "The event is still in development. Start date, rewards and exact numbers will be in the official update notes.",
   "永冬冰晶": "Everwinter Shards",
+  "衣橱预览修复": "Wardrobe preview fix",
+  "衣橱里的角色预览会把伸出身体外的武器、帽尖剪掉一截，现在会按外观实际的大小完整显示。": "The wardrobe preview used to cut off weapons and hat tips that stick out past the body. Outfits now show in full.",
 };

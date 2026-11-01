@@ -8,6 +8,12 @@ import { tl } from '../i18n';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-11-01-c', date: tl('11 月 1 日'), title: tl('衣橱预览修复'),
+    lines: [
+      tl('衣橱里的角色预览会把伸出身体外的武器、帽尖剪掉一截，现在会按外观实际的大小完整显示。'),
+    ],
+  },
+  {
     id: '2026-11-01-b', date: tl('11 月 1 日'), title: tl("活动预告：永冬之裔"),
     lines: [
       tl("新的限时活动「永冬之裔」即将开放：活动期间野外会随机刷出永冬生物，打倒它们收集永冬冰晶，兑换限定外观、坐骑和家园冰雕。"),
