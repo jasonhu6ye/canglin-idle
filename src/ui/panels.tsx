@@ -341,7 +341,7 @@ export function CharacterPanel({ s }: { s: GameState }) {
       <p className="muted">{tl`战斗时先吃食物栏，血量低于 ${Math.round(POTION_AT * 100)}% 先喝药水栏。回仓库补给时会把这两栏补满。在背包里点食物或药水，可以放进栏位。`}</p>
       <h2>{tl('工具')}</h2>
       <div className="equip tools">{TOOL_SLOTS.map(([id, name]) => slot(id, name))}</div>
-      <p className="muted">{TOOL_SLOTS.map(([slot, name]) => `${name} +${Math.round(slotSpeed(s, slot) * 100)}%`).join(' · ')}</p>
+      <p className="muted">{TOOL_SLOTS.map(([slot, name]) => `${name} +${Math.round(slotSpeed(s, slot) * 100)}%`.replace(/ /g, '\u00a0')).join(' · ')}</p>
       <p className="muted">{tl('点任意栏位会列出背包里能放进这一栏的装备，点「装备」直接换上，点「卸下」放回背包（背包满了送回仓库）。站在仓库旁时，仓库里的装备也会列出来。')}</p>
       {pick && <SlotPicker s={s} slot={pick[0]} name={pick[1]} onClose={() => setPick(null)} />}
     </div>
