@@ -10,7 +10,8 @@ import { doorOf, FACILITY_NAME, townAt, TOWNS, type Facility, type TownDef } fro
  * 闭环：采集 → 仓库 → 生产 → 装备/消耗品 → 战斗 → 掉落 → 生产或卖钱。
  */
 
-export { MAP_W, MAP_H, MID_BOX, OLD_BOX, at, atW, atF } from './geo';
+export { MAP_W, MAP_H, MAIN_SIZE, MID_BOX, OLD_BOX, at, atW, atF } from './geo';
+import { atR, CAMP, inRealm, MYSTERY_BOX, PORTAL_MS, REALM_BOX, REALM_LEVELS, REALM_REGIONS, REALM_SEEDS, strHash, timedWindow, TIMED_RULES, type RealmRegion, type Timed, type TimedKind } from './realm';
 import { MAP_W, MAP_H, MID_BOX, OLD_BOX, at, atW, atF } from './geo';
 import { APT_MAX, APT_MIN, COAT_NAME, coatOf, FOAL, FOAL_CHANCE, horseItem, RANCH } from './ranch';
 import { HW_ALTAR, HW_BOX, HW_MOUNT, HW_POINT, HW_TIERS, hwTierOf } from './halloween';
@@ -74,6 +75,15 @@ export const REGIONS: Record<RegionId, { name: string; color: string }> = {
   ashcape: { name: tl('灰烬海角'), color: '#4a3a3a' },
   thunder: { name: tl('雷鸣断层'), color: '#4a4a6a' },
   starsea: { name: tl('星陨晶海'), color: '#3a3a8a' },
+  // 永冬冰原（用户 11-01）
+  tundra: { name: tl('冻土荒原'), color: '#8a8478' },
+  frostpine: { name: tl('霜松冻林'), color: '#4a6a6a' },
+  icelakes: { name: tl('冰湖群'), color: '#8ac0e0' },
+  icerift: { name: tl('冰裂峡谷'), color: '#5a7a9a' },
+  glacier: { name: tl('冰川山脉'), color: '#b8d0e8' },
+  frozenruins: { name: tl('冰封废墟'), color: '#7a8aa0' },
+  aurorahigh: { name: tl('极光高地'), color: '#6ad0b8' },
+  everrift: { name: tl('永冬裂隙'), color: '#3a8ab0' },
 };
 
 // ---- 物品 ----
@@ -1292,6 +1302,10 @@ export interface MapNode {
   portal?: boolean;
   /** 12080 新城镇里的点位（城镇布局自己管地面，不用清空地） */
   townId?: string;
+  /** 永冬传送门（11-01）：苍岭城、落霞城城外各一座，冰原营地一座回程门 */
+  realmGate?: 'canglin' | 'duskhaven' | 'camp';
+  /** 永冬冰原的限时点（11-01）：怪物、精英、首领、宝箱，按时间刷出来、30 分钟后消失 */
+  timed?: Timed;
 }
 export type SiteKind = 'islands' | 'bamboo' | 'saltflat' | 'crater' | 'fungal' | 'glacier' | 'obsidian' | 'starabyss'
   | 'oasis' | 'mesa' | 'atoll' | 'crystalheart'
@@ -1588,7 +1602,7 @@ export const NODES: MapNode[] = [
   // ---- 世界首领的巢穴（用户 10-24）：地图上红色骷髅头标记，各在一片群系的腹地 ----
   lair('wb_flame_lair', tl('炎煌龙巢'), 7640, 7060, 'lava'),
   lair('wb_soul_lair', tl('噬魂古林'), 2150, 10600, 'moonmire'),
-  lair('wb_frost_lair', tl('永冬冰原'), 4400, 1250, 'frostpeak'),
+  lair('wb_frost_lair', tl('永冬巨像冰窟'), 4400, 1250, 'frostpeak'),
   lair('wb_thunder_lair', tl('天罚雷巅'), 10150, 1500, 'thunder'),
   lair('wb_void_lair', tl('虚无裂隙'), 5900, 10500, 'starsea'),
 
@@ -1605,6 +1619,61 @@ export const NODES: MapNode[] = [
   // ---- 12080 的 8 座新城镇（布局在 towns.ts） ----
   ...TOWNS.flatMap(townNodes),
 ];
+
+// ---- 永冬冰原（用户 11-01）：传送门、营地、限时点 ----
+/** 主大陆的两座永冬传送门：城外（不在城里），地图上有雪花标记 */
+const gate = (id: string, name: string, p: { x: number; y: number }, region: RegionId, side: 'canglin' | 'duskhaven' | 'camp'): MapNode =>
+  ({ id, name, ...p, region, lv: [1, 1], sprite: 'portal', actions: [], town: true, realmGate: side });
+const timedSpot = (id: string, name: string, p: { x: number; y: number }, region: RealmRegion, sprite: NodeSprite, kind: TimedKind, extra: Partial<MapNode> = {}): MapNode => {
+  const rule = TIMED_RULES[kind];
+  return {
+    id, name, ...p, region, lv: [...REALM_LEVELS[region]] as [number, number], sprite, actions: [],
+    timed: { kind, period: rule.period, chance: rule.chance, offset: Math.floor(strHash(id, 99) * rule.period) }, ...extra,
+  };
+};
+const REALM_NAMES: Record<RealmRegion, [string, string]> = {
+  tundra: [tl('霜裔营火'), tl('冻土坑')], frostpine: [tl('林间雪窝'), tl('松下冰洞')], icelakes: [tl('冰窟窿'), tl('湖心冰岛')],
+  icerift: [tl('崖边冰窟'), tl('桥头冰坡')], glacier: [tl('冰川裂口'), tl('冰瀑下')], frozenruins: [tl('断墙'), tl('冻住的广场')],
+  aurorahigh: [tl('极光石阵'), tl('冰晶坡')], everrift: [tl('裂隙边'), tl('冰刺林')],
+};
+/** 冰原边上一圈是海：刷新点往里收，别刷在海边的小冰岛上（北边接神秘区域的那段不算海岸） */
+const COAST = 290;
+const inland = (p: { x: number; y: number }) => {
+  const B = REALM_BOX;
+  const openNorth = p.x >= MYSTERY_BOX.x + COAST && p.x < MYSTERY_BOX.x + MYSTERY_BOX.size - COAST;
+  return {
+    x: Math.max(B.x + COAST, Math.min(B.x + B.size - 1 - COAST, p.x)),
+    y: Math.max(B.y + (openNorth ? 60 : COAST), Math.min(B.y + B.size - 1 - COAST, p.y)),
+  };
+};
+const near = (p: { x: number; y: number }, dx: number, dy: number) => inland({ x: p.x + dx, y: p.y + dy });
+NODES.push(
+  gate('realm_gate_canglin', tl('永冬传送门'), townXY(222, 192), 'town', 'canglin'),
+  gate('realm_gate_dusk', tl('落霞城·永冬传送门'), town2XY(38, 8), 'savanna', 'duskhaven'),
+  gate('realm_gate_camp', tl('永冬营地·回程传送门'), near(CAMP, -14, -4), 'tundra', 'camp'),
+  { id: 'realm_bank', name: tl('永冬营地·仓库'), ...near(CAMP, 10, -6), region: 'tundra', lv: [1, 1], sprite: 'bank', actions: [], town: true, opens: 'bank' },
+  // 限时怪物：每个区域的形状点上各一处，精英在区域中间
+  ...REALM_REGIONS.flatMap((r) => {
+    const pts = REALM_SEEDS.filter((q) => q[2] === r).map(([u, v]) => atR(u, v));
+    const mid = { x: Math.round(pts.reduce((a, q) => a + q.x, 0) / pts.length), y: Math.round(pts.reduce((a, q) => a + q.y, 0) / pts.length) };
+    const [n1, n2] = REALM_NAMES[r];
+    return [
+      ...pts.map((p, k) => timedSpot(`realm_${r}_${k}`, tl`${REGIONS[r].name}·${k % 2 ? n2 : n1}`, near(p, 18, 10), r, 'camp', 'mob')),
+      timedSpot(`realm_${r}_elite`, tl`${REGIONS[r].name}·精英巢`, near(mid, -30, -20), r, 'boss', 'elite'),
+      ...pts.filter((_, k) => k % 2 === 1).map((p, k) => timedSpot(`realm_${r}_chest${k}`, tl`${REGIONS[r].name}·宝箱`, near(p, -40, 34), r, 'camp', 'chest')),
+    ];
+  }),
+  // 两个限时首领：2 小时一轮，错开 1 小时，所以每小时都有一个刷出来
+  { ...timedSpot('realm_giant_lair', tl('永霜巨人之巢'), atR(0.2, 0.22), 'glacier', 'worldboss', 'boss', { world: true }), timed: { kind: 'boss', period: TIMED_RULES.boss.period, chance: 1, offset: 0 } },
+  { ...timedSpot('realm_baron_lair', tl('雪堡男爵的城堡'), atR(0.8, 0.22), 'frozenruins', 'worldboss', 'boss', { world: true }), timed: { kind: 'boss', period: TIMED_RULES.boss.period, chance: 1, offset: 60 * 60_000 } },
+);
+/** 永冬传送门两两相通：主大陆的门 ↔ 营地的回程门 */
+export const REALM_GATES = NODES.filter((n) => n.realmGate);
+export const GATE_CAMP = REALM_GATES.find((n) => n.realmGate === 'camp')!;
+export const MAIN_GATES = REALM_GATES.filter((n) => n.realmGate !== 'camp');
+export const isTimed = (n: MapNode | undefined) => !!n?.timed;
+/** 限时点这一刻有没有刷出来（不是限时点的一律算有） */
+export const nodeActive = (n: MapNode | undefined, now: number) => !n?.timed || !!timedWindow(n, now);
 
 /** 分解台（用户 10-25）：每座城镇仓库旁一个，把仓库里的装备、工具分解成金币。位置挑仓库附近空着的路面 */
 export const SALVAGE_SPOTS: Record<string, [number, number]> = {
@@ -1647,7 +1716,12 @@ for (const b of NODES.filter((n) => SHOP_SPOTS[n.id])) {
     }
     // 冰原首领只在冰原的巢穴里出现
     if (sp.winter) continue;
-    const pool = NODES.filter((n) => !n.town && !n.site && !n.cave && !n.starter && n.region === sp.region);
+    // 冰原的限时生物：普通怪分到限时怪物点，精英分到精英巢
+    if (sp.realm) {
+      for (const n of NODES) if (n.region === sp.region && n.timed?.kind === (sp.rank === 'elite' ? 'elite' : 'mob')) n.actions.push(fight(sp.id));
+      continue;
+    }
+    const pool = NODES.filter((n) => !n.town && !n.site && !n.cave && !n.starter && !n.timed && n.region === sp.region);
     const best = pool.reduce((a, b) => {
       const cost = (n: MapNode) => Math.abs(mid(n) - sp.level) + (load.get(n) ?? 0) * 6;
       return cost(b) < cost(a) ? b : a;
@@ -1683,6 +1757,8 @@ export const WAYSTONES: MapNode[] = [
   // 12080（用户 10-24 要求规划传送石碑）：每座新城镇一座，每处带首领的特色地点旁边一座
   ...TOWNS.map((t) => stoneAt(t.id, tl`传说石碑·${t.name}`, townAt(t, ...t.stone).x, townAt(t, ...t.stone).y, t.region, true)),
   ...NODES.filter((n) => n.site && !n.sea).map((n) => stoneAt(`site_${n.id}`, tl`传说石碑·${n.name}`, n.x + 6, n.y + 2, n.region)),
+  // 永冬营地（11-01）：冰原里的石碑只能在冰原里互相传，和主大陆之间要走永冬传送门
+  stoneAt('realm_camp', tl('传说石碑·永冬营地'), CAMP.x + 2, CAMP.y + 14, 'tundra', true),
 ];
 NODES.push(...WAYSTONES);
 
@@ -1737,7 +1813,13 @@ for (const n of NODES) if (!n.sea && !n.closed) for (const a of n.actions) (NODE
 export const nodesOfAction = (id: string | undefined): MapNode[] => (id ? NODES_OF[id] ?? [] : []);
 /** 动作所在地点；给了位置就挑过去最快的那个（按真实步行距离，给了石碑就把传送也算上） */
 export function nodeOfAction(id: string | undefined, near?: { x: number; y: number }, stones?: string[], speed?: number): MapNode | undefined {
-  const all = nodesOfAction(id);
+  let all = nodesOfAction(id);
+  // 冰原的限时点：优先挑这一刻刷出来的
+  if (all.some((n) => n.timed)) {
+    const now = Date.now();
+    const live = all.filter((n) => nodeActive(n, now));
+    if (live.length) all = live;
+  }
   if (!near || all.length < 2) return all[0];
   return fastest(all, near, stones, speed)?.node;
 }
@@ -1796,16 +1878,47 @@ export function travelMs(from: Pt, to: Pt, speed = WALK_TILES_PER_SEC) {
 
 /** 自动寻路顺路用石碑传送时，传送本身算多久 */
 export const STONE_JUMP_MS = 3000;
-export interface Route { ms: number; via?: [string, string] }
+export interface Route {
+  ms: number;
+  /** 顺路用一次石碑：走到 via[0]，传到 via[1] */
+  via?: [string, string];
+  /** 跨永冬传送门的路线（11-01）：按顺序的几次传送（石碑或传送门），每次走到 [0] 传到 [1] */
+  hops?: [string, string][];
+}
+/** 一条路线里依次要传送的几次 */
+export const hopsOf = (r: { via?: [string, string]; hops?: [string, string][] } | null | undefined): [string, string][] => r?.hops ?? (r?.via ? [r.via] : []);
+/** 传送用的点：石碑或永冬传送门 */
+export const jumpNode = (id: string) => WAYSTONES.find((n) => n.id === id) ?? REALM_GATES.find((n) => n.id === id);
 /**
  * 从 from 出发去各处的最快路线（用户 10-23：寻路要会自己用传送石碑）：
  * 直接走，或者「走到最近的石碑 A + 传送 + 从离终点最近的石碑 B 走过去」，哪个快用哪个。
  * 10-26 用户反馈：以前按直线估算，隔着河、湖的地方明明传送更快却跑过去；现在按真实步行距离比较。
+ * 11-01 永冬冰原：石碑只在同一边互相传；去另一边要先到永冬传送门（主大陆两座、冰原营地一座），过门再走。
  */
 export function routeFrom(stones: string[] | undefined, from: Pt, speed = WALK_TILES_PER_SEC): (to: Pt) => Route {
+  const same = sideRouteFrom(stones, from, speed);
+  const fromRealm = inRealm(from);
+  const mine = fromRealm ? [GATE_CAMP] : MAIN_GATES;
+  const theirs = fromRealm ? MAIN_GATES : [GATE_CAMP];
+  let legs: { a: MapNode; toA: Route; b: MapNode; fromB: (to: Pt) => Route }[] | undefined;
+  return (to) => {
+    if (inRealm(to) === fromRealm) return same(to);
+    legs ??= mine.flatMap((a) => theirs.map((b) => ({ a, toA: same(standOf(a)), b, fromB: sideRouteFrom(stones, standOf(b), speed) })));
+    let best: Route | undefined;
+    for (const l of legs) {
+      const tail = l.fromB(to);
+      const ms = l.toA.ms + PORTAL_MS + tail.ms;
+      if (!best || ms < best.ms) best = { ms, hops: [...hopsOf(l.toA), [l.a.id, l.b.id], ...hopsOf(tail)] };
+    }
+    return best!;
+  };
+}
+/** 同一边（主大陆或冰原）里的最快路线：直接走或者顺路用一次石碑 */
+function sideRouteFrom(stones: string[] | undefined, from: Pt, speed: number): (to: Pt) => Route {
   const walk = walkFrom(from);
   const ms = (tiles: number) => Math.round((tiles * 1000) / speed);
-  const lit = WAYSTONES.filter((n) => stones?.includes(n.id));
+  const side = inRealm(from);
+  const lit = WAYSTONES.filter((n) => stones?.includes(n.id) && inRealm(n) === side);
   if (lit.length < 2) return (to) => ({ ms: ms(walk(to)) });
   const stands = lit.map(standOf);
   const toA = stands.map((p) => ms(walk(p)));

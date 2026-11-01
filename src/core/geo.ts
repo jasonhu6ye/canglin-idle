@@ -1,8 +1,14 @@
 /* 地图尺寸和几层方框的坐标换算，data.ts、towns.ts 共用 */
 
-/** 世界大小：1080 → 1480 → 2188 → 5088 → 8848 → 12080（用户 10-24 给了新版世界地图） */
-export const MAP_W = 12080;
-export const MAP_H = 12080;
+import { MAIN_SIZE, WORLD_H, WORLD_W } from './realm';
+
+/**
+ * 世界大小：1080 → 1480 → 2188 → 5088 → 8848 → 12080（用户 10-24 给了新版世界地图）。
+ * 11-01 东边加了 3680 的永冬冰原，宽度变成 16160；主大陆还是 12080（MAIN_SIZE）。
+ */
+export const MAP_W = WORLD_W;
+export const MAP_H = WORLD_H;
+export { MAIN_SIZE };
 /**
  * 12080 大地图（用户 10-24）：原来 8848 的世界原样放在正中间这个方框里（格子尺寸不变，老地方之间走路时间不变），
  * 外面一圈是海、群岛和 8 个新群系
@@ -16,4 +22,4 @@ export const at = (u: number, v: number) => ({ x: OLD_BOX.x + Math.round(u * (OL
 /** 8848 方框里的相对坐标（10-23 那一圈外圈区域用） */
 export const atW = (u: number, v: number) => ({ x: MID_BOX.x + Math.round(u * (MID_BOX.size - 1)), y: MID_BOX.y + Math.round(v * (MID_BOX.size - 1)) });
 /** 整张 12080 大地图的相对坐标（10-24 最外圈的新群系用） */
-export const atF = (u: number, v: number) => ({ x: Math.round(u * (MAP_W - 1)), y: Math.round(v * (MAP_H - 1)) });
+export const atF = (u: number, v: number) => ({ x: Math.round(u * (MAIN_SIZE - 1)), y: Math.round(v * (MAIN_SIZE - 1)) });

@@ -4,10 +4,11 @@ import { GUILD_MAX_LV, cleanTech, guildPct, utcDay } from './guild';
 import { APT_MAX, APT_MIN, FOAL, growMs, HORSE_XP, horseItem, RANCH, RANCH_PENS } from './ranch';
 import { baseOf, qid, QUALITY_VALUE, rollQuality } from './quality';
 import { HW_MOUNT, HW_MOUNT_COST, HW_POINT, HW_SKINS, HW_TIERS, hwFight, hwHasSkin, hwOpen, hwShopOpen, hwTierOf, hwWait } from './halloween';
-import { OLD_JEWELS, BAR_VALUE, inTownArea, KEY_SHOP, keyOf, OLD_ENH, SCROLL_TOWN, SHARD_PER_STONE, TIERS, ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAP_W, MID_BOX, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, MAT_DAILY, MAT_PRICE, MAT_SHOP, SCROLL_DAILY, SCROLL_PRICE, SEED_SHOP, seedLevel, seedPrice, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, fastest, planRoute, travelMs, type MapNode } from './data';
+import { OLD_JEWELS, BAR_VALUE, inTownArea, KEY_SHOP, keyOf, OLD_ENH, SCROLL_TOWN, SHARD_PER_STONE, TIERS, ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAIN_SIZE, MID_BOX, nodeActive, REALM_GATES, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, MAT_DAILY, MAT_PRICE, MAT_SHOP, SCROLL_DAILY, SCROLL_PRICE, SEED_SHOP, seedLevel, seedPrice, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, fastest, planRoute, travelMs, type MapNode } from './data';
 import { nextRandom } from './rng';
 import { buffMob, coopMates, COOP_DEF, COOP_DMG, dungeonFloor, GATE_AFTER_CLEAR, GATE_CD, GATE_MAX, GATE_MS, GATE_REACH, legMs, rollChest, rollChestQuality, rollFloors, teamChest, teamChestQuality, type TeamMember } from './dungeon';
 import { partySize } from './party';
+import { inRealm } from './realm';
 import { aggroMates, dgCrew, fieldCrew, fieldKey, stopKey, takeMateHits, targetChance, threatOf } from './aggro';
 import { stepQuests } from './quests';
 import { migrateMail, sendMail } from './mail';
@@ -58,7 +59,7 @@ export function newGame(now: number, seed = Math.floor(Math.random() * 2 ** 31))
     regenMs: 0,
     stats: { kills: 0, deaths: 0 },
     loc: { ...SPAWN_TILE },
-    mapSize: MAP_W,
+    mapSize: MAIN_SIZE,
     travel: null,
     seen: { minnow: 1, wood_sword: 1, seed_potato: 1 },
     waystones: [WAYSTONE_HOME],
@@ -74,7 +75,7 @@ export const MAX_DEATH_STREAK = 3;
  * 8848（10-23）：老地图原样放在中间的方框里，整体平移；12080（10-24）：8848 的世界再整体平移进中间
  */
 function rescaleLoc(loc: { x: number; y: number }, old: number) {
-  if (old === MAP_W) return loc;
+  if (old === MAIN_SIZE) return loc;
   if (old === MID_BOX.size) return { x: loc.x + MID_BOX.x, y: loc.y + MID_BOX.y };
   let p = loc;
   if (old !== OLD_BOX.size) {
@@ -148,7 +149,7 @@ export function migrate(raw: unknown): GameState | null {
   const homeCells = homeCellIds(homeIn);
   const okPlot = (id: string) => !!PLOT_BY_ID[id] || homeCells.has(id);
   const oldSize = num(s.mapSize, 1080) > 0 ? num(s.mapSize, 1080) : 1080;
-  const sameMap = oldSize === MAP_W;
+  const sameMap = oldSize === MAIN_SIZE;
   const travel = obj<NonNullable<GameState['travel']>>(s.travel);
   const walk = obj<NonNullable<GameState['walk']>>(s.walk);
   const combat = obj<NonNullable<GameState['combat']>>(s.combat);
@@ -173,7 +174,7 @@ export function migrate(raw: unknown): GameState | null {
     stats: { kills: Math.max(0, num(obj<GameState['stats']>(s.stats)?.kills, 0)), deaths: Math.max(0, num(obj<GameState['stats']>(s.stats)?.deaths, 0)), ...(num(obj<GameState['stats']>(s.stats)?.sageCoins, 0) > 0 ? { sageCoins: num(obj<GameState['stats']>(s.stats)?.sageCoins, 0) } : {}) },
     // 旧存档没有位置：当作已经站在当前任务的地点
     loc: okPos(s.loc) ? rescaleLoc(s.loc, oldSize) : node0 ? standOf(node0) : fresh.loc,
-    mapSize: MAP_W,
+    mapSize: MAIN_SIZE,
     // 路上的目的地改过名或删掉了就当没在走
     travel: sameMap && travel && NODES.some((n) => n.id === travel.to) && num(travel.ms, -1) >= 0 && num(travel.total, -1) >= 0 ? travel : null,
     walk: sameMap && walk && okPos(walk.from) && okPos(walk.to) && num(walk.ms, -1) >= 0 && num(walk.total, -1) >= 0 ? walk : null,
@@ -761,7 +762,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     if (atHome) s.travel = { to: bank.id, ms: 0, total: 0 };
     else if (!s.travel || s.travel.to !== bank.id) {
       const r = planRoute(s.waystones, s.loc, dest, moveSpeed(s));
-      s.travel = { to: bank.id, ms: r.ms, total: r.ms, ...(r.via && { via: r.via }) };
+      s.travel = { to: bank.id, ms: r.ms, total: r.ms, ...(r.via && { via: r.via }), ...(r.hops && { hops: r.hops }) };
     }
     const step = Math.min(budget, s.travel.ms);
     s.travel.ms -= step;
@@ -827,15 +828,17 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     // 家园岛上有对应的制作台：就地开工
     if (homeCan(s, task.action)) return 0;
     // 两座城都有的建筑：已经在走的就接着走，否则去最近的那座
-    const cands = nodesOfAction(task.action);
+    // 永冬冰原的限时点：只去这一刻刷出来的那些
+    const t = now - dt;
+    const cands = nodesOfAction(task.action).filter((n) => nodeActive(n, t));
     // 只在海岛上的动作进不了队列（enqueue、migrate 都滤掉了），这里不会没有地点
     if (!cands.length) return 0;
     if (cands.some((n) => { const d = standOf(n); return d.x === s.loc.x && d.y === s.loc.y; })) return 0;
-    const node = cands.find((n) => n.id === s.travel?.to) ?? nodeOfAction(task.action, s.loc, s.waystones, moveSpeed(s))!;
+    const node = cands.find((n) => n.id === s.travel?.to) ?? fastest(cands, s.loc, s.waystones, moveSpeed(s))!.node;
     const dest = standOf(node);
     if (!s.travel || s.travel.to !== node.id) {
       const r = planRoute(s.waystones, s.loc, dest, moveSpeed(s));
-      s.travel = { to: node.id, ms: r.ms, total: r.ms, ...(r.via && { via: r.via }) };
+      s.travel = { to: node.id, ms: r.ms, total: r.ms, ...(r.via && { via: r.via }), ...(r.hops && { hops: r.hops }) };
     }
     const step = Math.min(budget, s.travel.ms);
     s.travel.ms -= step;
@@ -1301,6 +1304,14 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         continue;
       }
     }
+    // 永冬冰原的限时怪：所有刷新点都消失了，任务结束（用户 11-01：时间一过便消失）
+    {
+      const at = nodesOfAction(task.action);
+      if (at.length && at.every((n) => n.timed) && !at.some((n) => nodeActive(n, now - dt))) {
+        endTask('gone');
+        continue;
+      }
+    }
     // 开战前：背包食物不够设定数量就先回仓库拿（用户 10-22 要求）
     if (a0.kind === 'combat' && !task.stocked && !s.combat) {
       if (isBankId(s.travel?.to) || needSupply()) {
@@ -1394,7 +1405,7 @@ export function startAt(prev: GameState, action: string, nodeId: string, mode: T
   const dest = standOf(n);
   if (dest.x !== s.loc.x || dest.y !== s.loc.y) {
     const r = planRoute(s.waystones, s.loc, dest, moveSpeed(s));
-    s.travel = { to: n.id, ms: r.ms, total: r.ms, ...(r.via && { via: r.via }) };
+    s.travel = { to: n.id, ms: r.ms, total: r.ms, ...(r.via && { via: r.via }), ...(r.hops && { hops: r.hops }) };
   }
   return s;
 }
@@ -1440,6 +1451,24 @@ export function useWaystone(prev: GameState, to: string): GameState {
   const dest = WAYSTONES.find((n) => n.id === to);
   const from = atWaystone(prev);
   if (!dest || !from || from === dest || !prev.waystones?.includes(to)) return prev;
+  // 冰原和主大陆之间隔着深海，石碑传不过去，要走永冬传送门
+  if (inRealm(from) !== inRealm(dest)) return prev;
+  const s = clone(leaveWork(prev));
+  s.loc = standOf(dest);
+  s.walk = null;
+  s.travel = null;
+  return s;
+}
+
+/** 站在哪座永冬传送门旁边 */
+export function atGate(s: GameState): MapNode | undefined {
+  return REALM_GATES.find((n) => nearNode(s, n));
+}
+/** 走永冬传送门（11-01）：主大陆的门通冰原营地，营地的门回主大陆（回哪座城由 to 决定）。工作暂停 */
+export function useGate(prev: GameState, to: string): GameState {
+  const from = atGate(prev);
+  const dest = REALM_GATES.find((n) => n.id === to);
+  if (!from || !dest || from === dest || (from.realmGate === 'camp') === (dest.realmGate === 'camp')) return prev;
   const s = clone(leaveWork(prev));
   s.loc = standOf(dest);
   s.walk = null;

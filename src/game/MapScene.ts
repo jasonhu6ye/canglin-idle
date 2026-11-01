@@ -35,6 +35,7 @@ import { MATE_COLORS, onFieldHit, OtherPlayers } from './others';
 import { online } from '../net';
 import type { FieldMateHit } from '../net/social';
 import { animateTileset, liquidIndex, paintTileset, T, TILESET, tileIndex, VARIANTS } from './tiles';
+import { addMysteryFog } from './mysteryFog';
 import {
   BUILDINGS, CHUNK, FIELDS, findPath, GROUNDS, groundIndex, hash, isWalkable, LIQUIDS, propsInChunk, reachableNear, regionAt, SPAWN, standTile,
   WANDERERS, type PropKind,
@@ -197,6 +198,7 @@ export class MapScene extends Phaser.Scene {
     for (const n of NODES) this.addNode(n);
     for (const w of WANDERERS) this.addWanderer(w.kind, w.x, w.y, w.radius);
     this.addMonsters();
+    addMysteryFog(this);
 
     const task = store.state.queue[0];
     // 地图改版后旧存档的位置可能落在水里或新盖的房子里：挪到最近能站的格子

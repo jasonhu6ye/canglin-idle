@@ -106,6 +106,8 @@ export interface Species {
   event?: boolean;
   /** 永冬冰原独有的限时首领（用户 11-01）：两招大招交替放，只在冰原限时刷出 */
   winter?: boolean;
+  /** 永冬冰原的限时生物（11-01） */
+  realm?: boolean;
 }
 
 // [id, 名字, 等级, 区域, 外形, 级别 n/e/b, 特性（空格分隔）, 主色, 点缀色]
@@ -546,8 +548,47 @@ const WORLD_ROWS: Row[] = [
  * 大招每第 4 下放一次，两招轮流（第二招见 WORLD_SKILL.alt，效果见 sim WINTER_MOVES）。
  */
 const WINTER_ROWS: Row[] = [
-  ['wb_everfrost_giant', tl('永霜巨人'), 125, 'snow', 'troll', 'b', 'armored tough slow resist_melee', '#6f8fb0', '#7fe8ff', 'realm_giant_lair'],
-  ['wb_snow_baron', tl('雪堡男爵'), 125, 'snow', 'knight', 'b', 'swift fierce resist_ranged', '#8aa0c0', '#7fe8ff', 'realm_baron_lair'],
+  ['wb_everfrost_giant', tl('永霜巨人'), 125, 'glacier', 'troll', 'b', 'armored tough slow resist_melee', '#6f8fb0', '#7fe8ff', 'realm_giant_lair'],
+  ['wb_snow_baron', tl('雪堡男爵'), 125, 'frozenruins', 'knight', 'b', 'swift fierce resist_ranged', '#8aa0c0', '#7fe8ff', 'realm_baron_lair'],
+];
+/**
+ * 永冬冰原的限时生物（用户 11-01）：冰原上没有采集资源，只有限时刷出的怪和精英，每个点刷出来存在 30 分钟。
+ * 等级跟着区域走（95-135），越往北越难；没有专属地点，按区域分到冰原的限时点上。
+ */
+const REALM_ROWS: Row[] = [
+  // 冻土荒原 95-105
+  ['frost_hound', tl('霜裔猎犬'), 96, 'tundra', 'wolf', 'n', 'pack swift', '#9ab0c8', '#7fe8ff'],
+  ['tundra_mammoth', tl('冻原猛犸'), 101, 'tundra', 'mammoth', 'n', 'tough armored', '#6a5a4a', '#e8f4ff'],
+  ['frost_scion', tl('霜裔战士'), 104, 'tundra', 'yeti', 'n', 'fierce', '#c8d8e8', '#7fe8ff'],
+  ['rimecrown_warlord', tl('冰冠督军'), 108, 'tundra', 'orc', 'e', 'fierce tough', '#5a7a9a', '#bff4ff'],
+  // 霜松冻林 100-110
+  ['rime_treant', tl('霜松树精'), 103, 'frostpine', 'treant', 'n', 'regen tough', '#3a5a5a', '#cfeaff'],
+  ['snow_panther', tl('冻林雪豹'), 106, 'frostpine', 'panther', 'n', 'swift evasive', '#e8eef4', '#5a6a7a'],
+  ['pinewarden', tl('冻林守望者'), 112, 'frostpine', 'treant', 'e', 'regen armored', '#2a4a4a', '#9ff0ff'],
+  // 冰湖群 100-110
+  ['lake_spirit', tl('冰湖水灵'), 104, 'icelakes', 'elemental', 'n', 'resist_magic', '#6ab0e0', '#ffffff'],
+  ['ice_eel', tl('冰湖电鳗'), 108, 'icelakes', 'eel', 'n', 'swift venom', '#5a8ab0', '#e0f8ff'],
+  ['lake_serpent', tl('冰湖巨蛇'), 113, 'icelakes', 'snake', 'e', 'tough venom', '#4a7aa0', '#bff4ff'],
+  // 冰裂峡谷 105-115
+  ['rift_bat', tl('寒渊蝙蝠'), 107, 'icerift', 'bat', 'n', 'swift lifesteal', '#3a4a6a', '#7fe8ff'],
+  ['rift_golem', tl('峡谷冰魔像'), 111, 'icerift', 'golem', 'n', 'armored slow', '#7a9ab8', '#e0f8ff'],
+  ['rift_icewyvern', tl('冰裂飞龙'), 118, 'icerift', 'wyvern', 'e', 'swift fierce', '#5a7a9a', '#dff8ff'],
+  // 冰川山脉 110-122
+  ['glacier_ram', tl('冰川岩羊'), 112, 'glacier', 'goat', 'n', 'fierce', '#c8d8e8', '#6a8aa8'],
+  ['glacier_troll', tl('冰川巨魔'), 117, 'glacier', 'troll', 'n', 'regen tough', '#8aa8c0', '#e8f8ff'],
+  ['frost_titan', tl('霜巨人督军'), 124, 'glacier', 'yeti', 'e', 'tough fierce', '#6a8ab0', '#bff4ff'],
+  // 冰封废墟 110-122
+  ['ruin_knight', tl('冰封亡骑'), 115, 'frozenruins', 'knight', 'n', 'armored', '#6a7a8a', '#7fe8ff'],
+  ['frost_lich', tl('冰封巫妖'), 120, 'frozenruins', 'lich', 'n', 'resist_melee lifesteal', '#4a5a7a', '#9ff0ff'],
+  ['banner_wraith', tl('雪堡亡旗手'), 125, 'frozenruins', 'ghost', 'e', 'evasive lifesteal', '#5a6a8a', '#cfefff'],
+  // 极光高地 118-128
+  ['aurora_wisp', tl('极光灵'), 120, 'aurorahigh', 'wisp', 'n', 'evasive resist_magic', '#6ad0b8', '#e0fff4'],
+  ['aurora_drake', tl('极光飞龙'), 126, 'aurorahigh', 'drake', 'n', 'swift fierce', '#4a8a9a', '#a0ffe0'],
+  ['aurora_phoenix', tl('极光冰凰'), 130, 'aurorahigh', 'phoenix', 'e', 'swift regen', '#7ae0d0', '#ffffff'],
+  // 永冬裂隙 125-135
+  ['rift_walker', tl('裂隙行者'), 128, 'everrift', 'ghost', 'n', 'evasive lifesteal', '#2a4a6a', '#7fe8ff'],
+  ['everfrost_elemental', tl('永冬元素'), 132, 'everrift', 'elemental', 'n', 'thorns resist_ranged', '#3a7ab0', '#e0fbff'],
+  ['everfrost_drake', tl('永冬冰龙'), 136, 'everrift', 'dragon', 'e', 'fierce tough armored', '#3a6a9a', '#cff4ff'],
 ];
 /** 世界首领的专属大招：每第 4 下放一次，伤害 ×2.6；永冬首领有第二招 alt，和第一招轮流 */
 export const WORLD_SKILL: Record<string, { name: string; desc: string; alt?: { name: string; desc: string } }> = {
@@ -580,6 +621,7 @@ export const SPECIES: Species[] = [
   ...OUTER_ROWS.map((r) => ({ ...toSpecies(r, tierOfLevel(r[2])), outer: true })),
   ...WORLD_ROWS.map((r) => ({ ...toSpecies(r, tierOfLevel(r[2])), world: true })),
   ...WINTER_ROWS.map((r) => ({ ...toSpecies(r, tierOfLevel(r[2])), world: true, winter: true })),
+  ...REALM_ROWS.map((r) => ({ ...toSpecies(r, tierOfLevel(r[2])), realm: true })),
   // 野马（用户 10-24）：三个地方各一种，打败有几率掉小马崽
   ...([
     ['wild_horse', tl('金穗野马'), 12, 'savanna', 'horse', 'n', 'swift', '#9a6232', '#3a2010', 'golden_plain'],

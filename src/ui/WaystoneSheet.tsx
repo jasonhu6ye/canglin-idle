@@ -1,5 +1,6 @@
 import { NODES, REGIONS, WAYSTONES } from '../core/data';
 import { atWaystone } from '../core/sim';
+import { inRealm } from '../core/realm';
 import type { GameState } from '../core/types';
 import { store } from '../store';
 import { emitToGame } from './GameCanvas';
@@ -23,7 +24,9 @@ export function WaystoneSheet({ s, nodeId, onClose }: { s: GameState; nodeId: st
   const lit = on.includes(nodeId);
   const go = () => { store.requestWalk(nodeId); onClose(); };
   const [cat, setCat] = useSticky<StoneCat>('stones.cat', 'town');
-  const count = (c: StoneCat) => WAYSTONES.filter((n) => c === 'all' || (c === 'lit' ? on.includes(n.id) : catOf(n) === c));
+  // 冰原和主大陆的石碑互相传不过去（11-01）：只列这座石碑这一边的
+  const side = inRealm(node);
+  const count = (c: StoneCat) => WAYSTONES.filter((n) => inRealm(n) === side && (c === 'all' || (c === 'lit' ? on.includes(n.id) : catOf(n) === c)));
   // 已激活的排前面
   const list = count(cat).slice().sort((a, b) => +on.includes(b.id) - +on.includes(a.id));
   return (

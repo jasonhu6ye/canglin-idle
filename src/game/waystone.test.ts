@@ -1,4 +1,5 @@
-import { NODES, WAYSTONES } from '../core/data';
+import { GATE_CAMP, NODES, WAYSTONES } from '../core/data';
+import { inRealm } from '../core/realm';
 import { findPath, isBuilding, isWalkable, SPAWN, standTile } from './world';
 
 describe('传说石碑', () => {
@@ -10,7 +11,8 @@ describe('传说石碑', () => {
       expect(isBuilding(n.x, n.y), n.id).toBe(false);
       const close = NODES.filter((m) => m !== n && Math.hypot(m.x - n.x, m.y - n.y) < 4).map((m) => m.id);
       expect(close, n.id).toEqual([]);
-      expect(findPath(SPAWN, st, 400000), n.id).not.toBeNull();
+      // 冰原的石碑从营地走得到（11-01）
+      expect(findPath(inRealm(n) ? standTile(GATE_CAMP) : SPAWN, st, 400000), n.id).not.toBeNull();
     }
   });
 });

@@ -23,6 +23,8 @@ describe('数据闭环', () => {
       if (prev && NODES.find((x) => x.id === prev)?.town && n.town) continue;
       // 主城门外的新手树林也刷野兔（10-27）
       if (prev && n.starter && id === 'fight_rabbit') continue;
+      // 永冬冰原的限时点（11-01）：同一区域的怪在几个限时点轮流刷
+      if (prev && n.timed && NODES.find((x) => x.id === prev)?.timed) continue;
       expect(seen.get(id), `${id} 同时在 ${seen.get(id)} 和 ${n.id}`).toBeUndefined();
       seen.set(id, n.id);
     }
@@ -116,12 +118,14 @@ describe('怪物图鉴', () => {
       expect(ITEMS[`worldchest_${s.id}`].opens).toBeDefined();
     }
     expect(new Set(SPECIES.map((s) => s.name)).size, '名字不重复').toBe(SPECIES.length);
-    expect(base).toHaveLength(192);
+    expect(base.filter((s) => !s.realm)).toHaveLength(192);
+    // 永冬冰原的限时生物（11-01）
+    expect(base.filter((s) => s.realm)).toHaveLength(25);
     expect(fresh.filter((s) => s.rank !== 'boss')).toHaveLength(20);
     expect(fresh.filter((s) => s.rank === 'boss')).toHaveLength(8);
     expect(new Set(SPECIES.map((s) => s.id)).size).toBe(SPECIES.length);
     for (let t = 0; t < 8; t++) {
-      const tier = base.filter((s) => s.tier === t);
+      const tier = base.filter((s) => s.tier === t && !s.realm);
       expect(tier).toHaveLength(24);
       expect(tier.filter((s) => s.rank === 'elite')).toHaveLength(5);
       expect(tier.filter((s) => s.rank === 'boss')).toHaveLength(2);

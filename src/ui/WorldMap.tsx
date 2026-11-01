@@ -1,7 +1,7 @@
 import { skullUrl } from '../game/skullArt';
 import { pumpkinPointUrl } from '../game/halloweenArt';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ACTIONS, DANGER, dangerLevel, MAP_H, MAP_W, MID_BOX, MONSTERS, NODES, OLD_BOX, REGIONS, SKILLS, planRoute, standOf, type MapNode } from '../core/data';
+import { ACTIONS, DANGER, dangerLevel, MAIN_SIZE, MAP_H, MAP_W, MID_BOX, MONSTERS, NODES, OLD_BOX, REGIONS, SKILLS, planRoute, standOf, type MapNode } from '../core/data';
 import { TOWNS } from '../core/towns';
 import { combatLevel, moveSpeed } from '../core/sim';
 import type { GameState, RegionId, SkillId } from '../core/types';
@@ -12,16 +12,31 @@ import { emitToGame } from './GameCanvas';
 import { MonsterIcon } from './Bestiary';
 import { store } from '../store';
 import { FINE_POINTER } from './itemOpen';
+import { inRealm, isRealmRegion, MYSTERY_BOX, REALM_BOX, REALM_SEEDS } from '../core/realm';
 import { isEn, tl } from '../i18n';
 
-/** 缩略图每像素代表几格 */
-const STEP = Math.max(3, Math.round(MAP_W / 500));
-let overviewUrl: string | null = null;
+/**
+ * 世界地图分两张（11-01 加了永冬冰原）：主大陆 12080 和东边的冰原，冰原隔着深海、只能走传送门，
+ * 所以不画在一张图上，顶上切换。打开时显示角色所在的那张。
+ */
+type ViewId = 'main' | 'realm';
+const PAD = 160;
+const VIEWS: Record<ViewId, { x: number; y: number; w: number; h: number }> = {
+  main: { x: 0, y: 0, w: MAIN_SIZE, h: MAIN_SIZE },
+  // 北边接着 1444 的神秘区域（暂未开放，画成一片黑雾）
+  realm: { x: REALM_BOX.x - PAD, y: MYSTERY_BOX.y - PAD, w: REALM_BOX.size + PAD * 2, h: REALM_BOX.y + REALM_BOX.size - MYSTERY_BOX.y + PAD * 2 },
+};
+const inView = (v: ViewId, p: { x: number; y: number }) => (v === 'realm') === inRealm(p);
+const overviewUrl: Partial<Record<ViewId, string>> = {};
 
-function overview(): string {
-  if (overviewUrl) return overviewUrl;
-  const w = Math.ceil(MAP_W / STEP);
-  const h = Math.ceil(MAP_H / STEP);
+function overview(view: ViewId): string {
+  const have = overviewUrl[view];
+  if (have) return have;
+  const V = VIEWS[view];
+  /** 缩略图每像素代表几格 */
+  const STEP = Math.max(3, Math.round(V.w / 500));
+  const w = Math.ceil(V.w / STEP);
+  const h = Math.ceil(V.h / STEP);
   const c = document.createElement('canvas');
   c.width = w;
   c.height = h;
@@ -30,8 +45,18 @@ function overview(): string {
   const rgb = Object.fromEntries(Object.entries(GROUND_COLOR).map(([k, v]) => [k, [parseInt(v.slice(1, 3), 16), parseInt(v.slice(3, 5), 16), parseInt(v.slice(5, 7), 16)]]));
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
-      const g = overviewGround(Math.min(MAP_W - 1, x * STEP + 1), Math.min(MAP_H - 1, y * STEP + 1));
-      const [r, gg, b] = g === 'road' ? [200, 160, 100] : rgb[g];
+      const wx = Math.min(MAP_W - 1, V.x + x * STEP + 1), wy = Math.min(MAP_H - 1, V.y + y * STEP + 1);
+      const g = overviewGround(wx, wy);
+      let [r, gg, b] = g === 'road' ? [200, 160, 100] : rgb[g];
+      // 神秘区域：黑雾盖住，边上淡出一点
+      const fog = view === 'realm' ? mysteryFog(wx, wy) : 0;
+      if (fog > 0) {
+        const swirl = 10 + 14 * Math.sin(wx * 0.011 + Math.sin(wy * 0.007) * 3) * Math.sin(wy * 0.009 + wx * 0.002);
+        const k = Math.min(1, fog);
+        r = r * (1 - k) + (14 + swirl * 0.6) * k;
+        gg = gg * (1 - k) + (12 + swirl * 0.5) * k;
+        b = b * (1 - k) + (24 + swirl) * k;
+      }
       const o = (y * w + x) * 4;
       img.data[o] = r;
       img.data[o + 1] = gg;
@@ -40,14 +65,33 @@ function overview(): string {
     }
   }
   ctx.putImageData(img, 0, 0);
-  overviewUrl = c.toDataURL();
-  return overviewUrl;
+  return (overviewUrl[view] = c.toDataURL());
 }
 
+/** 神秘区域的黑雾浓度：里面全黑，外面 120 格淡出 */
+function mysteryFog(x: number, y: number) {
+  const M = MYSTERY_BOX;
+  const dx = Math.max(M.x - x, x - (M.x + M.size - 1), 0);
+  const dy = Math.max(M.y - y, y - (M.y + M.size - 1), 0);
+  const d = Math.hypot(dx, dy);
+  return d === 0 ? 1 : Math.max(0, 1 - d / 120) * 0.85;
+}
+/** 神秘区域在冰原那张图上的位置（0-1） */
+const MYST_VIEW = {
+  left: (MYSTERY_BOX.x - VIEWS.realm.x) / VIEWS.realm.w, top: (MYSTERY_BOX.y - VIEWS.realm.y) / VIEWS.realm.h,
+  w: MYSTERY_BOX.size / VIEWS.realm.w, h: MYSTERY_BOX.size / VIEWS.realm.h,
+};
+
 /** 老地图的区域名字按老方框里的相对位置算 */
-const inBox = (u: number, v: number): [number, number] => [(OLD_BOX.x + u * OLD_BOX.size) / MAP_W, (OLD_BOX.y + v * OLD_BOX.size) / MAP_H];
+const inBox = (u: number, v: number): [number, number] => [(OLD_BOX.x + u * OLD_BOX.size) / MAIN_SIZE, (OLD_BOX.y + v * OLD_BOX.size) / MAIN_SIZE];
 /** 8848 那一圈按 8848 方框里的相对位置算 */
-const inMid = (u: number, v: number): [number, number] => [(MID_BOX.x + u * MID_BOX.size) / MAP_W, (MID_BOX.y + v * MID_BOX.size) / MAP_H];
+const inMid = (u: number, v: number): [number, number] => [(MID_BOX.x + u * MID_BOX.size) / MAIN_SIZE, (MID_BOX.y + v * MID_BOX.size) / MAIN_SIZE];
+/** 冰原的区域名：摆在各区形状点的中间 */
+const inRealmView = (u: number, v: number): [number, number] => [(REALM_BOX.x - VIEWS.realm.x + u * REALM_BOX.size) / VIEWS.realm.w, (REALM_BOX.y - VIEWS.realm.y + v * REALM_BOX.size) / VIEWS.realm.h];
+const realmLabel = (r: RegionId): [number, number] => {
+  const pts = REALM_SEEDS.filter((q) => q[2] === r);
+  return inRealmView(pts.reduce((a, q) => a + q[0], 0) / pts.length, pts.reduce((a, q) => a + q[1], 0) / pts.length);
+};
 /** 区域名字摆放的位置（0-1） */
 const LABELS: Record<RegionId, [number, number]> = {
   town: inBox(0.47, 0.53), snow: inBox(0.46, 0.06), highland: inBox(0.8, 0.28), coast: inBox(0.8, 0.45), lava: inBox(0.74, 0.86),
@@ -56,6 +100,8 @@ const LABELS: Record<RegionId, [number, number]> = {
   canyon: inMid(0.9, 0.18), desert: inMid(0.9, 0.86), alpine: inMid(0.5, 0.05), crystal: inMid(0.52, 0.9),
   hills: [0.06, 0.36], vineisles: [0.08, 0.04], moonmire: [0.06, 0.74], archipelago: [0.95, 0.45],
   frostpeak: [0.5, 0.04], ashcape: [0.92, 0.92], thunder: [0.9, 0.03], starsea: [0.5, 0.97],
+  tundra: realmLabel('tundra'), frostpine: realmLabel('frostpine'), icelakes: realmLabel('icelakes'), icerift: inRealmView(0.5, 0.455),
+  glacier: realmLabel('glacier'), frozenruins: realmLabel('frozenruins'), aurorahigh: realmLabel('aurorahigh'), everrift: realmLabel('everrift'),
 };
 /** 城镇在世界地图上只标一个点（新城镇标在仓库上） */
 const TOWN_MARK: Record<string, string> = { smithy: tl('苍岭城'), market2: tl('落霞城'), ...Object.fromEntries(TOWNS.map((t) => [`${t.id}_bank`, t.name])) };
@@ -91,9 +137,12 @@ export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: ()
     try { localStorage.setItem('canglin-wm-filter', f); } catch { /* 存不了就算了 */ }
   };
   const scroller = useRef<HTMLDivElement>(null);
-  const url = useMemo(overview, []);
+  const [view, setView] = useState<ViewId>(() => (inRealm(playerPos) ? 'realm' : 'main'));
+  const V = VIEWS[view];
+  const url = useMemo(() => overview(view), [view]);
   const cl = combatLevel(s);
-  const me = { x: playerPos.x / MAP_W, y: playerPos.y / MAP_H };
+  const here = inView(view, playerPos);
+  const me = here ? { x: (playerPos.x - V.x) / V.w, y: (playerPos.y - V.y) / V.h } : { x: 0.5, y: 0.5 };
 
   // 缩放后：滚轮缩放时让光标下的那一点不动，按钮缩放时以画面中心为准，第一次打开对准角色
   const anchor = useRef<{ u: number; v: number; mx: number; my: number } | null>(null);
@@ -104,7 +153,7 @@ export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: ()
     anchor.current = null;
     el.scrollLeft = a.u * el.scrollWidth - a.mx;
     el.scrollTop = a.v * el.scrollHeight - a.my;
-  }, [zoom]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [zoom, view]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** 以屏幕上 (mx,my) 这一点为中心缩放 */
   const zoomAt = (next: number, mx?: number, my?: number) => {
@@ -186,7 +235,7 @@ export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: ()
       if (hit) it.e.style.visibility = 'hidden';
       else kept.push(r);
     }
-  }, [zoom, filter, sel, vw, s.waystones?.length]);
+  }, [zoom, filter, sel, vw, s.waystones?.length, view]);
 
   const node = sel ? NODES.find((n) => n.id === sel)! : null;
   return (
@@ -200,18 +249,29 @@ export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: ()
           <button onClick={() => zoomAt(zoom * 1.4)} disabled={zoom >= MAX_ZOOM}>{tl('＋')}</button>
         </span>
       </div>
+      <div className="chips-row wm-view">
+        {(['main', 'realm'] as ViewId[]).map((v) => (
+          <button key={v} className={`pill ${view === v ? 'on' : ''}`} onClick={() => { setSel(null); setView(v); }}>{v === 'main' ? tl('主大陆') : tl('❄ 永冬冰原')}</button>
+        ))}
+      </div>
       <div className="chips-row wm-filter">
         {FILTERS.map(([id, name]) => (
           <button key={id} className={`pill ${filter === id ? 'on' : ''}`} onClick={() => pickFilter(id)}>{name}</button>
         ))}
       </div>
       <div className={`wm-scroll ${FINE_POINTER ? 'grab' : ''}`} ref={scroller} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerLeave={onPointerUp}>
-        <div className="wm-canvas" ref={canvasRef} style={{ width: `${zoom * 100}%` }}>
+        <div className="wm-canvas" ref={canvasRef} style={{ width: `${zoom * 100}%`, aspectRatio: `${V.w} / ${V.h}` }}>
           <img src={url} alt="" draggable={false} />
-          {(Object.keys(LABELS) as RegionId[]).map((r) => (
+          {view === 'realm' && (
+            <div className="wm-mystery" style={{ left: `${MYST_VIEW.left * 100}%`, top: `${MYST_VIEW.top * 100}%`, width: `${MYST_VIEW.w * 100}%`, height: `${MYST_VIEW.h * 100}%` }}>
+              <b>{tl('？？？')}</b>
+              <span>{tl('神秘区域 · 暂未开放')}</span>
+            </div>
+          )}
+          {(Object.keys(LABELS) as RegionId[]).filter((r) => isRealmRegion(r) === (view === 'realm')).map((r) => (
             <span key={r} className="wm-region" data-pri={zoom < 2 ? 3 : 7} style={{ left: `${LABELS[r][0] * 100}%`, top: `${LABELS[r][1] * 100}%` }}>{REGIONS[r].name}</span>
           ))}
-          {NODES.filter((n) => (!n.town || n.pond || TOWN_MARK[n.id] || n.waystone) && passes(n, filter)).map((n) => {
+          {NODES.filter((n) => inView(view, n) && (!n.town || n.pond || TOWN_MARK[n.id] || n.waystone || n.portal) && passes(n, filter)).map((n) => {
             const d = n.town && !n.pond ? 0 : dangerLevel(n, cl);
             const lit = n.waystone && s.waystones?.includes(n.id);
             // 英文石碑名都带「Waystone: 」，图标已经能看出是石碑，标签上省掉，少占一半地方（用户 11-01 嫌英文满屏乱）
@@ -219,7 +279,7 @@ export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: ()
             const pri = sel === n.id ? 0 : TOWN_MARK[n.id] ? 1 : n.world || n.event ? 2 : n.site ? 4 : n.waystone ? 5 : 6;
             const big = n.site || n.world || n.event || TOWN_MARK[n.id] || (n.waystone && filter === 'stone');
             return (
-              <button key={n.id} className={`wm-node ${sel === n.id ? 'sel' : ''} ${n.cave ? 'cave' : ''} ${n.waystone ? `stone ${lit ? 'lit' : ''}` : ''}`} style={{ left: `${(n.x / MAP_W) * 100}%`, top: `${(n.y / MAP_H) * 100}%`, zIndex: pri <= 2 ? 3 : undefined }}
+              <button key={n.id} className={`wm-node ${sel === n.id ? 'sel' : ''} ${n.cave ? 'cave' : ''} ${n.waystone ? `stone ${lit ? 'lit' : ''}` : ''}`} style={{ left: `${((n.x - V.x) / V.w) * 100}%`, top: `${((n.y - V.y) / V.h) * 100}%`, zIndex: pri <= 2 ? 3 : undefined }}
                 onClick={() => setSel(n.id)}>
                 {/* 世界首领：红色骷髅头（用户 10-24） */}
                 {n.event ? <img className="wm-skull wm-pumpkin" src={pumpkinPointUrl()} alt="" draggable={false} /> : n.world ? <img className="wm-skull" src={skullUrl()} alt="" draggable={false} /> : <i style={n.waystone ? undefined : { background: n.cave ? '#2a2030' : DANGER[d].color }} />}
@@ -228,7 +288,7 @@ export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: ()
               </button>
             );
           })}
-          <span className="wm-me" style={{ left: `${me.x * 100}%`, top: `${me.y * 100}%` }} />
+          {here && <span className="wm-me" style={{ left: `${me.x * 100}%`, top: `${me.y * 100}%` }} />}
         </div>
       </div>
       <div className="wm-legend">

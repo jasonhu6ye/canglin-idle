@@ -1,6 +1,7 @@
 import { FARM_RECTS, setNavField, MAP_H as MAP_H0, MAP_W as MAP_W0, MID_BOX, NODES, OLD_BOX, town2XY, TOWN2_CENTER, townXY, type MapNode } from '../core/data';
 import { TOWNS, type TownDef, type TownTheme } from '../core/towns';
 import type { RegionId } from '../core/types';
+import { atR, behindAirWall, CAMP, CAMP_R, inMystery, isRealmRegion, MAIN_SIZE, MYSTERY_BOX, REALM_BOX, REALM_SEEDS, RIFT, type RealmRegion } from '../core/realm';
 // 地图尺寸抄一份成本地常量：寻路每步都要用，跨模块的导入绑定在测试环境里每次都走 getter，很慢
 const MAP_W = MAP_W0;
 const MAP_H = MAP_H0;
@@ -22,6 +23,8 @@ export const GROUNDS = [
   'savanna', 'autumn', 'jungle', 'redrock', 'dune', 'crystalground', 'alpine', 'coral',
   // 12080 最外圈新群系和新城镇的地面（用户 10-24）
   'hillgrass', 'marble', 'moonmud', 'frostrock', 'stormrock', 'blacksand', 'chalk',
+  // 永冬冰原的冻土（用户 11-01）
+  'tundra',
   'water', 'ocean', 'swampwater', 'lava', 'chasm', 'cliff', 'shallows', 'redcliff', 'moonwater', 'starwater',
 ] as const;
 export type Ground = (typeof GROUNDS)[number];
@@ -37,6 +40,7 @@ export const REGION_IDS: RegionId[] = [
   'town', 'snow', 'highland', 'coast', 'lava', 'abyss', 'swamp', 'woodland', 'giantwood',
   'savanna', 'autumn', 'jungle', 'tropic', 'canyon', 'desert', 'alpine', 'crystal',
   'hills', 'vineisles', 'moonmire', 'archipelago', 'frostpeak', 'ashcape', 'thunder', 'starsea',
+  'tundra', 'frostpine', 'icelakes', 'icerift', 'glacier', 'frozenruins', 'aurorahigh', 'everrift',
 ];
 /** 外圈的新区域 */
 export const RING_REGIONS = new Set<RegionId>(['savanna', 'autumn', 'jungle', 'tropic', 'canyon', 'desert', 'alpine', 'crystal']);
@@ -115,8 +119,8 @@ const SEEDS: { x: number; y: number; r: number }[] = [
   // 老地图的形状点放进中间的方框，外圈是新区域，再外圈是 12080 的新群系
   ...SHAPE_SEEDS.map(([u, v, r]) => ({ x: OB.x + u * (OB.size - 1), y: OB.y + v * (OB.size - 1), r: REGION_IDS.indexOf(r) })),
   ...RING_SEEDS.map(([u, v, r]) => ({ x: MB.x + u * (MB.size - 1), y: MB.y + v * (MB.size - 1), r: REGION_IDS.indexOf(r) })),
-  ...BAND_SEEDS.map(([u, v, r]) => ({ x: u * (MAP_W - 1), y: v * (MAP_H - 1), r: REGION_IDS.indexOf(r) })),
-  ...NODES.filter((n) => !n.town || n.pond).map((n) => ({ x: n.x, y: n.y, r: REGION_IDS.indexOf(n.region) })),
+  ...BAND_SEEDS.map(([u, v, r]) => ({ x: u * (MAIN_SIZE - 1), y: v * (MAIN_SIZE - 1), r: REGION_IDS.indexOf(r) })),
+  ...NODES.filter((n) => (!n.town || n.pond) && n.x < MAIN_SIZE).map((n) => ({ x: n.x, y: n.y, r: REGION_IDS.indexOf(n.region) })),
   ...TOWNS.map((t) => ({ x: t.c.x, y: t.c.y, r: REGION_IDS.indexOf(t.region) })),
 ];
 /** 区域边界扰动的幅度和尺度（格）：按老地图 5088 的尺度，老区域的形状不变 */
@@ -141,7 +145,26 @@ for (let by = 0; by < BY; by++) {
   }
 }
 
+/** 永冬冰原的区域：自己一套形状点，扰动小一点（冰原小，区域也小） */
+const RSEEDS = REALM_SEEDS.map(([u, v, r]) => ({ ...atR(u, v), r: REGION_IDS.indexOf(r) }));
+const R_WARP = 260;
+function realmRegion(x: number, y: number) {
+  const wx = x + (fbm(x, y, 111, 220) - 0.5) * R_WARP;
+  const wy = y + (fbm(x, y, 112, 220) - 0.5) * R_WARP;
+  let best = RSEEDS[0].r;
+  let bestD = Infinity;
+  for (const s of RSEEDS) {
+    const d = (s.x - wx) ** 2 + (s.y - wy) ** 2;
+    if (d < bestD) {
+      bestD = d;
+      best = s.r;
+    }
+  }
+  return best;
+}
+
 function regionRaw(x: number, y: number) {
+  if (x >= MAIN_SIZE) return realmRegion(x, y);
   const wx = x + (fbm(x, y, 11, WARP_SCALE) - 0.5) * WARP;
   const wy = y + (fbm(x, y, 12, WARP_SCALE) - 0.5) * WARP;
   let best = 0;
@@ -238,6 +261,7 @@ function inStrait(x: number, y: number) {
 
 function baseGround(x: number, y: number, r: RegionId): Ground {
   const d = fbm(x, y, 5, 10);
+  if (isRealmRegion(r)) return realmBase(x, y, r, d);
   switch (r) {
     case 'town': return d > 0.62 ? 'meadow' : 'grass';
     case 'snow': return 'snow';
@@ -265,6 +289,90 @@ function baseGround(x: number, y: number, r: RegionId): Ground {
     case 'thunder': return d > 0.64 ? 'gravel' : 'stormrock';
     case 'starsea': return d > 0.6 ? 'glowmoss' : 'crystalground';
   }
+  return 'snow';
+}
+
+// ---- 永冬冰原（用户 11-01）：地面 ----
+
+/** 各区的底色地面 */
+function realmBase(x: number, y: number, r: RealmRegion, d: number): Ground {
+  switch (r) {
+    case 'tundra': return d > 0.66 ? 'snow' : d < 0.3 ? 'gravel' : 'tundra';
+    case 'frostpine': return d > 0.7 ? 'frostrock' : 'snow';
+    case 'icelakes': return d > 0.62 ? 'tundra' : 'snow';
+    case 'icerift': return d > 0.6 ? 'gravel' : 'frostrock';
+    case 'glacier': return d > 0.55 ? 'snow' : d < 0.3 ? 'ice' : 'frostrock';
+    case 'frozenruins': {
+      // 冻住的古城：一块块破碎的石板路和白石地基，中间盖着雪
+      const blk = hash(x >> 4, y >> 4, 131);
+      if (blk < 0.3 && (x & 15) > 1 && (y & 15) > 1) return d > 0.5 ? 'marble' : 'cobble';
+      return d > 0.62 ? 'snow' : 'frostrock';
+    }
+    case 'aurorahigh': return Math.abs(fbm(x, y, 133, 26) - 0.5) < 0.025 ? 'glowmoss' : d > 0.6 ? 'crystalground' : 'snow';
+    case 'everrift': return Math.abs(fbm(x, y, 134, 18) - 0.5) < 0.03 ? 'glowmoss' : d > 0.55 ? 'frostrock' : 'crystalground';
+  }
+}
+/** 冰原四周的海：方框边上一圈不规则的海岸，岸边是雪 */
+function realmSea(x: number, y: number): Ground | undefined {
+  const B = REALM_BOX;
+  const M = MYSTERY_BOX;
+  // 北边接着神秘区域：两块方框拼起来算海岸（冰原的北岸只算神秘区域两侧那两段，神秘区域不算南岸）
+  const mx0 = M.x, mx1 = M.x + M.size - 1;
+  const top = x < mx0 ? y - B.y : x > mx1 ? y - B.y : Math.hypot(Math.min(x - mx0, mx1 - x), Math.max(0, y - B.y));
+  const eR = y < B.y ? -1 : Math.min(x - B.x, B.x + B.size - 1 - x, top, B.y + B.size - 1 - y);
+  const eM = y >= B.y || x < mx0 || x > mx1 ? -1 : Math.min(x - mx0, mx1 - x, y - M.y);
+  const e = Math.max(eR, eM);
+  if (e < 0) return 'ocean';
+  if (e > 260) return undefined;
+  const depth = 60 + fbm(x, y, 140, 90) * 160;
+  if (e < depth) return 'ocean';
+  if (e < depth + 5 + hash(x, y, 141) * 3) return 'snow';
+  return undefined;
+}
+/** 冰原的原始地面：海 → 营地 → 冰裂峡谷 → 各区的大地貌 → 底色 */
+function realmRaw(x: number, y: number, r: RegionId): Ground {
+  const sea = realmSea(x, y);
+  if (sea) return sea;
+  if (inMystery(x, y)) return mysteryRaw(x, y);
+  // 永冬营地：一片压实的雪地，中间铺石
+  const dc = Math.hypot(x - CAMP.x, y - CAMP.y);
+  if (dc < CAMP_R + 10) return dc < 12 ? 'cobble' : dc < CAMP_R ? 'roadsnow' : 'snow';
+  const u = (x - REALM_BOX.x) / (REALM_BOX.size - 1);
+  const v = (y - REALM_BOX.y) / (REALM_BOX.size - 1);
+  // 冰裂峡谷：东西横贯的深谷，三座冰桥
+  const rv = v - RIFT.v - (fbm(x, y, 142, 160) - 0.5) * 0.03;
+  if (Math.abs(rv) < RIFT.half) {
+    const bridge = RIFT.bridges.some((b) => Math.abs(u - b) < RIFT.bridgeHalf);
+    if (bridge) return 'ice';
+    return Math.abs(rv) > RIFT.half - 0.003 ? 'cliff' : 'chasm';
+  }
+  const n = fbm(x, y, 143, 26);
+  const big = fbm(x, y, 144, 140);
+  switch (r as RealmRegion) {
+    case 'tundra': if (n > 0.78) return 'ice'; break;
+    case 'frostpine': if (n > 0.8) return 'ice'; break;
+    case 'icelakes':
+      // 大片冰湖，湖面上几个没冻住的冰窟窿
+      if (big > 0.52) return n > 0.8 && big > 0.58 ? 'water' : 'ice';
+      break;
+    case 'glacier': {
+      const ridge = 1 - Math.abs(fbm(x, y, 145, 120) * 2 - 1);
+      if (ridge > 0.955 && fbm(x, y, 146, 50) > 0.4) return 'cliff';
+      break;
+    }
+    case 'frozenruins': if (n > 0.82) return 'ice'; break;
+    case 'aurorahigh': if (big > 0.7) return n > 0.5 ? 'ice' : 'glowmoss'; break;
+    case 'everrift': if (n > 0.76 && big > 0.45) return 'chasm'; break;
+  }
+  return realmBase(x, y, r as RealmRegion, fbm(x, y, 5, 10));
+}
+
+/** 神秘区域（暂未开放）：黑冰和裂开的晶石地，盖在黑雾下面，只露出一点轮廓 */
+function mysteryRaw(x: number, y: number): Ground {
+  const n = fbm(x, y, 147, 30);
+  if (n > 0.74) return 'chasm';
+  if (n < 0.28) return 'ice';
+  return fbm(x, y, 148, 12) > 0.55 ? 'crystalground' : 'frostrock';
 }
 
 /** 区域里的大块地貌：冰面、悬崖、熔岩湖、裂谷、沼泽水、林间小湖 */
@@ -532,7 +640,7 @@ function landform(x: number, y: number, r: RegionId): Ground | null {
 /** 海上群岛里一定要是陆地的地方：资源点、特色地点和城镇所在的岛 */
 const ISLAND_SPOTS = [
   // 群岛里的点位，和离地图边不到 500 格（可能落进外海）的点位
-  ...NODES.filter((n) => !n.town && (SEA_REGIONS.has(n.region) || Math.min(n.x, n.y, MAP_W - 1 - n.x, MAP_H - 1 - n.y) < 500))
+  ...NODES.filter((n) => !n.town && n.x < MAIN_SIZE && (SEA_REGIONS.has(n.region) || Math.min(n.x, n.y, MAIN_SIZE - 1 - n.x, MAP_H - 1 - n.y) < 500))
     .map((n) => ({ x: n.x, y: n.y, r: n.site ? n.site.r * 1.15 : n.cave ? 30 : 46 })),
   ...TOWNS.filter((t) => SEA_REGIONS.has(t.region)).map((t) => ({ x: t.c.x, y: t.c.y, r: 80 })),
 ];
@@ -555,7 +663,7 @@ const SHORE: Partial<Record<RegionId, Ground>> = { ashcape: 'blacksand', thunder
  */
 const COAST_PROFILE = [1350, 1050, 450, 500, 1350, 1300, 520, 360, 380, 420, 1400, 1100, 360, 380, 430, 1000];
 function coastDepth(x: number, y: number) {
-  const a = ((Math.atan2(y - MAP_H / 2, x - MAP_W / 2) / (Math.PI * 2) + 1) % 1) * 16;
+  const a = ((Math.atan2(y - MAIN_SIZE / 2, x - MAIN_SIZE / 2) / (Math.PI * 2) + 1) % 1) * 16;
   const i = Math.floor(a);
   const P = COAST_PROFILE;
   return P[i % 16] + (P[(i + 1) % 16] - P[i % 16]) * smooth(a - i) + (fbm(x, y, 404, 260) - 0.5) * 420 + (vnoise(x / 760, y / 760, 408) - 0.5) * 1000;
@@ -564,7 +672,7 @@ function coastDepth(x: number, y: number) {
 const islandNoise = (x: number, y: number) => vnoise(x / 150, y / 150, 405) * 0.7 + vnoise(x / 50, y / 50, 406) * 0.24 + vnoise(x / 12, y / 12, 407) * 0.06;
 /** 地图外面一圈是海（宽窄按方位变），海里有群岛。返回 undefined 表示不是海 */
 function bandSea(x: number, y: number, r: RegionId): Ground | undefined {
-  const e = Math.min(x, y, MAP_W - 1 - x, MAP_H - 1 - y);
+  const e = Math.min(x, y, MAIN_SIZE - 1 - x, MAP_H - 1 - y);
   if (e >= 1720) return undefined;
   const depth = coastDepth(x, y);
   if (e >= depth + 5) return undefined;
@@ -602,6 +710,7 @@ function townGround(x: number, y: number): Ground | null {
 
 /** 不考虑道路和局部修改的原始地面，粗网格寻路和世界地图缩略图用 */
 function rawGround(x: number, y: number): Ground {
+  if (x >= MAIN_SIZE) return realmRaw(x, y, REGION_IDS[regionIdx(x, y)]);
   const tg = townGround(x, y);
   if (tg) return tg;
   const r = REGION_IDS[regionIdx(x, y)];
@@ -795,6 +904,10 @@ for (let c = 0; c < CW * CH; c++) coarseGround[c] = G[rawGround(clampX((c % CW) 
   dist[start] = 0;
   const heap = new Heap();
   heap.push(start, 0);
+  // 永冬冰原隔着深海：路从营地另修一棵
+  const camp = cell(CAMP);
+  dist[camp] = 0;
+  heap.push(camp, 0);
   // 12080 的粗网格有 228 万格：邻居展开写死、不分配数组，放进函数里让引擎优化
   ((N: number) => {
     const relax = (j: number, nd: number, i: number) => {
@@ -863,6 +976,8 @@ chunkFlags.forEach((fl, ci) => {
 /** 粗网格能不能走：中心能走，或者格子里有路（桥） */
 const coarseOpen = new Uint8Array(CW * CH);
 for (let c = 0; c < CW * CH; c++) coarseOpen[c] = !blockedG[coarseGround[c]] || coarseRoad[c] ? 1 : 0;
+// 神秘区域：粗网格也不通
+for (let c = 0; c < CW * CH; c++) if (behindAirWall(((c % CW) << CS) + (1 << (CS - 1)), (Math.floor(c / CW) << CS) + (1 << (CS - 1)))) coarseOpen[c] = 0;
 // 新城镇的栈桥、木道铺在水上，粗格子中心可能落在水里：城里铺了能走的地面的粗格子都算能走
 for (const b of TOWN_BOX) {
   for (let y = b.y0; y <= b.y1; y++) for (let x = b.x0; x <= b.x1; x++) {
@@ -1021,6 +1136,7 @@ const ROAD_STYLE: Record<RegionId, Ground> = {
   snow: 'roadsnow', alpine: 'roadsnow', coast: 'roadsand', savanna: 'roadsand', tropic: 'roadsand', desert: 'roadsand',
   lava: 'roaddark', abyss: 'roaddark', highland: 'roaddark', canyon: 'roaddark', crystal: 'roaddark',
   hills: 'road', vineisles: 'road', moonmire: 'road', archipelago: 'roadsand', frostpeak: 'roadsnow', ashcape: 'roaddark', thunder: 'roaddark', starsea: 'roaddark',
+  tundra: 'roadsnow', frostpine: 'roadsnow', icelakes: 'roadsnow', icerift: 'roadsnow', glacier: 'roadsnow', frozenruins: 'roadsnow', aurorahigh: 'roadsnow', everrift: 'roadsnow',
 };
 
 function ensureGround(ci: number): Uint8Array {
@@ -1240,7 +1356,34 @@ function wildProp(x: number, y: number, r: RegionId, g: Ground): PropKind | null
     case 'starsea':
       if (p < (f > 0.5 ? 0.06 : 0.015)) return hash(x, y, 9) < 0.5 ? 'starshard' : 'crystalspire';
       return p < 0.1 ? 'glowshroom' : p < 0.11 ? 'crystal' : null;
+    // ---- 永冬冰原（11-01）----
+    case 'tundra':
+      if (Math.hypot(x - CAMP.x, y - CAMP.y) < CAMP_R + 4) return null;
+      if (p < (f > 0.66 ? 0.03 : 0.004)) return 'deadtree';
+      return p < 0.03 ? 'drift' : p < 0.04 ? 'snowrock' : p < 0.043 ? 'bones' : p < 0.05 ? 'tuft' : null;
+    case 'frostpine':
+      if (p < (f > 0.45 ? 0.36 : 0.05)) return 'snowpine';
+      return p < 0.4 ? 'drift' : p < 0.41 ? 'snowrock' : null;
+    case 'icelakes':
+      if (p < (f > 0.62 ? 0.12 : 0.01)) return 'snowpine';
+      return p < 0.14 ? 'drift' : p < 0.145 ? 'icecrystal' : null;
+    case 'icerift':
+      if (p < (f > 0.6 ? 0.05 : 0.01)) return 'icecrystal';
+      return p < 0.08 ? 'snowrock' : p < 0.09 ? 'boulder' : null;
+    case 'glacier':
+      if (p < (f > 0.55 ? 0.07 : 0.015)) return 'icecrystal';
+      return p < 0.1 ? 'snowrock' : p < 0.11 ? 'boulder' : p < 0.13 ? 'drift' : null;
+    case 'frozenruins':
+      if (g === 'cobble' || g === 'marble') return p < 0.02 ? 'grave' : p < 0.03 ? 'bones' : p < 0.035 ? 'banner' : null;
+      return p < 0.03 ? 'snowrock' : p < 0.05 ? 'drift' : p < 0.055 ? 'cross' : p < 0.06 ? 'icecrystal' : null;
+    case 'aurorahigh':
+      if (p < (f > 0.6 ? 0.06 : 0.01)) return hash(x, y, 10) < 0.5 ? 'crystalspire' : 'icecrystal';
+      return p < 0.08 ? 'drift' : p < 0.09 ? 'glowshroom' : null;
+    case 'everrift':
+      if (p < (f > 0.5 ? 0.07 : 0.015)) return hash(x, y, 11) < 0.5 ? 'crystalspire' : 'icecrystal';
+      return p < 0.09 ? 'starshard' : p < 0.1 ? 'snowrock' : null;
   }
+  return null;
 }
 
 /** 地图边缘一圈用本区域的树或石头围起来 */
@@ -1250,6 +1393,7 @@ const EDGE_WALL: Record<RegionId, PropKind> = {
   savanna: 'acacia', autumn: 'goldtree', jungle: 'jungletree', tropic: 'palm', canyon: 'redrock', desert: 'redrock',
   alpine: 'snowpine', crystal: 'crystalspire',
   hills: 'willow', vineisles: 'jungletree', moonmire: 'deadtree', archipelago: 'palm', frostpeak: 'snowpine', ashcape: 'ashrock', thunder: 'stormspire', starsea: 'starshard',
+  tundra: 'snowrock', frostpine: 'snowpine', icelakes: 'snowpine', icerift: 'icecrystal', glacier: 'icecrystal', frozenruins: 'snowrock', aurorahigh: 'crystalspire', everrift: 'crystalspire',
 };
 
 /** 算出这块的装饰物，顺便记下哪些格子被挡住 */
@@ -1273,7 +1417,7 @@ function ensureProps(ci: number): Uint8Array {
         const g = GROUNDS[ground[li]];
         if (g === 'cobble' || (Math.abs(x - SPAWN.x) < 4 && Math.abs(y - SPAWN.y) < 4)) continue;
         const r = REGION_IDS[regionIdx(x, y)];
-        const edge = x < 2 || y < 2 || y >= MAP_H - 2 || x >= MAP_W - 2;
+        const edge = x < 2 || y < 2 || y >= MAP_H - 2 || x >= MAP_W - 2 || (x >= MAIN_SIZE - 2 && x < MAIN_SIZE);
         k = edge ? EDGE_WALL[r] : wildProp(x, y, r, g);
         // 新城镇里只留不挡路的小装饰（草、花、雪堆），树和石头不长在城里
         if (k && BLOCKING.has(k) && townOf(x, y)) k = null;
@@ -1303,7 +1447,13 @@ function walkChunk(ci: number): Uint8Array {
   const fl = chunkFlags[ci];
   // 按位存（每块 128 字节），不随地面和装饰物一起被丢掉：走过一次的地方以后寻路不用重新生成
   const w = new Uint8Array((CHUNK * CHUNK) >> 3);
-  for (let li = 0; li < CHUNK * CHUNK; li++) if (!blockedG[ground[li]] && !block[li] && !((fl?.[li] ?? 0) & F_BUILD)) w[li >> 3] |= 1 << (li & 7);
+  // 神秘区域外面一圈空气墙（用户 11-01：暂未开放，进不去）
+  const cx = (ci % CHUNKS_X) * CHUNK, cy = Math.floor(ci / CHUNKS_X) * CHUNK;
+  const wall = behindAirWall(cx, cy) || behindAirWall(cx + CHUNK - 1, cy + CHUNK - 1) || behindAirWall(cx, cy + CHUNK - 1) || behindAirWall(cx + CHUNK - 1, cy);
+  for (let li = 0; li < CHUNK * CHUNK; li++) {
+    if (wall && behindAirWall(cx + (li & 31), cy + (li >> 5))) continue;
+    if (!blockedG[ground[li]] && !block[li] && !((fl?.[li] ?? 0) & F_BUILD)) w[li >> 3] |= 1 << (li & 7);
+  }
   return (chunkWalk[ci] = w);
 }
 export function isWalkable(x: number, y: number) {

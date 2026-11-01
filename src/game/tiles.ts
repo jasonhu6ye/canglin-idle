@@ -71,6 +71,8 @@ const PAL: Record<Ground, string[]> = {
   chalk: ['#c8c4b8', '#e2ded2', '#f2eee4', '#a8a498'],
   moonwater: ['#2e2448', '#3a2e5c', '#52427a', '#c8a8ff'],
   starwater: ['#141850', '#1c2266', '#2a3284', '#e8e0ff'],
+  // 永冬冰原（11-01）：灰褐色冻土，结着白霜
+  tundra: ['#5a5650', '#716b62', '#8a847a', '#dce8f4'],
 };
 
 // 每个像素都要用调色板，先解析一次（以前每个像素都重新 parseInt，开局要多花 1 秒）
@@ -291,6 +293,13 @@ function groundPixel(g: Ground, x: number, y: number, v: number, f: number): RGB
       if (crack) return g === 'stormrock' && n > 0.6 ? acc : dark;
       if (g === 'frostrock' && n > 0.97) return acc;
       return n < 0.14 ? dark : n > 0.86 ? light : base;
+    }
+    case 'tundra': {
+      // 冻土：一块块冻裂的土，裂缝发暗，表面零星白霜
+      const cell = hash(x >> 2, y >> 2, v + 210);
+      if ((x & 3) === 0 && cell < 0.5) return dark;
+      if (n > 0.93) return acc;
+      return n < 0.14 ? dark : n > 0.84 ? light : cell < 0.25 ? mix(base, dark, 0.3) : base;
     }
     case 'blacksand': {
       // 黑沙：细碎的颗粒，偶尔一粒火星

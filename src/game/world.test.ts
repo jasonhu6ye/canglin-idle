@@ -1,5 +1,6 @@
 import { findPath, isWalkable, reachableNear, regionAt, SPAWN, standTile } from './world';
-import { ACTIONS, MAP_W, NODES, townXY } from '../core/data';
+import { ACTIONS, GATE_CAMP, MAP_W, NODES, townXY } from '../core/data';
+import { inRealm } from '../core/realm';
 
 describe('世界', { timeout: 30_000 }, () => {
   it('每个资源点都在区域图上规定的区域里', () => {
@@ -9,7 +10,8 @@ describe('世界', { timeout: 30_000 }, () => {
   it('从城镇能走到每个资源点', () => {
     for (const n of NODES) {
       const s = standTile(n);
-      const path = findPath(SPAWN, s);
+      // 永冬冰原隔着深海（11-01）：从营地的回程门走
+      const path = findPath(inRealm(n) ? standTile(GATE_CAMP) : SPAWN, s);
       // 海岛要等航行系统（用户 10-24），陆地上的都要走得到
       if (n.sea) { expect(path, `${n.name} 在海岛上，不该有桥`).toBeNull(); continue; }
       expect(path, n.name).not.toBeNull();
@@ -43,5 +45,17 @@ describe('远路', { timeout: 120_000 }, () => {
         expect(findPath(standTile(n), spot!), id).not.toBeNull();
       });
     }
+  });
+});
+
+describe('神秘区域（11-01 暂未开放）', () => {
+  it('空气墙挡着，整块都走不进去', async () => {
+    const { MYSTERY_BOX: M } = await import('../core/realm');
+    for (let i = 0; i < 400; i++) {
+      const x = M.x + ((i * 37) % M.size), y = M.y + ((i * 91) % M.size);
+      expect(isWalkable(x, y), `${x},${y}`).toBe(false);
+    }
+    const edge = { x: M.x + (M.size >> 1), y: M.y + M.size + 20 };
+    expect(findPath(standTile(GATE_CAMP), { x: edge.x, y: M.y + M.size - 30 })).toBeNull();
   });
 });

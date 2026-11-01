@@ -68,6 +68,7 @@ const END_TEXT: Record<TaskEndReason, string> = {
   level: tl('等级不够，已跳过'),
   noAmmo: tl('弹药用完了，战斗停止'),
   summon: tl('南瓜王已经离开（要先在活动祭坛召唤）'),
+  gone: tl('限时怪已经消失'),
 };
 
 type Toast = { id: number; text: string; gold: boolean };

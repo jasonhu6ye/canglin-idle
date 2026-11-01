@@ -1098,4 +1098,11 @@ export const EN_UI: Record<string, string> = {
   "最后在线：{0}": "Last online: {0}",
   " · 总等级 {0} · 战斗 {1}": " · Total level {0} · Combat {1}",
   " · 还没上传过存档": " · No save uploaded yet",
+  "限时怪已经消失": "Timed spawn gone",
+  "冻结": "Frozen",
+  "寒气回流": "Frost Heal",
+  "神秘区域 · 暂未开放": "Unknown Region · Locked",
+  "主大陆": "Mainland",
+  "❄ 永冬冰原": "❄ Everwinter",
+  "{0}停了：限时刷出的怪已经消失，等下一轮再来": "{0} stopped: the timed spawn is gone. Come back next round.",
 };

@@ -203,7 +203,9 @@ export type RegionId = 'town' | 'snow' | 'highland' | 'coast' | 'lava' | 'abyss'
   // 8848 大地图外圈的新区域（用户 10-23）
   | 'savanna' | 'autumn' | 'jungle' | 'tropic' | 'canyon' | 'desert' | 'alpine' | 'crystal'
   // 12080 最外圈的新群系（用户 10-24）
-  | 'hills' | 'vineisles' | 'moonmire' | 'archipelago' | 'frostpeak' | 'ashcape' | 'thunder' | 'starsea';
+  | 'hills' | 'vineisles' | 'moonmire' | 'archipelago' | 'frostpeak' | 'ashcape' | 'thunder' | 'starsea'
+  // 永冬冰原（用户 11-01）
+  | 'tundra' | 'frostpine' | 'icelakes' | 'icerift' | 'glacier' | 'frozenruins' | 'aurorahigh' | 'everrift';
 
 export interface CombatAction {
   id: string;
@@ -369,7 +371,7 @@ export interface GameState {
   mapSize?: number;
   /** 正在自动寻路去当前任务的地点；到达前任务不开始 */
   /** 自动寻路：via 是顺路用的两座石碑（先走到第一座，传到第二座） */
-  travel: { to: string; ms: number; total: number; via?: [string, string] } | null;
+  travel: { to: string; ms: number; total: number; via?: [string, string]; hops?: [string, string][] } | null;
   /** 玩家手动寻路（没有任务或已暂停时）：关掉游戏也照样走完 */
   walk?: { from: { x: number; y: number }; to: { x: number; y: number }; ms: number; total: number } | null;
   /** 玩家点地图走开了：队列保留但不干活，点「继续工作」才走回去 */
@@ -458,7 +460,7 @@ export interface DungeonRun {
   lastHit?: { floor: number; idx: number; dmg: number; crit?: boolean; mine: boolean };
 }
 
-export type TaskEndReason = 'complete' | 'noInput' | 'death' | 'level' | 'noAmmo' | 'summon';
+export type TaskEndReason = 'complete' | 'noInput' | 'death' | 'level' | 'noAmmo' | 'summon' | 'gone';
 
 /** 一次结算的汇总，用于离线收获弹窗和实时提示 */
 export interface Summary {

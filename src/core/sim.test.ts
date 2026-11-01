@@ -753,7 +753,9 @@ describe('传说石碑', () => {
   it('自动寻路在所有已激活石碑里挑最快的一对，只要比走路快就用', async () => {
     const { WAYSTONES, planRoute, standOf: st, STONE_JUMP_MS } = await import('./data');
     const all = WAYSTONES.map((n) => n.id);
-    for (const from of WAYSTONES.slice(0, 6)) for (const to of WAYSTONES.slice(-6)) {
+    // 冰原的石碑（11-01）只在冰原里互相传，这里只看主大陆
+    const main = WAYSTONES.filter((n) => n.x < 12080);
+    for (const from of main.slice(0, 6)) for (const to of main.slice(-6)) {
       const a = st(from);
       const b = { x: st(to).x + 3, y: st(to).y };
       const r = planRoute(all, a, b);

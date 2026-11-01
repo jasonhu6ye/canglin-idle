@@ -228,6 +228,19 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .wm-scroll { flex: 1; overflow: auto; -webkit-overflow-scrolling: touch; background: #0a0604; position: relative; }
 .wm-canvas { position: relative; aspect-ratio: 1; min-width: 100%; margin: 0 auto; box-shadow: inset 0 0 0 2px var(--gold-dark); }
 .wm-canvas img { width: 100%; height: 100%; display: block; }
+/* 神秘区域（11-01 暂未开放）：一片缓缓翻涌的黑雾 */
+.wm-mystery {
+  position: absolute; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; overflow: hidden;
+  background: radial-gradient(ellipse at 50% 55%, rgba(60, 40, 110, 0.35), transparent 65%);
+}
+.wm-mystery::before {
+  content: ''; position: absolute; inset: -20%;
+  background: radial-gradient(circle at 30% 40%, rgba(90, 70, 150, 0.22), transparent 30%), radial-gradient(circle at 70% 65%, rgba(40, 60, 120, 0.22), transparent 32%), radial-gradient(circle at 55% 20%, rgba(120, 90, 180, 0.15), transparent 25%);
+  animation: wm-mist 14s ease-in-out infinite alternate;
+}
+@keyframes wm-mist { from { transform: translate(-4%, 2%) rotate(0deg); } to { transform: translate(4%, -3%) rotate(8deg); } }
+.wm-mystery b { position: relative; font-size: 22px; color: #b9a8ff; letter-spacing: 4px; text-shadow: 0 0 8px #6040c0, 0 0 2px #000; }
+.wm-mystery span { position: relative; font-size: 11px; color: #d8d0ff; letter-spacing: 1px; text-shadow: 0 1px 0 #000, 0 0 4px #000; white-space: nowrap; }
 .wm-region {
   position: absolute; transform: translate(-50%, -50%); pointer-events: none; white-space: nowrap; font-size: 12px; font-weight: bold;
   color: #fff3c4; letter-spacing: 2px; text-shadow: 0 1px 0 #000, 0 0 4px #000, 0 0 8px #000;

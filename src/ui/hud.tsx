@@ -118,6 +118,7 @@ export function stopText(reason: TaskEndReason, action: string, item?: string): 
     case 'death': return tl`${name}停了：连续阵亡 3 次。换更好的装备、食物栏放上食物，或者换只弱一点的怪`;
     case 'noAmmo': return tl`${name}停了：弹药用完了，背包和仓库都没有`;
     case 'summon': return tl`${name}停了：南瓜王不在，要先去万圣节活动祭坛召唤`;
+    case 'gone': return tl`${name}停了：限时刷出的怪已经消失，等下一轮再来`;
     default: return tl`${name}做完了，队列空了，角色在发呆`;
   }
 }
