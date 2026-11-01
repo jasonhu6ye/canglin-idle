@@ -214,7 +214,7 @@ export interface OnlineApi {
   /** 云存档：存的是整个 GameState；冲突时比 lastTick，新的赢 */
   pullSave(): Promise<GameState | null>;
   /** 存档上传时带上设备 id，好认出是不是别的设备传的 */
-  pushSave(s: GameState, device?: string): Promise<void>;
+  pushSave(s: GameState, device?: string, epoch?: number): Promise<void>;
   /** 云端存档的 lastTick 和上传它的设备（不下载整份存档），没有就是 null */
   cloudHead(): Promise<{ tick: number; device?: string } | null>;
 
@@ -338,9 +338,33 @@ export interface OnlineApi {
   /** 管理员：可疑玩家、改状态（hide / unhide / ban / unban / clear） */
   gmCheaters(): Promise<CheatRow[]>;
   gmAcSet(playerId: string, action: 'hide' | 'unhide' | 'ban' | 'unban' | 'clear', note?: string): Promise<void>;
+  /** 管理员：所有玩家的交易记录（who = 数字 ID 或名字，空 = 全部） */
+  gmTrades(who?: string): Promise<GmTrade[]>;
+  /** 管理员：服务器存档（快照）和回档；pid 为空 = 全服回档，返回回档了几个人 */
+  gmSnapshots(): Promise<Snapshot[]>;
+  gmSnapshotCreate(label: string): Promise<void>;
+  gmSnapshotDelete(id: number): Promise<void>;
+  gmRollback(id: number, pid?: number): Promise<number>;
+  /** 管理员：真人玩家，新注册的在前；人数统计 */
+  gmPlayers(who?: string): Promise<GmPlayer[]>;
+  gmPlayerCount(): Promise<{ total: number; today: number; week: number }>;
 }
 
+export interface GmPlayer {
+  id: string; pid: number; name: string; joined: number; lastSeen: number;
+  total: number | null; combat: number | null; guildTag: string | null; hidden: boolean; banned: boolean; flags: number;
+}
+
+export interface GmTrade {
+  id: string; status: 'open' | 'done' | 'cancelled'; at: number; createdAt: number;
+  a: { id: string; pid: number; name: string; items: Record<string, number>; value: number };
+  b: { id: string; pid: number; name: string; items: Record<string, number>; value: number };
+}
+export interface Snapshot { id: number; label: string; auto: boolean; players: number; at: number; mb: number }
+
 export type CheatKind = 'clock_local' | 'save_edit' | 'speed';
+/** 上传存档被拒：服务器回档过了（ROLLBACK:新版本号） */
+export const isRollbackError = (e: unknown) => /ROLLBACK:\d+/.test(String((e as Error)?.message ?? e));
 export interface CheatFlag { kind: string; severe: boolean; detail: Record<string, unknown>; at: number }
 export interface CheatRow { playerId: string; pid: number; name: string; hidden: boolean; banned: boolean; note: string; n: number; severe: number; lastAt: number | null; flags: CheatFlag[] }
 

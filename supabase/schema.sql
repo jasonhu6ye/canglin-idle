@@ -1227,6 +1227,8 @@ declare
   c_new numeric; c_old numeric; c_cap numeric; gifted numeric;
   me_pid bigint; since timestamptz;
 begin
+  -- 回档函数写入时不检查
+  if current_setting('ac.bypass', true) = '1' then return new; end if;
   -- 上传时间以服务器为准
   new.updated_at := now();
   if (select exists (select 1 from gm_admins a join profiles p on p.pid = a.pid where p.id = new.player_id)) then
@@ -1286,6 +1288,7 @@ create or replace function public.ac_check_rank() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare save_xp numeric; lv_sum numeric;
 begin
+  if current_setting('ac.bypass', true) = '1' then return new; end if;
   new.updated_at := now();
   select public.ac_sum(data -> 'xp') into save_xp from saves where player_id = new.player_id;
   select public.ac_sum(new.skills) into lv_sum;
@@ -1393,3 +1396,381 @@ create policy "chat 自己发" on public.chat for insert with check (
     or channel = 'guild' and guild_id = (select guild_id from public.profiles where id = auth.uid())
     or channel = 'party' and party_id = public.my_party()
     or channel = 'private' and to_id is not null and public.is_friend(auth.uid(), to_id)));
+
+-- ============ 防作弊第二批（11-01）============
+-- 物品：存档里不存在的物品、数量不合法、仓库总价值涨得太快（按 item_values 价格，扣掉交易收到的和 GM 送的）
+-- 回档：存档时间倒退（交易出去以后再传旧存档刷物品）
+-- 交易：价值严重不对等（大号给小号送资源）、给出的东西比云存档里还多
+-- 世界频道刷屏：每分钟最多 8 句，超了丢掉并记录
+-- 多开：同一台设备登录过多个账号
+-- 交易记录：GM 面板可以看所有玩家的交易
+
+-- 一包物品按服务器价格算总价值（coins 按 1）
+create or replace function public.ac_value(o jsonb) returns numeric
+language sql stable security definer set search_path = public as $$
+  select coalesce(sum(case when jsonb_typeof(e.v) = 'number' then e.v::text::numeric * coalesce(iv.value, 0) else 0 end), 0)
+  from jsonb_each(coalesce(o, '{}'::jsonb)) as e(k, v) left join item_values iv on iv.id = e.k
+$$;
+
+-- 物品总价值（仓库 + 背包 + 身上，不算金币）
+create or replace function public.ac_save_value(d jsonb) returns numeric
+language sql stable security definer set search_path = public as $$
+  select public.ac_value(coalesce(d -> 'bank', '{}'::jsonb) - 'coins') + public.ac_value(coalesce(d -> 'bag', '{}'::jsonb) - 'coins')
+    + coalesce((select sum(coalesce(iv.value, 0)) from jsonb_each_text(coalesce(d -> 'equipment', '{}'::jsonb)) e(k, v) join item_values iv on iv.id = e.v), 0)
+$$;
+
+-- 不合法的物品：不存在的 id、数量不是正整数、数量离谱
+create or replace function public.ac_bad_items(d jsonb) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select coalesce(jsonb_agg(jsonb_build_object('id', x.k, 'n', x.v)), '[]'::jsonb) from (
+    select e.k, e.v from jsonb_each(coalesce(d -> 'bank', '{}'::jsonb) || coalesce(d -> 'bag', '{}'::jsonb)) e(k, v)
+    where (e.k <> 'coins' and not exists (select 1 from item_values iv where iv.id = e.k))
+       or jsonb_typeof(e.v) <> 'number'
+       or e.v::text::numeric < 0
+       or e.v::text::numeric <> floor(e.v::text::numeric)
+       or (e.k <> 'coins' and e.v::text::numeric > 1000000000)
+    limit 10
+  ) x
+$$;
+
+create or replace function public.ac_check_save() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  real_ms numeric; game_ms numeric; hours numeric;
+  xp_new numeric; xp_old numeric; xp_cap numeric; boost numeric;
+  c_new numeric; c_old numeric; c_cap numeric; gifted numeric;
+  v_new numeric; v_old numeric; v_cap numeric; v_in numeric;
+  bad jsonb; traded boolean; dev text; n_acc int;
+  me_pid bigint; since timestamptz;
+begin
+  -- 回档函数写入时不检查
+  if current_setting('ac.bypass', true) = '1' then return new; end if;
+  -- 上传时间以服务器为准
+  new.updated_at := now();
+  if (select exists (select 1 from gm_admins a join profiles p on p.pid = a.pid where p.id = new.player_id)) then
+    return new;
+  end if;
+  select pid into me_pid from profiles where id = new.player_id;
+  -- 存档时间跑到服务器前面去了
+  if new.last_tick > extract(epoch from now()) * 1000 + public.ac_conf('clock_skew_min', 10) * 60000 then
+    perform public.ac_flag(new.player_id, 'clock', new.last_tick > extract(epoch from now()) * 1000 + 3 * 3600000, jsonb_build_object('ahead_min', round((new.last_tick - extract(epoch from now()) * 1000) / 60000)));
+  end if;
+  if tg_op = 'UPDATE' then
+    since := old.updated_at;
+    xp_old := public.ac_sum(old.data -> 'xp');
+    c_old := coalesce((old.data -> 'bank' ->> 'coins')::numeric, 0);
+    v_old := public.ac_save_value(old.data);
+    game_ms := new.last_tick - old.last_tick;
+  else
+    since := coalesce((select created_at from profiles where id = new.player_id), now() - interval '1 hour');
+    xp_old := 0; c_old := 0; v_old := 0; game_ms := 0;
+  end if;
+  real_ms := greatest(extract(epoch from now() - since) * 1000, 0);
+  hours := greatest(real_ms / 3600000.0, 0.02);
+  -- 游戏时间比真实时间多走了很多（离线结算最多 24 小时，正常不会超过真实时间）
+  if tg_op = 'UPDATE' and game_ms - real_ms > public.ac_conf('drift_min', 30) * 60000 then
+    perform public.ac_flag(new.player_id, 'clock', game_ms - real_ms > 3 * 3600000,
+      jsonb_build_object('game_min', round(game_ms / 60000), 'real_min', round(real_ms / 60000)));
+  end if;
+  -- 回档：存档时间倒退。这段时间里做成过交易的算严重（交易出去再传旧档 = 刷物品）
+  if tg_op = 'UPDATE' and game_ms < -5 * 60000 then
+    select exists (select 1 from trades t where t.status = 'done' and new.player_id in (t.a, t.b)
+      and t.updated_at > to_timestamp(new.last_tick / 1000.0)) into traded;
+    perform public.ac_flag(new.player_id, 'rollback', traded,
+      jsonb_build_object('back_min', round(-game_ms / 60000), 'traded', traded));
+  end if;
+  -- 经验：GM 经验增益期间按比例放宽
+  select coalesce(sum(pct), 0) / 100.0 into boost from gm_buffs
+    where kind = 'xp' and ends_at > since and starts_at < now() and (target_pid is null or target_pid = me_pid);
+  xp_new := public.ac_sum(new.data -> 'xp');
+  xp_cap := public.ac_conf('xp_per_hour', 6000000) * (1 + boost) * hours + public.ac_conf('xp_slack', 300000);
+  if xp_new - xp_old > xp_cap then
+    perform public.ac_flag(new.player_id, 'xp', xp_new - xp_old > 3 * xp_cap,
+      jsonb_build_object('gain', xp_new - xp_old, 'cap', round(xp_cap), 'hours', round(hours, 2)));
+  end if;
+  if tg_op = 'UPDATE' and xp_new < xp_old - 1 then
+    perform public.ac_flag(new.player_id, 'xp_drop', false, jsonb_build_object('old', xp_old, 'new', xp_new));
+  end if;
+  -- 这段时间别人交易给的、GM 送的（金币和物品价值分开算）
+  select coalesce(sum((it ->> 'qty')::numeric), 0) into gifted
+    from gm_mail m, jsonb_array_elements(m.items) it
+    where m.target_pid = me_pid and m.claimed_at > since - interval '5 minutes' and it ->> 'item' = 'coins';
+  select coalesce(sum(coalesce((case when t.a = new.player_id then t.b_items else t.a_items end ->> 'coins')::numeric, 0)), 0) into c_cap
+    from trades t where t.status = 'done' and new.player_id in (t.a, t.b) and t.updated_at > since - interval '5 minutes';
+  gifted := gifted + c_cap;
+  c_new := coalesce((new.data -> 'bank' ->> 'coins')::numeric, 0);
+  c_cap := public.ac_conf('coins_per_hour', 50000000) * hours + public.ac_conf('coins_slack', 5000000) + gifted;
+  if c_new - c_old > c_cap then
+    perform public.ac_flag(new.player_id, 'coins', c_new - c_old > 5 * c_cap,
+      jsonb_build_object('gain', c_new - c_old, 'cap', round(c_cap), 'hours', round(hours, 2)));
+  end if;
+  -- 物品总价值
+  select coalesce(sum(public.ac_value(case when t.a = new.player_id then t.b_items else t.a_items end - 'coins')), 0) into v_in
+    from trades t where t.status = 'done' and new.player_id in (t.a, t.b) and t.updated_at > since - interval '5 minutes';
+  select v_in + coalesce(sum((it ->> 'qty')::numeric * coalesce(iv.value, 0)), 0) into v_in
+    from gm_mail m, jsonb_array_elements(m.items) it left join item_values iv on iv.id = it ->> 'item'
+    where m.target_pid = me_pid and m.claimed_at > since - interval '5 minutes' and it ->> 'item' <> 'coins';
+  v_new := public.ac_save_value(new.data);
+  v_cap := public.ac_conf('value_per_hour', 50000000) * hours + public.ac_conf('value_slack', 5000000) + v_in;
+  if v_new - v_old > v_cap then
+    perform public.ac_flag(new.player_id, 'items', v_new - v_old > 5 * v_cap,
+      jsonb_build_object('gain', round(v_new - v_old), 'cap', round(v_cap), 'hours', round(hours, 2)));
+  end if;
+  -- 不合法的物品
+  bad := public.ac_bad_items(new.data);
+  if jsonb_array_length(bad) > 0 then
+    perform public.ac_flag(new.player_id, 'bad_item',
+      exists (select 1 from jsonb_array_elements(bad) b where jsonb_typeof(b -> 'n') <> 'number' or (b ->> 'n')::numeric < 0 or (b ->> 'n')::numeric > 1000000000),
+      jsonb_build_object('items', bad));
+  end if;
+  -- 多开：同一台设备传过几个账号的存档
+  dev := new.data ->> '_device';
+  if dev is not null then
+    select count(distinct player_id) into n_acc from saves where data ->> '_device' = dev and player_id <> new.player_id;
+    if n_acc + 1 >= public.ac_conf('multi_accounts', 3) then
+      perform public.ac_flag(new.player_id, 'multi', false, jsonb_build_object('accounts', n_acc + 1));
+    end if;
+  end if;
+  return new;
+end $$;
+
+-- 交易成交时检查：价值严重不对等；给出去的比云存档里有的还多
+create or replace function public.ac_check_trade() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare va numeric; vb numeric; gap numeric; k text; v jsonb; have numeric; fake jsonb; side uuid; items jsonb;
+begin
+  if new.status <> 'done' or old.status = 'done' then return new; end if;
+  va := public.ac_value(new.a_items);
+  vb := public.ac_value(new.b_items);
+  gap := public.ac_conf('trade_gap', 3000000);
+  if abs(va - vb) > gap and greatest(va, vb) > 5 * least(va, vb) then
+    -- 记在收东西多的那一方（被送资源的小号）
+    perform public.ac_flag(case when va > vb then new.b else new.a end, 'trade', false,
+      jsonb_build_object('trade', new.id, 'from', (select name from profiles where id = case when va > vb then new.a else new.b end),
+        'got', round(greatest(va, vb)), 'gave', round(least(va, vb))));
+  end if;
+  foreach side in array array[new.a, new.b] loop
+    items := case when side = new.a then new.a_items else new.b_items end;
+    fake := '[]'::jsonb;
+    for k, v in select * from jsonb_each(items) loop
+      select coalesce(case when k = 'coins' then (data -> 'bank' ->> 'coins')::numeric
+        else coalesce((data -> 'bank' ->> k)::numeric, 0) + coalesce((data -> 'bag' ->> k)::numeric, 0) end, 0)
+        into have from saves where player_id = side;
+      if coalesce(have, 0) < v::text::numeric then
+        fake := fake || jsonb_build_object('id', k, 'gave', v, 'had', coalesce(have, 0));
+      end if;
+    end loop;
+    if jsonb_array_length(fake) > 0 then
+      perform public.ac_flag(side, 'trade_fake', public.ac_value((select jsonb_object_agg(f ->> 'id', (f ->> 'gave')::numeric - (f ->> 'had')::numeric) from jsonb_array_elements(fake) f)) > public.ac_conf('trade_gap', 3000000),
+        jsonb_build_object('trade', new.id, 'items', fake));
+    end if;
+  end loop;
+  return new;
+end $$;
+drop trigger if exists ac_check_trade on public.trades;
+create trigger ac_check_trade before update on public.trades for each row execute function public.ac_check_trade();
+
+-- 世界频道刷屏：每分钟最多 8 句（GM 不限）
+create or replace function public.ac_check_chat() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare n int;
+begin
+  if new.channel <> 'world' or public.is_gm() then return new; end if;
+  select count(*) into n from chat where player_id = new.player_id and channel = 'world' and at > now() - interval '1 minute';
+  if n >= public.ac_conf('chat_per_min', 8) then
+    perform public.ac_flag(new.player_id, 'spam', false, jsonb_build_object('per_min', n + 1));
+    -- 不报错（报错的话记录也会一起撤销），直接丢掉这句
+    return null;
+  end if;
+  return new;
+end $$;
+drop trigger if exists ac_check_chat on public.chat;
+create trigger ac_check_chat before insert on public.chat for each row execute function public.ac_check_chat();
+
+-- 客户端报上来的种类加上「游戏加速」
+create or replace function public.report_cheat(p_kind text, p_detail jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null or p_kind not in ('clock_local', 'save_edit', 'speed') then return; end if;
+  perform public.ac_flag(auth.uid(), p_kind, false, coalesce(p_detail, '{}'::jsonb));
+end $$;
+
+-- 管理员：所有玩家的交易记录（最近的在前），可以按数字 ID 或名字筛
+create or replace function public.gm_trades(p_who text default null, p_limit int default 100)
+returns table (id uuid, a uuid, a_pid bigint, a_name text, b uuid, b_pid bigint, b_name text,
+  a_items jsonb, b_items jsonb, a_value numeric, b_value numeric, status text, created_at timestamptz, updated_at timestamptz)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  return query
+    select t.id, t.a, pa.pid, pa.name, t.b, pb.pid, pb.name, t.a_items, t.b_items,
+      public.ac_value(t.a_items), public.ac_value(t.b_items), t.status, t.created_at, t.updated_at
+    from trades t join profiles pa on pa.id = t.a join profiles pb on pb.id = t.b
+    where p_who is null or p_who = ''
+      or pa.pid::text = p_who or pb.pid::text = p_who
+      or lower(pa.name) like '%' || lower(p_who) || '%' or lower(pb.name) like '%' || lower(p_who) || '%'
+    order by t.updated_at desc
+    limit least(p_limit, 300);
+end $$;
+grant execute on function public.gm_trades(text, int) to authenticated;
+
+-- ============ 服务器存档 / 回档（11-01）============
+-- 快照：把所有玩家的云存档和排行榜复制一份。每天自动存一份（保留最近 snap_keep_auto 份，默认 3），GM 也能手动存（保留最近 10 份）。
+-- 回档：把存档换回快照里的样子（全服或单个玩家）。全服回档前会先自动存一份「回档前」快照，回错了还能再回来。
+-- 每个玩家有 save_epoch，回档时 +1 并写进存档的 _epoch；客户端上传时带的 _epoch 比它小就拒收（报 ROLLBACK），
+-- 客户端收到后读回档后的存档并刷新，所以开着游戏的人也不会把旧进度传回去。
+-- 不回档的：公会仓库、交易、邮件、聊天这些服务器上的表（只回角色存档和排行榜）。
+alter table public.profiles add column if not exists save_epoch int not null default 0;
+
+create table if not exists public.server_snapshots (
+  id bigint generated always as identity primary key,
+  label text not null default '',
+  auto boolean not null default false,
+  players int not null default 0,
+  created_at timestamptz not null default now()
+);
+create table if not exists public.snapshot_saves (
+  snapshot_id bigint not null references public.server_snapshots(id) on delete cascade,
+  player_id uuid not null references public.profiles(id) on delete cascade,
+  data jsonb not null,
+  last_tick bigint not null,
+  rank jsonb,
+  primary key (snapshot_id, player_id)
+);
+alter table public.server_snapshots enable row level security;
+alter table public.snapshot_saves enable row level security;
+-- 不开任何策略：只能通过下面的函数读写
+
+create or replace function public.ac_snapshot(p_label text, p_auto boolean) returns bigint
+language plpgsql security definer set search_path = public as $$
+declare sid bigint; n int;
+begin
+  insert into server_snapshots (label, auto) values (left(coalesce(p_label, ''), 40), p_auto) returning id into sid;
+  insert into snapshot_saves (snapshot_id, player_id, data, last_tick, rank)
+    select sid, s.player_id, s.data, s.last_tick,
+      (select to_jsonb(r) - 'player_id' - 'updated_at' from ranks r where r.player_id = s.player_id)
+    from saves s;
+  get diagnostics n = row_count;
+  update server_snapshots set players = n where id = sid;
+  -- 只留最近几份
+  delete from server_snapshots where auto and id not in (select id from server_snapshots where auto order by id desc limit greatest(public.ac_conf('snap_keep_auto', 3)::int, 1));
+  delete from server_snapshots where not auto and id not in (select id from server_snapshots where not auto order by id desc limit 10);
+  return sid;
+end $$;
+revoke execute on function public.ac_snapshot(text, boolean) from public, anon, authenticated;
+
+-- 每天自动存一份：有人上传存档时顺便看一下（同一时刻只让一个人做）
+create or replace function public.ac_auto_snapshot() returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if exists (select 1 from server_snapshots where auto and created_at > now() - interval '24 hours') then return; end if;
+  if not pg_try_advisory_xact_lock(424242) then return; end if;
+  perform public.ac_snapshot('每日自动', true);
+end $$;
+revoke execute on function public.ac_auto_snapshot() from public, anon, authenticated;
+
+-- 上传存档：先看回档版本，再做原来的检查
+create or replace function public.ac_check_save_epoch() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare ep int;
+begin
+  -- 回档函数自己写存档时不检查
+  if current_setting('ac.bypass', true) = '1' then return new; end if;
+  select save_epoch into ep from profiles where id = new.player_id;
+  if coalesce((new.data ->> '_epoch')::int, 0) < coalesce(ep, 0) then
+    raise exception 'ROLLBACK:%', ep;
+  end if;
+  perform public.ac_auto_snapshot();
+  return new;
+end $$;
+drop trigger if exists ac_check_save_epoch on public.saves;
+-- 触发器按名字顺序跑：ac_check_save 在前会先改 updated_at，回档检查要放最前面
+drop trigger if exists aa_check_save_epoch on public.saves;
+create trigger aa_check_save_epoch before insert or update on public.saves for each row execute function public.ac_check_save_epoch();
+
+-- 管理员：快照列表
+create or replace function public.gm_snapshots()
+returns table (id bigint, label text, auto boolean, players int, created_at timestamptz, mb numeric)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  return query
+    select s.id, s.label, s.auto, s.players, s.created_at,
+      round(coalesce((select sum(pg_column_size(x.data)) from snapshot_saves x where x.snapshot_id = s.id), 0) / 1048576.0, 1)
+    from server_snapshots s order by s.id desc;
+end $$;
+grant execute on function public.gm_snapshots() to authenticated;
+
+create or replace function public.gm_snapshot_create(p_label text) returns bigint
+language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  return public.ac_snapshot(coalesce(nullif(trim(p_label), ''), '手动'), false);
+end $$;
+grant execute on function public.gm_snapshot_create(text) to authenticated;
+
+create or replace function public.gm_snapshot_delete(p_id bigint) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  delete from server_snapshots where id = p_id;
+end $$;
+grant execute on function public.gm_snapshot_delete(bigint) to authenticated;
+
+-- 回档：p_pid 为空 = 全服（先自动存一份回档前快照），否则只回这个数字 ID 的玩家。返回回档了几个人
+create or replace function public.gm_rollback(p_snapshot bigint, p_pid bigint default null) returns int
+language plpgsql security definer set search_path = public as $$
+declare r record; n int := 0; ep int; who uuid;
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  if not exists (select 1 from server_snapshots where id = p_snapshot) then raise exception '快照不存在'; end if;
+  if p_pid is not null then
+    select id into who from profiles where pid = p_pid;
+    if who is null then raise exception '没有这个玩家'; end if;
+    if not exists (select 1 from snapshot_saves where snapshot_id = p_snapshot and player_id = who) then raise exception '这个快照里没有这个玩家'; end if;
+  else
+    perform public.ac_snapshot('回档前', false);
+  end if;
+  perform set_config('ac.bypass', '1', true);
+  for r in select * from snapshot_saves where snapshot_id = p_snapshot and (who is null or player_id = who) loop
+    update profiles set save_epoch = save_epoch + 1 where id = r.player_id returning save_epoch into ep;
+    insert into saves (player_id, data, last_tick, updated_at)
+      values (r.player_id, r.data || jsonb_build_object('_epoch', ep, '_device', 'rollback'), r.last_tick, to_timestamp(r.last_tick / 1000.0))
+      on conflict (player_id) do update set data = excluded.data, last_tick = excluded.last_tick, updated_at = excluded.updated_at;
+    if r.rank is not null then
+      insert into ranks (player_id, total, combat, skills, xp, updated_at)
+        values (r.player_id, (r.rank ->> 'total')::int, (r.rank ->> 'combat')::int, coalesce(r.rank -> 'skills', '{}'), coalesce(r.rank -> 'xp', '{}'), now())
+        on conflict (player_id) do update set total = excluded.total, combat = excluded.combat, skills = excluded.skills, xp = excluded.xp, updated_at = now();
+    end if;
+    n := n + 1;
+  end loop;
+  perform set_config('ac.bypass', '', true);
+  return n;
+end $$;
+grant execute on function public.gm_rollback(bigint, bigint) to authenticated;
+
+-- ============ 管理员：真人玩家列表（11-01）============
+-- 新注册的在前；带注册时间、最后在线、等级、公会、防作弊状态。p_who 按数字 ID 或名字筛
+create or replace function public.gm_players(p_who text default null, p_limit int default 200)
+returns table (id uuid, pid bigint, name text, created_at timestamptz, last_seen timestamptz, total int, combat int,
+  guild_tag text, hidden boolean, banned boolean, flags bigint)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  return query
+    select p.id, p.pid, p.name, p.created_at, p.last_seen, r.total, r.combat, g.tag, p.ac_hidden, p.banned,
+      (select count(*) from cheat_flags f where f.player_id = p.id)
+    from profiles p left join ranks r on r.player_id = p.id left join guilds g on g.id = p.guild_id
+    where p_who is null or p_who = '' or p.pid::text = p_who or lower(p.name) like '%' || lower(p_who) || '%'
+    order by p.created_at desc
+    limit least(p_limit, 500);
+end $$;
+grant execute on function public.gm_players(text, int) to authenticated;
+
+create or replace function public.gm_player_count() returns table (total bigint, today bigint, week bigint)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  return query select count(*), count(*) filter (where created_at > now() - interval '1 day'), count(*) filter (where created_at > now() - interval '7 days') from profiles;
+end $$;
+grant execute on function public.gm_player_count() to authenticated;
