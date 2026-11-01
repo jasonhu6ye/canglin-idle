@@ -5,6 +5,7 @@ import { levelSnapshot } from './api';
 import type { TaskSpec } from '../core/guild';
 import { fastOf, readFast, slowKey, withMove, type Fast } from './presenceSync';
 import { tl } from '../i18n';
+import { gameNow } from '../core/clock';
 
 /** Supabase 实现（10-25 用户选定）。表和权限见 supabase/schema.sql */
 
@@ -77,8 +78,16 @@ export class SupabaseApi implements OnlineApi {
     if (!p) return (this.profile = null);
     this.profile = { id: p.id, pid: p.pid, name: p.name, outfit: p.outfit ?? undefined, guildId: p.guild_id };
     await this.loadTag();
-    void this.sb.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', p.id);
+    this.touchSeen(p.id);
     return this.profile;
+  }
+  /**
+   * 记下「最后在线时间」（好友、公会成员列表的「几小时前在线」）。
+   * 11-01 修：以前写成 void this.sb.from(...).update(...)，Supabase 的查询要 await / then 才会真的发出去，
+   * 所以一直没写进去，列表里显示的其实是注册时间（用户看到下线十几小时却显示 6 天前）。时间用和服务器对过的时钟
+   */
+  private touchSeen(id: string) {
+    this.sb.from('profiles').update({ last_seen: new Date(gameNow()).toISOString() }).eq('id', id).then(() => {}, () => {});
   }
   private async loadTag() {
     if (!this.profile) return;
@@ -136,7 +145,7 @@ export class SupabaseApi implements OnlineApi {
     const id = this.need().id;
     const snap = levelSnapshot(s);
     ok(await this.sb.from('saves').upsert({ player_id: id, data: device ? { ...s, _device: device } : s, last_tick: s.lastTick, updated_at: new Date().toISOString() }));
-    void this.sb.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', id);
+    this.touchSeen(id);
     ok(await this.sb.from('ranks').upsert({ player_id: id, total: snap.total, combat: snap.combat, skills: snap.skills, xp: snap.xp, updated_at: new Date().toISOString() }));
   }
   async cloudHead() {

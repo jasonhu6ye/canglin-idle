@@ -1285,4 +1285,8 @@ export const EN_TEXT: Record<string, string> = {
   "英文界面的新手任务提示、背包和角色页的说明都改短了，主界面不再被大段文字挡住。": "Quest tips and the help text on the Bag and Character pages are much shorter, so they no longer cover the main screen.",
   "场景里的石碑名字（英文）只写地名。": "Waystones in the world now show just the place name.",
   '英文继续润色：家园访客换成英文名字，公会、交易、设置等处的长说明改短，坐骑和日期的写法统一。': 'More English polish: home island visitors have English names now, long hints in guilds, trading and settings are shorter, and mount names and dates are spelled consistently.',
+  // 离线时间修复（11-01）
+  '修复：好友和公会成员的离线时间': 'Fix: last-online time for friends and guild members',
+  '好友列表和公会成员里的「多久前在线」以前一直没有更新，显示的其实是注册时间，所以明明刚下线十几个小时却显示几天前。现在上线和游戏中每分钟都会记下最后在线时间。': 'The "last online" time in the friends list and guild member list never updated and actually showed when the account was created, so someone who logged off half a day ago could show as gone for days. It\'s now recorded when you log in and every minute while you play.',
+  '修好之后，每个人要先上线一次，显示才会变准。': 'Each player needs to log in once after this fix before their time shows correctly.',
 };
