@@ -38,7 +38,7 @@ import { animateTileset, liquidIndex, paintTileset, T, TILESET, tileIndex, VARIA
 import { addMysteryFog } from './mysteryFog';
 import { paintWinterPortal, paintWinterPortalSwirl, WPORTAL_EYE, WPORTAL_FOOT, WPORTAL_H } from './winterPortalArt';
 import { playRealmIntro } from '../ui/realmIntro';
-import { chestTier, nextWindow, PORTAL_MS, timedWindow } from '../core/realm';
+import { chestTier, mmss, nextWindow, PORTAL_MS, timedWindow } from '../core/realm';
 import {
   BUILDINGS, CHUNK, FIELDS, findPath, GROUNDS, groundIndex, hash, isWalkable, LIQUIDS, propsInChunk, reachableNear, regionAt, SPAWN, standTile,
   WANDERERS, type PropKind,
@@ -1557,7 +1557,6 @@ export class MapScene extends Phaser.Scene {
       // 倒计时：刷出来时「还剩」，首领没刷出来时也显示「下次」
       const clock = this.timedClock.get(id);
       if (!clock || !view.contains(clock.x, clock.y)) continue;
-      const mmss = (ms: number) => { const t = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
       if (win) clock.setText(tl`⏳ ${mmss(win.end - now)}`).setVisible(true);
       else if (n.timed?.kind === 'boss') {
         const nx = nextWindow(n, now);

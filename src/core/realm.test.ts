@@ -66,3 +66,14 @@ describe('永冬冰原（11-01）', () => {
     expect(finishRealmChest(late, w.end + 5000).bank.coins ?? 0).toBe(s.bank.coins ?? 0);
   });
 });
+
+describe('读档（11-01 复查）', () => {
+  it('万圣节、畜牧栏、冰原宝箱记录读档后都还在', async () => {
+    const { migrate } = await import('./sim');
+    const s = { ...newGame(0, 1), halloween: { skins: ['reaper'], mount: true, last: 5 }, ranch: { pens: [{ start: 1, ms: 2 }, null, null] }, realmChest: { got: { realm_tundra_chest0: 3 } } };
+    const m = migrate(JSON.parse(JSON.stringify(s)))!;
+    expect(m.halloween).toEqual({ skins: ['reaper'], mount: true, last: 5 });
+    expect(m.ranch?.pens[0]).toEqual({ start: 1, ms: 2 });
+    expect(m.realmChest).toEqual({ got: { realm_tundra_chest0: 3 } });
+  });
+});

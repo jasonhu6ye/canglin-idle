@@ -137,5 +137,8 @@ export function chestTier(id: string, round: number): ChestTier {
   const r = strHash(id, round * 7 + 3);
   return r < 0.05 ? 'gold' : r < 0.3 ? 'blue' : 'green';
 }
+/** 倒计时文字 m:ss */
+export const mmss = (ms: number) => { const t = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
+
 /** 开箱要多久 */
 export const CHEST_OPEN_MS = 10_000;

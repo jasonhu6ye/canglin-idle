@@ -12,7 +12,7 @@ import { emitToGame } from './GameCanvas';
 import { MonsterIcon } from './Bestiary';
 import { store } from '../store';
 import { FINE_POINTER } from './itemOpen';
-import { inRealm, isRealmRegion, MYSTERY_BOX, nextWindow, REALM_BOX, REALM_SEEDS, timedWindow } from '../core/realm';
+import { inRealm, isRealmRegion, MYSTERY_BOX, mmss, nextWindow, REALM_BOX, REALM_SEEDS, timedWindow } from '../core/realm';
 import { isEn, tl } from '../i18n';
 
 /**
@@ -315,7 +315,6 @@ export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: ()
 }
 
 /** 限时点的倒计时（11-01）：刷出来的显示还剩多久，没刷出来的显示下次什么时候 */
-const mmss = (ms: number) => { const t = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
 function TimedLine({ n }: { n: MapNode }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);

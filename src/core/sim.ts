@@ -99,6 +99,33 @@ const okMode = (m: unknown): m is TaskMode => {
   return !!o && (o.type === 'infinite' || (o.type === 'count' && num(o.count, 0) >= 1) || (o.type === 'time' && num(o.ms, 0) > 0));
 };
 
+function migrateHw(raw: unknown): GameState['halloween'] {
+  const h = obj<NonNullable<GameState['halloween']>>(raw);
+  if (!h) return undefined;
+  const out: NonNullable<GameState['halloween']> = {};
+  if (Number.isInteger(h.summoned) && HW_TIERS[h.summoned!]) out.summoned = h.summoned;
+  if (Number.isFinite(h.last)) out.last = h.last;
+  if (h.mount) out.mount = true;
+  if (h.skin) out.skin = true;
+  const skins = arr<string>(h.skins).filter((id) => HW_SKINS.some((k) => k.id === id));
+  if (skins.length) out.skins = [...new Set(skins)];
+  return Object.keys(out).length ? out : undefined;
+}
+function migrateRanch(raw: unknown): GameState['ranch'] {
+  const r = obj<NonNullable<GameState['ranch']>>(raw);
+  if (!r) return undefined;
+  const pens = Array.from({ length: RANCH_PENS }, (_, i) => {
+    const p = arr<{ start: number; ms: number } | null>(r.pens)[i];
+    return p && Number.isFinite(p.start) && Number.isFinite(p.ms) && p.ms >= 0 ? { start: p.start, ms: p.ms } : null;
+  });
+  return pens.some(Boolean) ? { pens } : undefined;
+}
+function migrateRealmChest(raw: unknown): GameState['realmChest'] {
+  const r = obj<NonNullable<GameState['realmChest']>>(raw);
+  const got = Object.fromEntries(Object.entries(obj<Record<string, number>>(r?.got) ?? {}).filter(([id, n]) => typeof id === 'string' && Number.isInteger(n)));
+  return Object.keys(got).length ? { got } : undefined;
+}
+
 export function migrate(raw: unknown): GameState | null {
   const s = obj<Omit<Partial<GameState>, "version"> & { version?: number }>(raw);
   if (!s || ![1, 2, 3].includes(s.version ?? 0)) return null;
@@ -187,6 +214,10 @@ export function migrate(raw: unknown): GameState | null {
     shopBuys: obj(s.shopBuys) && typeof s.shopBuys!.day === 'string' ? { day: s.shopBuys!.day, n: Object.fromEntries(Object.entries(obj<Record<string, number>>(s.shopBuys!.n) ?? {}).filter(([, q]) => Number.isFinite(q) && q > 0)) } : undefined,
     buffs: Object.fromEntries(Object.entries(obj<GameState['buffs']>(s.buffs) ?? {}).filter(([, b]) => b && Number.isFinite(b.pct) && Number.isFinite(b.ms) && b.ms > 0)),
     mounted: !!s.mounted && !!equipment.mount,
+    // 11-01 复查：以前读档会把这三样丢掉（刷新页面后万圣节外观、召唤冷却、畜牧栏里的小马、开过的冰原宝箱都没了）
+    halloween: migrateHw(s.halloween),
+    ranch: migrateRanch(s.ranch),
+    realmChest: migrateRealmChest(s.realmChest),
     redeemed: arr<string>(s.redeemed).filter((c) => typeof c === 'string'),
     mail: migrateMail(s.mail),
     mailKeys: arr<string>(s.mailKeys).filter((k) => typeof k === 'string'),
@@ -834,7 +865,8 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     // 只在海岛上的动作进不了队列（enqueue、migrate 都滤掉了），这里不会没有地点
     if (!cands.length) return 0;
     if (cands.some((n) => { const d = standOf(n); return d.x === s.loc.x && d.y === s.loc.y; })) return 0;
-    const node = cands.find((n) => n.id === s.travel?.to) ?? fastest(cands, s.loc, s.waystones, moveSpeed(s))!.node;
+    // 已经在路上的接着走完（目标半路消失了也先走到，再去别的点；不然 loc 还在起点，走过的路全白走）
+    const node = nodesOfAction(task.action).find((n) => n.id === s.travel?.to) ?? fastest(cands, s.loc, s.waystones, moveSpeed(s))!.node;
     const dest = standOf(node);
     if (!s.travel || s.travel.to !== node.id) {
       const r = planRoute(s.waystones, s.loc, dest, moveSpeed(s));

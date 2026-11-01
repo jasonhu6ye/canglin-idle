@@ -999,7 +999,11 @@ chunkFlags.forEach((fl, ci) => {
 const coarseOpen = new Uint8Array(CW * CH);
 for (let c = 0; c < CW * CH; c++) coarseOpen[c] = !blockedG[coarseGround[c]] || coarseRoad[c] ? 1 : 0;
 // 神秘区域：粗网格也不通
-for (let c = 0; c < CW * CH; c++) if (behindAirWall(((c % CW) << CS) + (1 << (CS - 1)), (Math.floor(c / CW) << CS) + (1 << (CS - 1)))) coarseOpen[c] = 0;
+for (let cy = Math.max(0, (MYSTERY_BOX.y - 8) >> CS); cy <= Math.min(CH - 1, (MYSTERY_BOX.y + MYSTERY_BOX.size + 8) >> CS); cy++) {
+  for (let cx = Math.max(0, (MYSTERY_BOX.x - 8) >> CS); cx <= Math.min(CW - 1, (MYSTERY_BOX.x + MYSTERY_BOX.size + 8) >> CS); cx++) {
+    if (behindAirWall((cx << CS) + (1 << (CS - 1)), (cy << CS) + (1 << (CS - 1)))) coarseOpen[cy * CW + cx] = 0;
+  }
+}
 // 新城镇的栈桥、木道铺在水上，粗格子中心可能落在水里：城里铺了能走的地面的粗格子都算能走
 for (const b of TOWN_BOX) {
   for (let y = b.y0; y <= b.y1; y++) for (let x = b.x0; x <= b.x1; x++) {

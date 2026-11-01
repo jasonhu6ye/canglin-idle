@@ -182,11 +182,13 @@ export const sharedFight = (action: string | undefined) => !!action && SHARED.ha
 /** 最近一次收到的所有在线玩家（打冰原精英/首领时找一起打的人） */
 let lastAll: Presence[] = [];
 /** 一起打的人：队友，加上（冰原精英/首领时）附近所有人 */
-function fightMates(action: string | undefined, meId: string): { id: string; name: string }[] {
-  const out = new Map<string, string>();
-  for (const m of st.party?.members ?? []) if (m.playerId !== meId) out.set(m.playerId, m.name);
-  if (sharedFight(action)) for (const p of lastAll) if (p.playerId !== meId && !out.has(p.playerId)) out.set(p.playerId, p.name);
-  return [...out].map(([id, name]) => ({ id, name }));
+function fightMates(action: string | undefined, meId: string): { id: string; name: string; i: number }[] {
+  // i：队友按队伍里的位置（飘字颜色和以前一样），不是队友的排在后面
+  const out = new Map<string, { name: string; i: number }>();
+  (st.party?.members ?? []).forEach((m, i) => { if (m.playerId !== meId) out.set(m.playerId, { name: m.name, i }); });
+  let k = 4;
+  if (sharedFight(action)) for (const p of lastAll) if (p.playerId !== meId && !out.has(p.playerId)) out.set(p.playerId, { name: p.name, i: k++ });
+  return [...out].map(([id, v]) => ({ id, ...v }));
 }
 
 let aggroAt = 0;
@@ -240,7 +242,7 @@ export function takeFieldHits(all: Presence[]): FieldMateHit[] {
   const out: FieldMateHit[] = [];
   lastAll = all;
   if (!me || (!st.party && !sharedFight(action)) || !action || ACTIONS[action]?.kind !== 'combat' || s.dungeon) return out;
-  for (const [i, m] of fightMates(action, me.id).entries()) {
+  for (const m of fightMates(action, me.id)) {
     const p = all.find((q) => q.playerId === m.id);
     const f = p?.fd;
     if (!p) continue;
@@ -258,8 +260,9 @@ export function takeFieldHits(all: Presence[]): FieldMateHit[] {
     // 不是队友的（冰原同打）：一次最多算怪物血量的 20%，防止改过的客户端一下把大家的首领打没
     const party = st.party?.members.some((q) => q.playerId === p.playerId);
     const cap = party ? Infinity : Math.max(1, (s.combat.monsterMax ?? s.combat.monsterHp) * 0.2);
-    pushMateHit(fieldKey(action), Math.min(delta, cap));
-    out.push({ id: p.playerId, name: m.name, i, dmg: delta, crit: !!f.crit });
+    const dmg = Math.min(delta, cap);
+    pushMateHit(fieldKey(action), dmg);
+    out.push({ id: p.playerId, name: m.name, i: m.i, dmg, crit: !!f.crit });
   }
   return out;
 }
