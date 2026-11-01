@@ -8,6 +8,13 @@ import { tl } from '../i18n';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-11-01-f', date: tl('11 月 1 日'), title: tl("新外观预览：永霜领主"),
+    lines: [
+      tl("衣橱里新增「永霜领主」：深蓝冰甲、冰棱王冠、霜蓝披风，站着不动时脚边会升起冰柱托出冰霜巨剑，拔出来扛肩、横扫、举剑召霜，再劈进地里放出一圈冰爆。"),
+      tl("这套外观是永冬之裔活动的限定奖励，活动开放后用永冬冰晶兑换；现在先能在衣橱里看效果。"),
+    ],
+  },
+  {
     id: '2026-11-01-e', date: tl('11 月 1 日'), title: tl('英文界面精简'),
     lines: [
       tl('英文界面的新手任务提示、背包和角色页的说明都改短了，主界面不再被大段文字挡住。'),
