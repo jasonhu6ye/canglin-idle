@@ -378,22 +378,29 @@ export const wtBannerUrl = () => once('wt-banner2', () => {
 });
 
 /** ① 随机降临：一张雪原小地图，几处雪花标记带倒计时，标记周围一圈暴风雪 */
-export const wtSpawnUrl = () => once('wt-spawn2', () => {
+export const wtSpawnUrl = () => once('wt-spawn3', () => {
+  // 全新地图「永冬冰原」（用户 11-01：活动在新地图出现）：整片冰原，结冰的湖、冰裂谷、冰川、北边的永冬裂隙，营地在南边入口
   const { c, ctx } = canvas(120, 90);
   for (let y = 0; y < 90; y++) for (let x = 0; x < 120; x++) {
     const r = phash(x >> 2, y >> 2, 5);
     const r2 = phash(x, y, 6);
-    const snowy = y < 34 + Math.sin(x * 0.08) * 6;
-    const col = snowy ? (r < 0.25 ? SNOW[2] : r2 < 0.1 ? SNOW[3] : SNOW[4]) : r < 0.2 ? '#244a2a' : r < 0.5 ? '#2e5a30' : '#3a6a38';
-    px(ctx, x, y, col);
+    px(ctx, x, y, r < 0.2 ? SNOW[2] : r < 0.35 ? SNOW[3] : r2 < 0.08 ? SNOW[3] : SNOW[4]);
   }
-  // 雪线边上一圈过渡
-  for (let x = 0; x < 120; x++) { const y = Math.round(34 + Math.sin(x * 0.08) * 6); px(ctx, x, y, SNOW[1]); px(ctx, x, y + 1, '#5a7a5a'); }
-  // 树和河
-  for (let k = 0; k < 26; k++) { const x = phash(k, 1, 3) * 120, y = 44 + phash(k, 2, 3) * 44; px(ctx, x, y, '#183a1e', 2, 2); px(ctx, x, y - 1, '#2a5a2e'); }
-  for (let x = 0; x < 120; x++) { const y = Math.round(62 + Math.sin(x * 0.07) * 7); px(ctx, x, y, '#2a6aa0', 1, 3); px(ctx, x, y, '#5aa0d0'); }
-  // 城
-  px(ctx, 55, 46, '#8a6a4a', 10, 8); px(ctx, 54, 44, '#a03a2a', 12, 3); px(ctx, 59, 50, '#3a2a1a', 2, 4);
+  // 冰湖
+  for (const [cx, cy, rx, ry] of [[36, 48, 16, 9], [88, 58, 12, 7]] as [number, number, number, number][]) for (let y = -ry; y <= ry; y++) for (let x = -rx; x <= rx; x++) {
+    const d = (x / rx) ** 2 + (y / ry) ** 2;
+    if (d > 1) continue;
+    px(ctx, cx + x, cy + y, d > 0.8 ? ICE[2] : (x - y) % 7 === 0 ? ICE[4] : ICE[3]);
+  }
+  // 冰裂谷：一条弯弯的深色裂缝
+  for (let y = 10; y < 80; y++) { const x = 62 + Math.sin(y * 0.12) * 8; px(ctx, x, y, ICE[0], 2, 1); px(ctx, x - 1, y, ICE[1]); }
+  // 冰川山
+  for (let k = 0; k < 9; k++) { const x = 6 + k * 13 + phash(k, 1, 7) * 4, y = 8 + phash(k, 2, 7) * 6; for (let j = 0; j < 7; j++) for (let i = -j; i <= j; i++) px(ctx, x + i * 0.7, y + j, i < 0 ? '#ffffff' : ICE[2]); }
+  // 北边的永冬裂隙
+  glowAt(ctx, 62, 6, 12, 'rgba(90,240,255,0.7)');
+  px(ctx, 61, 1, '#eaffff', 2, 8);
+  // 南边入口营地
+  px(ctx, 54, 80, '#8a5a3a', 12, 6); px(ctx, 53, 78, '#c84a3a', 14, 3); glowAt(ctx, 60, 84, 6, 'rgba(255,160,60,0.6)');
   // 地图边框
   ctx.strokeStyle = '#c8a060';
   ctx.lineWidth = 1;

@@ -51,15 +51,15 @@ export function WinterNotice() {
           <div className="hw-title wt-title"><small>{tl('限时活动预告 · 即将开放')}</small>{tl('永冬之裔')}</div>
         </div>
         <div className="news-body">
-          <p className="hw-lead">{tl('北方冰原深处的')}<b>{tl('永冬裂隙')}</b>{tl('裂开了。冰霜的后裔趁着风雪南下，活动期间大陆各处的野外会')}<b>{tl('随机刷出永冬生物')}</b>{tl('。追上它们、打倒它们，收集')}<b>{tl('永冬冰晶')}</b>{tl('，换取限定奖励。')}</p>
+          <p className="hw-lead">{tl('北方冰原深处的')}<b>{tl('永冬裂隙')}</b>{tl('裂开了，裂隙另一头是一片从没人踏足过的冰原。活动会开放')}<b>{tl('全新地图「永冬冰原」')}</b>{tl('，冰霜的后裔就在那里')}<b>{tl('随机刷出')}</b>{tl('。追上它们、打倒它们，收集')}<b>{tl('永冬冰晶')}</b>{tl('，换取限定奖励。')}</p>
           <div className="hw-cards">
             <figure>
               <img src={wtSpawnUrl()} alt="" />
-              <figcaption><b>{tl('① 随机降临')}</b>{tl('每隔一段时间，野外随机几个地点会刮起暴风雪，刷出永冬生物。地图上会标出雪花和倒计时，时间到了没打完它们就会消失。')}</figcaption>
+              <figcaption><b>{tl('① 新地图 · 随机降临')}</b>{tl('永冬生物只出现在新地图永冬冰原上：冰湖、冰裂谷、冰川一应俱全。每隔一段时间，冰原上随机几个地点会刮起暴风雪，刷出永冬生物。地图上会标出雪花和倒计时，时间到了没打完它们就会消失。')}</figcaption>
             </figure>
             <figure>
               <img src={wtFoesUrl()} alt="" />
-              <figcaption><b>{tl('② 三种永冬生物')}</b>{tl('成群出没的霜裔、头戴冰冠的精英，还有很少出现的永冬领主。等级跟着所在区域走，新手和老玩家都有得打。')}</figcaption>
+              <figcaption><b>{tl('② 三种永冬生物')}</b>{tl('成群出没的霜裔、头戴冰冠的精英，还有很少出现的永冬领主。冰原分外围和深处，越往裂隙走越强，新手和老玩家都有得打。')}</figcaption>
             </figure>
             <figure>
               <img src={wtLootUrl()} alt="" />
