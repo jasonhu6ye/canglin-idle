@@ -2031,11 +2031,23 @@ function drawIceCrownHead(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, p
   const ey = Math.round(cy + 0.4);
   const bright = flicker(pose, 2) > 0.4;
   const blaze = pose.frost === 'sweep' || pose.frost === 'sweep2' || pose.frost === 'lift' || pose.frost === 'plant' || pose.frost === 'nova';
-  const eyes = side ? [Math.round(hx + 2.6)] : [Math.round(hx - 2.5), Math.round(hx + 1.5)];
+  // 每只眼两格：正面左眼在 hx-2、右眼在 hx+1，侧面在 hx+2.6
+  const eyes = side ? [Math.round(hx + 2.6)] : [Math.round(hx - 2), Math.round(hx + 1)];
+  // 眼周一圈冷光晕（用户 11-01：眼睛要有冰霜光效）：贴着眼睛的脸和眉骨染成淡青色，眼睛本身亮白
+  const halo = mix(S[3], G[1], bright ? 0.6 : 0.45);
+  const haloDim = mix(S[2], G[0], 0.5);
   for (const x of eyes) {
-    p.set(x, ey, pose.blink ? S[1] : bright || blaze ? G[2] : G[1]);
-    p.set(x + (side ? 0 : x < hx ? 1 : 0), ey, pose.blink ? S[1] : G[1]);
-    p.set(x, ey - 1, H[0]);
+    const x1 = x + 1;
+    if (!pose.blink) {
+      for (const [dx, dy] of [[-1, 0], [1, 0], [0, 1], [-1, 1], [1, 1]] as [number, number][]) {
+        const xx = (dx > 0 ? Math.max(x, x1) : Math.min(x, x1)) + dx;
+        const c = p.get(xx, ey + dy);
+        if (c && faceRamp(S).includes(c)) p.set(xx, ey + dy, dy ? haloDim : halo);
+      }
+    }
+    p.set(x, ey, pose.blink ? S[1] : G[2]);
+    p.set(x1, ey, pose.blink ? S[1] : bright || blaze ? G[2] : G[1]);
+    p.set(x, ey - 1, pose.blink ? H[0] : mix(H[0], G[0], 0.6));
     if (blaze && !pose.blink) {
       // 寒光往上窜出一截，再往外侧拖出一道
       p.set(x, ey - 1, G[1]);
@@ -2879,6 +2891,28 @@ function drawFrostFx(p: Pix, o: Outfit, pose: Pose, at: FxAt, put: (x: number, y
     put(gx0, gy0 + crouch, '#ffffff');
     if (ph < 0.08) { put(gx0 - 1, gy0 + crouch, FROST[3]); put(gx0 + 1, gy0 + crouch, FROST[3]); put(gx0, gy0 - 1 + crouch, FROST[3]); put(gx0, gy0 + 1 + crouch, FROST[3]); }
   });
+  // ---- 常驻：眼里往上飘的霜气（用户 11-01：眼睛的冰霜光效）：每只眼两三缕青白的冷光往上往外飘，挥剑、冰爆时飘得更高更密 ----
+  const blaze = fp === 'sweep' || fp === 'sweep2' || fp === 'lift' || fp === 'plant' || fp === 'nova';
+  if (!up && !pose.blink) {
+    const eyY = Math.round(headY + 0.4);
+    // 眼睛的外侧那一格：正面左眼 cx-2、右眼 cx+2，侧面 cx+4
+    const eyes: [number, number][] = side ? [[cx + 4, 1]] : [[cx - 2, -1], [cx + 2, 1]];
+    for (const [ex0, dir] of eyes) {
+      for (let j = 0; j < (blaze ? 5 : 3); j++) {
+        const ph = (t * (blaze ? 4 : 2.5) + j * 0.33 + phash(j, dir + 2, 7) * 0.4) % 1;
+        // 先往眼角外侧飘，再往上升
+        const h = (blaze ? 6 : 3.5) * ph * ph;
+        const x = ex0 + dir * (ph * (blaze ? 5 : 3.5) + 0.6) + Math.sin(ph * 9 + j * 2) * 0.6;
+        const y = eyY - h;
+        const c = ph < 0.45 ? FROST[4] : ph < 0.75 ? FROST[3] : FROST[2];
+        if (y < headY - 5) empty(x, y, c); else put(x, y, c);
+      }
+      // 眼角往外漏出的一道冷光：贴着眼睛两格青白，再远一格忽明忽暗
+      put(ex0 + dir, eyY, FROST[4]);
+      put(ex0 + dir * 2, eyY, flicker(pose, 2) > 0.45 || blaze ? FROST[3] : FROST[2]);
+      if (blaze) { put(ex0 + dir * 3, eyY - 1, FROST[2]); put(ex0 + dir * 3, eyY, FROST[3]); }
+    }
+  }
   // ---- 常驻：呼出的白气（背面看不见） ----
   if (!up) {
     const ph = (t * 0.8 + 0.3) % 1;
