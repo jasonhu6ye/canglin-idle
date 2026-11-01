@@ -189,7 +189,7 @@ export function botProfile(b: AiPlayer, t = Date.now()): BotProfile {
     if (a.skill === 'farming' || a.skill === 'husbandry' || a.skill === 'enhancing') return false;
     return a.level <= levels[a.skill] && a.level >= lo(levels[a.skill]);
   };
-  const spots = NODES.filter((n) => !n.sea && !n.closed && !n.portal && !n.opens && n.actions.length)
+  const spots = NODES.filter((n) => !n.sea && !n.closed && !n.portal && !n.opens && !n.timed && n.actions.length)
     .map((n) => ({ n, acts: n.actions.filter(doable) }))
     .filter((x) => x.acts.length);
   const joinedDays = Math.min(h0 / rate, Math.max(0, (b.at - LAUNCH) / DAY));

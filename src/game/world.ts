@@ -164,7 +164,12 @@ function realmRegion(x: number, y: number) {
 }
 
 function regionRaw(x: number, y: number) {
-  if (x >= MAIN_SIZE) return realmRegion(x, y);
+  if (x >= MAIN_SIZE) {
+    // 离冰原和神秘区域都很远的深海：区域无所谓，不用算
+    const far = x < REALM_BOX.x - 300 || y < MYSTERY_BOX.y - 300 || y > REALM_BOX.y + REALM_BOX.size + 300
+      || (y < REALM_BOX.y - 300 && (x < MYSTERY_BOX.x - 300 || x > MYSTERY_BOX.x + MYSTERY_BOX.size + 300));
+    return far ? RSEEDS[0].r : realmRegion(x, y);
+  }
   const wx = x + (fbm(x, y, 11, WARP_SCALE) - 0.5) * WARP;
   const wy = y + (fbm(x, y, 12, WARP_SCALE) - 0.5) * WARP;
   let best = 0;
@@ -710,7 +715,13 @@ function townGround(x: number, y: number): Ground | null {
 
 /** 不考虑道路和局部修改的原始地面，粗网格寻路和世界地图缩略图用 */
 function rawGround(x: number, y: number): Ground {
-  if (x >= MAIN_SIZE) return realmRaw(x, y, REGION_IDS[regionIdx(x, y)]);
+  if (x >= MAIN_SIZE) {
+    // 冰原方框和神秘区域以外全是深海：不用算区域（区域要按 40 多个形状点找最近的，很慢）
+    const outR = x < REALM_BOX.x || y < REALM_BOX.y || y >= REALM_BOX.y + REALM_BOX.size;
+    const outM = x < MYSTERY_BOX.x || x >= MYSTERY_BOX.x + MYSTERY_BOX.size || y < MYSTERY_BOX.y || y >= REALM_BOX.y;
+    if (outR && outM) return 'ocean';
+    return realmRaw(x, y, REGION_IDS[regionIdx(x, y)]);
+  }
   const tg = townGround(x, y);
   if (tg) return tg;
   const r = REGION_IDS[regionIdx(x, y)];

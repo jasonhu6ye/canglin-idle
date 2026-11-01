@@ -255,7 +255,10 @@ export function takeFieldHits(all: Presence[]): FieldMateHit[] {
     fieldSeen.set(p.playerId, { k: f.k, n: f.n, dmg: same ? Math.max(f.dmg, last.dmg) : f.dmg });
     // 自己这只还在刷新、或者是第一次看到这个队友（以前打的旧账）就不记
     if (!last || delta <= 0 || !s.combat || s.combat.respawnMs > 0 || !s.combat.crew) continue;
-    pushMateHit(fieldKey(action), delta);
+    // 不是队友的（冰原同打）：一次最多算怪物血量的 20%，防止改过的客户端一下把大家的首领打没
+    const party = st.party?.members.some((q) => q.playerId === p.playerId);
+    const cap = party ? Infinity : Math.max(1, (s.combat.monsterMax ?? s.combat.monsterHp) * 0.2);
+    pushMateHit(fieldKey(action), Math.min(delta, cap));
     out.push({ id: p.playerId, name: m.name, i, dmg: delta, crit: !!f.crit });
   }
   return out;

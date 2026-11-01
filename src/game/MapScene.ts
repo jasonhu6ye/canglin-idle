@@ -1537,11 +1537,12 @@ export class MapScene extends Phaser.Scene {
   private timedViz = new Map<string, Phaser.GameObjects.GameObject[]>();
   private timedOn = new Map<string, boolean>();
   private timedClock = new Map<string, Phaser.GameObjects.Text>();
+  private timedNode?: Map<string, MapNode>;
   private syncTimed() {
     const now = Date.now();
     const view = this.cameras.main.worldView;
     for (const [id, objs] of this.timedViz) {
-      const n = NODES.find((x) => x.id === id)!;
+      const n = (this.timedNode ??= new Map(NODES.filter((x) => x.timed).map((x) => [x.id, x]))).get(id)!;
       const win = timedWindow(n, now);
       const on = !!win;
       const was = this.timedOn.get(id);
