@@ -5,6 +5,7 @@ import { channelMsgs, closeChat, openChat, send, useSocial } from '../net/social
 import { errText } from './Login';
 import { translate } from '../net/translate';
 import { tl } from '../i18n';
+import { myAcStatus } from '../net/sync';
 
 /**
  * 聊天页（10-25 用户要求单独一个页面）：世界 / 公会 / 队伍 / 私聊。好友在单独的好友页。
@@ -99,7 +100,8 @@ export function ChatPage({ onClose }: { onClose: () => void }) {
   const nameOf = (id?: string) => friends.find((f) => f.playerId === id)?.name ?? '?';
   const blocked = st.channel === 'guild' && !me.guildId ? tl('还没加入公会。按 G 或点底部「公会」加入一个')
     : st.channel === 'party' && !st.party ? tl('还没有队伍。在底部「好友」页邀请好友组队')
-    : st.channel === 'private' && !friends.length ? tl('还没有好友。在底部「好友」页输入对方的 ID 加好友') : '';
+    : st.channel === 'private' && !friends.length ? tl('还没有好友。在底部「好友」页输入对方的 ID 加好友')
+    : st.channel === 'world' && myAcStatus().banned ? tl('你的账号因为数据异常被限制，暂时不能在世界频道发言。有疑问请联系管理员。') : '';
   const submit = async (raw = text) => {
     const t = raw.trim();
     if (!t || busy || blocked) return;

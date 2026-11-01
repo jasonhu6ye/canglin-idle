@@ -1066,7 +1066,15 @@ let list: AiPlayer[] = [];
 let loadedAt = 0;
 let loading: Promise<void> | null = null;
 let api: OnlineApi | null = null;
+let muted = false;
 const REFRESH_MS = 120_000;
+/** AI 是否被 GM 禁言（不在世界频道说话、不接话） */
+export const botsMuted = () => muted;
+export async function setBotsMuted(v: boolean) {
+  if (!api) return;
+  await api.setFlag('ai_mute', v);
+  muted = v;
+}
 /** 世界频道每天北京时间 0 点清空（用户 10-31）：这一刻之后的才显示 */
 export const worldResetAt = (t = Date.now()) => Math.floor((t + 8 * HOUR) / DAY) * DAY - 8 * HOUR;
 const BACKFILL_N = 200;
@@ -1076,8 +1084,10 @@ export function refreshBots(force = false): Promise<void> {
   if (!api || (!force && (loading || Date.now() - loadedAt < REFRESH_MS))) return loading ?? Promise.resolve();
   loadedAt = Date.now();
   const a = api;
-  loading = a.aiList()
-    .then((l) => { list = [...l].sort((x, y) => x.at - y.at || (x.id < y.id ? -1 : 1)); })
+  // 全服开关（11-01）：GM 可以让 AI 全都不在世界频道说话
+  const flags = a.flags().then((f) => { muted = f.ai_mute === true; }).catch(() => {});
+  loading = Promise.all([a.aiList(), flags])
+    .then(([l]) => { list = [...l].sort((x, y) => x.at - y.at || (x.id < y.id ? -1 : 1)); })
     .catch(() => {})
     .finally(() => { loading = null; });
   return loading;
@@ -1140,6 +1150,8 @@ export function withBots(base: OnlineApi): OnlineApi {
         const now = Date.now();
         // 名单还没拉下来时先不往前走，拉到了再补
         if (!list.length) return;
+        // 禁言期间：不说话、不接话，也不补；解除后从那一刻接着说
+        if (muted) { last = now; heard.length = 0; return; }
         let ms: ChatMsg[];
         if (!last) {
           // 从现在往前一段段算，够了就停，免得手机上一打开就卡

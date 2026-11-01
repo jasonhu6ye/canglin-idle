@@ -1145,3 +1145,251 @@ drop policy if exists "ai_players 管理员改" on public.ai_players;
 create policy "ai_players 管理员改" on public.ai_players for update using (public.is_gm()) with check (public.is_gm());
 drop policy if exists "ai_players 管理员删" on public.ai_players;
 create policy "ai_players 管理员删" on public.ai_players for delete using (public.is_gm());
+
+-- ============ 全服开关（11-01）============
+-- key → value。ai_mute：AI 玩家不在世界频道说话；ac：防作弊阈值。所有人可读，管理员可写
+create table if not exists public.game_flags (
+  key text primary key,
+  value jsonb not null,
+  updated_at timestamptz not null default now()
+);
+alter table public.game_flags enable row level security;
+drop policy if exists "game_flags 所有人可看" on public.game_flags;
+create policy "game_flags 所有人可看" on public.game_flags for select using (true);
+drop policy if exists "game_flags 管理员写" on public.game_flags;
+create policy "game_flags 管理员写" on public.game_flags for all using (public.is_gm()) with check (public.is_gm());
+
+-- ============ 防作弊（11-01）============
+-- 存档和排行榜是客户端传的，服务器在入库时按真实时间检查：
+--   时间：存档里的游戏时间比服务器时间跑得快（改系统时间刷离线收益）
+--   经验：两次上传之间涨的经验超过每小时上限（按 GM 经验增益放宽）
+--   金币：两次上传之间涨的金币超过每小时上限（扣掉 GM 邮件送的）
+--   排行榜：上传的经验和云存档对不上
+-- 可疑的记一条 cheat_flags；严重的自动移出排行榜（ac_hidden），GM 在面板里看记录、解除、封禁。
+-- 封禁：不上排行榜、不能在世界频道说话。
+alter table public.profiles add column if not exists ac_hidden boolean not null default false;
+alter table public.profiles add column if not exists banned boolean not null default false;
+alter table public.profiles add column if not exists ac_note text;
+
+create table if not exists public.cheat_flags (
+  id bigint generated always as identity primary key,
+  player_id uuid not null references public.profiles(id) on delete cascade,
+  kind text not null,
+  severe boolean not null default false,
+  detail jsonb not null default '{}'::jsonb,
+  at timestamptz not null default now()
+);
+create index if not exists cheat_flags_at on public.cheat_flags (at desc);
+create index if not exists cheat_flags_player on public.cheat_flags (player_id, kind, at desc);
+alter table public.cheat_flags enable row level security;
+drop policy if exists "cheat_flags 管理员看" on public.cheat_flags;
+create policy "cheat_flags 管理员看" on public.cheat_flags for select using (public.is_gm());
+drop policy if exists "cheat_flags 管理员删" on public.cheat_flags;
+create policy "cheat_flags 管理员删" on public.cheat_flags for delete using (public.is_gm());
+
+create or replace function public.is_banned(p uuid default auth.uid()) returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce((select banned from profiles where id = p), false)
+$$;
+grant execute on function public.is_banned(uuid) to authenticated;
+
+-- 阈值（GM 面板可改，存在 game_flags.ac）
+create or replace function public.ac_conf(k text, d numeric) returns numeric
+language sql stable security definer set search_path = public as $$
+  select coalesce((select (value ->> k)::numeric from game_flags where key = 'ac'), d)
+$$;
+
+-- 记一条（同一个人同一种 10 分钟内只记一次）；严重的顺手移出排行榜
+create or replace function public.ac_flag(p uuid, p_kind text, p_severe boolean, p_detail jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if exists (select 1 from cheat_flags where player_id = p and kind = p_kind and (severe or not p_severe) and at > now() - interval '10 minutes') then
+    return;
+  end if;
+  insert into cheat_flags (player_id, kind, severe, detail) values (p, p_kind, p_severe, p_detail);
+  if p_severe and public.ac_conf('auto_hide', 1) > 0 then
+    update profiles set ac_hidden = true where id = p;
+  end if;
+end $$;
+revoke execute on function public.ac_flag(uuid, text, boolean, jsonb) from public, anon, authenticated;
+
+create or replace function public.ac_sum(o jsonb) returns numeric
+language sql immutable as $$
+  select coalesce(sum(case when jsonb_typeof(v) = 'number' then v::text::numeric else 0 end), 0) from jsonb_each(coalesce(o, '{}'::jsonb)) as e(k, v)
+$$;
+
+-- 上传存档时检查
+create or replace function public.ac_check_save() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  real_ms numeric; game_ms numeric; hours numeric;
+  xp_new numeric; xp_old numeric; xp_cap numeric; boost numeric;
+  c_new numeric; c_old numeric; c_cap numeric; gifted numeric;
+  me_pid bigint; since timestamptz;
+begin
+  -- 上传时间以服务器为准
+  new.updated_at := now();
+  if (select exists (select 1 from gm_admins a join profiles p on p.pid = a.pid where p.id = new.player_id)) then
+    return new;
+  end if;
+  select pid into me_pid from profiles where id = new.player_id;
+  -- 存档时间跑到服务器前面去了
+  if new.last_tick > extract(epoch from now()) * 1000 + public.ac_conf('clock_skew_min', 10) * 60000 then
+    perform public.ac_flag(new.player_id, 'clock', new.last_tick > extract(epoch from now()) * 1000 + 3 * 3600000, jsonb_build_object('ahead_min', round((new.last_tick - extract(epoch from now()) * 1000) / 60000)));
+  end if;
+  if tg_op = 'UPDATE' then
+    since := old.updated_at;
+    xp_old := public.ac_sum(old.data -> 'xp');
+    c_old := coalesce((old.data -> 'bank' ->> 'coins')::numeric, 0);
+    game_ms := new.last_tick - old.last_tick;
+  else
+    since := coalesce((select created_at from profiles where id = new.player_id), now() - interval '1 hour');
+    xp_old := 0; c_old := 0; game_ms := 0;
+  end if;
+  real_ms := greatest(extract(epoch from now() - since) * 1000, 0);
+  hours := greatest(real_ms / 3600000.0, 0.02);
+  -- 游戏时间比真实时间多走了很多（离线结算最多 24 小时，正常不会超过真实时间）
+  if tg_op = 'UPDATE' and game_ms - real_ms > public.ac_conf('drift_min', 30) * 60000 then
+    perform public.ac_flag(new.player_id, 'clock', game_ms - real_ms > 3 * 3600000,
+      jsonb_build_object('game_min', round(game_ms / 60000), 'real_min', round(real_ms / 60000)));
+  end if;
+  -- 经验：GM 经验增益期间按比例放宽
+  select coalesce(sum(pct), 0) / 100.0 into boost from gm_buffs
+    where kind = 'xp' and ends_at > since and starts_at < now() and (target_pid is null or target_pid = me_pid);
+  xp_new := public.ac_sum(new.data -> 'xp');
+  xp_cap := public.ac_conf('xp_per_hour', 6000000) * (1 + boost) * hours + public.ac_conf('xp_slack', 300000);
+  if xp_new - xp_old > xp_cap then
+    perform public.ac_flag(new.player_id, 'xp', xp_new - xp_old > 3 * xp_cap,
+      jsonb_build_object('gain', xp_new - xp_old, 'cap', round(xp_cap), 'hours', round(hours, 2)));
+  end if;
+  -- 经验不可能变少（GM 改档除外，这里只记不算严重）
+  if tg_op = 'UPDATE' and xp_new < xp_old - 1 then
+    perform public.ac_flag(new.player_id, 'xp_drop', false, jsonb_build_object('old', xp_old, 'new', xp_new));
+  end if;
+  -- 金币：扣掉这段时间 GM 邮件送的
+  select coalesce(sum((it ->> 'qty')::numeric), 0) into gifted
+    from gm_mail m, jsonb_array_elements(m.items) it
+    where m.target_pid = me_pid and m.claimed_at > since - interval '5 minutes' and it ->> 'item' = 'coins';
+  c_new := coalesce((new.data -> 'bank' ->> 'coins')::numeric, 0);
+  c_cap := public.ac_conf('coins_per_hour', 50000000) * hours + public.ac_conf('coins_slack', 5000000) + gifted;
+  if c_new - c_old > c_cap then
+    perform public.ac_flag(new.player_id, 'coins', c_new - c_old > 5 * c_cap,
+      jsonb_build_object('gain', c_new - c_old, 'cap', round(c_cap), 'hours', round(hours, 2)));
+  end if;
+  return new;
+end $$;
+drop trigger if exists ac_check_save on public.saves;
+create trigger ac_check_save before insert or update on public.saves for each row execute function public.ac_check_save();
+
+-- 排行榜：经验必须和云存档一致，等级总和要对得上
+create or replace function public.ac_check_rank() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare save_xp numeric; lv_sum numeric;
+begin
+  new.updated_at := now();
+  select public.ac_sum(data -> 'xp') into save_xp from saves where player_id = new.player_id;
+  select public.ac_sum(new.skills) into lv_sum;
+  if save_xp is null or public.ac_sum(new.xp) > save_xp + 1 or new.total <> lv_sum then
+    perform public.ac_flag(new.player_id, 'rank', true,
+      jsonb_build_object('rank_xp', public.ac_sum(new.xp), 'save_xp', save_xp, 'total', new.total, 'lv_sum', lv_sum));
+  end if;
+  return new;
+end $$;
+drop trigger if exists ac_check_rank on public.ranks;
+create trigger ac_check_rank before insert or update on public.ranks for each row execute function public.ac_check_rank();
+
+-- 客户端发现的异常（改系统时间、改本地存档）也报上来
+create or replace function public.report_cheat(p_kind text, p_detail jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null or p_kind not in ('clock_local', 'save_edit', 'speed') then return; end if;
+  perform public.ac_flag(auth.uid(), p_kind, false, coalesce(p_detail, '{}'::jsonb));
+end $$;
+grant execute on function public.report_cheat(text, jsonb) to authenticated;
+
+-- 服务器时间（客户端校准时钟用）
+create or replace function public.server_now() returns bigint
+language sql stable as $$ select (extract(epoch from now()) * 1000)::bigint $$;
+grant execute on function public.server_now() to anon, authenticated;
+
+-- 自己的状态（被封禁 / 被移出排行榜时客户端提示）
+create or replace function public.my_ac() returns table (hidden boolean, banned boolean)
+language sql stable security definer set search_path = public as $$
+  select ac_hidden, banned from profiles where id = auth.uid()
+$$;
+grant execute on function public.my_ac() to authenticated;
+
+-- 管理员：可疑玩家列表（每人一行：最近的记录、次数、状态）
+create or replace function public.gm_cheaters(p_limit int default 100)
+returns table (player_id uuid, pid bigint, name text, hidden boolean, banned boolean, note text, n bigint, severe bigint, last_at timestamptz, flags jsonb)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  return query
+    select p.id, p.pid, p.name, p.ac_hidden, p.banned, p.ac_note, count(f.id), count(f.id) filter (where f.severe), max(f.at),
+      (select jsonb_agg(x order by x.at desc) from (select f2.kind, f2.severe, f2.detail, f2.at from cheat_flags f2 where f2.player_id = p.id order by f2.at desc limit 10) x)
+    from profiles p left join cheat_flags f on f.player_id = p.id
+    where f.id is not null or p.ac_hidden or p.banned
+    group by p.id
+    order by max(f.at) desc nulls last
+    limit least(p_limit, 300);
+end $$;
+grant execute on function public.gm_cheaters(int) to authenticated;
+
+-- 管理员：改状态。action: hide / unhide / ban / unban / clear（清记录并解除移出）
+create or replace function public.gm_ac_set(p_player uuid, p_action text, p_note text default null) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  if p_action = 'hide' then update profiles set ac_hidden = true where id = p_player;
+  elsif p_action = 'unhide' then update profiles set ac_hidden = false where id = p_player;
+  elsif p_action = 'ban' then update profiles set banned = true, ac_hidden = true where id = p_player;
+  elsif p_action = 'unban' then update profiles set banned = false, ac_hidden = false where id = p_player;
+  elsif p_action = 'clear' then delete from cheat_flags where player_id = p_player; update profiles set ac_hidden = false where id = p_player and not banned;
+  else raise exception '未知操作'; end if;
+  if p_note is not null then update profiles set ac_note = left(p_note, 100) where id = p_player; end if;
+end $$;
+grant execute on function public.gm_ac_set(uuid, text, text) to authenticated;
+
+-- 排行榜不显示被移出 / 封禁的人
+create or replace function public.leaderboard(p_board text, p_limit int default 100)
+returns table (rank bigint, player_id uuid, name text, guild_tag text, value int, xp numeric)
+language sql stable security definer set search_path = public as $$
+  with v as (
+    select r.player_id,
+      case p_board when 'total' then r.total when 'combat' then r.combat
+        else coalesce((r.skills ->> p_board)::int, 1) end as value,
+      coalesce((r.xp ->> p_board)::numeric, 0) as xp
+    from ranks r join profiles p0 on p0.id = r.player_id
+    where not p0.ac_hidden and not p0.banned
+  )
+  select rank() over (order by v.value desc, v.xp desc), v.player_id, p.name, g.tag, v.value, v.xp
+  from v join profiles p on p.id = v.player_id left join guilds g on g.id = p.guild_id
+  order by 1 limit least(p_limit, 200)
+$$;
+
+create or replace function public.my_rank(p_board text)
+returns table (rank bigint, player_id uuid, name text, guild_tag text, value int, xp numeric)
+language sql stable security definer set search_path = public as $$
+  with v as (
+    select r.player_id,
+      case p_board when 'total' then r.total when 'combat' then r.combat
+        else coalesce((r.skills ->> p_board)::int, 1) end as value,
+      coalesce((r.xp ->> p_board)::numeric, 0) as xp
+    from ranks r join profiles p0 on p0.id = r.player_id
+    where (not p0.ac_hidden and not p0.banned) or r.player_id = auth.uid()
+  ), me as (select * from v where player_id = auth.uid())
+  select (select count(*) + 1 from v where v.player_id <> me.player_id and (v.value > me.value or (v.value = me.value and v.xp > me.xp))),
+    me.player_id, p.name, g.tag, me.value, me.xp
+  from me join profiles p on p.id = me.player_id left join guilds g on g.id = p.guild_id
+$$;
+
+-- 封禁的人不能在世界频道说话
+drop policy if exists "chat 自己发" on public.chat;
+create policy "chat 自己发" on public.chat for insert with check (
+  auth.uid() = player_id
+  and name = (select name from public.profiles where id = auth.uid())
+  and (channel = 'world' and guild_id is null and party_id is null and to_id is null and not public.is_banned()
+    or channel = 'guild' and guild_id = (select guild_id from public.profiles where id = auth.uid())
+    or channel = 'party' and party_id = public.my_party()
+    or channel = 'private' and to_id is not null and public.is_friend(auth.uid(), to_id)));
