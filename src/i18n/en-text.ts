@@ -1270,4 +1270,10 @@ export const EN_TEXT: Record<string, string> = {
   "大量冰晶、霜雪礼盒": "Lots of shards, Frost Gift Box",
   "活动还在制作中，开放时间、奖励和具体数值以正式更新公告为准。": "The event is still in development. Start date, rewards and exact numbers will be in the official update notes.",
   "永冬冰晶": "Everwinter Shards",
+  "永霜领主": "Permafrost Lord",
+  "来自永冬裂隙的巨人之主：深蓝冰甲，头戴一圈冰棱王冠，霜蓝披风下摆结着冰，眼里是两点青色寒光。站着不动时会从背后拔出冰霜巨剑，横挥旋剑、举剑召霜，然后砸向地面炸出一地冰棱，最后巨剑散成雪花。": "Lord of the giants from the Everwinter Rift: deep-blue ice armor, a crown of icicles, a frost-blue cape with ice crusting its hem, and two points of cold cyan light for eyes. Standing still, he draws a frost greatsword from his back, spins and raises it to call the frost, then slams it into the ground in a burst of ice spikes before the blade scatters into snow.",
+  "新外观预览：永霜领主": "New outfit preview: Permafrost Lord",
+  "衣橱里新增「永霜领主」：深蓝冰甲、冰棱王冠、霜蓝披风，站着不动时会从背后拔出冰霜巨剑，旋剑、举剑召霜，再砸向地面炸出一地冰棱。": "New in the wardrobe: Permafrost Lord. Deep-blue ice armor, an icicle crown and a frost-blue cape. Standing still, he draws a frost greatsword from his back, spins it, raises it to call the frost, then slams it into the ground in a burst of ice spikes.",
+  "这套外观是永冬之裔活动的限定奖励，活动开放后用永冬冰晶兑换；现在先能在衣橱里看效果。": "This outfit is a limited reward of the Scions of Everwinter event, traded for Everwinter Shards once the event opens. For now you can preview it in the wardrobe.",
+  "永冬之裔的限定外观「永霜领主」已经能在衣橱里预览：冰甲冰冠、霜蓝披风，待机时拔出冰霜巨剑挥舞、砸地炸冰棱。活动开放后用永冬冰晶兑换。": "The Scions of Everwinter limited outfit, Permafrost Lord, can already be previewed in the wardrobe: ice armor and crown, a frost-blue cape, and an idle where he draws a frost greatsword, swings it and slams it into the ground. Trade Everwinter Shards for it once the event opens.",
 };

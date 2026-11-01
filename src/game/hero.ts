@@ -45,7 +45,7 @@ export interface Outfit {
   /** 镇上的村民：不背行囊 */
   npc?: boolean;
   /** 兑换码外观（用户 10-23）：特殊头部造型，hair 这时是头部主色 */
-  head?: 'pumpkin' | 'voidpumpkin' | 'paleknight' | 'jester' | 'bone' | 'voidhood' | 'reaper' | 'vampire';
+  head?: 'pumpkin' | 'voidpumpkin' | 'paleknight' | 'jester' | 'bone' | 'voidhood' | 'reaper' | 'vampire' | 'icecrown';
   /** 袍子下摆、兜帽边的金线 */
   trim?: string;
   /** 不背行囊、没有围巾尾巴 */
@@ -57,7 +57,7 @@ export interface Outfit {
   /** 发光色（眼睛、脸、灯、粒子）：暗、中、亮 */
   glow?: string[];
   /** 粒子特效 */
-  fx?: 'embers' | 'wisps' | 'sparks' | 'mist' | 'confetti' | 'frostfire' | 'soulfire' | 'bats';
+  fx?: 'embers' | 'wisps' | 'sparks' | 'mist' | 'confetti' | 'frostfire' | 'soulfire' | 'bats' | 'frost';
   /** 衣服上的菱格花纹（小丑） */
   harlequin?: boolean;
   /** 要用这个兑换码解锁 */
@@ -137,6 +137,17 @@ export const OUTFITS: Outfit[] = [
     pack: ['#1c1a22', '#2c2a34', '#46444e'], roll: '#1c1a22',
     head: 'vampire', noPack: true, coffin: true,
     glow: ['#8a0a14', '#ff2a2a', '#ffb0a0'], fx: 'bats', event: 'halloween',
+  },
+  {
+    // 用户 11-01：永冬之裔活动的领主皮肤，特效拉满。深蓝冰甲、头戴冰棱王冠、身披霜蓝披风、眼里是青色寒光；
+    // 待机时从背后拔出一把冰霜巨剑，横挥、旋剑、举剑召霜、砸地炸出冰棱，最后巨剑散成雪花
+    id: 'frostlord', name: tl('永霜领主'), desc: tl('来自永冬裂隙的巨人之主：深蓝冰甲，头戴一圈冰棱王冠，霜蓝披风下摆结着冰，眼里是两点青色寒光。站着不动时会从背后拔出冰霜巨剑，横挥旋剑、举剑召霜，然后砸向地面炸出一地冰棱，最后巨剑散成雪花。'),
+    skin: ['#3a6a9a', '#8ac8ec'], hair: ['#0c1e40', '#163466', '#24508c'],
+    coat: ['#0e2246', '#1a3c70', '#2c5c9c', '#5a9ad8'], shirt: ['#2a5a8c', '#4a86bc'],
+    pants: ['#0a1830', '#142c54'], boots: ['#0c1c38', '#1e3c6c'], scarf: ['#1a3c70', '#2c5c9c'],
+    pack: ['#1a3c70', '#2c5c9c', '#5a9ad8'], roll: '#1a3c70',
+    head: 'icecrown', noPack: true, cloak: ['#0a1838', '#122a58', '#1e4480'], trim: '#bafcff',
+    glow: ['#1a7ab8', '#4ac8ff', '#eaffff'], fx: 'frost', sealed: true,
   },
   // ---- 兑换码「为爱发电」解锁的五套（用户 10-23 给的参考图和录屏，按本作画法重画） ----
   {
@@ -234,7 +245,7 @@ const STEEL = ['#3e444c', '#7a828c', '#bcc4ce', '#f4f8fc'];
 const BELT = ['#1e120a', '#3a2414', '#5a3a20'];
 
 export type HeroDir = 'down' | 'up' | 'side';
-export type HeroTool = 'pickaxe' | 'axe' | 'hoe' | 'sickle' | 'rod' | 'hammer' | 'knife' | 'sword' | 'spear' | 'dagger' | 'bow' | 'staff' | 'handaxe' | 'shortsword' | 'broadsword' | 'greataxe' | 'warhammer' | 'warscythe' | 'chainblade' | 'greatshield' | 'longbow' | 'crossbow' | 'warbow' | 'arbalest' | 'scythe' | 'none';
+export type HeroTool = 'pickaxe' | 'axe' | 'hoe' | 'sickle' | 'rod' | 'hammer' | 'knife' | 'sword' | 'spear' | 'dagger' | 'bow' | 'staff' | 'handaxe' | 'shortsword' | 'broadsword' | 'greataxe' | 'warhammer' | 'warscythe' | 'chainblade' | 'greatshield' | 'longbow' | 'crossbow' | 'warbow' | 'arbalest' | 'scythe' | 'greatsword' | 'none';
 
 interface Pose {
   dir: HeroDir;
@@ -296,6 +307,9 @@ interface Pose {
   /** 棺材待机阶段：晃、蹦、小鬼探头、吱呀开缝、开盖、龇牙、倒地、躺着、弹起、落定 */
   cof?: 'sway' | 'hop' | 'ghost' | 'creak' | 'open' | 'grin' | 'fall' | 'lie' | 'rise' | 'settle';
   cofK?: number;
+  /** 永霜领主待机（用户 11-01）：伸手到背后、拔出巨剑、双手持剑、单手旋剑、举剑过头、砸向地面、剑插在地上、剑散成雪花、放下手；frostK 是阶段进度 0-1 */
+  frost?: 'reach' | 'draw' | 'hold' | 'spin' | 'raise' | 'slam' | 'stuck' | 'fade' | 'lower';
+  frostK?: number;
   /** 这一帧在动作里的进度 0-1、帧序号（特效闪烁用，生成精灵表时填） */
   t?: number;
   seed?: number;
@@ -369,6 +383,19 @@ function scytheEdge(hx: number, hy: number, a: number, flip: number, K = 1): [nu
   }
   return pts;
 }
+
+/** 永霜巨剑剑身长度（从手到剑尖） */
+const GSWORD_LEN = 17.5;
+/** 巨剑剑脊上的点（残影、剑上的寒气从这里起） */
+function swordLine(hx: number, hy: number, a: number, K = 1): [number, number][] {
+  const pts: [number, number][] = [];
+  for (let t = 2; t <= GSWORD_LEN; t += 1) {
+    const [dx, dy] = v(a, t * K);
+    pts.push([hx + dx, hy + dy]);
+  }
+  return pts;
+}
+const ICEB = ['#1a7ab8', '#4ac8ff', '#9ae8ff', '#dafaff', '#ffffff'];
 
 function drawTool(p: Pix, tool: HeroTool, hx: number, hy: number, a: number, pose: Pose): [number, number][] | undefined {
   const K = pose.toolGrow ?? 1;
@@ -477,6 +504,44 @@ function drawTool(p: Pix, tool: HeroTool, hx: number, hy: number, a: number, pos
     for (const [dx, dy] of [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [0, 1]]) p.set(kx + dx, ky + dy, dy === 0 ? '#1a1418' : dy < 0 ? '#ece8dc' : '#b8b4a8');
     p.set(kx, ky, '#dcd8cc');
     return scytheEdge(hx, hy, a, flip, K);
+  } else if (tool === 'greatsword') {
+    // 永霜巨剑（用户 11-01 特效拉满）：深蓝缠绳的长柄、柄尾一颗冰晶剑首、寒铁护手两端往上翘成冰角，
+    // 剑身是一整块冰晶：白芯、青蓝剑面、亮白刃口，刃上凸出三根冰棱，剑脊三点青光符文
+    const GRIP = ['#0c1e40', '#163466', '#24508c'];
+    handle(-5, 0.8, GRIP);
+    for (const w of [-4.2, -2.8, -1.4]) strip(w, -0.9, 0.9, (k) => (k < 0.5 ? '#9ae8ff' : '#4ac8ff'));
+    const [px0, py0] = along(-5.8);
+    p.set(px0, py0, '#ffffff');
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) p.set(px0 + dx, py0 + dy, '#4ac8ff');
+    // 护手
+    strip(1, -3.6, 3.6, (k) => (Math.abs(k - 0.5) > 0.4 ? '#dafaff' : Math.abs(k - 0.5) > 0.25 ? '#4a86bc' : '#1a3c70'));
+    strip(1.7, -2.6, 2.6, (k) => (Math.abs(k - 0.5) > 0.36 ? '#9ae8ff' : '#24508c'));
+    for (const sg of [-1, 1]) {
+      p.set(...perp(...along(2), 3.9 * sg), '#9ae8ff');
+      p.set(...perp(...along(2.8), 4.2 * sg), '#ffffff');
+    }
+    // 剑身
+    for (let t = 2.2; t <= GSWORD_LEN; t += 0.45) {
+      const sgm = (t - 2.2) / (GSWORD_LEN - 2.2);
+      const hw = sgm < 0.78 ? 1.55 - sgm * 0.4 : Math.max(0.3, (1 - sgm) * 5.6);
+      strip(t, -hw, hw, (k) => {
+        const d = Math.abs(k - 0.5) * 2;
+        return d > 0.8 ? ICEB[4] : d > 0.5 ? ICEB[2] : d > 0.22 ? ICEB[3] : ICEB[1];
+      });
+    }
+    // 刃上的冰棱
+    for (const [t0, sg, len] of [[6, -1, 2], [9.6, 1, 2.4], [12.8, -1, 1.8]] as [number, number, number][]) {
+      const [bx, by] = along(t0);
+      for (let r = 1.2; r <= 1.8 + len; r += 0.5) {
+        const k = (r - 1.8) / len;
+        p.set(...perp(bx, by, r * sg), k > 0.7 ? '#ffffff' : k > 0.3 ? ICEB[2] : ICEB[1]);
+        if (k < 0.5) p.set(...perp(...along(t0 + 0.7), r * sg), ICEB[1]);
+      }
+    }
+    // 剑脊的符文
+    const lit = flicker(pose, 2) > 0.5;
+    for (const t0 of [5, 8.4, 11.8]) p.set(...along(t0), lit ? '#4ac8ff' : '#1a7ab8');
+    return swordLine(hx, hy, a, K);
   } else if (tool === 'spear') {
     handle(-3, 12.5);
     // 枪缨
@@ -808,7 +873,8 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
   p.oy = HERO_PAD.t;
   const R = rampsOf(o);
   const cx = 14;
-  const crouch = pose.crouch ?? 0;
+  // 永霜领主劈砸地面和剑插着的时候微蹲一下
+  const crouch = (pose.crouch ?? 0) + (o.head === 'icecrown' && (pose.frost === 'stuck' || (pose.frost === 'slam' && (pose.frostK ?? 0) > 0.6)) ? 1 : 0);
   const side = pose.dir === 'side';
   const up = pose.dir === 'up';
   const down = pose.dir === 'down';
@@ -1053,6 +1119,8 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
   let hands: [number, number][] = [];
   /** 死神的镰刀：握在哪只手、什么角度，头画完之后再画（刀刃举过头顶时要压在头上面） */
   let scythe: { hx: number; hy: number; a: number; grow: number; fade: number; flip: number } | null = null;
+  /** 永霜领主的巨剑：同样头画完再画；bury 是地面高度，剑插进地里的部分不画 */
+  let sword: SwordAt | null = null;
   let blade: [number, number][] | undefined;
   if (!side) {
     const [l, r] = pose.armLift ?? [0, 0];
@@ -1130,6 +1198,54 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
       const UPR = Math.PI - 0.15;
       const a = rp === 'spin' ? UPR + ease(rk) * TAU : rp === 'raise' ? lerp(UPR, Math.PI - 0.55, k) : rp === 'slash' ? lerp(Math.PI - 0.55, -0.75, fast) : rp === 'fade' ? -0.75 : UPR;
       if (rp !== 'reach' && rp !== 'lower') scythe = { hx: hands[1][0], hy: hands[1][1], a, grow: rp === 'summon' ? ease(rk) : 1, fade: rp === 'fade' ? rk : 0, flip: -1 };
+    } else if (o.head === 'icecrown' && pose.frost) {
+      // 永霜领主拔剑（用户 11-01）：右手探到肩后、左手张开聚霜，巨剑从肩后拔出来斜举在右上，
+      // 然后双手持剑竖在胸前、单手绕手旋一整圈、双手举过头顶、从头顶劈到右脚边插进地里、停一会儿、剑散成雪花、放下手
+      const fp = pose.frost;
+      const fk = pose.frostK ?? 1;
+      const k = ease(fk);
+      const fast = ease(Math.min(1, fk * 1.8));
+      type H = { ex: number; ey: number; hx: number; hy: number };
+      const DOWN: H = { ex: 4.4, ey: 3.9, hx: 4.4, hy: 7.1 };
+      const BACK: H = { ex: 6.4, ey: 1.4, hx: 3.6, hy: -1.6 };
+      const DRAWN: H = { ex: 6.6, ey: 1, hx: 8.4, hy: -2.2 };
+      const HOLD: H = { ex: 6, ey: 4, hx: 3.4, hy: 4.2 };
+      const SPIN: H = { ex: 6.4, ey: 1.8, hx: 7.6, hy: 1.6 };
+      const RAISE: H = { ex: 6, ey: -0.2, hx: 4.2, hy: -2.6 };
+      const STUCK: H = { ex: 5.6, ey: 2.8, hx: 3.6, hy: 1.4 };
+      const LOPEN: H = { ex: 6, ey: 3.4, hx: 7.6, hy: 2.4 };
+      const LHOLD: H = { ex: 5.6, ey: 4.6, hx: -1.6, hy: 5.6 };
+      const LRAISE: H = { ex: 3, ey: 0.4, hx: -2.6, hy: -1.4 };
+      const LSTUCK: H = { ex: 4.6, ey: 3.4, hx: -1.2, hy: 2.8 };
+      const SEQ: Record<NonNullable<Pose['frost']>, [[H, H, number], [H, H, number]]> = {
+        reach: [[DOWN, BACK, k], [DOWN, LOPEN, k]],
+        draw: [[BACK, DRAWN, fast], [LOPEN, LOPEN, k]],
+        hold: [[DRAWN, HOLD, Math.min(1, k * 2)], [LOPEN, LHOLD, Math.min(1, k * 2)]],
+        spin: [[HOLD, SPIN, Math.min(1, k * 3)], [LHOLD, DOWN, Math.min(1, k * 3)]],
+        raise: [[SPIN, RAISE, k], [DOWN, LRAISE, k]],
+        slam: [[RAISE, STUCK, fast], [LRAISE, LSTUCK, fast]],
+        stuck: [[STUCK, STUCK, k], [LSTUCK, LSTUCK, k]],
+        fade: [[STUCK, STUCK, k], [LSTUCK, LSTUCK, k]],
+        lower: [[STUCK, DOWN, k], [LSTUCK, DOWN, k]],
+      };
+      const [right, left] = SEQ[fp];
+      hands = [];
+      for (const sg of [-1, 1]) {
+        const [from, to, kk] = sg < 0 ? left : right;
+        const at = (key: keyof H) => lerp(from[key], to[key], kk);
+        const sx = cx + sg * 4.2, sy0 = sy + 1.3;
+        const ex = cx + sg * at('ex'), ey = sy + at('ey');
+        const hx = cx + sg * at('hx'), hy = sy + at('hy');
+        capsule(p, sx, sy0, ex, ey, 1.35, R.shirt);
+        capsule(p, ex, ey, hx, hy, 1.2, C);
+        ball(p, hx, hy, 1.15, 1.05, R.skin);
+        hands.push([hx, hy]);
+      }
+      // 剑的角度：拔出来时斜指右上，胸前竖直略左倾，旋剑绕手一整圈，举剑略右倾，劈下去从头顶转到右下插进地里
+      const UPR = Math.PI - 0.6, VERT = Math.PI - 0.3, OVER = Math.PI - 0.45, DOWNR = 0.3;
+      const a = fp === 'draw' ? lerp(Math.PI - 0.95, UPR, fast) : fp === 'hold' ? lerp(UPR, VERT, Math.min(1, k * 2)) : fp === 'spin' ? VERT + ease(fk) * TAU
+        : fp === 'raise' ? lerp(VERT, OVER, k) : fp === 'slam' ? lerp(OVER, DOWNR, fast) : fp === 'stuck' || fp === 'fade' ? DOWNR : VERT;
+      if (fp !== 'reach' && fp !== 'lower') sword = { hx: hands[1][0], hy: hands[1][1], a, grow: fp === 'draw' ? Math.min(1, fk * 1.25) : 1, fade: fp === 'fade' ? fk : 0, bury: ground + 0.6 };
     } else {
       arm(cx - 4.4, l);
       arm(cx + 4.4, r);
@@ -1177,6 +1293,18 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
   if (o.head === 'paleknight' && !up) {
     for (const sx of side ? [cx + 0.8] : [cx - 4.3, cx + 4.3]) ball(p, sx, sy + 0.6, 2, 1.5, R.shirt);
   }
+  if (o.head === 'icecrown' && !up) {
+    // 永霜领主的冰晶肩甲：厚厚一块深蓝甲片，外侧竖起一根冰棱，甲片下缘一道霜线
+    for (const sg of side ? [1] : [-1, 1]) {
+      const sx = side ? cx + 1 : cx + sg * 4.4;
+      ball(p, sx, sy + 0.7, 2.3, 1.7, C);
+      p.line(sx - 1.6, sy + 2.2, sx + 1.6, sy + 2.2, '#9ae8ff');
+      const tx = side ? sx + 1.6 : sx + sg * 1.4;
+      p.set(tx, sy - 0.6, ICEB[1]);
+      p.set(tx, sy - 1.6, ICEB[3]);
+      p.set(tx + (side ? 0.6 : sg * 0.6), sy - 2.6, '#ffffff');
+    }
+  }
   if (o.head === 'voidhood' && !up) {
     // 咒师的披肩：肩上一圈厚厚的斗篷，下缘镶金线，肩膀看起来才像披着袍子
     for (const sx of side ? [cx + 0.4] : [cx - 4.4, cx + 4.4]) {
@@ -1194,17 +1322,23 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
   // ---- 头 ----
   drawHead(p, o, R, cx, headY, pose);
   if (scythe) blade = drawScythe(p, scythe, pose);
+  if (sword) blade = drawFrostSword(p, sword, pose);
 
   if (up && !bare) capsule(p, cx - 4.3, sy - 0.2, cx + 4.3, sy - 0.2, 1.5, R.roll);
 
   // ---- 前面的手臂和工具 ----
   if (side) {
     const rs = float && pose.reap ? reapSide(pose) : null;
-    const arm = sideArm(rs ? rs.armF : pose.armF ?? 0, rs ? rs.elbowF : pose.elbowF ?? 0, pose.reach ?? 0, 0);
+    const fs = o.head === 'icecrown' && pose.frost ? frostSide(pose) : null;
+    const sa = rs ?? fs;
+    const arm = sideArm(sa ? sa.armF : pose.armF ?? 0, sa ? sa.elbowF : pose.elbowF ?? 0, pose.reach ?? 0, 0);
     const tool = pose.tool ?? 'none';
     if (rs?.show) {
       scythe = { hx: arm.hx, hy: arm.hy, a: rs.a, grow: rs.grow, fade: rs.fade, flip: -1 };
       blade = drawScythe(p, scythe, pose);
+    } else if (fs?.show) {
+      sword = { hx: arm.hx, hy: arm.hy, a: fs.a, grow: fs.grow, fade: fs.fade, bury: ground + 0.6 };
+      blade = drawFrostSword(p, sword, pose);
     } else if (tool !== 'none' && tool !== 'greatshield') drawTool(p, tool, arm.hx, arm.hy, arm.a + (pose.toolTurn ?? 0), pose);
     arm.draw();
     if (tool === 'greatshield') drawGreatShield(p, arm.hx, arm.hy);
@@ -1220,7 +1354,7 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
   if (o.offhand === 'shield' && down) drawShield(p, cx - 5.6, sy + 3.2, 'front');
   if (o.offhand === 'shield' && up) drawShield(p, cx - 2.6, sy + 1.4, 'back');
   const out = (coffin ? composeCoffin(p, o, pose, cx, ground) : p).outlineTinted();
-  if (o.fx) drawFx(out, o, pose, { cx, sy, hipY, headY, lantern, hands, blade, scythe, ground });
+  if (o.fx) drawFx(out, o, pose, { cx, sy, hipY, headY, lantern, hands, blade, scythe, sword, ground });
   return out;
 }
 
@@ -1458,6 +1592,42 @@ function drawScythe(p: Pix, s: { hx: number; hy: number; a: number; grow: number
   return edge;
 }
 
+interface SwordAt { hx: number; hy: number; a: number; grow: number; fade: number; bury: number }
+/** 永霜巨剑：另画一层再叠上去，散成雪花时按哈希抽掉像素，插进地里的部分不画 */
+function drawFrostSword(p: Pix, s: SwordAt, pose: Pose) {
+  const tp = new Pix(p.w, p.h);
+  tp.ox = p.ox;
+  tp.oy = p.oy;
+  const line = drawTool(tp, 'greatsword', s.hx, s.hy, s.a, { ...pose, toolGrow: s.grow });
+  for (let i = 0; i < tp.data.length; i++) {
+    const c = tp.data[i];
+    if (!c) continue;
+    const x = i % p.w, y = Math.floor(i / p.w);
+    if (y - p.oy + 0.5 > s.bury) continue;
+    if (s.fade > 0 && phash(x, y, 5) < s.fade) continue;
+    p.data[i] = c;
+  }
+  return line?.filter(([, y]) => y <= s.bury);
+}
+
+/** 永霜领主侧面拔剑的手位：前臂角度、手肘、剑的绝对角度（0 朝下、π/2 朝前、π 朝上） */
+function frostSide(pose: Pose) {
+  const fp = pose.frost!;
+  const fk = pose.frostK ?? 1;
+  const k = ease(fk);
+  const fast = ease(Math.min(1, fk * 1.8));
+  type A = [number, number, number];
+  const REST: A = [0.1, 0.25, 0], BACK: A = [3.3, 0.5, Math.PI + 0.9], DRAWN: A = [2.5, 0.3, Math.PI - 0.5], HOLD: A = [0.9, 1, Math.PI - 0.25], SPIN: A = [1.2, 0.9, Math.PI - 0.25],
+    RAISE: A = [2.7, 0.4, Math.PI - 0.3], STUCK: A = [1.25, 0.35, 0.5];
+  const SEQ: Record<NonNullable<Pose['frost']>, [A, A, number]> = {
+    reach: [REST, BACK, k], draw: [BACK, DRAWN, fast], hold: [DRAWN, HOLD, Math.min(1, k * 2)], spin: [HOLD, SPIN, Math.min(1, k * 3)],
+    raise: [SPIN, RAISE, k], slam: [RAISE, STUCK, fast], stuck: [STUCK, STUCK, k], fade: [STUCK, STUCK, k], lower: [STUCK, REST, k],
+  };
+  const [f, to, kk] = SEQ[fp];
+  const a = fp === 'spin' ? SPIN[2] + ease(fk) * TAU : lerp(f[2], to[2], kk);
+  return { armF: lerp(f[0], to[0], kk), elbowF: lerp(f[1], to[1], kk), a, grow: fp === 'draw' ? Math.min(1, fk * 1.25) : 1, fade: fp === 'fade' ? fk : 0, show: fp !== 'reach' && fp !== 'lower' };
+}
+
 /** 死神侧面掏镰刀的手位：前臂角度、手肘、镰刀的绝对角度（0 朝下、π/2 朝前、π 朝上） */
 function reapSide(pose: Pose) {
   const rp = pose.reap!;
@@ -1540,6 +1710,7 @@ function drawSpecialHead(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, po
 
   if (o.head === 'voidhood') return drawVoidHood(p, o, R, cx, cy, pose);
   if (o.head === 'reaper') return drawReaperHead(p, o, R, cx, cy, pose);
+  if (o.head === 'icecrown') return drawIceCrownHead(p, o, R, cx, cy, pose);
   if (o.head === 'pumpkin' || o.head === 'voidpumpkin') {
     // 扁圆的南瓜，五道竖棱，顶上一截弯梗和一片叶子
     ball(p, hx, cy - 0.2, side ? 5.2 : 5.7, 4.7, H);
@@ -1789,6 +1960,73 @@ function drawVoidHood(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose:
 
 const BONE = ['#5a584e', '#8a887c', '#b8b6aa', '#dcdad0', '#f6f4ec'];
 /** 死神（用户 10-30）：深兜帽罩着头，帽兜在脑后松松垂下一截；帽口一团黑，黑暗里浮着一张骷髅脸，眼窝里烧着幽绿魂火 */
+/** 王冠上每根冰棱的高度（从左到右） */
+const CROWN = [2, 4, 2, 3, 6, 3, 2, 4, 2];
+/**
+ * 永霜领主的头（用户 11-01）：深蓝的头盔包住整个头，额前一圈冰棱王冠（中间最高），
+ * 盔下露出冰蓝色的脸，两眼是青色寒光，旋剑、举剑、砸地时眼光往上窜；下巴一把结霜的白须
+ */
+function drawIceCrownHead(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose: Pose) {
+  const side = pose.dir === 'side';
+  const up = pose.dir === 'up';
+  const H = ramp(o.hair);
+  const hx = side ? cx + 0.5 : cx;
+  const G = o.glow ?? ['#1a7ab8', '#4ac8ff', '#eaffff'];
+  // 头盔
+  ball(p, hx, cy - 0.3, side ? 5 : 5.2, 5, H);
+  if (side) capsule(p, hx - 3.6, cy - 1.6, hx - 5.4, cy + 2.6, 1.3, H, 1);
+  // 盔沿一道霜线
+  for (let x = Math.round(hx - 4); x <= Math.round(hx + 4); x++) {
+    const y = Math.round(cy - 1.4 + (Math.abs(x - hx) > 3 ? 1 : 0));
+    if (H.includes(p.get(x, y) ?? '')) p.set(x, y, side && x > hx + 3 ? '#9ae8ff' : '#4a86bc');
+  }
+  // 冰棱王冠：从盔沿往上长，根部青蓝、尖端白
+  const cols = side ? [-3, -2, -1, 0, 1, 2, 3] : [-4, -3, -2, -1, 0, 1, 2, 3, 4];
+  cols.forEach((dx, i) => {
+    const h = side ? CROWN[i + 1] : CROWN[i];
+    const x = Math.round(hx + dx + (side ? -0.5 : 0));
+    const top = Math.round(cy - 4.2 - (Math.abs(dx) > 2 ? -1 : 0));
+    for (let j = 0; j < h; j++) {
+      const k = j / h;
+      p.set(x, top - j, k > 0.7 ? '#ffffff' : k > 0.35 ? ICEB[3] : ICEB[1]);
+    }
+    if (h >= 4 && !(i & 1)) p.set(x, top - h, '#ffffff');
+  });
+  if (up) {
+    // 背面：盔后一道冰蓝脊线
+    p.line(hx, cy - 3.5, hx, cy + 3, H[2]);
+    return;
+  }
+  // 脸：冰蓝皮肤，盔檐下的一张窄脸
+  const S = R.skin;
+  const fx0 = side ? hx + 1.4 : hx;
+  ball(p, fx0, cy + 1.9, side ? 3.2 : 3.8, 3.2, faceRamp(S), 0, (x, y) => y + 0.5 > cy - 0.3 && (!side || x + 0.5 > hx - 0.2));
+  // 眼：两格青光，眉骨一格暗
+  const ey = Math.round(cy + 0.4);
+  const bright = flicker(pose, 2) > 0.4;
+  const blaze = pose.frost === 'spin' || pose.frost === 'raise' || pose.frost === 'slam' || pose.frost === 'stuck';
+  const eyes = side ? [Math.round(hx + 2.6)] : [Math.round(hx - 2.5), Math.round(hx + 1.5)];
+  for (const x of eyes) {
+    p.set(x, ey, pose.blink ? S[1] : bright || blaze ? G[2] : G[1]);
+    p.set(x + (side ? 0 : x < hx ? 1 : 0), ey, pose.blink ? S[1] : G[1]);
+    p.set(x, ey - 1, H[0]);
+    if (blaze && !pose.blink) {
+      // 寒光往上窜出一截，再往外侧拖出一道
+      p.set(x, ey - 1, G[1]);
+      p.set(x + (side ? 1 : x < hx ? -1 : 1), ey - 2, bright ? G[2] : G[0]);
+    }
+  }
+  // 结霜的白须：下巴下三缕
+  const BEARD = ['#9ae8ff', '#dafaff', '#ffffff'];
+  const by = Math.round(cy + 3.8);
+  const bx = side ? Math.round(hx + 2.4) : Math.round(hx);
+  for (const [dx, len] of side ? [[0, 2], [1, 3], [2, 2]] : [[-2, 2], [-1, 3], [0, 4], [1, 3], [2, 2]]) {
+    for (let j = 0; j < len; j++) p.set(bx + dx, by + j, j === len - 1 ? BEARD[2] : j === 0 ? BEARD[0] : BEARD[1]);
+  }
+  // 鼻子一格暗
+  p.set(side ? Math.round(hx + 4) : Math.round(hx - 0.5), ey + 1, S[0]);
+}
+
 function drawReaperHead(p: Pix, o: Outfit, R: Ramps, cx: number, cy: number, pose: Pose) {
   const side = pose.dir === 'side';
   const up = pose.dir === 'up';
@@ -2287,7 +2525,7 @@ function drawLantern(p: Pix, o: Outfit, hx: number, hy: number, pose: Pose, hidd
 }
 
 /** 粒子特效：画在描边之后，不带黑边；按帧进度循环，位置用哈希打散 */
-interface FxAt { cx: number; sy: number; hipY: number; headY: number; lantern: [number, number] | null; hands: [number, number][]; blade?: [number, number][]; scythe?: { hx: number; hy: number; a: number; grow: number; fade: number; flip: number } | null; ground?: number }
+interface FxAt { cx: number; sy: number; hipY: number; headY: number; lantern: [number, number] | null; hands: [number, number][]; blade?: [number, number][]; scythe?: { hx: number; hy: number; a: number; grow: number; fade: number; flip: number } | null; sword?: SwordAt | null; ground?: number }
 function drawFx(p: Pix, o: Outfit, pose: Pose, at: FxAt) {
   const t = pose.t ?? 0;
   const seed = pose.seed ?? 0;
@@ -2299,6 +2537,7 @@ function drawFx(p: Pix, o: Outfit, pose: Pose, at: FxAt) {
   if (o.fx === 'frostfire') return drawFrostfireFx(p, o, pose, at, put);
   if (o.fx === 'soulfire') return drawSoulfireFx(p, o, pose, at, put);
   if (o.fx === 'bats') return drawBatsFx(p, o, pose, at, put);
+  if (o.fx === 'frost') return drawFrostFx(p, o, pose, at, put);
   if (o.fx === 'embers' || o.fx === 'wisps') {
     // 火星 / 鬼火：从灯里往上飘，越往上越暗，到头就灭
     const src: [number, number][] = [];
@@ -2550,6 +2789,280 @@ function drawSoulfireFx(p: Pix, o: Outfit, pose: Pose, at: FxAt, put: (x: number
   }
 }
 
+const FROST = ['#143a6a', '#1a7ab8', '#4ac8ff', '#bafcff', '#ffffff'];
+/** 地上冒出来的冰棱：底在 (x, y0)、高 h、底半宽 w，往 lean 方向歪；左亮右暗、尖端白 */
+function iceSpike(put: (x: number, y: number, c: string) => void, x: number, y0: number, h: number, w: number, lean: number) {
+  for (let j = 0; j < h; j++) {
+    const k = j / h;
+    const half = w * (1 - k);
+    const xx = x + lean * j;
+    for (let dx = -Math.ceil(half); dx <= Math.ceil(half); dx++) {
+      if (Math.abs(dx) > half + 0.3) continue;
+      const edge = Math.abs(dx) / (half + 0.3);
+      put(xx + dx, y0 - j, k > 0.8 ? FROST[4] : edge > 0.55 ? (dx < 0 ? FROST[3] : FROST[1]) : FROST[2]);
+    }
+  }
+}
+/**
+ * 永霜领主的特效（用户 11-01：特效拉满）：
+ * 常驻：脚下一层霜雾打转、天上飘雪（越冷雪越大）、甲上冰晶一闪一闪、嘴里呼出白气；
+ * 拔剑：霜气被吸进手里 → 白环炸开、剑身崩出冰屑 → 剑脊两侧升起冷雾、细雪从剑上落下、冰晶绕剑 → 旋剑留三道蓝影和剑尖白弧、雪花甩出去 →
+ * 举剑时绕身一圈冰符文、剑尖聚起寒光、天上垂下极光 → 劈下拉出剑光、落地冲击环、地面霜裂、两侧长出冰棱、雪尘扬起 → 剑散成雪花、冰棱碎成冰屑
+ */
+function drawFrostFx(p: Pix, o: Outfit, pose: Pose, at: FxAt, put: (x: number, y: number, c: string) => void) {
+  const t = pose.t ?? 0;
+  const seed = pose.seed ?? 0;
+  const { cx, sy, headY, hands, blade, sword } = at;
+  const empty = (x: number, y: number, c: string) => { if (!p.get(Math.round(x), Math.round(y))) put(x, y, c); };
+  const fp = pose.frost;
+  const k = pose.frostK ?? 1;
+  const side = pose.dir === 'side';
+  const up = pose.dir === 'up';
+  const gy = HERO_FEET - 0.4;
+  // 寒气强度：剑在手里越久越冷，砸地时最冷
+  const cold = fp === 'draw' ? 0.6 + k * 0.4 : fp === 'hold' ? 1 : fp === 'spin' ? 1.1 : fp === 'raise' ? 1.3 + k * 0.5 : fp === 'slam' ? 1.8 : fp === 'stuck' ? 1.6 - k * 0.4 : fp === 'fade' ? 1 - k * 0.6 : fp === 'lower' ? 0.4 : 0.35;
+  // ---- 常驻：脚下的霜雾 ----
+  for (let j = 0; j < 12; j++) {
+    const a = (j / 12) * TAU + t * TAU * 0.35;
+    const r = 0.6 + phash(j, 2, 9) * 0.4;
+    const x = cx + Math.cos(a) * 8.5 * r;
+    const y = gy + Math.sin(a) * 1.8 * r;
+    empty(x, y, j % 3 ? FROST[0] : FROST[1]);
+    if (cold > 0.8 && j % 4 === 0) empty(x, y - 1, FROST[1]);
+  }
+  // ---- 常驻：飘落的雪花，越冷越多；每隔几片一片大的 ----
+  const flakes = Math.min(14, 6 + Math.round(cold * 5));
+  for (let j = 0; j < flakes; j++) {
+    const ph = (t * (0.7 + (j % 3) * 0.15) + phash(j, 1, 13)) % 1;
+    const x = cx + (phash(j, 5, 13) - 0.5) * 34 + Math.sin(ph * 5 + j) * 1.5;
+    const y = headY - 12 + ph * 36;
+    if (y > HERO_FEET) continue;
+    const c = j % 3 === 0 ? FROST[4] : FROST[3];
+    empty(x, y, c);
+    if (j % 5 === 0) { empty(x - 1, y, FROST[2]); empty(x + 1, y, FROST[2]); empty(x, y - 1, FROST[2]); empty(x, y + 1, FROST[2]); }
+  }
+  // ---- 常驻：甲上冰晶的闪光（两肩、胸口、冰冠顶） ----
+  const glints: [number, number][] = side ? [[cx + 2.6, sy - 2.6], [cx + 1, sy + 3.5], [cx, headY - 10.5]] : [[cx - 5.8, sy - 2.6], [cx + 5.8, sy - 2.6], [cx, headY - 10.5], [cx - 1, sy + 4]];
+  glints.forEach(([gx0, gy0], j) => {
+    const ph = (t * 1.5 + j * 0.31 + (seed % 3) * 0.1) % 1;
+    if (ph > 0.18) return;
+    put(gx0, gy0, '#ffffff');
+    if (ph < 0.08) { put(gx0 - 1, gy0, FROST[3]); put(gx0 + 1, gy0, FROST[3]); put(gx0, gy0 - 1, FROST[3]); put(gx0, gy0 + 1, FROST[3]); }
+  });
+  // ---- 常驻：呼出的白气（背面看不见） ----
+  if (!up) {
+    const ph = (t * 0.8 + 0.3) % 1;
+    if (ph < 0.45) {
+      const g = ph / 0.45;
+      const mx = side ? cx + 5 + g * 4 : cx + 1 + g * 1.5;
+      const my = headY + 3.5 - g * 3;
+      empty(mx, my, g < 0.5 ? FROST[3] : FROST[2]);
+      if (g > 0.2) empty(mx + 1, my - 1, FROST[2]);
+    }
+  }
+  if (!fp) return;
+  const grip = sword ? [sword.hx, sword.hy] : hands[hands.length - 1];
+  if (!grip) return;
+  const [gx, gy2] = grip;
+  if (fp === 'reach') {
+    // 霜气从四面八方被吸进探到背后的那只手，另一只手掌心凝起一团冰光
+    if (k < 0.25) return;
+    for (let j = 0; j < 10; j++) {
+      const ph = 1 - ((t * 3 + j * 0.1 + phash(j, 1, 9) * 0.4) % 1);
+      const a = (j / 10) * TAU + j * 0.7;
+      const r = 1.5 + ph * 10;
+      empty(gx + Math.cos(a) * r, gy2 + Math.sin(a) * r * 0.7, ph < 0.3 ? FROST[4] : ph < 0.6 ? FROST[3] : FROST[2]);
+    }
+    if (!side && hands[0]) {
+      const [lx, ly] = hands[0];
+      const g = (k - 0.25) / 0.75;
+      put(lx, ly - 2, flicker(pose, 3) > 0.5 ? FROST[4] : FROST[3]);
+      if (g > 0.4) { put(lx - 1, ly - 2, FROST[2]); put(lx + 1, ly - 2, FROST[2]); put(lx, ly - 3, FROST[2]); }
+    }
+    return;
+  }
+  if (fp === 'draw') {
+    // 拔剑的瞬间一圈白环炸开；剑身往外崩冰屑
+    if (k < 0.35) {
+      const rr = k * 22;
+      for (let i = 0; i < 40; i++) {
+        const a = (i / 40) * TAU;
+        empty(gx + Math.cos(a) * rr, gy2 + Math.sin(a) * rr * 0.6, k < 0.18 ? FROST[4] : FROST[2]);
+      }
+    }
+    if (blade) for (let j = 0; j < 9; j++) {
+      const ph = (k * 1.6 + phash(j, 2, 9)) % 1;
+      const [bx, by] = blade[Math.min(blade.length - 1, Math.floor(phash(j, 3, 9) * blade.length))];
+      const dir = side ? 1 : j & 1 ? 1 : -1;
+      empty(bx + dir * ph * 6, by - ph * 5 + (j % 3), ph < 0.3 ? FROST[4] : ph < 0.6 ? FROST[3] : FROST[2]);
+    }
+    if (!side && hands[0]) {
+      const [lx, ly] = hands[0];
+      put(lx, ly - 2, FROST[3]);
+      put(lx, ly - 3, FROST[2]);
+    }
+  }
+  if (!blade || !sword) return;
+  // ---- 剑上的寒气：顺着剑脊往上冒白蓝的冷雾，越冷越高；细雪从剑上飘落 ----
+  const steam = fp === 'draw' ? k : fp === 'fade' ? 1 - k : fp === 'slam' || fp === 'stuck' ? 0.35 : 1;
+  if (steam > 0.05) {
+    const STEAM = [FROST[0], FROST[0], FROST[1], FROST[2], FROST[3]];
+    for (let i = 2; i < blade.length; i += 3) {
+      const [bx, by] = blade[i];
+      const h = Math.round((1.5 + (i / blade.length) * 1.5) * Math.min(1.4, cold) * steam + 0.5);
+      flameField(empty, bx, by - 1, 1.6, h, t, seed + i * 3, STEAM, 0);
+    }
+    for (let j = 0; j < 6; j++) {
+      const ph = (t * 3 + j * 0.17 + phash(j, 4, 9) * 0.5) % 1;
+      if (ph > steam * 0.8) continue;
+      const [bx, by] = blade[Math.min(blade.length - 1, Math.floor(phash(j, seed % 3, 5) * blade.length))];
+      empty(bx + Math.sin(ph * 8 + j) * 2, by + ph * 6, ph < 0.4 ? FROST[4] : FROST[3]);
+    }
+  }
+  if (fp === 'hold') {
+    // 持剑：冰晶小点绕着剑身螺旋往上
+    for (let j = 0; j < 8; j++) {
+      const ph = (t * 2 + j * 0.125) % 1;
+      const [bx, by] = blade[Math.floor(ph * (blade.length - 1))];
+      const a = ph * TAU * 2 + j;
+      empty(bx + Math.cos(a) * 3.5, by + Math.sin(a) * 1.5, j & 1 ? FROST[3] : FROST[4]);
+    }
+  }
+  if (fp === 'spin') {
+    // 旋剑的残影：剑脊在稍早三个角度留下越来越淡的蓝影；剑尖拖出一道白弧；雪花被甩出去
+    for (const [back, c] of [[0.4, FROST[2]], [0.8, FROST[1]], [1.2, FROST[0]]] as [number, string][]) {
+      const pts = swordLine(gx, gy2, sword.a - back);
+      for (let i = 0; i < pts.length; i++) {
+        if ((i + Math.floor(back * 4)) % 2) continue;
+        const [x, y] = pts[i];
+        if (y <= sword.bury) empty(x, y, c);
+      }
+    }
+    for (let j = 1; j <= 8; j++) {
+      const pts = swordLine(gx, gy2, sword.a - j * 0.09);
+      const [x, y] = pts[pts.length - 1];
+      if (y <= sword.bury) empty(x, y, j < 3 ? FROST[4] : j < 6 ? FROST[3] : FROST[2]);
+    }
+    for (let j = 0; j < 6; j++) {
+      const ph = (k * 2 + j / 6) % 1;
+      const [dx, dy] = v(sword.a - ph * 2.5 + j, 18 + ph * 6);
+      if (gy2 + dy <= sword.bury) empty(gx + dx, gy2 + dy, ph < 0.5 ? FROST[3] : FROST[2]);
+    }
+  }
+  if (fp === 'raise') {
+    // 举剑召霜：绕身一圈冰符文，剑尖上聚起越来越大的寒光，天上垂下几道极光
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * TAU + t * TAU * 1.2;
+      const ox = Math.round(cx + Math.cos(a) * 11);
+      const oy = Math.round(sy + 3 + Math.sin(a) * 3.2);
+      const rune = RUNES[(i + Math.floor(t * 6)) % RUNES.length];
+      const c = Math.sin(a) > 0 ? FROST[3] : FROST[2];
+      for (let j = 0; j < 9; j++) if (rune[j]) empty(ox + (j % 3) - 1, oy + Math.floor(j / 3) - 1, c);
+    }
+    const tip = blade[blade.length - 1];
+    const r = 1 + k * 3;
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * TAU + t * TAU;
+      empty(tip[0] + Math.cos(a) * r, tip[1] - 1 + Math.sin(a) * r * 0.8, FROST[3]);
+    }
+    empty(tip[0], tip[1] - 1, '#ffffff');
+    if (k > 0.5) for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) empty(tip[0] + dx, tip[1] - 1 + dy, FROST[4]);
+    for (let j = 0; j < 5; j++) {
+      const x = cx + (j - 2) * 7 + Math.round(Math.sin(t * TAU * 2 + j));
+      const len = 3 + Math.round(phash(j, Math.floor(t * 10), 7) * 4 + k * 3);
+      for (let y = 0; y < len; y++) empty(x, -HERO_PAD.t + y, y < len * 0.4 ? FROST[2] : y < len * 0.75 ? FROST[1] : FROST[0]);
+    }
+  }
+  if (fp === 'slam' || fp === 'stuck' || fp === 'fade') {
+    // 剑插进地里的位置
+    const ix = gx + Math.sin(sword.a) * ((sword.bury - gy2) / Math.max(0.3, Math.cos(sword.a)));
+    const iy = HERO_FEET - 1;
+    const hitK = fp === 'slam' ? Math.max(0, (k - 0.55) / 0.45) : 1;
+    if (fp === 'slam') {
+      // 剑光：从举剑的角度一路劈到现在的角度，越早越淡越稀
+      const a0 = side ? Math.PI + 0.35 : Math.PI - 0.45;
+      const a1 = sword.a;
+      const n = Math.max(2, Math.ceil(Math.abs(a0 - a1) * 16));
+      for (let i = 0; i <= n; i++) {
+        const f = i / n;
+        const a = lerp(a0, a1, f);
+        const age = 1 - f;
+        if (age > 0.7 && (i & 1)) continue;
+        for (const r of [13, 14.5, 16, 17.5]) {
+          if (r > 15 && age > 0.5) continue;
+          const [dx, dy] = v(a, r);
+          if (gy2 + dy > sword.bury) continue;
+          empty(gx + dx, gy2 + dy, age < 0.15 ? FROST[4] : age < 0.4 ? FROST[3] : age < 0.7 ? FROST[2] : FROST[1]);
+        }
+      }
+    }
+    // 两侧的冰棱：落地时一下长出来，剑插着时立着，剑散掉时一起缩回去碎掉
+    const spikes: [number, number, number][] = side
+      ? [[ix - 4, 5, -0.3], [ix + 4, 6, 0.3], [ix + 8, 4, 0.4], [ix - 8, 3, -0.4], [ix + 12, 3, 0.5]]
+      : [[ix - 9, 5, -0.3], [ix + 5, 6, 0.3], [ix + 9, 4, 0.4], [ix - 13, 4, -0.4], [ix - 17, 3, -0.5], [ix + 13, 3, 0.5]];
+    const grow = fp === 'slam' ? hitK : fp === 'fade' ? 1 - k : 1;
+    spikes.forEach(([x, h, lean], j) => {
+      const hh = Math.round(h * ease(Math.max(0, Math.min(1, grow * 1.4 - j * 0.08))));
+      if (hh > 0) iceSpike(put, x, HERO_FEET, hh, 1.1 + h * 0.25, lean);
+      if (fp === 'fade') {
+        // 碎掉的冰屑往上飞
+        for (let m = 0; m < 2; m++) {
+          const ph = (k + m * 0.4 + phash(j, m, 7) * 0.3) % 1;
+          empty(x + (m ? 1 : -1) * ph * 4 + lean * 3, HERO_FEET - h - ph * 7, ph < 0.5 ? FROST[3] : FROST[2]);
+        }
+      }
+    });
+    if (hitK > 0 && fp !== 'fade') {
+      // 冲击环：往外扩的扁椭圆，越扩越淡；剑插着时隔点画一圈慢慢散掉
+      const ring = fp === 'slam' ? hitK : Math.min(1, 1 + k * 1.5);
+      if (fp === 'slam' || k < 0.4) {
+        const rr = 3 + ring * 14;
+        for (let i = 0; i < 56; i++) {
+          if (fp === 'stuck' && (i & 1)) continue;
+          const a = (i / 56) * TAU;
+          empty(ix + Math.cos(a) * rr, iy + Math.sin(a) * rr * 0.32, ring < 0.4 ? FROST[4] : ring < 0.8 ? FROST[3] : FROST[1]);
+        }
+      }
+      // 地面霜裂：从落点往外的几道折线，一明一暗
+      for (let j = 0; j < 6; j++) {
+        const a = (j / 6) * TAU + 0.3;
+        const len = 3 + Math.min(1, hitK * 1.5) * (6 + phash(j, 2, 7) * 4);
+        for (let r = 1.5; r < len; r += 1) {
+          const zig = Math.floor(r) & 1 ? 0.6 : -0.6;
+          const x = ix + Math.cos(a) * r + zig * Math.sin(a);
+          const y = iy + Math.sin(a) * r * 0.35 + zig * 0.3;
+          if (y > HERO_FEET + 1) continue;
+          empty(x, y, r < len * 0.4 ? FROST[3] : flicker(pose, 3) > 0.5 ? FROST[2] : FROST[1]);
+        }
+      }
+      // 雪尘：落点两边扬起又落下
+      if (fp === 'slam') for (let j = 0; j < 10; j++) {
+        const sgn = j & 1 ? 1 : -1;
+        const x = ix + sgn * (2 + (j >> 1) * 2.2) * hitK;
+        const y = HERO_FEET - 1 - Math.sin(hitK * Math.PI) * (3 + (j % 3)) + (j >> 1) * 0.4;
+        empty(x, y, j % 3 ? FROST[3] : FROST[4]);
+      }
+      // 插着的剑：柄上结出的霜往下掉
+      if (fp === 'stuck') for (let j = 0; j < 4; j++) {
+        const ph = (t * 4 + j * 0.25) % 1;
+        empty(gx + (j - 1.5) * 1.5, gy2 + 2 + ph * 6, ph < 0.5 ? FROST[3] : FROST[2]);
+      }
+    }
+  }
+  if (fp === 'fade') {
+    // 剑散成雪花往上飘
+    for (let i = 0; i < blade.length; i++) {
+      const ph = (k + phash(i, 3, 7) * 0.5) % 1;
+      const [bx, by] = blade[i];
+      const x = bx + Math.sin(ph * 6 + i) * 1.5;
+      const y = by - ph * 8;
+      empty(x, y, ph < 0.4 ? FROST[4] : ph < 0.7 ? FROST[3] : FROST[2]);
+      if (i % 3 === 0 && ph < 0.5) { empty(x - 1, y, FROST[2]); empty(x + 1, y, FROST[2]); }
+    }
+  }
+}
+
+
 /**
  * 棺材皮肤的特效（用户 10-31）：平时一只蝙蝠绕着棺材转、脚边一层紫雾；蹦起落地和倒地时扬起尘土；
  * 开缝时盖缝透红光、开盖时一群蝙蝠从棺材里飞出来、龇牙时红眼闪光；躺着的时候一只蝙蝠落在棺材上
@@ -2678,6 +3191,8 @@ const CAST_PHASES: [number, Pose['cast']][] = [[12, undefined], [18, 'rise'], [3
  */
 const REAP_PHASES: [number, Pose['reap']][] = [[20, undefined], [32, 'reach'], [40, 'summon'], [64, 'hold'], [80, 'spin'], [92, 'raise'], [100, 'slash'], [110, 'fade'], [120, 'lower']];
 const IDLE_FRAMES = 120;
+/** 永霜领主待机（用户 11-01，120 帧）：0-17 站着呼吸，18-27 伸手到背后，28-39 拔剑，40-55 双手持剑，56-71 旋剑，72-83 举剑，84-91 劈砸地面，92-103 剑插在地上，104-111 剑散成雪花，112-119 放下手 */
+const FROST_PHASES: [number, Pose['frost']][] = [[18, undefined], [28, 'reach'], [40, 'draw'], [56, 'hold'], [72, 'spin'], [84, 'raise'], [92, 'slam'], [104, 'stuck'], [112, 'fade'], [120, 'lower']];
 /**
  * 棺材皮肤待机（用户 10-31 录屏，120 帧）：0-15 立着轻晃，16-27 蹦两下，28-39 小鬼从棺材后面探头又缩回去，40-51 棺盖吱呀开一条缝、里面亮起红眼，
  * 52-65 棺盖大开、蝙蝠飞出来，66-75 伯爵剪影龇牙、眼睛闪光，76-85 整口棺材往左倒下去（盖子顺势合上），86-99 躺在地上，100-107 弹起来立住，108-119 落定晃两下
@@ -2716,9 +3231,10 @@ const idle = (dir: HeroDir): HeroAnim => ({
     // 冰火咒师的施法表是按 96 帧写的，换算到现在的帧数
     const [cast, castK] = phaseOf(CAST_PHASES, (i * 96) / IDLE_FRAMES);
     const [reap, reapK] = phaseOf(REAP_PHASES, i);
+    const [frost, frostK] = phaseOf(FROST_PHASES, i);
     return {
       dir, bob: b > 0.3 ? 1 : 0, legF: 0.12, legB: -0.1, armF: 0.1 + b * 0.05, armB: -0.1,
-      elbowF: 0.25, elbowB: 0.2, cape: Math.round(1 + b), blink: i === 6 || i === 79, cast, castK, reap, reapK,
+      elbowF: 0.25, elbowB: 0.2, cape: Math.round(1 + b), blink: i === 6 || i === 79, cast, castK, reap, reapK, frost, frostK,
       // 飘着的外观：慢慢上下浮
       hover: -2 + Math.round(Math.sin(t * TAU * 3) * 1.4),
       // 棺材皮肤：按录屏的阶段表来（其他皮肤不看这些字段）
