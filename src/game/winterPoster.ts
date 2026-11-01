@@ -11,18 +11,18 @@ import { phash } from './pix';
  * 配色：深蓝夜空、青绿极光、冰蓝、带蓝影的雪地（不用纯白，怪才看得清）。
  */
 
-const ICE = ['#12304e', '#2a6a9a', '#5ab0e0', '#a8e0ff', '#eafaff'];
-const SNOW = ['#4a6e96', '#6e94ba', '#94b8d8', '#bcd6ec', '#e2eef8'];
-const ROCK = ['#141c30', '#1e2a44', '#2c3c5a', '#3e5272'];
+export const ICE = ['#12304e', '#2a6a9a', '#5ab0e0', '#a8e0ff', '#eafaff'];
+export const SNOW = ['#4a6e96', '#6e94ba', '#94b8d8', '#bcd6ec', '#e2eef8'];
+export const ROCK = ['#141c30', '#1e2a44', '#2c3c5a', '#3e5272'];
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-function px(ctx: CanvasRenderingContext2D, x: number, y: number, col: string, w = 1, h = 1) {
+export function px(ctx: CanvasRenderingContext2D, x: number, y: number, col: string, w = 1, h = 1) {
   ctx.fillStyle = col;
   ctx.fillRect(Math.round(x), Math.round(y), w, h);
 }
 
 /** 夜空：上深下浅，星星有大有小，几颗会闪成十字 */
-function sky(ctx: CanvasRenderingContext2D, w: number, h: number, salt: number) {
+export function sky(ctx: CanvasRenderingContext2D, w: number, h: number, salt: number) {
   const g = ctx.createLinearGradient(0, 0, 0, h);
   g.addColorStop(0, '#040818');
   g.addColorStop(0.55, '#0e2042');
@@ -40,7 +40,7 @@ function sky(ctx: CanvasRenderingContext2D, w: number, h: number, salt: number) 
 }
 
 /** 极光：几条竖帘一样的光带，底下亮、往上淡，颜色从青绿渐到紫 */
-function aurora(ctx: CanvasRenderingContext2D, w: number, y0: number, len: number, salt: number, bands = 2) {
+export function aurora(ctx: CanvasRenderingContext2D, w: number, y0: number, len: number, salt: number, bands = 2) {
   for (let b = 0; b < bands; b++) {
     const base = y0 + b * len * 0.45;
     const hue = b === 0 ? [90, 255, 190] : [130, 170, 255];
@@ -64,7 +64,7 @@ function aurora(ctx: CanvasRenderingContext2D, w: number, y0: number, len: numbe
 }
 
 /** 一轮冷月，带光晕和几块月斑 */
-function moon(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
+export function moon(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
   glowAt(ctx, x, y, r * 4, 'rgba(180,220,255,0.35)');
   for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
     const d = Math.hypot(dx, dy);
@@ -75,7 +75,7 @@ function moon(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
 }
 
 /** 一层山：ridge(x) 给出山顶高度；迎光面亮、背光面暗，山顶一层雪 */
-function mountains(ctx: CanvasRenderingContext2D, w: number, base: number, ridge: (x: number) => number, pal: string[], snowLine: number, salt: number) {
+export function mountains(ctx: CanvasRenderingContext2D, w: number, base: number, ridge: (x: number) => number, pal: string[], snowLine: number, salt: number) {
   for (let x = 0; x < w; x++) {
     const top = ridge(x);
     const slope = ridge(x + 1) - ridge(x - 1);
@@ -92,7 +92,7 @@ function mountains(ctx: CanvasRenderingContext2D, w: number, base: number, ridge
 }
 
 /** 雪地：近处亮、远处带蓝影，起伏的雪堆，堆背面一道阴影 */
-function snowField(ctx: CanvasRenderingContext2D, w: number, h: number, y0: number, salt: number) {
+export function snowField(ctx: CanvasRenderingContext2D, w: number, h: number, y0: number, salt: number) {
   for (let y = y0; y < h; y++) {
     const t = (y - y0) / Math.max(1, h - y0);
     for (let x = 0; x < w; x++) {
@@ -114,7 +114,7 @@ function snowField(ctx: CanvasRenderingContext2D, w: number, h: number, y0: numb
 }
 
 /** 斜着刮的风雪：短斜线 + 小点，近大远小 */
-function blizzard(ctx: CanvasRenderingContext2D, w: number, h: number, n: number, salt: number) {
+export function blizzard(ctx: CanvasRenderingContext2D, w: number, h: number, n: number, salt: number) {
   for (let k = 0; k < n; k++) {
     const x = phash(k, 7, salt) * w;
     const y = phash(k, 8, salt) * h;
@@ -126,7 +126,7 @@ function blizzard(ctx: CanvasRenderingContext2D, w: number, h: number, n: number
 }
 
 /** 冰川墙：一块块竖着的冰柱拼起来，每块有亮面、暗面和裂纹 */
-function glacier(ctx: CanvasRenderingContext2D, x0: number, x1: number, base: number, height: (x: number) => number, salt: number) {
+export function glacier(ctx: CanvasRenderingContext2D, x0: number, x1: number, base: number, height: (x: number) => number, salt: number) {
   let x = x0;
   while (x < x1) {
     const bw = 5 + Math.floor(phash(x, 1, salt) * 7);
@@ -144,7 +144,7 @@ function glacier(ctx: CanvasRenderingContext2D, x0: number, x1: number, base: nu
 }
 
 /** 永冬裂隙：冰墙上一道锯齿形的竖裂口，里面是青白色的光，往外溢 */
-function rift(ctx: CanvasRenderingContext2D, cx: number, top: number, bottom: number, maxW: number, salt: number) {
+export function rift(ctx: CanvasRenderingContext2D, cx: number, top: number, bottom: number, maxW: number, salt: number) {
   glowAt(ctx, cx, (top + bottom) / 2, maxW * 4, 'rgba(80,230,255,0.45)');
   for (let y = top; y < bottom; y++) {
     const t = (y - top) / (bottom - top);
@@ -159,7 +159,7 @@ function rift(ctx: CanvasRenderingContext2D, cx: number, top: number, bottom: nu
 }
 
 /** 一只「永冬化」的怪：保留原图细节，叠一层冰蓝，脚下一块阴影，背后一团冷光；k 是放大倍数 */
-function frostMon(ctx: CanvasRenderingContext2D, id: string, x: number, y: number, k = 1, flip = false, glow = 'rgba(110,210,255,0.4)', tint = 0.15) {
+export function frostMon(ctx: CanvasRenderingContext2D, id: string, x: number, y: number, k = 1, flip = false, glow = 'rgba(110,210,255,0.4)', tint = 0.15) {
   const m: MonsterDef | undefined = MONSTERS[id];
   if (!m) return;
   const S = monsterFrameSize(m);
@@ -185,7 +185,7 @@ function frostMon(ctx: CanvasRenderingContext2D, id: string, x: number, y: numbe
  * 永冬领主（专门画的，不用现成怪物图）：深蓝冰甲的巨人，肩上和头上长着冰晶，白色毛皮披肩，
  * 眼睛和胸口发青光，右手拄一把冰川巨剑。原尺寸 40×52，k 倍放大。
  */
-function lordCanvas() {
+export function lordCanvas() {
   const W = 40, H = 52;
   const { c, ctx } = canvas(W, H);
   const P = (x: number, y: number, col: string) => px(ctx, x, y, col);
@@ -241,7 +241,7 @@ function lordCanvas() {
   }
   return c;
 }
-function lord(ctx: CanvasRenderingContext2D, x: number, y: number, k = 2) {
+export function lord(ctx: CanvasRenderingContext2D, x: number, y: number, k = 2) {
   const c = lordCanvas();
   glowAt(ctx, x, y - 26 * k, 30 * k, 'rgba(120,200,255,0.45)');
   for (let dx = -14 * k; dx <= 14 * k; dx++) px(ctx, x + dx, y - 1, 'rgba(20,40,80,0.35)', 1, 2);
