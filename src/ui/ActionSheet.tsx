@@ -135,7 +135,7 @@ function NodeSheet({ s, node, onClose }: { s: GameState; node: MapNode; onClose:
       <div className="sheet-head">
         <button className="back" onClick={onClose}>{tl('‹ 返回')}</button>
         <h2>{node.name}</h2>
-        <small className="muted">{isHome ? tl('家园岛屿') : REGIONS[node.region].name}{!node.town && !node.cave && ` · Lv${node.lv[0]}-${node.lv[1]}`}</small>
+        <small className="muted">{isHome ? tl('家园岛屿') : REGIONS[node.region].name}{!node.town && !node.cave && (node.lv[0] === node.lv[1] ? ` · Lv${node.lv[0]}` : ` · Lv${node.lv[0]}-${node.lv[1]}`)}</small>
       </div>
       {cats.length > 1 && (
         <div className="chips-row filter-row">

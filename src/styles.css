@@ -198,11 +198,13 @@ button.danger { background: linear-gradient(#6a2424, #4a1818); border: 0; border
 .cell.sel { box-shadow: 0 0 0 1px var(--edge), 0 0 0 2px var(--gold), inset 0 0 8px rgba(232, 184, 74, 0.35) !important; }
 .item-detail { position: sticky; bottom: 0; margin-top: 10px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 0 0 2px var(--edge), inset 0 0 0 1px var(--gold), 0 -6px 12px rgba(0, 0, 0, 0.5); }
 
-.equip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-.equip.tools { grid-template-columns: repeat(5, 1fr); }
+.equip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.equip.tools { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .slot { padding: 6px 2px; display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 58px; background: linear-gradient(#1d130c, #120b07) !important; }
 .slot small { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .slot.full small { color: var(--text); }
+/* 英文格子名长（Skinning Knife、Common T1 Sword）：最多折两行，不撑宽格子 */
+html[lang="en"] .slot small, html[lang="en"] .cell .nm { white-space: normal; text-align: center; line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .slot .empty { width: 28px; height: 28px; border: 1px dashed #4a3220; }
 
 /* ---- 技能 ---- */
@@ -459,6 +461,8 @@ html[lang=en] .wm-region { letter-spacing: 0.5px; font-size: 11px; }
 .place-row { display: flex; gap: 4px; margin-top: 4px; }
 .place-row .place { flex: 1; min-width: 0; margin: 0; }
 .place-row .walk { padding: 0 12px; flex: none; margin: 0; justify-content: center; }
+.place > small { flex: none; margin-left: 6px; white-space: nowrap; }
+.place .eta { white-space: nowrap; }
 .skill-detail .walk-to { width: 100%; padding: 9px; margin: 4px 0 2px; }
 .chip.quest .fold { margin-left: 0; background: none; border: 0; box-shadow: none; color: #e8b84a; padding: 0 4px 0 0; min-height: 0; font-size: 12px; cursor: pointer; }
 .chip.quest.folded { gap: 2px; }
