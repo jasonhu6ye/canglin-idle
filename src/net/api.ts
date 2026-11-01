@@ -327,7 +327,22 @@ export interface OnlineApi {
   aiAdd(list: { name: string; seed: number }[]): Promise<void>;
   aiRename(id: string, name: string): Promise<void>;
   aiDelete(ids: string[]): Promise<void>;
+
+  /** 全服开关（11-01）：ai_mute、ac 等，所有人能读，管理员能写 */
+  flags(): Promise<Record<string, unknown>>;
+  setFlag(key: string, value: unknown): Promise<void>;
+  /** 防作弊（11-01）：服务器时间（毫秒）；客户端发现的异常；自己的状态 */
+  serverNow(): Promise<number>;
+  reportCheat(kind: CheatKind, detail: Record<string, unknown>): Promise<void>;
+  myAc(): Promise<{ hidden: boolean; banned: boolean }>;
+  /** 管理员：可疑玩家、改状态（hide / unhide / ban / unban / clear） */
+  gmCheaters(): Promise<CheatRow[]>;
+  gmAcSet(playerId: string, action: 'hide' | 'unhide' | 'ban' | 'unban' | 'clear', note?: string): Promise<void>;
 }
+
+export type CheatKind = 'clock_local' | 'save_edit' | 'speed';
+export interface CheatFlag { kind: string; severe: boolean; detail: Record<string, unknown>; at: number }
+export interface CheatRow { playerId: string; pid: number; name: string; hidden: boolean; banned: boolean; note: string; n: number; severe: number; lastAt: number | null; flags: CheatFlag[] }
 
 /** AI 玩家：服务器只存名字和种子，其余按种子和时间算（见 bots.ts）；at 是加入时间 */
 export interface AiPlayer { id: string; name: string; seed: number; at: number }

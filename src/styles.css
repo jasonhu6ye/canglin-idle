@@ -1194,3 +1194,5 @@ button.chat-who { cursor: pointer; text-decoration: underline dotted; text-under
 .wt-chip { border-color: #3a8ac0 !important; background: linear-gradient(90deg, rgba(14, 40, 70, 0.92), rgba(30, 70, 100, 0.92)) !important; box-shadow: 0 0 8px rgba(110, 210, 255, 0.45); }
 .wt-chip .hw-chip-main { color: #dff4ff; }
 .wt-chip .hw-chip-main b { color: #9ae4ff; }
+.gm-mute { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+.gm-ac-flags { margin: 4px 0; padding-left: 14px; font-size: 12px; } .gm-ac-flags li { margin: 2px 0; }

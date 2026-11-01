@@ -1,5 +1,5 @@
 import type { GameState } from '../core/types';
-import type { AiPlayer, GmInput, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
+import type { AiPlayer, CheatKind, CheatRow, GmInput, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { GUILD_MAX, levelSnapshot } from './api';
 import { tl } from '../i18n';
 import { ITEMS } from '../core/data';
@@ -31,6 +31,8 @@ interface Db {
   gm?: GmRow[];
   gmMail?: GmMailRow[];
   ai?: AiPlayer[];
+  flags?: Record<string, unknown>;
+  cheats?: { kind: string; detail: Record<string, unknown>; at: number }[];
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -415,5 +417,18 @@ export class LocalApi implements OnlineApi {
     this.db.ai = (this.db.ai ?? []).filter((b) => !ids.includes(b.id));
     this.flush();
   }
+  // 全服开关、防作弊（11-01）：本地只记下来，测试用
+  async flags() { return { ...(this.db.flags ?? {}) }; }
+  async setFlag(key: string, value: unknown) {
+    this.db.flags = { ...(this.db.flags ?? {}), [key]: value };
+    this.flush();
+  }
+  async serverNow() { return Date.now(); }
+  async reportCheat(kind: CheatKind, detail: Record<string, unknown>) {
+    this.db.cheats = [...(this.db.cheats ?? []), { kind, detail, at: Date.now() }];
+    this.flush();
+  }
+  async myAc() { return { hidden: false, banned: false }; }
+  async gmCheaters(): Promise<CheatRow[]> { return []; }
+  async gmAcSet() { /* 本地没有别的玩家 */ }
 }
-

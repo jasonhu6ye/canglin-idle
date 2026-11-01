@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { store } from '../store';
+import { saveTampered, store } from '../store';
+import { calibrate } from '../core/clock';
 import { newGame, setSettings } from '../core/sim';
 import type { GameState } from '../core/types';
 import { online } from './index';
@@ -126,7 +127,33 @@ function startFresh(outfit?: string) {
 async function afterAuth() {
   if (!online.signedIn()) return set('login');
   if (!online.me()) return set('create');
+  // 防作弊（11-01）：进游戏前先对时间，本机时间被调过就按服务器时间重算离线收益
+  await syncClock();
+  store.recalibrate();
+  if (saveTampered && !tamperSent) { tamperSent = true; void online.reportCheat('save_edit', {}).catch(() => {}); }
+  void refreshAc();
   await resolveSave();
+}
+
+/** 向服务器对时间；本机时钟这段时间里被拨过（差值变了 2 分钟以上）就报上去 */
+let tamperSent = false;
+export async function syncClock(timeoutMs = 2500) {
+  if (!online.signedIn()) return;
+  const sentAt = Date.now();
+  const server = await Promise.race([
+    online.serverNow().catch(() => 0),
+    new Promise<number>((r) => setTimeout(() => r(0), timeoutMs)),
+  ]);
+  if (!server) return;
+  const jump = calibrate(server, sentAt, Date.now());
+  if (Math.abs(jump) > 2 * 60_000) void online.reportCheat('clock_local', { jump_min: Math.round(jump / 60_000) }).catch(() => {});
+}
+
+/** 自己有没有被移出排行榜 / 封禁（聊天页、排行榜提示用） */
+let ac = { hidden: false, banned: false };
+export const myAcStatus = () => ac;
+async function refreshAc() {
+  try { ac = await online.myAc(); fns.forEach((f) => f()); } catch { /* 拿不到就当正常 */ }
 }
 
 const wrap = async (f: () => Promise<unknown>) => {
@@ -153,6 +180,9 @@ export async function retry() {
 }
 
 export function startSync() {
+  store.beforeResume = () => syncClock();
+  // 每 5 分钟对一次时间，顺便看看自己的状态
+  setInterval(() => { if (phase === 'play') { void syncClock(); void refreshAc(); } }, 5 * 60_000);
   void retry();
   setInterval(() => { if (Date.now() - lastPush > PUSH_EVERY_MS) void pushNow(); }, 10_000);
   // 切回来时马上对一次云端：这段时间可能在别的设备上玩过
