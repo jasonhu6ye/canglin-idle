@@ -569,7 +569,7 @@ function AcTab() {
         </ul>
       )}
       <h3>{tl('检查阈值')}</h3>
-      <div className="gm-form frame">
+      <div className="gm-form gm-ac-form frame">
         {AC_FIELDS.map(([k, name]) => (
           <label key={k}><span>{name}</span><input inputMode="numeric" value={conf[k] ?? ''} onChange={(e) => setConf({ ...conf, [k]: e.target.value.replace(/[^\d.]/g, '') })} /></label>
         ))}
