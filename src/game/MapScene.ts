@@ -2213,7 +2213,7 @@ export class MapScene extends Phaser.Scene {
       const leech = c.pLeech ?? 0;
       if (leech > 0) this.time.delayedCall(hitIn + 260, () => this.float(`+${leech}`, '#6ee86a'));
     }
-    const big = this.foeSeen.m > prev.m && c.mArt === 'world';
+    const big = this.foeSeen.m > prev.m && (c.mArt === 'world' || c.mArt === 'world2');
     if (this.foeSeen.m > prev.m) this.monsterSwingFx(c.mDmg ?? -1, c.mArt, foe, m);
     if (c.respawnMs > 0 && prev.respawn <= 0) {
       this.playMon(foe, m, 'death');
@@ -2223,7 +2223,7 @@ export class MapScene extends Phaser.Scene {
       this.playMon(foe, m, 'idle');
       this.tweens.add({ targets: foe, alpha: 1, duration: 300 });
     } else if (c.respawnMs <= 0) {
-      if (big) this.playMon(foe, m, 'skill', true);
+      if (big) this.playMon(foe, m, c.mArt === 'world2' ? 'skill2' : 'skill', true);
       else if (c.monsterTimerMs > prev.timer + 200) {
         this.playMon(foe, m, 'attack', true);
         if (c.mDmg !== -2) this.lunge(foe);
@@ -2341,24 +2341,36 @@ export class MapScene extends Phaser.Scene {
     const x = this.player.x - 6;
     const y = this.player.y - 36;
     // 精英、首领的大招和首领狂怒：在怪头上喊出来
-    const world = art === 'world' && m ? WORLD_SKILL[m.id] : undefined;
+    const alt = art === 'world2';
+    const world = (art === 'world' || alt) && m ? (alt ? WORLD_SKILL[m.id]?.alt : WORLD_SKILL[m.id]) : undefined;
     const shout = world ? tl`${world.name}！` : art === 'enrage' ? tl('狂怒！') : art === 'boss' ? MONSTER_MOVES.boss.name : art === 'elite' ? MONSTER_MOVES.elite.name : '';
-    if (world && foe?.active && m) this.worldSkillFx(m, foe);
+    if (world && foe?.active && m) this.worldSkillFx(m, foe, alt);
     if (shout && foe?.active) {
-      this.popText(foe.x, foe.y - (world ? 72 : 30), shout, world ? '#ff5a3a' : art === 'enrage' ? '#ff3a3a' : '#ff8a5a', world ? 13 : art === 'elite' ? 8 : 10);
+      this.popText(foe.x, foe.y - (world && m ? Math.round(monsterFrameSize(m) * 0.75) : 30), shout, world ? '#ff5a3a' : art === 'enrage' ? '#ff3a3a' : '#ff8a5a', world ? 13 : art === 'elite' ? 8 : 10);
       if (art !== 'elite' && dmg > 0) this.cameras.main.shake(160, 0.004);
     }
     // -2：这一下打的是队友（嘲讽，10-26），自己头上不飘字
     if (dmg === -2) return;
     if (dmg < 0) return this.popText(x - 4, y, tl('闪避'), '#9ad8ff', 7);
     if (dmg === 0) return;
+    // 霜刃三连：一刀一个数字，跟着剑光一起蹦
+    if (art === 'world' && m?.id === 'wb_snow_baron') {
+      const parts = [Math.round(dmg * 0.25), Math.round(dmg * 0.3)];
+      parts.push(dmg - parts[0] - parts[1]);
+      parts.forEach((d, k) => this.time.delayedCall(260 + k * 380, () => {
+        this.hitFlash(this.playerBody, -1, 0x9fe6ff);
+        this.popText(x - 4 + (k - 1) * 6, y - k * 3, `-${d}`, k === 2 ? '#ffffff' : '#9fe6ff', k === 2 ? 10 : 8);
+      }));
+      return;
+    }
+    if (art === 'world2' && m?.id === 'wb_everfrost_giant') this.time.delayedCall(700, () => this.popText(x + 4, y - 9, tl('冻结'), '#9fe6ff', 7));
     this.hitFlash(this.playerBody, -1, 0xff5040);
     this.popText(x - 4, y, `-${dmg}`, '#ff5a4a', 8);
     if (store.state.hp < maxHp(store.state) * 0.25) this.cameras.main.flash(120, 120, 0, 0);
   }
 
   /** 世界首领的大招：场景里再配一层特效，和精灵表里画好的大招动作一起播 */
-  private worldSkillFx(m: MonsterDef, foe: Phaser.GameObjects.Sprite) {
+  private worldSkillFx(m: MonsterDef, foe: Phaser.GameObjects.Sprite, alt = false) {
     const px = this.player.x;
     const py = this.player.y - 6;
     const D = D_FLOAT - 2;
@@ -2373,6 +2385,7 @@ export class MapScene extends Phaser.Scene {
         this.tweens.add({ targets: p, x: x + Math.cos(a) * 10, y: y + Math.sin(a) * 4 - 3, alpha: 0, scale: 1.2, duration: 500, onComplete: () => p.destroy() });
       }
     };
+    if (m.winter) return this.winterSkillFx(m, foe, alt, glow, burst);
     switch (m.event ? 'pumpkin' : m.id) {
       case 'pumpkin': {
         // 南瓜炸弹：一串南瓜灯从天上落下来，落地炸出橙紫两色的火花
@@ -2474,6 +2487,111 @@ export class MapScene extends Phaser.Scene {
         this.time.delayedCall(500, () => { burst(px, py, 0xff60c0); this.cameras.main.shake(200, 0.004); });
         break;
       }
+    }
+  }
+
+  /**
+   * 永冬首领的四个大招（11-01）：精灵表里已经画了动作和近身特效，这里配远处的那一层。
+   * 永霜巨人：冰川崩落（冰刺一路炸到主角脚下 + 冲击波 + 碎冰）、永霜吐息（冻雾扑面 + 主角身上结冰壳）。
+   * 雪堡男爵：霜刃三连（三道剑气飞向主角 + 十字斩）、凛冬号令（暴雪横扫全屏 + 寒气回流）。
+   */
+  private winterSkillFx(
+    m: MonsterDef, foe: Phaser.GameObjects.Sprite, alt: boolean,
+    glow: (x: number, y: number, tint: number, scale: number) => Phaser.GameObjects.Image,
+    burst: (x: number, y: number, tint: number) => void,
+  ) {
+    const px = this.player.x;
+    const py = this.player.y - 6;
+    const D = D_FLOAT - 2;
+    const ICE = 0x9fe6ff;
+    const fy = this.player.y;
+    const flakeAt = (x: number, y: number, dx: number, dy: number, ms: number, delay = 0) => {
+      const f = this.add.image(x, y, 'p-spark').setTint(Math.random() < 0.5 ? 0xffffff : ICE).setDepth(D).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0);
+      this.tweens.add({ targets: f, x: x + dx, y: y + dy, alpha: { from: 1, to: 0 }, delay, duration: ms, onComplete: () => f.destroy() });
+    };
+    if (m.id === 'wb_everfrost_giant' && !alt) {
+      // 冰川崩落：砸地那一下（约 0.55 秒）震屏，冰刺从巨人脚下一路冒到主角脚下
+      this.time.delayedCall(560, () => {
+        this.cameras.main.shake(260, 0.007);
+        const ring = this.add.ellipse(foe.x + (px > foe.x ? 30 : -30), fy, 20, 6).setStrokeStyle(2, ICE, 1).setDepth(D - 1);
+        this.tweens.add({ targets: ring, scaleX: 7, scaleY: 7, alpha: 0, duration: 650, ease: 'Quad.easeOut', onComplete: () => ring.destroy() });
+      });
+      const n = 8;
+      for (let k = 0; k < n; k++) {
+        const q = (k + 1) / n;
+        const x = foe.x + (px - foe.x) * q + (Math.random() - 0.5) * 6;
+        const y = foe.y + (fy - foe.y) * q;
+        this.time.delayedCall(600 + k * 55, () => {
+          const sp = glow(x, y - 8, ICE, 0.14).setScale(0.07, 0.01).setOrigin(0.5, 1);
+          this.tweens.add({ targets: sp, scaleY: 0.45 + Math.random() * 0.2, duration: 90, yoyo: true, hold: 380, onComplete: () => sp.destroy() });
+          burst(x, y - 2, 0xe0f8ff);
+          for (let j = 0; j < 3; j++) flakeAt(x, y - 4, (Math.random() - 0.5) * 20, -10 - Math.random() * 14, 500);
+        });
+      }
+      this.time.delayedCall(1050, () => this.cameras.main.flash(200, 200, 235, 255));
+    } else if (m.id === 'wb_everfrost_giant') {
+      // 永霜吐息：冻雾一团团扑到主角身上，主角身上结一层冰壳 2 秒
+      for (let k = 0; k < 16; k++) {
+        const g = glow(foe.x + (px - foe.x) * 0.2, foe.y - 70, 0xcff4ff, 0.12).setAlpha(0);
+        this.tweens.add({
+          targets: g, x: px + (Math.random() - 0.5) * 30, y: py + (Math.random() - 0.5) * 16, alpha: { from: 0.9, to: 0.15 }, scale: 0.4,
+          delay: 480 + k * 40, duration: 520, ease: 'Sine.easeOut', onComplete: () => g.destroy(),
+        });
+      }
+      this.time.delayedCall(950, () => {
+        const shell = this.add.ellipse(px, py - 2, 22, 30, ICE, 0.35).setStrokeStyle(1, 0xffffff, 0.9).setDepth(D);
+        this.tweens.add({ targets: shell, alpha: 0.2, duration: 1600, delay: 300, onComplete: () => {
+          for (let j = 0; j < 10; j++) flakeAt(px, py - 2, (Math.random() - 0.5) * 30, (Math.random() - 0.5) * 24, 420);
+          shell.destroy();
+        } });
+        this.cameras.main.flash(160, 210, 240, 255);
+      });
+    } else if (m.id === 'wb_snow_baron' && !alt) {
+      // 霜刃三连：三道月牙剑气飞向主角，最后一下在主角身上炸出冰十字
+      for (let k = 0; k < 3; k++) {
+        this.time.delayedCall(200 + k * 380, () => {
+          const g = this.add.graphics().setDepth(D).setBlendMode(Phaser.BlendModes.ADD);
+          const r = 14 + k * 3;
+          g.lineStyle(4, ICE, 0.55).beginPath().arc(0, 0, r, -1.1, 1.1).strokePath();
+          g.lineStyle(1.5, 0xffffff, 1).beginPath().arc(0, 0, r, -0.9, 0.9).strokePath();
+          g.setPosition(foe.x, foe.y - 40).setRotation(Math.atan2(py - (foe.y - 40), px - foe.x) + (k === 1 ? 0.5 : k === 2 ? 0 : -0.5));
+          this.tweens.add({ targets: g, x: px, y: py, duration: 220, ease: 'Quad.easeIn', onComplete: () => {
+            this.tweens.add({ targets: g, alpha: 0, scale: 1.4, duration: 160, onComplete: () => g.destroy() });
+            burst(px, py, ICE);
+          } });
+        });
+      }
+      this.time.delayedCall(1240, () => {
+        const g = this.add.graphics().setDepth(D).setBlendMode(Phaser.BlendModes.ADD);
+        for (const [w, c, a] of [[5, ICE, 0.5], [2, 0xffffff, 1]] as const) {
+          g.lineStyle(w, c, a).beginPath().moveTo(-14, -14).lineTo(14, 14).moveTo(-14, 14).lineTo(14, -14).strokePath();
+        }
+        g.setPosition(px, py).setScale(0.3);
+        this.tweens.add({ targets: g, scale: 1.3, alpha: 0, duration: 420, ease: 'Quad.easeOut', onComplete: () => g.destroy() });
+        this.cameras.main.shake(180, 0.006);
+        for (let j = 0; j < 12; j++) flakeAt(px, py, Math.cos(j) * 26, Math.sin(j) * 18, 480);
+      });
+    } else {
+      // 凛冬号令：暴雪从右往左刮过整个画面，地上符文圈亮起，寒气流回男爵身上
+      const cam = this.cameras.main;
+      const v = cam.worldView;
+      this.time.delayedCall(500, () => {
+        const veil = this.add.rectangle(v.centerX, v.centerY, v.width, v.height, 0xcfe8ff, 0).setDepth(D - 3);
+        this.tweens.add({ targets: veil, fillAlpha: 0.22, duration: 300, yoyo: true, hold: 900, onComplete: () => veil.destroy() });
+        for (let k = 0; k < 60; k++) {
+          const y = v.y + Math.random() * v.height;
+          const x = v.right + Math.random() * 40;
+          const f = this.add.rectangle(x, y, 4 + Math.random() * 6, 1, 0xffffff, 0.8).setDepth(D).setRotation(-0.2);
+          this.tweens.add({ targets: f, x: v.x - 20, y: y + 30, delay: Math.random() * 900, duration: 500 + Math.random() * 400, onComplete: () => f.destroy() });
+        }
+        const ring = this.add.ellipse(foe.x, foe.y, 30, 9).setStrokeStyle(2, ICE, 0.9).setDepth(D - 1);
+        this.tweens.add({ targets: ring, scaleX: 3.2, scaleY: 3.2, duration: 500, ease: 'Quad.easeOut', yoyo: true, hold: 500, onComplete: () => ring.destroy() });
+      });
+      for (let k = 0; k < 10; k++) {
+        const g = glow(px + (Math.random() - 0.5) * 20, py, ICE, 0.08);
+        this.tweens.add({ targets: g, x: foe.x, y: foe.y - 40, delay: 1100 + k * 50, duration: 500, ease: 'Sine.easeIn', onComplete: () => g.destroy() });
+      }
+      this.time.delayedCall(1600, () => this.popText(foe.x, foe.y - 92, tl('寒气回流'), '#9fe6ff', 8));
     }
   }
 

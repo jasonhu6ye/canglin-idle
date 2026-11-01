@@ -103,7 +103,7 @@ describe('怪物图鉴', () => {
     expect(ring.filter((s) => s.rank === 'boss')).toHaveLength(4);
     for (const s of ring) expect(NODES.find((n) => n.id === s.home), s.id).toBeDefined();
     // 世界首领（用户 10-24）：5 个，各住一个巢穴，必掉宝库
-    const world = SPECIES.filter((s) => s.world);
+    const world = SPECIES.filter((s) => s.world && !s.winter);
     expect(world).toHaveLength(5);
     for (const s of world) {
       const lair = NODES.find((n) => n.id === s.home);

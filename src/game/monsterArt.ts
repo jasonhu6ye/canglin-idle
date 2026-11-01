@@ -3,6 +3,7 @@ import type { MonsterDef } from '../core/types';
 import { sizeOf, SIZE_PX, type Form } from '../core/bestiary';
 import { phash, Pix } from './pix';
 import { drawWorldFrame, WORLD_ANIMS, WORLD_SIZE } from './worldBossArt';
+import { drawRealmFrame, isRealmBoss, REALM_ANIMS, REALM_SIZE } from './winterBossArt';
 
 /*
  * 怪物多帧动画：按外形分 16 个画法（四足兽、飞禽、虫、蛇、人形、魔像、亡灵、植物、魔眼……），
@@ -18,7 +19,7 @@ export const MON_ANIMS = [
   { key: 'death', frames: 8, rate: 10, repeat: 0 },
 ] as const;
 /** skill：世界首领的大招动画（普通怪没有） */
-export type MonAnim = (typeof MON_ANIMS)[number]['key'] | 'skill';
+export type MonAnim = (typeof MON_ANIMS)[number]['key'] | 'skill' | 'skill2';
 export const MON_FRAMES = MON_ANIMS.reduce((n, a) => n + a.frames, 0);
 
 interface Pose {
@@ -1366,14 +1367,16 @@ export function finish(c: Pick<Ctx, 'p' | 'rank' | 'g' | 'S' | 'A'> & { o: Pick<
 }
 
 export function monsterFrameSize(m: MonsterDef) {
+  if (isRealmBoss(m)) return REALM_SIZE;
   if (m.world || m.event) return WORLD_SIZE;
   return SIZE_PX[sizeOf({ form: m.form as Form, rank: m.rank })];
 }
 
 /** 这种怪有哪些动画：世界首领多一套大招，帧数也多 */
-export const animsOf = (m: MonsterDef): readonly { key: MonAnim; frames: number; rate: number; repeat: number }[] => (m.world || m.event ? WORLD_ANIMS : MON_ANIMS);
+export const animsOf = (m: MonsterDef): readonly { key: MonAnim; frames: number; rate: number; repeat: number }[] => (isRealmBoss(m) ? REALM_ANIMS : m.world || m.event ? WORLD_ANIMS : MON_ANIMS);
 
 export function drawMonsterFrame(m: MonsterDef, anim: MonAnim, i: number): Pix {
+  if (isRealmBoss(m)) return drawRealmFrame(m, anim, i);
   if (m.world || m.event) return drawWorldFrame(m, anim, i);
   const S = monsterFrameSize(m);
   const n = MON_ANIMS.find((a) => a.key === anim)!.frames;

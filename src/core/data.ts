@@ -668,6 +668,8 @@ const BOSS_TROPHY: Record<string, [string, string]> = {
   wb_frost_colossus: [tl('永冬之核'), tl('永冬巨像胸口的冰核，周围的空气都会结霜。')],
   wb_thunder_roc: [tl('天罚雷翎'), tl('天罚雷鹏的尾翎，一直噼啪冒着电火花。')],
   wb_void_eye: [tl('虚无晶瞳'), tl('虚无魔眼的晶体瞳孔，盯着它看会头晕。')],
+  wb_everfrost_giant: [tl('永霜冰须'), tl('永霜巨人胡子上结的一绺冰须，掰不断也化不开。')],
+  wb_snow_baron: [tl('男爵冰冠'), tl('雪堡男爵头盔上的冰晶冠，冠尖还冒着寒气。')],
 };
 {
   const have = new Set(itemList.map((i) => i.id));
@@ -870,6 +872,8 @@ const monsterList: MonsterDef[] = SPECIES.map((sp, idx) => {
   // 世界首领：血量再 ×4（约同级普通怪的 40 倍），伤害、防御各 +15%
   if (sp.world) hp *= 4;
   if (sp.event) hp *= 1.6;
+  // 永冬首领是给多人一起打的：血量再 ×1.5
+  if (sp.winter) hp *= 1.5;
   let ms = FAMILY_MS[fam] + (sp.rank === 'boss' ? 400 : 0);
   if (tr.has('swift')) ms *= 0.75;
   if (tr.has('slow')) ms *= 1.25;
@@ -888,6 +892,7 @@ const monsterList: MonsterDef[] = SPECIES.map((sp, idx) => {
     art: { color: sp.color, accent: sp.accent },
     ...(sp.world ? { world: true } : {}),
     ...(sp.event ? { event: true } : {}),
+    ...(sp.winter ? { winter: true } : {}),
   };
 });
 // 野怪掉同阶的种子：普通 2%、精英 6%、Boss 25% 一次 3 颗
@@ -1640,6 +1645,8 @@ for (const b of NODES.filter((n) => SHOP_SPOTS[n.id])) {
       home.actions.push(fight(sp.id));
       continue;
     }
+    // 冰原首领只在冰原的巢穴里出现
+    if (sp.winter) continue;
     const pool = NODES.filter((n) => !n.town && !n.site && !n.cave && !n.starter && n.region === sp.region);
     const best = pool.reduce((a, b) => {
       const cost = (n: MapNode) => Math.abs(mid(n) - sp.level) + (load.get(n) ?? 0) * 6;

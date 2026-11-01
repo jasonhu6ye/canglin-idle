@@ -566,6 +566,11 @@ export const MONSTER_MOVES = {
 export const BOSS_ENRAGE = 0.3;
 /** 世界首领的专属大招（名字见 bestiary WORLD_SKILL）：每第 4 下，伤害 ×2.6 */
 export const WORLD_MOVE = { every: 4, mult: 2.6 } as const;
+/** 永冬首领两招的倍率 [第一招, 第二招] 和第二招的附加效果：冻住主角多少毫秒、首领回多少血 */
+export const WINTER_MOVES: Record<string, { mult: [number, number]; freezeMs?: number; healPct?: number }> = {
+  wb_everfrost_giant: { mult: [2.8, 1.8], freezeMs: 2000 },
+  wb_snow_baron: { mult: [3, 2], healPct: 0.03 },
+};
 const moveOf = (m: MonsterDef) => (m.rank === 'normal' ? undefined : m.world || m.event ? WORLD_MOVE : MONSTER_MOVES[m.rank]);
 
 /** 护甲套装效果：板甲每件减伤 3%，皮甲每件闪避 +2%，布甲每件暴击 +2% */
@@ -1076,8 +1081,12 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       if (enraged && !c.enraged) { c.enraged = true; c.mArt = 'enrage'; }
       const move = moveOf(m);
       const big = !!move && ((c.mSwings ?? 0) + 1) % move.every === 0;
-      if (big) c.mArt = m.world || m.event ? 'world' : m.rank;
+      // 永冬首领：两招轮流，第二招 mArt = 'world2'
+      const wm = m.winter ? WINTER_MOVES[m.id] : undefined;
+      const alt = big && !!wm && Math.floor(((c.mSwings ?? 0) + 1) / move!.every) % 2 === 0;
+      if (big) c.mArt = alt ? 'world2' : m.world || m.event ? 'world' : m.rank;
       else if (c.mArt !== 'enrage' || !enraged) c.mArt = undefined;
+      if (alt && wm?.healPct) c.monsterHp = Math.min(m.hp, c.monsterHp + Math.ceil(m.hp * wm.healPct));
       if (has('regen')) c.monsterHp = Math.min(m.hp, c.monsterHp + Math.ceil(m.hp * regenPct(m)));
       c.mSwings = (c.mSwings ?? 0) + 1;
       c.mDmg = -1;
@@ -1085,9 +1094,12 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       if (!big && aimsAtMate(s, rand)) c.mDmg = -2;
       else if (st.monsterMaxHit > 0 && rand() < st.monsterHit && rand() >= st.dodge) {
         const rage = has('berserk') && c.monsterHp < m.hp / 2 ? 1.5 : 1;
-        let dmg = Math.max(1, Math.round((1 + Math.floor(rand() * st.monsterMaxHit * rage)) * (1 - st.reduce) * (big && move ? move.mult : 1)));
+        const mult = big && move ? (wm ? wm.mult[alt ? 1 : 0] : move.mult) : 1;
+        let dmg = Math.max(1, Math.round((1 + Math.floor(rand() * st.monsterMaxHit * rage)) * (1 - st.reduce) * mult));
         if (has('venom')) dmg += Math.ceil(m.level / 8);
         if (has('lifesteal')) c.monsterHp = Math.min(m.hp, c.monsterHp + Math.ceil(dmg / 2));
+        // 永霜吐息：被冻住，下一刀晚出
+        if (alt && wm?.freezeMs) c.playerTimerMs += wm.freezeMs;
         c.mDmg = dmg;
         hurt(dmg);
       }

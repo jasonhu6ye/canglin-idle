@@ -193,6 +193,8 @@ export interface MonsterDef {
   world?: boolean;
   /** 活动限定首领（万圣节南瓜王）：要在活动祭坛召唤才能打 */
   event?: boolean;
+  /** 永冬冰原独有的限时首领（11-01）：两招大招轮流放 */
+  winter?: boolean;
   /** 副本里的怪（10-25）：哪种副本、第几层（0 起），外形和配色用 base 那只 */
   dungeon?: { kind: 'green' | 'blue'; floor: number; base: string };
 }

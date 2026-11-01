@@ -104,6 +104,8 @@ export interface Species {
   horse?: boolean;
   /** 活动限定（万圣节南瓜王）：只能在活动祭坛召唤 */
   event?: boolean;
+  /** 永冬冰原独有的限时首领（用户 11-01）：两招大招交替放，只在冰原限时刷出 */
+  winter?: boolean;
 }
 
 // [id, 名字, 等级, 区域, 外形, 级别 n/e/b, 特性（空格分隔）, 主色, 点缀色]
@@ -539,8 +541,24 @@ const WORLD_ROWS: Row[] = [
   ['wb_thunder_roc', tl('天罚雷鹏'), 110, 'thunder', 'griffin', 'b', 'swift fierce evasive', '#34345e', '#fff060', 'wb_thunder_lair'],
   ['wb_void_eye', tl('虚无魔眼'), 135, 'starsea', 'eye', 'b', 'resist_magic lifesteal thorns', '#1a1030', '#ff40a0', 'wb_void_lair'],
 ];
-/** 世界首领的专属大招：每第 4 下放一次，伤害 ×2.6 */
-export const WORLD_SKILL: Record<string, { name: string; desc: string }> = {
+/**
+ * 永冬冰原的两个限时首领（用户 11-01）：都是 125 级、冰原独有，专属 120 帧动画在 game/winterBossArt.ts。
+ * 大招每第 4 下放一次，两招轮流（第二招见 WORLD_SKILL.alt，效果见 sim WINTER_MOVES）。
+ */
+const WINTER_ROWS: Row[] = [
+  ['wb_everfrost_giant', tl('永霜巨人'), 125, 'snow', 'troll', 'b', 'armored tough slow resist_melee', '#6f8fb0', '#7fe8ff', 'realm_giant_lair'],
+  ['wb_snow_baron', tl('雪堡男爵'), 125, 'snow', 'knight', 'b', 'swift fierce resist_ranged', '#8aa0c0', '#7fe8ff', 'realm_baron_lair'],
+];
+/** 世界首领的专属大招：每第 4 下放一次，伤害 ×2.6；永冬首领有第二招 alt，和第一招轮流 */
+export const WORLD_SKILL: Record<string, { name: string; desc: string; alt?: { name: string; desc: string } }> = {
+  wb_everfrost_giant: {
+    name: tl('冰川崩落'), desc: tl('双手举起冻满冰川的巨棒砸向地面，冰刺一路炸开（伤害 ×2.8）'),
+    alt: { name: tl('永霜吐息'), desc: tl('仰头吸气，吐出一大团冻雾，被冻住的人 2 秒出不了手（伤害 ×1.8）') },
+  },
+  wb_snow_baron: {
+    name: tl('霜刃三连'), desc: tl('冰晶长剑连斩三刀，最后一下十字斩（伤害 ×3）'),
+    alt: { name: tl('凛冬号令'), desc: tl('用寒气凝出雪堡军旗插在地上，刮起暴雪，吸回 3% 血量（伤害 ×2）') },
+  },
   ...Object.fromEntries(HW_TIERS.map((_, d) => [hwBossId(d), { name: tl('南瓜炸弹'), desc: tl('高举权杖，一串燃着鬼火的南瓜灯从天而降，落地炸开') }])),
   wb_flame_dragon: { name: tl('天火流星'), desc: tl('振翅升空，喷出烈焰，天上落下一阵火流星') },
   wb_soul_tree: { name: tl('噬魂缠根'), desc: tl('地下钻出尖刺树根把人缠住，再吸走魂火') },
@@ -561,6 +579,7 @@ export const SPECIES: Species[] = [
   ...RING_ROWS.map((r) => ({ ...toSpecies(r, tierOfLevel(r[2])), ring: true })),
   ...OUTER_ROWS.map((r) => ({ ...toSpecies(r, tierOfLevel(r[2])), outer: true })),
   ...WORLD_ROWS.map((r) => ({ ...toSpecies(r, tierOfLevel(r[2])), world: true })),
+  ...WINTER_ROWS.map((r) => ({ ...toSpecies(r, tierOfLevel(r[2])), world: true, winter: true })),
   // 野马（用户 10-24）：三个地方各一种，打败有几率掉小马崽
   ...([
     ['wild_horse', tl('金穗野马'), 12, 'savanna', 'horse', 'n', 'swift', '#9a6232', '#3a2010', 'golden_plain'],
