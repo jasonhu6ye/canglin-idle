@@ -8,6 +8,13 @@ import { tl } from '../i18n';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-11-01-d', date: tl('11 月 1 日'), title: tl('世界地图标签更清爽'),
+    lines: [
+      tl('世界地图上的名字互相压住时，只留更重要的那个（城镇、首领、区域名优先），放大地图就能看到其余地点的名字。'),
+      tl('英文界面的石碑标签去掉了前缀，只写地名，区域名字距收紧，不再挤满屏幕。'),
+    ],
+  },
+  {
     id: '2026-11-01-c', date: tl('11 月 1 日'), title: tl('衣橱预览修复'),
     lines: [
       tl('衣橱里的角色预览会把伸出身体外的武器、帽尖剪掉一截，现在会按外观实际的大小完整显示。'),

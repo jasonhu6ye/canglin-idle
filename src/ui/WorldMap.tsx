@@ -12,7 +12,7 @@ import { emitToGame } from './GameCanvas';
 import { MonsterIcon } from './Bestiary';
 import { store } from '../store';
 import { FINE_POINTER } from './itemOpen';
-import { tl } from '../i18n';
+import { isEn, tl } from '../i18n';
 
 /** 缩略图每像素代表几格 */
 const STEP = Math.max(3, Math.round(MAP_W / 500));
@@ -162,6 +162,32 @@ export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: ()
     }
   };
 
+  // 标签互相压住时只留重要的：选中的 > 城镇 > 世界首领/活动 > 区域名(远看) > 特色地点 > 石碑 > 普通地点；放大后空间够了自然都会显示出来
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [vw, setVw] = useState(0);
+  useEffect(() => {
+    const f = () => setVw(window.innerWidth);
+    window.addEventListener('resize', f);
+    return () => window.removeEventListener('resize', f);
+  }, []);
+  useLayoutEffect(() => {
+    const root = canvasRef.current;
+    if (!root) return;
+    const els = [...root.querySelectorAll<HTMLElement>('[data-pri]')];
+    els.forEach((e) => { e.style.visibility = ''; });
+    const items = els.map((e) => ({ e, p: Number(e.dataset.pri), r: e.getBoundingClientRect() })).sort((a, b) => a.p - b.p);
+    const kept: DOMRect[] = [];
+    // 地点图标本身也不让普通标签压住（城镇、首领这些重要的除外）
+    const marks = [...root.querySelectorAll<HTMLElement>('.wm-node > i, .wm-node > img')].map((e) => e.getBoundingClientRect());
+    const over = (r: DOMRect, k: DOMRect, g: number) => r.left < k.right + g && r.right > k.left - g && r.top < k.bottom + g && r.bottom > k.top - g;
+    for (const it of items) {
+      const r = it.r;
+      const hit = kept.some((k) => over(r, k, 2)) || (it.p > 2 && marks.some((k) => over(r, k, -1)));
+      if (hit) it.e.style.visibility = 'hidden';
+      else kept.push(r);
+    }
+  }, [zoom, filter, sel, vw, s.waystones?.length]);
+
   const node = sel ? NODES.find((n) => n.id === sel)! : null;
   return (
     <div className="worldmap">
@@ -180,23 +206,25 @@ export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: ()
         ))}
       </div>
       <div className={`wm-scroll ${FINE_POINTER ? 'grab' : ''}`} ref={scroller} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerLeave={onPointerUp}>
-        <div className="wm-canvas" style={{ width: `${zoom * 100}%` }}>
+        <div className="wm-canvas" ref={canvasRef} style={{ width: `${zoom * 100}%` }}>
           <img src={url} alt="" draggable={false} />
           {(Object.keys(LABELS) as RegionId[]).map((r) => (
-            <span key={r} className="wm-region" style={{ left: `${LABELS[r][0] * 100}%`, top: `${LABELS[r][1] * 100}%` }}>{REGIONS[r].name}</span>
+            <span key={r} className="wm-region" data-pri={zoom < 2 ? 3 : 7} style={{ left: `${LABELS[r][0] * 100}%`, top: `${LABELS[r][1] * 100}%` }}>{REGIONS[r].name}</span>
           ))}
           {NODES.filter((n) => (!n.town || n.pond || TOWN_MARK[n.id] || n.waystone) && passes(n, filter)).map((n) => {
             const d = n.town && !n.pond ? 0 : dangerLevel(n, cl);
             const lit = n.waystone && s.waystones?.includes(n.id);
-            const name = n.waystone ? n.name.replace(tl('传说石碑·'), tl('石碑·')) : TOWN_MARK[n.id] ?? n.name;
+            // 英文石碑名都带「Waystone: 」，图标已经能看出是石碑，标签上省掉，少占一半地方（用户 11-01 嫌英文满屏乱）
+            const name = n.waystone ? (isEn ? n.name.replace(/^(Legendary )?Waystone:\s*/, '') : n.name.replace(tl('传说石碑·'), tl('石碑·'))) : TOWN_MARK[n.id] ?? n.name;
+            const pri = sel === n.id ? 0 : TOWN_MARK[n.id] ? 1 : n.world || n.event ? 2 : n.site ? 4 : n.waystone ? 5 : 6;
             const big = n.site || n.world || n.event || TOWN_MARK[n.id] || (n.waystone && filter === 'stone');
             return (
-              <button key={n.id} className={`wm-node ${sel === n.id ? 'sel' : ''} ${n.cave ? 'cave' : ''} ${n.waystone ? `stone ${lit ? 'lit' : ''}` : ''}`} style={{ left: `${(n.x / MAP_W) * 100}%`, top: `${(n.y / MAP_H) * 100}%` }}
+              <button key={n.id} className={`wm-node ${sel === n.id ? 'sel' : ''} ${n.cave ? 'cave' : ''} ${n.waystone ? `stone ${lit ? 'lit' : ''}` : ''}`} style={{ left: `${(n.x / MAP_W) * 100}%`, top: `${(n.y / MAP_H) * 100}%`, zIndex: pri <= 2 ? 3 : undefined }}
                 onClick={() => setSel(n.id)}>
                 {/* 世界首领：红色骷髅头（用户 10-24） */}
                 {n.event ? <img className="wm-skull wm-pumpkin" src={pumpkinPointUrl()} alt="" draggable={false} /> : n.world ? <img className="wm-skull" src={skullUrl()} alt="" draggable={false} /> : <i style={n.waystone ? undefined : { background: n.cave ? '#2a2030' : DANGER[d].color }} />}
                 {/* 特色地点和城镇一直标名字 */}
-                {(zoom > 1 || big) && <span className={n.event ? 'site event' : n.world ? 'site world' : big ? 'site' : ''}>{n.world ? `☠ ${name}` : name}</span>}
+                {(zoom > 1 || big) && <span data-pri={pri} className={n.event ? 'site event' : n.world ? 'site world' : big ? 'site' : ''}>{n.world ? `☠ ${name}` : name}</span>}
               </button>
             );
           })}

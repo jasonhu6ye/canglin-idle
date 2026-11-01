@@ -1272,4 +1272,7 @@ export const EN_TEXT: Record<string, string> = {
   "永冬冰晶": "Everwinter Shards",
   "衣橱预览修复": "Wardrobe preview fix",
   "衣橱里的角色预览会把伸出身体外的武器、帽尖剪掉一截，现在会按外观实际的大小完整显示。": "The wardrobe preview used to cut off weapons and hat tips that stick out past the body. Outfits now show in full.",
+  "世界地图标签更清爽": "Cleaner world map labels",
+  "世界地图上的名字互相压住时，只留更重要的那个（城镇、首领、区域名优先），放大地图就能看到其余地点的名字。": "When names on the world map overlap, only the more important one is shown (towns, bosses and region names first). Zoom in to see the rest.",
+  "英文界面的石碑标签去掉了前缀，只写地名，区域名字距收紧，不再挤满屏幕。": "Waystone labels now show just the place name, and region names are tighter, so the map is no longer crowded with text.",
 };
