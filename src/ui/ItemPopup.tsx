@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ITEMS } from '../core/data';
 import type { GameState } from '../core/types';
 import { CodexDetail } from './Codex';
+import { GearCompare } from './GearCompare';
 import { onOpenItem, onShowLoot, openItem, showLoot } from './itemOpen';
 import { Icon } from './icons';
 import { fmtNum } from './format';
@@ -16,6 +17,7 @@ export function ItemPopup({ s }: { s: GameState }) {
     <div className="item-popup" onClick={() => openItem(null)}>
       <div className="item-popup-body" onClick={(e) => e.stopPropagation()}>
         <CodexDetail s={s} id={id} reveal />
+        {ITEMS[id].equip && <GearCompare s={s} id={id} />}
         <button className="primary close" onClick={() => openItem(null)}>{tl('关闭')}</button>
       </div>
     </div>

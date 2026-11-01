@@ -1,3 +1,4 @@
+import { CompareChip, GearCompare } from './GearCompare';
 import { UI_SCALES, useUiScale } from './uiScale';
 import { gfxLevel, gfxPref, onGfx, setGfxPref, type GfxPref } from '../game/gfx';
 import { qClass } from '../core/quality';
@@ -90,6 +91,7 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
           {e.move ? '' : e.speed ? tl` · ${toolSkillNames(e.slot) || SKILLS[e.skill].name}速度 +${Math.round(e.speed * 100)}%` : ` · ${gearLine(e)}`}
         </span>
       )}
+      {e && <GearCompare s={s} id={id} />}
       <div className="go">
         {keyOf(id) && from === 'bag' && <button className="primary" disabled={!!s.dungeon || !!s.home?.inside} onClick={() => emitToGame(USE_KEY, id)}>{tl('使用（在身边开洞口）')}</button>}
         {keyOf(id) && from === 'bank' && <span className="muted">{tl('副本钥匙要放进背包才能用')}</span>}
@@ -274,6 +276,7 @@ function SlotPicker({ s, slot, name, onClose }: { s: GameState; slot: EquipSlot;
                   <b>{ITEMS[id].name}</b>{n > 1 && <small className="muted"> ×{n}</small>} <small className="muted">{from}</small>
                   <small className={ok ? 'muted' : 'bad'}>{tl`${SKILLS[e.skill].name} ${e.level} 级${ok ? '' : tl('（等级不够）')}`}</small>
                   <small className="muted">{gearStats(id)}</small>
+                  <CompareChip s={s} id={id} />
                 </div>
                 <button onClick={() => openItem(id)}>{tl('详情')}</button>
                 <button className="primary" disabled={!ok} onClick={() => { store.dispatch((g) => equip(g, id)); onClose(); }}>{cur ? tl('替换') : tl('装备')}</button>

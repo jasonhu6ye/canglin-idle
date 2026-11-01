@@ -1169,3 +1169,15 @@ button.chat-who { cursor: pointer; text-decoration: underline dotted; text-under
 .chat-chip .chat-name { color: var(--gold); font-weight: normal; }
 .chat-chip.flash { animation: chat-flash 0.9s ease-out; }
 @keyframes chat-flash { 0% { box-shadow: 0 0 0 1px var(--gold), 0 0 10px rgba(232, 200, 120, 0.6); } 100% { box-shadow: 0 0 0 1px var(--edge), 0 0 0 transparent; } }
+
+/* 装备对比（11-01） */
+.gear-compare { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border: 1px solid var(--edge); border-radius: 4px; background: rgba(0, 0, 0, 0.25); font-size: 12px; }
+.gear-compare .gc-head b { color: var(--gold); }
+.gear-compare .gc-fight { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; font-weight: bold; }
+.gear-compare table { border-collapse: collapse; width: 100%; }
+.gear-compare td { padding: 1px 6px 1px 0; white-space: nowrap; }
+.gear-compare td:first-child { width: 40%; white-space: normal; }
+.gear-compare .good, .pick-row .good { color: #8ee08a; }
+.gear-compare .bad { color: #e86a5a; }
+.item-popup-body .gear-compare { flex-shrink: 0; margin: 0; background: #241a12; border: 2px solid var(--edge); box-shadow: inset 0 0 0 1px var(--gold); }
+.item-popup-body > * { flex-shrink: 0; }
