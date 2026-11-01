@@ -214,7 +214,7 @@ function giant(w: W) {
   }
 
   const cx = 26 + shift;
-  const hip = 44 + bob + crouch;
+  const hip = 46 + bob + crouch;
   shadow(w, cx + 2, 17);
 
   // ---- 背后飘的雪（待机时一直下） ----
@@ -245,8 +245,8 @@ function giant(w: W) {
   leg(cx - 4, stepF, true);
 
   // ---- 远手 ----
-  const shF: [number, number] = [cx - 6 + lean * 0.9, hip - 21 + lean * 0.4];
-  const shN: [number, number] = [cx + 8 + lean * 0.9, hip - 20 + lean * 0.4];
+  const shF: [number, number] = [cx - 6 + lean * 0.9, hip - 24 + lean * 0.4];
+  const shN: [number, number] = [cx + 7 + lean * 0.9, hip - 23 + lean * 0.4];
   const [cdx, cdy] = dir(clubA);
   const elbowN: [number, number] = [shN[0] + dir(armN)[0] * 7, shN[1] + dir(armN)[1] * 7];
   const handN: [number, number] = [elbowN[0] + dir(armN + (armN > 2 ? -0.3 : 0.25))[0] * 6.5, elbowN[1] + dir(armN + (armN > 2 ? -0.3 : 0.25))[1] * 6.5];
@@ -272,20 +272,20 @@ function giant(w: W) {
 
   // ---- 背上的冰刺（从肩胛长出来） ----
   for (let k = 0; k < 4; k++) {
-    const bx = cx - 9 + k * 2.6 + lean * 0.8;
-    const byy = hip - 22 + k * 0.6 + lean * 0.3;
-    const h = 5 + (k % 2) * 3 + Math.sin(t * TAU + k) * 0.3;
+    const bx = cx - 7 + k * 2.4 + lean * 0.8;
+    const byy = hip - 25 + lean * 0.3;
+    const h = 3 + (k % 2) * 2 + Math.sin(t * TAU + k) * 0.3;
     F(w, [[bx - 1.4, byy + 1], [bx - 2.6 - k * 0.3, byy - h], [bx + 1.2, byy + 0.5]], k % 2 ? ice[2] : ice[1]);
     L(w, bx - 1.1, byy, bx - 2.4 - k * 0.3, byy - h + 1, ice[3], 0.3);
   }
 
   // ---- 身体：大肚腩 + 胸膛，兽皮斜挎 ----
   const tx = cx + 1 + lean;
-  const ty = hip - 11;
-  blob(w, tx, ty, 12, 11.5, skin, 71);
+  const ty = hip - 13;
+  blob(w, tx, ty, 10.5, 13, skin, 71);
   // 胸肌、肚子的明暗
-  E(w, tx + 3, ty - 4, 4.5, 3.2, skin[2]);
-  E(w, tx + 3.5, ty + 5, 6, 5, skin[2]);
+  E(w, tx + 3, ty - 5, 4.5, 3.6, skin[2]);
+  E(w, tx + 3, ty + 5, 5.5, 5, skin[2]);
   L(w, tx + 1, ty - 5, tx + 6, ty - 6, skin[3], 0.4);
   // 冰霜纹（皮肤上结的霜）
   for (let k = 0; k < 8; k++) {
@@ -294,13 +294,13 @@ function giant(w: W) {
     px(w, tx + Math.cos(a) * r, ty + Math.sin(a) * r * 1.1, ice[3]);
   }
   // 兽皮披肩：盖住后背和两肩，下沿一撮撮毛
-  blob(w, tx - 3, ty - 8, 9, 5.5, fur, 23);
+  blob(w, tx - 1, ty - 11, 10, 3.6, fur, 23);
   for (let k = 0; k < 8; k++) {
-    const x = tx - 11 + k * 2.3;
-    const y = ty - 4 + Math.abs(k - 3.5) * -0.5 + Math.sin(t * TAU + k) * 0.3;
+    const x = tx - 10 + k * 2.5;
+    const y = ty - 8 + Math.abs(k - 3.5) * 0.3 + Math.sin(t * TAU + k) * 0.3;
     F(w, [[x - 1.3, y - 1], [x + 1.3, y - 1], [x + 0.2, y + 2.2 + (k % 2)]], k % 2 ? fur[1] : fur[2]);
   }
-  E(w, tx - 5, ty - 10, 3, 1.5, fur[3]);
+  E(w, tx - 3, ty - 13, 3, 1.2, fur[3]);
   // 披肩用一根骨扣扣在胸前
   E(w, tx + 4, ty - 6, 1.3, 1, '#e8e0d0');
   // 腰带 + 冰晶带扣
@@ -319,8 +319,8 @@ function giant(w: W) {
   leg(cx + 5, stepN, false);
 
   // ---- 头 ----
-  const hx = cx + 11 + lean * 1.4 + head * 0.4;
-  const hy = hip - 25 + lean * 0.5 + head * 0.6 + crouch * 0.1;
+  const hx = cx + 4 + lean * 1.4 + head * 0.4;
+  const hy = hip - 31 + lean * 0.5 + head * 0.6 + crouch * 0.1;
   const drawHead = () => {
   // 脖子
   E(w, hx - 1, hy + 5, 4.5, 3.5, skin[1]);
@@ -357,8 +357,8 @@ function giant(w: W) {
   L(w, hx - 5.6, hy - 1.8, hx + 5.6, hy - 2.2, iron[0], 0.8);
   for (let k = 0; k < 4; k++) dot(w, hx - 4 + k * 2.6, hy - 2, iron[3]);
   // 冰角：往后上方弯
-  chain(w, [[hx - 3, hy - 5.5], [hx - 7, hy - 9], [hx - 8, hy - 14]], 1.8, 0.5, (k) => (k % 3 ? ice[2] : ice[3]), 10);
-  chain(w, [[hx + 2, hy - 6.8], [hx + 2.5, hy - 11], [hx + 0.5, hy - 15]], 1.6, 0.4, (k) => (k % 3 ? ice[1] : ice[2]), 10);
+  chain(w, [[hx - 3, hy - 5.5], [hx - 6.5, hy - 8], [hx - 7.5, hy - 11.5]], 1.8, 0.5, (k) => (k % 3 ? ice[2] : ice[3]), 10);
+  chain(w, [[hx + 2, hy - 6.8], [hx + 2.5, hy - 10], [hx + 1, hy - 12.5]], 1.6, 0.4, (k) => (k % 3 ? ice[1] : ice[2]), 10);
   // 盔顶冰晶冠
   for (let k = 0; k < 3; k++) F(w, [[hx - 2 + k * 2, hy - 7], [hx - 1.4 + k * 2, hy - 9.5 - (k % 2) * 1.2], [hx - 0.6 + k * 2, hy - 7]], k % 2 ? ice[3] : ice[2]);
 
