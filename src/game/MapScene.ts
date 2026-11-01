@@ -40,7 +40,7 @@ import {
   WANDERERS, type PropKind,
   warmNav,
 } from './world';
-import { tl } from '../i18n';
+import { isEn, tl } from '../i18n';
 
 /** 步行速度（格/秒）。以后的坐骑在这上面乘倍率 */
 export { WALK_TILES_PER_SEC };
@@ -1079,7 +1079,9 @@ export class MapScene extends Phaser.Scene {
       st.img.setTexture(`waystone-${lit ? 'on' : 'off'}`);
       st.glow.setAlpha(lit ? 0.55 : 0);
       const n = WAYSTONES.find((x) => x.id === id)!;
-      st.text.setText(lit ? n.name : tl`${n.name}\n（未激活）`).setColor(lit ? '#c8f4ff' : '#b0a898');
+      // 英文石碑名「Waystone: X」太长，场景里本来就画着石碑，只写地名
+      const nm = isEn ? n.name.replace(/^(Legendary )?Waystone:\s*/, '') : n.name;
+      st.text.setText(lit ? nm : tl`${nm}\n（未激活）`).setColor(lit ? '#c8f4ff' : '#b0a898');
     }
   }
 

@@ -3,12 +3,15 @@ import { useSyncExternalStore } from 'react';
 import { nodeOfAction } from './core/data';
 import { advance, LOG_CAP, mergeSummary, migrate, moveSpeed, newGame, walkPos } from './core/sim';
 import { stepMail } from './core/mail';
+import { gameNow, saveSig } from './core/clock';
 import type { CombatLogEntry, GameState, Summary } from './core/types';
 
 const SAVE_KEY = 'canglin-idle-save-v1';
 /** 本机备份（10-27）：每 10 分钟另存一份，主存档读不出来时用它，不至于整个档没了 */
 const BACKUP_KEY = 'canglin-idle-save-bak';
 const BACKUP_EVERY_MS = 10 * 60_000;
+/** 存档签名（11-01 防作弊）：存档被手动改过时对不上 */
+const SIG_KEY = 'canglin-idle-save-sig';
 const LOG_KEY = 'canglin-combat-log';
 const TICK_MS = 200;
 const SAVE_EVERY_MS = 5000;
@@ -29,10 +32,14 @@ function parse(raw: string | null): GameState | null {
   }
 }
 
+/** 读档时发现本地存档被改过（登录后报给服务器） */
+export let saveTampered = false;
 function load(): GameState {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     const s = parse(raw);
+    const sig = localStorage.getItem(SIG_KEY);
+    if (s && raw && sig && sig !== saveSig(raw)) saveTampered = true;
     if (s) return s;
     // 读不出来的旧存档先另存一份，再用备份；备份也没有才开新档
     if (raw) localStorage.setItem(`${SAVE_KEY}-broken-${Date.now()}`, raw);
@@ -41,7 +48,7 @@ function load(): GameState {
   } catch {
     // 无法访问 localStorage（隐私模式等）时开新档
   }
-  return newGame(Date.now());
+  return newGame(gameNow());
 }
 
 class Store {
@@ -83,6 +90,31 @@ class Store {
     this.emit();
   }
 
+  /** 读档时的存档（还没结算离线收益），对过服务器时间后可能要重算 */
+  private loaded: GameState | null = null;
+  private loadedSkew = 0;
+  /** 读档后玩家动过（点了按钮、种了田）就不再重算 */
+  private touched = false;
+  /** 切回前台结算前要做的事（联机时对时间），由 sync.ts 设置 */
+  beforeResume: () => Promise<unknown> = async () => {};
+  /**
+   * 登录后对过服务器时间：本机时间被调快过的话，读档时多算的离线收益不算，按正确的时间重新结算。
+   * 只在进游戏前（玩家还没动过）做。
+   */
+  recalibrate() {
+    if (!this.loaded || this.touched || this.inactive) return;
+    const loaded = this.loaded;
+    this.loaded = null;
+    const now = gameNow();
+    // 读档时用的时间和校准后的差不多：不用重算
+    if (Math.abs(now - Date.now() - this.loadedSkew) < 60_000) return;
+    const { state, summary } = advance(loaded, now);
+    this.state = stepMail(state, now);
+    this.offline = summary.elapsedMs >= OFFLINE_POPUP_MS ? summary : null;
+    this.save();
+    this.emit();
+  }
+
   /** 游戏在另一个页面（tab）或另一台设备（device）上开着：这边停下，不再存档 */
   inactive = false;
   inactiveWhy: 'tab' | 'device' = 'tab';
@@ -102,14 +134,17 @@ class Store {
     const loaded = load();
     // 刚读档：备份一份能读的（读档时备份最可靠）
     try { localStorage.setItem(BACKUP_KEY, JSON.stringify(loaded)); } catch { /* 存不了就算了 */ }
-    const { state, summary } = advance(loaded, Date.now());
-    this.state = stepMail(state, Date.now());
+    this.loaded = loaded;
+    this.loadedSkew = gameNow() - Date.now();
+    const { state, summary } = advance(loaded, gameNow());
+    this.state = stepMail(state, gameNow());
     this.absorb(summary);
     if (summary.elapsedMs >= OFFLINE_POPUP_MS) this.offline = summary;
     setInterval(() => this.tick(), TICK_MS);
     document.addEventListener('visibilitychange', () => {
       // 切回前台时可能隔了很久，也走离线弹窗
-      if (document.visibilityState === 'visible') this.tick(true);
+      // 先向服务器对一下时间（最多等 2.5 秒），免得改了系统时间回来白拿离线收益
+      if (document.visibilityState === 'visible') void this.beforeResume().finally(() => this.tick(true));
       else { this.hiddenAt = Date.now(); this.save(); }
     });
     window.addEventListener('pagehide', () => this.save());
@@ -117,8 +152,8 @@ class Store {
 
   private tick(fromBackground = false) {
     if (this.inactive) return;
-    const { state, summary } = advance(this.state, Date.now());
-    this.state = stepMail(state, Date.now());
+    const { state, summary } = advance(this.state, gameNow());
+    this.state = stepMail(state, gameNow());
     this.absorb(summary);
     const hidden = document.visibilityState === 'hidden';
     // 在后台、或者一下子结算了很久（锁屏回来定时器先跑了）：都记进离开期间的收获
@@ -154,7 +189,8 @@ class Store {
   /** 玩家操作：先结算到当前时刻再应用，避免丢进度 */
   dispatch(fn: (s: GameState) => GameState) {
     if (this.inactive) return;
-    const { state, summary } = advance(this.state, Date.now());
+    this.touched = true;
+    const { state, summary } = advance(this.state, gameNow());
     this.absorb(summary, true);
     this.state = fn(state);
     this.save();
@@ -163,7 +199,8 @@ class Store {
 
   /** 种田操作：先结算到现在，再种 / 浇 / 收，收获的东西也记进日志、弹提示 */
   farm(fn: (s: GameState, now: number) => { state: GameState; summary: Summary }) {
-    const now = Date.now();
+    this.touched = true;
+    const now = gameNow();
     const { state, summary } = advance(this.state, now);
     this.absorb(summary, true);
     const r = fn(state, now);
@@ -210,7 +247,7 @@ class Store {
   }
 
   reset() {
-    this.state = newGame(Date.now());
+    this.state = newGame(gameNow());
     this.combatLog = [];
     this.logDirty = true;
     this.offline = null;
@@ -224,6 +261,7 @@ class Store {
     try {
       const raw = JSON.stringify(this.state);
       localStorage.setItem(SAVE_KEY, raw);
+      localStorage.setItem(SIG_KEY, saveSig(raw));
       if (Date.now() - this.lastBackup > BACKUP_EVERY_MS) {
         this.lastBackup = Date.now();
         localStorage.setItem(BACKUP_KEY, raw);

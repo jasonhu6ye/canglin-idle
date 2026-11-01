@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { GM_KINDS, GM_KIND_NAME, GM_PCT_MAX } from '../core/gm';
 import type { GmKind } from '../core/types';
-import { online, type AiPlayer, type GmInput, type GmMailRow, type GmRow } from '../net';
-import { aiPlayers, botDoing, botName, botOnline, botPresence, botProfile, habitOf, refreshBots, zoneOf } from '../net/bots';
+import { online, type AiPlayer, type CheatRow, type GmInput, type GmMailRow, type GmRow } from '../net';
+import { aiPlayers, botDoing, botsMuted, setBotsMuted, botName, botOnline, botPresence, botProfile, habitOf, refreshBots, zoneOf } from '../net/bots';
 import { actionName } from './format';
 import { emitToGame } from './GameCanvas';
 import { ITEMS } from '../core/data';
@@ -45,7 +45,7 @@ const left = (ms: number) => {
 };
 
 export function GmPanel({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<'buff' | 'mail' | 'gear' | 'ai'>('buff');
+  const [tab, setTab] = useState<'buff' | 'mail' | 'gear' | 'ai' | 'ac'>('buff');
   return (
     <div className="page guild gm-panel">
       <div className="sheet-head">
@@ -58,8 +58,9 @@ export function GmPanel({ onClose }: { onClose: () => void }) {
         <button className={`pill ${tab === 'mail' ? 'on' : ''}`} onClick={() => setTab('mail')}>{tl('赠送物品')}</button>
         <button className={`pill ${tab === 'gear' ? 'on' : ''}`} onClick={() => setTab('gear')}>{tl('赠送装备')}</button>
         <button className={`pill ${tab === 'ai' ? 'on' : ''}`} onClick={() => setTab('ai')}>{tl('AI 玩家')}</button>
+        <button className={`pill ${tab === 'ac' ? 'on' : ''}`} onClick={() => setTab('ac')}>{tl('防作弊')}</button>
       </div>
-      {tab === 'buff' ? <BuffTab /> : tab === 'ai' ? <AiTab onClose={onClose} /> : <MailTab key={tab} gear={tab === 'gear'} />}
+      {tab === 'buff' ? <BuffTab /> : tab === 'ai' ? <AiTab onClose={onClose} /> : tab === 'ac' ? <AcTab /> : <MailTab key={tab} gear={tab === 'gear'} />}
     </div>
   );
 }
@@ -433,6 +434,12 @@ function AiTab({ onClose }: { onClose: () => void }) {
           <button disabled={busy || !list.length} onClick={delNewest}>{tl('删除最新的')}</button>
           <button disabled={busy || !list.length} onClick={() => confirm(tl`删掉全部 ${list.length} 个 AI 玩家？`) && del(list.map((b) => b.id), tl('已删除全部 AI 玩家'))}>{tl('全部删除')}</button>
         </div>
+        <div className="gm-mute">
+          <span>{tl('世界频道发言')}</span>
+          <button className={`pill ${botsMuted() ? '' : 'on'}`} disabled={busy} onClick={() => void run(() => setBotsMuted(false), tl('AI 玩家恢复在世界频道说话'))}>{tl('允许')}</button>
+          <button className={`pill ${botsMuted() ? 'on' : ''}`} disabled={busy} onClick={() => void run(() => setBotsMuted(true), tl('AI 玩家已全部闭嘴，不在世界频道说话'))}>{tl('全部闭嘴')}</button>
+          <small className="muted">{tl('全服生效，其他玩家 2 分钟内同步')}</small>
+        </div>
         <p className="muted">{tl`现在有 ${list.length} 个 AI 玩家，${list.filter((b) => botOnline(b)).length} 个在线。名字、外观、等级随机，加进来后每天慢慢升级；每个 AI 有自己的时区和习惯：有的天天肝，有的隔几天才上来一次，三分之一基本不说话`}</p>
         {msg && <p className={msg.ok ? 'good' : 'warn'}>{msg.text}</p>}
       </div>
@@ -465,6 +472,110 @@ function AiTab({ onClose }: { onClose: () => void }) {
           })}
         </ul>
       )}
+    </>
+  );
+}
+
+/*
+ * 防作弊（11-01）：服务器在上传存档 / 排行榜时检查，客户端发现改系统时间、改本地存档也会报上来。
+ * 严重的自动移出排行榜，这里看记录、解除、封禁（封禁 = 不上排行榜、不能在世界频道说话）。
+ */
+const AC_KIND: Record<string, string> = {
+  xp: tl('经验涨得太快'), coins: tl('金币涨得太快'), clock: tl('游戏时间比真实时间快（改系统时间）'), rank: tl('排行榜数据和存档对不上'),
+  xp_drop: tl('经验变少了'), clock_local: tl('游戏中改了系统时间'), save_edit: tl('本地存档被改过'), speed: tl('游戏速度异常'),
+};
+const AC_DEFAULT = { xp_per_hour: 6000000, coins_per_hour: 50000000, drift_min: 30, auto_hide: 1 };
+const AC_FIELDS: [keyof typeof AC_DEFAULT, string][] = [
+  ['xp_per_hour', tl('每小时经验上限')], ['coins_per_hour', tl('每小时金币上限')], ['drift_min', tl('游戏时间允许超前（分钟）')], ['auto_hide', tl('严重的自动移出排行榜（1 开 / 0 关）')],
+];
+function acDetail(d: Record<string, unknown>) {
+  const n = (k: string) => fmtNum(Number(d[k] ?? 0));
+  if ('gain' in d) return tl`${d.hours} 小时涨了 ${n('gain')}，上限 ${n('cap')}`;
+  if ('ahead_min' in d) return tl`存档时间比服务器快 ${n('ahead_min')} 分钟`;
+  if ('game_min' in d) return tl`真实 ${n('real_min')} 分钟，游戏走了 ${n('game_min')} 分钟`;
+  if ('rank_xp' in d) return tl`排行榜经验 ${n('rank_xp')}，存档经验 ${n('save_xp')}`;
+  if ('jump_min' in d) return tl`系统时间跳了 ${n('jump_min')} 分钟`;
+  return Object.keys(d).length ? JSON.stringify(d) : '';
+}
+function AcTab() {
+  const [rows, setRows] = useState<CheatRow[] | null>(null);
+  const [conf, setConf] = useState<Record<string, string>>({});
+  const [open, setOpen] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = async () => {
+    try {
+      const [r, f] = await Promise.all([online.gmCheaters(), online.flags()]);
+      setRows(r);
+      const ac = { ...AC_DEFAULT, ...((f.ac as Record<string, number>) ?? {}) };
+      setConf(Object.fromEntries(Object.entries(ac).map(([k, v]) => [k, String(v)])));
+    } catch (e) {
+      setMsg({ text: (e as Error).message, ok: false });
+      setRows([]);
+    }
+  };
+  useEffect(() => { void load(); }, []);
+  const run = async (f: () => Promise<void>, ok: string) => {
+    setBusy(true);
+    try { await f(); setMsg({ text: ok, ok: true }); await load(); } catch (e) { setMsg({ text: (e as Error).message, ok: false }); }
+    setBusy(false);
+  };
+  const saveConf = () => {
+    const v: Record<string, number> = {};
+    for (const [k] of AC_FIELDS) {
+      const x = Number(conf[k]);
+      if (!Number.isFinite(x) || x < 0) return setMsg({ text: tl('阈值要填不小于 0 的数字'), ok: false });
+      v[k] = x;
+    }
+    void run(() => online.setFlag('ac', v), tl('阈值已保存'));
+  };
+  const act = (r: CheatRow, a: 'hide' | 'unhide' | 'ban' | 'unban' | 'clear', ok: string, ask?: string) => {
+    if (ask && !confirm(ask)) return;
+    void run(() => online.gmAcSet(r.playerId, a), ok);
+  };
+  const list = rows ?? [];
+  return (
+    <>
+      <h3>{tl('防作弊')} <small className="muted">{tl('上传存档时服务器按真实时间检查经验、金币、游戏时间和排行榜数据；游戏里改系统时间、改本地存档也会记下来')}</small></h3>
+      {msg && <p className={msg.ok ? 'good' : 'warn'}>{msg.text}</p>}
+      <h3>{tl('可疑玩家')} <small className="muted">{tl`${list.length} 人`}</small></h3>
+      {rows == null ? <p className="muted">{tl('读取中…')}</p> : !list.length ? <p className="muted">{tl('还没有可疑记录')}</p> : (
+        <ul className="gm-list">
+          {list.map((r) => (
+            <li key={r.playerId} className="frame">
+              <div>
+                <b>{r.name}</b> <small className="muted">#{r.pid}</small>
+                {r.banned ? <b className="warn"> {tl('已封禁')}</b> : r.hidden ? <b className="warn"> {tl('已移出排行榜')}</b> : null}
+              </div>
+              <small className="muted">{tl`${r.n} 条记录（严重 ${r.severe}）`}{r.lastAt ? tl` · 最近 ${new Date(r.lastAt).toLocaleString()}` : ''}{r.note ? ` · ${r.note}` : ''}</small>
+              {open === r.playerId && (
+                <ul className="gm-ac-flags">
+                  {r.flags.map((f, i) => (
+                    <li key={i}><b className={f.severe ? 'warn' : ''}>{AC_KIND[f.kind] ?? f.kind}</b> <small className="muted">{new Date(f.at).toLocaleString()} · {acDetail(f.detail)}</small></li>
+                  ))}
+                </ul>
+              )}
+              <div className="gm-row-tools">
+                <button className="pill" onClick={() => setOpen(open === r.playerId ? null : r.playerId)}>{open === r.playerId ? tl('收起') : tl('看记录')}</button>
+                {r.hidden && !r.banned && <button className="pill" disabled={busy} onClick={() => act(r, 'unhide', tl`${r.name} 回到排行榜`)}>{tl('放回排行榜')}</button>}
+                {!r.hidden && !r.banned && <button className="pill" disabled={busy} onClick={() => act(r, 'hide', tl`${r.name} 已移出排行榜`)}>{tl('移出排行榜')}</button>}
+                {r.banned
+                  ? <button className="pill" disabled={busy} onClick={() => act(r, 'unban', tl`已解封 ${r.name}`)}>{tl('解封')}</button>
+                  : <button className="pill" disabled={busy} onClick={() => act(r, 'ban', tl`已封禁 ${r.name}`, tl`封禁 ${r.name}？不上排行榜、不能在世界频道说话`)}>{tl('封禁')}</button>}
+                <button className="pill" disabled={busy} onClick={() => act(r, 'clear', tl`已清除 ${r.name} 的记录`, tl`清除 ${r.name} 的全部记录（误判时用）？`)}>{tl('清除记录')}</button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      <h3>{tl('检查阈值')}</h3>
+      <div className="gm-form gm-ac-form frame">
+        {AC_FIELDS.map(([k, name]) => (
+          <label key={k}><span>{name}</span><input inputMode="numeric" value={conf[k] ?? ''} onChange={(e) => setConf({ ...conf, [k]: e.target.value.replace(/[^\d.]/g, '') })} /></label>
+        ))}
+        <p className="muted">{tl('默认值按满级角色最快的经验和金币速度留了几倍余量；GM 经验增益期间自动按比例放宽，GM 邮件送的金币不算。超过上限 3 倍（金币 5 倍）算严重。')}</p>
+        <div className="gm-actions"><button className="primary" disabled={busy} onClick={saveConf}>{tl('保存')}</button></div>
+      </div>
     </>
   );
 }

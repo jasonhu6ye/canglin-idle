@@ -1,6 +1,6 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js';
 import type { GameState, GmBuff } from '../core/types';
-import type { GmInput, GmMail, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildDay, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
+import type { CheatKind, CheatRow, GmInput, GmMail, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildDay, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { levelSnapshot } from './api';
 import type { TaskSpec } from '../core/guild';
 import { fastOf, readFast, slowKey, withMove, type Fast } from './presenceSync';
@@ -555,6 +555,34 @@ export class SupabaseApi implements OnlineApi {
   async aiDelete(ids: string[]) {
     const r = ok(await this.sb.from('ai_players').delete().in('id', ids).select('id'));
     if (!r?.length) throw new Error(tl('没有权限，或者这条已经删掉了'));
+  }
+  // ---- 全服开关、防作弊（11-01）----
+  async flags() {
+    const rows: Row[] = ok(await this.sb.from('game_flags').select('key,value'));
+    return Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  }
+  async setFlag(key: string, value: unknown) {
+    ok(await this.sb.from('game_flags').upsert({ key, value, updated_at: new Date().toISOString() }));
+  }
+  async serverNow() { return Number(ok(await this.sb.rpc('server_now'))); }
+  async reportCheat(kind: CheatKind, detail: Record<string, unknown>) {
+    if (!this.profile) return;
+    ok(await this.sb.rpc('report_cheat', { p_kind: kind, p_detail: detail }));
+  }
+  async myAc() {
+    const rows = ok(await this.sb.rpc('my_ac')) as Row[];
+    return { hidden: !!rows?.[0]?.hidden, banned: !!rows?.[0]?.banned };
+  }
+  async gmCheaters() {
+    const rows = ok(await this.sb.rpc('gm_cheaters', { p_limit: 200 })) as Row[];
+    return rows.map((r): CheatRow => ({
+      playerId: r.player_id, pid: Number(r.pid), name: r.name, hidden: !!r.hidden, banned: !!r.banned, note: r.note ?? '',
+      n: Number(r.n), severe: Number(r.severe), lastAt: r.last_at ? Date.parse(r.last_at) : null,
+      flags: (Array.isArray(r.flags) ? r.flags : []).map((f: Row) => ({ kind: f.kind, severe: !!f.severe, detail: f.detail ?? {}, at: Date.parse(f.at) })),
+    }));
+  }
+  async gmAcSet(playerId: string, action: 'hide' | 'unhide' | 'ban' | 'unban' | 'clear', note?: string) {
+    ok(await this.sb.rpc('gm_ac_set', { p_player: playerId, p_action: action, p_note: note ?? null }));
   }
 }
 const toGmMail = (r: Row): GmMail => ({

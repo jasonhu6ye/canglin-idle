@@ -2,17 +2,45 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { setSettings } from '../core/sim';
 import type { GameState } from '../core/types';
 import { hwHasSkin } from '../core/halloween';
-import { HERO_ANIMS, HERO_H, HERO_PAD, HERO_W, OUTFITS, paintHeroSheet, type Outfit } from '../game/hero';
+import { FRAME_H, FRAME_W, HERO_ANIMS, HERO_H, HERO_PAD, HERO_W, OUTFITS, paintHeroSheet, type Outfit } from '../game/hero';
 import { store } from '../store';
 import { tl } from '../i18n';
 
 /** 衣橱只展示正面待机（用户 10-30：不用轮播其他动作） */
 const PREVIEW = 'idle-down';
 
-/** 衣橱里的小人：正面待机动作循环播放 */
+/**
+ * 衣橱里的小人：正面待机动作循环播放。
+ * 有的外观带长柄武器/翅膀（镰刀、棺材、冰火法杖），会伸出人物格子外面，
+ * 以前只截人物格子会把武器头剪掉（用户 11-01），现在按这套外观实际画到的范围来截。
+ */
+function previewBox(sheet: ReturnType<typeof paintHeroSheet>, key: string) {
+  let x0 = HERO_PAD.l, y0 = HERO_PAD.t, x1 = HERO_PAD.l + HERO_W - 1, y1 = HERO_PAD.t + HERO_H - 1;
+  const ctx = sheet.canvas.getContext('2d');
+  if (ctx) {
+    for (const f of sheet.frames) {
+      if (!f.name.startsWith(`${key}-`)) continue;
+      const d = ctx.getImageData(f.x, f.y, FRAME_W, FRAME_H).data;
+      for (let y = 0; y < FRAME_H; y++) {
+        for (let x = 0; x < FRAME_W; x++) {
+          if (!d[(y * FRAME_W + x) * 4 + 3]) continue;
+          if (x < x0) x0 = x; if (x > x1) x1 = x;
+          if (y < y0) y0 = y; if (y > y1) y1 = y;
+        }
+      }
+    }
+  }
+  // 左右对称地放宽，人物保持在正中间
+  const c = HERO_PAD.l + HERO_W / 2;
+  const half = Math.max(c - x0, x1 + 1 - c);
+  const x = Math.max(0, Math.floor(c - half));
+  return { x, y: y0, w: Math.min(FRAME_W, Math.ceil(c + half)) - x, h: y1 + 1 - y0 };
+}
+
 export function HeroPreview({ outfit, scale = 3 }: { outfit: Outfit; scale?: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const sheet = useMemo(() => paintHeroSheet(outfit), [outfit]);
+  const box = useMemo(() => previewBox(sheet, PREVIEW), [sheet]);
   useEffect(() => {
     const a = HERO_ANIMS.find((x) => x.key === PREVIEW)!;
     let tick = 0;
@@ -20,15 +48,17 @@ export function HeroPreview({ outfit, scale = 3 }: { outfit: Outfit; scale?: num
       const ctx = ref.current?.getContext('2d');
       if (!ctx) return;
       const f = sheet.frames.find((x) => x.name === `${a.key}-${tick % a.frames}`)!;
-      ctx.clearRect(0, 0, HERO_W, HERO_H);
-      ctx.drawImage(sheet.canvas, f.x + HERO_PAD.l, f.y + HERO_PAD.t, HERO_W, HERO_H, 0, 0, HERO_W, HERO_H);
+      ctx.clearRect(0, 0, box.w, box.h);
+      ctx.drawImage(sheet.canvas, f.x + box.x, f.y + box.y, box.w, box.h, 0, 0, box.w, box.h);
       tick++;
     };
     draw();
     const id = setInterval(draw, 1000 / a.rate);
     return () => clearInterval(id);
-  }, [sheet]);
-  return <canvas ref={ref} width={HERO_W} height={HERO_H} className="pix" style={{ width: HERO_W * scale, height: HERO_H * scale }} />;
+  }, [sheet, box]);
+  // 特别宽/高的外观稍微缩小一点，不把旁边的文字和格子挤开
+  const k = scale * Math.min(1, (HERO_W * 1.6) / box.w, (HERO_H * 1.3) / box.h);
+  return <canvas ref={ref} width={box.w} height={box.h} className="pix" style={{ width: box.w * k, height: box.h * k }} />;
 }
 
 export function Wardrobe({ s, onClose }: { s: GameState; onClose: () => void }) {
