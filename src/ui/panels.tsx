@@ -36,6 +36,7 @@ import { FINE_POINTER, openItem, showLoot } from './itemOpen';
 import { openGuide } from './Guide';
 import { openNews } from './News';
 import { openHalloween } from './Halloween';
+import { openWinterNotice } from './WinterNotice';
 import { hwOpen } from '../core/halloween';
 import { stopText } from './hud';
 import { actionName } from './format';
@@ -582,6 +583,8 @@ export function MorePanel({ s }: { s: GameState }) {
       <button className="primary" onClick={() => setPage('settings')}>{tl('打开设置')}</button>
       <h2>{tl('排行榜 ')}<small className="muted">{tl('总等级、战斗等级、各技能')}</small></h2>
       <button className="primary" onClick={() => setPage('rank')}>{tl('查看排行榜')}</button>
+      <h2>{tl('永冬之裔 ')}<small className="muted">{tl('限时活动预告 · 即将开放')}</small></h2>
+      <button className="primary" onClick={openWinterNotice}>{tl('查看活动预告')}</button>
       {hwOpen(Date.now()) && <>
         <h2>{tl('万圣节活动 ')}<small className="muted">{tl('11 月 1 日结束')}</small></h2>
         <button className="primary" onClick={openHalloween}>{tl('查看活动说明')}</button>

@@ -4,6 +4,7 @@ import { avBannerUrl, avCampUrl, avChestsUrl, avGatesUrl, avMapUrl, avResUrl } f
 import { tl } from '../i18n';
 import { guideShowing, onGuideClosed } from './Guide';
 import { newsPending, onNewsClosed } from './News';
+import { winterDone } from './WinterNotice';
 
 /**
  * 「异域之路」预告（用户 10-30：弹出即将更新的异域公告，带贴图和玩法介绍，参考 Albion 的阿瓦隆之路）。
@@ -26,6 +27,8 @@ export function AvalonNotice() {
         if (guideShowing() || newsPending() || localStorage.getItem(SEEN) || !localStorage.getItem('canglin-guide-seen')) return;
         // 排在副本公告、万圣节公告后面，一次只弹一个
         if (!localStorage.getItem('canglin-dg-notice')) return;
+        // 永冬之裔预告每次登录都先弹，关掉以后再轮到这个
+        if (!winterDone()) return;
         if (hwOpen(Date.now()) && !localStorage.getItem('canglin-hw-notice')) return;
       } catch { return; }
       setOpen(true);

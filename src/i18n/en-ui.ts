@@ -982,4 +982,8 @@ export const EN_UI: Record<string, string> = {
   "对着正在打的 {0}": "vs. your current target, {0}",
   "按战斗等级附近的怪估算": "estimated vs. monsters near your combat level",
   "换上会卸下 {0}": "Equipping this unequips {0}",
+  "限时活动即将开放": "limited event coming soon",
+  "预告": "Preview",
+  "永冬之裔 ": "Scions of Everwinter ",
+  "查看活动预告": "View event preview",
 };

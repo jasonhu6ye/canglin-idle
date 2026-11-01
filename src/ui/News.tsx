@@ -8,6 +8,13 @@ import { tl } from '../i18n';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-11-01-b', date: tl('11 月 1 日'), title: tl("活动预告：永冬之裔"),
+    lines: [
+      tl("新的限时活动「永冬之裔」即将开放：活动期间野外会随机刷出永冬生物，打倒它们收集永冬冰晶，兑换限定外观、坐骑和家园冰雕。"),
+      tl("主界面任务卡片上方的「永冬之裔」按钮和「更多」页可以随时打开活动预告。"),
+    ],
+  },
+  {
     id: '2026-11-01-a', date: tl('11 月 1 日'), title: tl("新功能：装备对比"),
     lines: [
       tl("看装备详情时会和身上同一栏的装备逐项对比，变好的绿色 ▲、变差的红色 ▼。"),

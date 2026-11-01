@@ -17,6 +17,7 @@ import { Mailbox } from './ui/Mailbox';
 import { DungeonHud, DungeonPopups } from './ui/Dungeon';
 import { DungeonNotice } from './ui/DungeonNotice';
 import { AvalonNotice } from './ui/AvalonNotice';
+import { WinterChip, WinterNotice } from './ui/WinterNotice';
 import { Guide, openGuide } from './ui/Guide';
 import { News } from './ui/News';
 import { HalloweenChip, HalloweenNotice } from './ui/Halloween';
@@ -325,7 +326,7 @@ function Game() {
             {!s.dungeon && <QueuePanel s={s} />}
             <BuffBar s={s} region={region} />
               </div>
-          <StatusChips s={s} extra={<><HalloweenChip s={s} /><QuestCard s={s} onGo={openNode} /></>} log={combatLog ? <CombatLog onClose={() => setCombatLog(false)} /> : null} chat={<ChatChip />} />
+          <StatusChips s={s} extra={<><WinterChip /><HalloweenChip s={s} /><QuestCard s={s} onGo={openNode} /></>} log={combatLog ? <CombatLog onClose={() => setCombatLog(false)} /> : null} chat={<ChatChip />} />
           <MapButtons s={s} onWorldMap={() => setWorldMap(true)} />
         </div>
         <BossBar s={s} />
@@ -378,6 +379,7 @@ function Game() {
       {!offline && <News />}
       <HalloweenNotice />
       <DungeonNotice />
+      <WinterNotice />
       <AvalonNotice />
       <UpdateBanner />
       {inactive && (
