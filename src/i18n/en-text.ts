@@ -1289,4 +1289,5 @@ export const EN_TEXT: Record<string, string> = {
   '修复：好友和公会成员的离线时间': 'Fix: last-online time for friends and guild members',
   '好友列表和公会成员里的「多久前在线」以前一直没有更新，显示的其实是注册时间，所以明明刚下线十几个小时却显示几天前。现在上线和游戏中每分钟都会记下最后在线时间。': 'The "last online" time in the friends list and guild member list never updated and actually showed when the account was created, so someone who logged off half a day ago could show as gone for days. It\'s now recorded when you log in and every minute while you play.',
   '修好之后，每个人要先上线一次，显示才会变准。': 'Each player needs to log in once after this fix before their time shows correctly.',
+  '英文排版：角色页格子和背包/仓库里的物品名最多显示两行，不再被截成半个词；技能页地点列表的等级和路程不再折行。': 'English layout: slot and item names in the Character page, bag and bank now wrap onto two lines instead of getting cut off, and the level and travel time in skill location lists stay on one line.',
 };
