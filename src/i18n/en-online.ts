@@ -8,7 +8,7 @@ export const EN_ONLINE: Record<string, string> = {
   '打不动（回血比你的输出快）': 'Too tough (heals faster than your damage)',
   '{0}（约 {1} 秒，掉血约 {2}）': '{0} (about {1}s, lose about {2} HP)',
   '点「去做」打开树林的页面，原木已经选好了，点「立即开始」角色会自己走过去砍树，之后一直自动进行，你可以去干别的。':
-    'Tap "Go" to open the woods. Logs are already selected, so just tap "Start now" and your character walks over and keeps chopping on their own while you do something else.',
+    'Tap "Go", then "Start now". Your character walks to the woods and keeps chopping on their own.',
 
   // 地点列表
   '养马': 'Horse breeding',

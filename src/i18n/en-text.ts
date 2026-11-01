@@ -866,7 +866,7 @@ export const EN_TEXT: Record<string, string> = {
   "搜索文章，如：副本、背包、组队": "Search articles, e.g. dungeon, bag, party",
   "刚开始玩？先看这三篇：": "New here? Start with these three:",
   "没有找到相关文章，换个词试试。": "No matching articles. Try another word.",
-  "狩猎能拿到兽皮，兽皮在工坊鞣成皮革，可以做皮甲。皮甲加闪避，能和板甲、布甲随意混搭。": "Hunting gives hides. Tan them into leather at the workshop to make leather armor, which adds dodge and mixes freely with plate and cloth.",
+  "狩猎能拿到兽皮，兽皮在工坊鞣成皮革，可以做皮甲。皮甲加闪避，能和板甲、布甲随意混搭。": 'Hunting gives hides. Tan them into leather for leather armor, which adds dodge.',
   "新手指引和攻略手册更新": "Beginner guide and Handbook refresh",
   "新手指引重写：每页加了物品配图，写进了城门口的新手点位、云存档、品质、寻路、好友组队公会这些新内容，去掉了过时的说法。": "The beginner guide is rewritten: each page has item art, it covers the starter spots at the town gates, cloud saves, gear quality, pathfinding, friends, parties and guilds, and outdated tips are gone.",
   "攻略手册目录加了搜索框（标题和正文都能搜），顶上推荐新手先看的三篇。": "The Handbook index has a search box (titles and article text) and recommends three articles for new players at the top.",
@@ -1275,4 +1275,7 @@ export const EN_TEXT: Record<string, string> = {
   "世界地图标签更清爽": "Cleaner world map labels",
   "世界地图上的名字互相压住时，只留更重要的那个（城镇、首领、区域名优先），放大地图就能看到其余地点的名字。": "When names on the world map overlap, only the more important one is shown (towns, bosses and region names first). Zoom in to see the rest.",
   "英文界面的石碑标签去掉了前缀，只写地名，区域名字距收紧，不再挤满屏幕。": "Waystone labels now show just the place name, and region names are tighter, so the map is no longer crowded with text.",
+  "英文界面精简": "Tidier English text",
+  "英文界面的新手任务提示、背包和角色页的说明都改短了，主界面不再被大段文字挡住。": "Quest tips and the help text on the Bag and Character pages are much shorter, so they no longer cover the main screen.",
+  "场景里的石碑名字（英文）只写地名。": "Waystones in the world now show just the place name.",
 };

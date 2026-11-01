@@ -8,6 +8,13 @@ import { tl } from '../i18n';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-11-01-e', date: tl('11 月 1 日'), title: tl('英文界面精简'),
+    lines: [
+      tl('英文界面的新手任务提示、背包和角色页的说明都改短了，主界面不再被大段文字挡住。'),
+      tl('场景里的石碑名字（英文）只写地名。'),
+    ],
+  },
+  {
     id: '2026-11-01-d', date: tl('11 月 1 日'), title: tl('世界地图标签更清爽'),
     lines: [
       tl('世界地图上的名字互相压住时，只留更重要的那个（城镇、首领、区域名优先），放大地图就能看到其余地点的名字。'),
