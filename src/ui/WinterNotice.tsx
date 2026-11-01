@@ -4,10 +4,14 @@ import { tl } from '../i18n';
 import { NOTICE_CLOSED } from './AvalonNotice';
 import { guideShowing, onGuideClosed } from './Guide';
 import { newsPending, onNewsClosed } from './News';
+import { fastest, GATE_CAMP, MAIN_GATES } from '../core/data';
+import { inRealm } from '../core/realm';
+import { moveSpeed } from '../core/sim';
+import { store } from '../store';
 
 /**
  * 「永冬之裔」活动预告（用户 11-01：像万圣节一样的限时活动，这次是地图上随机刷新活动生物；
- * 每次登录都弹出来，主界面也有入口）。玩法还没做，这里只是预告。
+ * 每次登录都弹出来，主界面也有入口）。11-02 用户：改成已开启，玩法就是永冬冰原，能直接寻路去传送门。
  * 每次打开游戏（刷新页面）弹一次：等新手指引、更新公告关掉以后再弹，排在其它预告前面。
  */
 const listeners = new Set<() => void>();
@@ -48,63 +52,75 @@ export function WinterNotice() {
       <div className="item-popup-body frame hw-notice wt-notice" onClick={(e) => e.stopPropagation()}>
         <div className="hw-hero">
           <img src={wtBannerUrl()} alt="" />
-          <div className="hw-title wt-title"><small>{tl('限时活动预告 · 即将开放')}</small>{tl('永冬之裔')}</div>
+          <div className="hw-title wt-title"><small>{tl('限时活动 · 已开启')}</small>{tl('永冬之裔')}</div>
         </div>
         <div className="news-body">
-          <p className="hw-lead">{tl('北方冰原深处的')}<b>{tl('永冬裂隙')}</b>{tl('裂开了。冰霜的后裔趁着风雪南下，活动期间大陆各处的野外会')}<b>{tl('随机刷出永冬生物')}</b>{tl('。追上它们、打倒它们，收集')}<b>{tl('永冬冰晶')}</b>{tl('，换取限定奖励。')}</p>
+          <p className="hw-lead">{tl('北方的')}<b>{tl('永冬冰原')}</b>{tl('已经开放。从苍岭城、落霞城城外的')}<b>{tl('永冬传送门')}</b>{tl('进去，冰原上会')}<b>{tl('限时刷出永冬生物、首领和宝箱')}</b>{tl('，打倒它们、打开宝箱拿奖励。')}</p>
           <div className="hw-cards">
             <figure>
               <img src={wtSpawnUrl()} alt="" />
-              <figcaption><b>{tl('① 随机降临')}</b>{tl('每隔一段时间，野外随机几个地点会刮起暴风雪，刷出永冬生物。地图上会标出雪花和倒计时，时间到了没打完它们就会消失。')}</figcaption>
+              <figcaption><b>{tl('① 限时降临')}</b>{tl('冰原上每隔一段时间刷出怪物、精英、首领和宝箱，每个存在 30 分钟，时间到了就消失。世界地图选「限时」能看到雪花和倒计时。')}</figcaption>
             </figure>
             <figure>
               <img src={wtFoesUrl()} alt="" />
-              <figcaption><b>{tl('② 三种永冬生物')}</b>{tl('成群出没的霜裔、头戴冰冠的精英，还有很少出现的永冬领主。等级跟着所在区域走，新手和老玩家都有得打。')}</figcaption>
+              <figcaption><b>{tl('② 冰原生物')}</b>{tl('25 种永冬生物，等级 95-135，越往北越强，每个区域都有精英巢。')}</figcaption>
             </figure>
             <figure>
               <img src={wtLootUrl()} alt="" />
-              <figcaption><b>{tl('③ 永冬冰晶')}</b>{tl('打倒永冬生物会掉永冬冰晶（活动积分），精英和领主还会掉霜雪礼盒，打开有冰晶、材料和金币。')}</figcaption>
+              <figcaption><b>{tl('③ 限时宝箱')}</b>{tl('绿、蓝、金三种，站在旁边开 10 秒，每人每轮能开一次，东西直接进仓库。')}</figcaption>
             </figure>
             <figure>
               <img src={wtRewardUrl()} alt="" />
-              <figcaption><b>{tl('④ 限定奖励')}</b>{tl('在苍岭城的永冬冰柱用冰晶兑换限定外观、坐骑和家园冰雕，活动结束后就再也拿不到了。')}</figcaption>
+              <figcaption><b>{tl('④ 冰原首领')}</b>{tl('永霜巨人、雪堡男爵两个 125 级首领轮流出现，每小时一个，打赢必掉宝库。')}</figcaption>
             </figure>
             <figure>
               <img src={wtTeamUrl()} alt="" />
-              <figcaption><b>{tl('⑤ 讨伐永冬领主')}</b>{tl('永冬领主出现时全服都会收到消息。它血厚伤害高，适合组队或叫上公会一起打，参与的人都能分到奖励。')}</figcaption>
+              <figcaption><b>{tl('⑤ 一起讨伐')}</b>{tl('冰原的精英和首领不用组队，附近的人能一起打同一只，伤害互相算上。')}</figcaption>
             </figure>
             <figure className="av-risk">
               <div className="av-risk-box wt-risk-box">❄</div>
-              <figcaption><b>{tl('⑥ 每天都有')}</b>{tl('活动期间每天都会刷，挂机时角色也能顺路打附近的永冬生物。不用守着屏幕，上线看看地图上的雪花就行。')}</figcaption>
+              <figcaption><b>{tl('⑥ 永冬营地')}</b>{tl('冰原南边的营地有仓库、石碑和回程门，回程门能回苍岭城或落霞城。')}</figcaption>
             </figure>
           </div>
-          <h3>{tl('永冬生物')}</h3>
+          <h3>{tl('冰原区域')}</h3>
           <table className="hw-table">
-            <thead><tr><th></th><th>{tl('出现')}</th><th>{tl('掉落')}</th></tr></thead>
+            <thead><tr><th></th><th>{tl('等级')}</th></tr></thead>
             <tbody>
-              <tr><td><b className="wt-t1">{tl('霜裔')}</b></td><td>{tl('最常见，成群出现')}</td><td>{tl('冰晶')}</td></tr>
-              <tr><td><b className="wt-t2">{tl('冰冠精英')}</b></td><td>{tl('少见，单独出现')}</td><td>{tl('冰晶、霜雪礼盒')}</td></tr>
-              <tr><td><b className="wt-t3">{tl('永冬领主')}</b></td><td>{tl('稀有，全服公告')}</td><td>{tl('大量冰晶、霜雪礼盒')}</td></tr>
+              <tr><td><b className="wt-t1">{tl('冻土荒原')}</b></td><td>95-105</td></tr>
+              <tr><td><b className="wt-t1">{tl('霜松冻林 / 冰湖群')}</b></td><td>100-110</td></tr>
+              <tr><td><b className="wt-t2">{tl('冰裂峡谷')}</b></td><td>105-115</td></tr>
+              <tr><td><b className="wt-t2">{tl('冰川山脉 / 冰封废墟')}</b></td><td>110-122</td></tr>
+              <tr><td><b className="wt-t3">{tl('极光高地')}</b></td><td>118-128</td></tr>
+              <tr><td><b className="wt-t3">{tl('永冬裂隙')}</b></td><td>125-135</td></tr>
             </tbody>
           </table>
-          <p className="muted small">{tl('活动还在制作中，开放时间、奖励和具体数值以正式更新公告为准。')}</p>
+          <p className="muted small">{tl('永冬冰晶兑换限定外观「永霜领主」等奖励之后开放。')}</p>
         </div>
         <div className="go">
-          <button className="primary" onClick={close}>{tl('敬请期待')}</button>
+          {!inRealm(store.state.loc) && <button className="primary" onClick={() => { close(); goGate(); }}>{tl('寻路去永冬传送门')}</button>}
+          <button onClick={close}>{tl('关闭')}</button>
         </div>
       </div>
     </div>
   );
 }
 
-/** 主界面的活动入口：一直挂着，点开看预告 */
+/** 寻路去最近的永冬传送门（人已经在冰原里就去营地的回程门） */
+function goGate() {
+  const st = store.state;
+  const list = inRealm(st.loc) ? [GATE_CAMP] : MAIN_GATES;
+  const to = fastest(list, st.loc, st.waystones, moveSpeed(st))?.node ?? list[0];
+  store.requestWalk(to.id);
+}
+
+/** 主界面的活动入口：一直挂着，点开看活动说明，「寻路」直接去传送门（用户 11-02：活动已开启） */
 export function WinterChip() {
   return (
     <div className="chip hw-chip wt-chip">
       <button className="hw-chip-main" onClick={openWinterNotice}>
-        <img src={wtIconUrl()} alt="" /> <b>{tl('永冬之裔')}</b> {tl('限时活动即将开放')}
+        <img src={wtIconUrl()} alt="" /> <b>{tl('永冬之裔')}</b> {tl('限时活动进行中')}
       </button>
-      <button className="hw-chip-go" onClick={openWinterNotice}>{tl('预告')}</button>
+      <button className="hw-chip-go" onClick={goGate}>{tl('寻路')}</button>
     </div>
   );
 }
