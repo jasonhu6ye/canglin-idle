@@ -336,7 +336,7 @@ export const EN_TEXT: Record<string, string> = {
   ' Lv{0} · {1} · 大招「{2}」：{3}': ' Lv{0} · {1} · Signature move "{2}": {3}',
   '战斗等级最好比世界首领高 10 级以上，带满食物和药水，穿整套同阶护甲（板甲减伤最稳）。开打前看一眼战前评估，掉血太快就先回去练。': 'Ideally be 10+ combat levels above the world boss, bring a full load of food and potions, and wear a full same-tier set (plate\'s damage reduction is the safest). Check the estimate before you start; if you\'d lose HP too fast, go train first.',
   '万圣节活动：南瓜王': 'Halloween Event: The Pumpkin King',
-  '活动到 11 月 1 日结束。苍岭城东门外有一座万圣节活动祭坛，点它选难度召唤南瓜王，每小时能召唤一次。召唤后角色会自己走到祭坛开打，打赢一次南瓜王就离开。': 'The event runs until November 1. Outside Canglin\'s east gate is the Halloween Altar: tap it, pick a difficulty, and summon the Pumpkin King, once per hour. Your character walks to the altar and fights on their own, and the Pumpkin King leaves after one defeat.',
+  '活动到 11 月 1 日结束，之后祭坛只能兑换积分，11 月 7 日祭坛移除，积分请在那之前用掉。苍岭城东门外有一座万圣节活动祭坛，点它选难度召唤南瓜王，每小时能召唤一次。召唤后角色会自己走到祭坛开打，打赢一次南瓜王就离开。': 'The event ran until November 1; after that the altar only trades points, and it is removed on November 7, so spend your points before then. Outside Canglin\'s east gate is the Halloween Altar: tap it, pick a difficulty, and summon the Pumpkin King, once per hour. Your character walks to the altar and fights on their own, and the Pumpkin King leaves after one defeat.',
   '：Lv{0}，打赢给 {1} 个南瓜礼盒': ': Lv{0}, a win gives {1} Pumpkin Gift Boxes',
   '南瓜礼盒在背包里打开，得 8-15 南瓜积分和一些金币，积分直接存进仓库。积分在活动结束前用来兑换限定物品（兑换商店后续开放）。': 'Open Pumpkin Gift Boxes in your bag for 8-15 Pumpkin Points and some coins; the points go straight to your bank. Trade points for limited items before the event ends (the exchange shop opens later).',
   '选难度时看一眼每档的评估。没打赢也不用重新召唤，回祭坛点「前往挑战」接着打。': 'Check each difficulty\'s estimate when choosing. If you lose, there\'s no need to summon again: go back to the altar and tap "Go fight".',
@@ -1311,4 +1311,7 @@ export const EN_TEXT: Record<string, string> = {
   "两个冰原独有的 125 级首领：永霜巨人、雪堡男爵，每小时轮流出现一个。冰原的精英和首领不用组队，几个人能一起打同一只。": "Two Lv125 bosses, the Everfrost Giant and the Snowkeep Baron, alternate hourly. Icefield elites and bosses can be fought together without a party.",
   "限时宝箱：站在旁边开 10 秒，每人每轮一次，分绿、蓝、金三种。": "Timed chests: 10s to open, once per round, in green, blue or gold.",
   "永冬裂隙再往北是被黑雾笼罩的神秘区域，暂未开放。": "North of the Everwinter Rift lies a fog-shrouded region, not yet open.",
+  "🎃 {0}\n积分兑换 · 11 月 7 日移除": "🎃 {0}\nPoint exchange · removed Nov 7",
+  "万圣节祭坛 11 月 7 日移除": "Halloween Altar leaves Nov 7",
+  "万圣节活动已经结束，祭坛现在只能兑换南瓜积分（南瓜灵驹、幽冥死神、棺材伯爵）。11 月 7 日祭坛从地图上移除，积分请在那之前用掉。": "The Halloween event is over. The altar now only trades Pumpkin Points (Jack-o'-Lantern Steed, Netherworld Reaper, Coffin Count). It leaves the map on Nov 7, so spend your points before then.",
 };

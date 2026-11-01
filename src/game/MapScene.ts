@@ -36,6 +36,7 @@ import { online } from '../net';
 import type { FieldMateHit } from '../net/social';
 import { animateTileset, liquidIndex, paintTileset, T, TILESET, tileIndex, VARIANTS } from './tiles';
 import { addMysteryFog } from './mysteryFog';
+import { hwGone, hwOpen } from '../core/halloween';
 import { paintWinterPortal, paintWinterPortalSwirl, WPORTAL_EYE, WPORTAL_FOOT, WPORTAL_H } from './winterPortalArt';
 import { playRealmIntro } from '../ui/realmIntro';
 import { chestTier, mmss, nextWindow, PORTAL_MS, timedWindow } from '../core/realm';
@@ -1284,6 +1285,7 @@ export class MapScene extends Phaser.Scene {
       return;
     }
     if (n.event) {
+      if (hwGone(Date.now())) return;
       this.addAltar(n, cx, cy);
       return;
     }
@@ -1334,7 +1336,8 @@ export class MapScene extends Phaser.Scene {
     this.time.addEvent({ delay: 220, loop: true, callback: () => img.setTexture(`altar-${(f = (f + 1) % 4)}`) });
     this.addGlow(cx, cy - 70, 0xa050ff, 44);
     this.addGlow(cx, cy - 30, 0xff8a20, 30);
-    this.add.text(cx, cy - 108, tl`🎃 ${n.name}\n召唤南瓜王 · Lv30-120`, {
+    // 活动结束后只剩积分兑换，祭坛 11 月 7 日移除（用户 11-02）
+    this.add.text(cx, cy - 108, hwOpen(Date.now()) ? tl`🎃 ${n.name}\n召唤南瓜王 · Lv30-120` : tl`🎃 ${n.name}\n积分兑换 · 11 月 7 日移除`, {
       fontFamily: FONT, fontSize: '9px', color: '#ffb050', stroke: '#1a0820', strokeThickness: 3, resolution: 4, align: 'center',
     }).setOrigin(0.5, 1).setDepth(D_LABEL);
     this.add.zone(cx, cy - 50, T * 6, T * 6).setInteractive({ useHandCursor: true }).setData('node', n.id);

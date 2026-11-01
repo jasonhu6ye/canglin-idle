@@ -12,6 +12,7 @@ import { emitToGame } from './GameCanvas';
 import { MonsterIcon } from './Bestiary';
 import { store } from '../store';
 import { FINE_POINTER } from './itemOpen';
+import { hwGone } from '../core/halloween';
 import { inRealm, isRealmRegion, MYSTERY_BOX, mmss, nextWindow, REALM_BOX, REALM_SEEDS, timedWindow } from '../core/realm';
 import { isEn, tl } from '../i18n';
 
@@ -275,7 +276,7 @@ export function WorldMap({ s, onClose, onOpenNode }: { s: GameState; onClose: ()
           {(Object.keys(LABELS) as RegionId[]).filter((r) => isRealmRegion(r) === (view === 'realm')).map((r) => (
             <span key={r} className="wm-region" data-pri={zoom < 2 ? 3 : 7} style={{ left: `${LABELS[r][0] * 100}%`, top: `${LABELS[r][1] * 100}%` }}>{REGIONS[r].name}</span>
           ))}
-          {NODES.filter((n) => inView(view, n) && (!n.town || n.pond || TOWN_MARK[n.id] || n.waystone || n.portal || n.realmGate) && passes(n, filter)).map((n) => {
+          {NODES.filter((n) => inView(view, n) && !(n.event && hwGone(now)) && (!n.town || n.pond || TOWN_MARK[n.id] || n.waystone || n.portal || n.realmGate) && passes(n, filter)).map((n) => {
             const d = n.town && !n.pond ? 0 : dangerLevel(n, cl);
             const lit = n.waystone && s.waystones?.includes(n.id);
             // 英文石碑名都带「Waystone: 」，图标已经能看出是石碑，标签上省掉，少占一半地方（用户 11-01 嫌英文满屏乱）

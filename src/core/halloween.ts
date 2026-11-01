@@ -45,5 +45,8 @@ export const HW_REVEAL = new Date(2026, 9, 30).getTime();
 export const hwShopOpen = (now: number) => now >= HW_REVEAL;
 
 export const hwOpen = (now: number) => now < HW_END;
+/** 祭坛（和积分兑换）留到 11 月 7 日，那天起地图上移除（用户 11-02） */
+export const HW_GONE = new Date(2026, 10, 7).getTime();
+export const hwGone = (now: number) => now >= HW_GONE;
 /** 还要等多久才能再召唤（毫秒，0 表示现在就行） */
 export const hwWait = (last: number | undefined, now: number) => (last === undefined ? 0 : Math.max(0, last + HW_COOLDOWN - now));

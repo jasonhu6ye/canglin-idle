@@ -8,6 +8,10 @@ import { tl } from '../i18n';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-11-02-b', date: tl('11 月 2 日'), title: tl('万圣节祭坛 11 月 7 日移除'),
+    lines: [tl('万圣节活动已经结束，祭坛现在只能兑换南瓜积分（南瓜灵驹、幽冥死神、棺材伯爵）。11 月 7 日祭坛从地图上移除，积分请在那之前用掉。')],
+  },
+  {
     id: '2026-11-02-a', date: tl('11 月 2 日'), title: tl('新地图：永冬冰原'),
     lines: [
       tl('主大陆东边隔着深海多了一片 3680×3680 的永冬冰原，苍岭城、落霞城城外各有一座「永冬传送门」（世界地图上有雪花标记），进门有入场动画。冰原南边的永冬营地有仓库、石碑和回程门。'),
