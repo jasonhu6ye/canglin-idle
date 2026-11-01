@@ -2877,7 +2877,7 @@ function drawFrostFx(p: Pix, o: Outfit, pose: Pose, at: FxAt, put: (x: number, y
     const ph = (t * (0.7 + (j % 3) * 0.15) + phash(j, 1, 13)) % 1;
     let x = cx + (phash(j, 5, 13) - 0.5) * 34 + Math.sin(ph * 5 + j) * 1.5;
     let y = headY - 12 + ph * 36;
-    if (fp === 'nova') { x += (x - cx) * k * 0.6; y -= k * 4; }
+    if (fp === 'nova') { const g = Math.min(1, k * 2.5); x += (x - cx) * g * 0.6; y -= g * 4; }
     if (y > HERO_FEET) continue;
     const c = j % 3 === 0 ? FROST[4] : FROST[3];
     empty(x, y, c);
@@ -2984,13 +2984,31 @@ function drawFrostFx(p: Pix, o: Outfit, pose: Pose, at: FxAt, put: (x: number, y
   }
   if (!blade || !sword) return;
   // ---- 剑上的寒气：顺着剑脊往上冒白蓝的冷雾，越冷越高；细雪从剑上飘落 ----
-  const steam = fp === 'shatter' ? 1 - k : fp === 'plant' || fp === 'nova' ? 0.35 : fp === 'sweep' || fp === 'sweep2' ? 0.5 : fp === 'grip' ? 0.5 : 1;
+  // 插在地里的时候（用户 11-01：巨剑持续冒着寒气）寒气最浓：整条剑身都往上冒白雾，越靠近地面越浓
+  const planted = fp === 'nova' || (fp === 'plant' && k > 0.6);
+  const steam = fp === 'shatter' ? 1 - k : planted ? 1.6 : fp === 'plant' ? 0.35 : fp === 'sweep' || fp === 'sweep2' ? 0.5 : fp === 'grip' ? 0.5 : 1;
   if (steam > 0.05) {
-    const STEAM = [FROST[0], FROST[0], FROST[1], FROST[2], FROST[3]];
-    for (let i = 2; i < blade.length; i += 3) {
+    const STEAM = planted ? [FROST[0], FROST[1], FROST[2], FROST[3], FROST[4]] : [FROST[0], FROST[0], FROST[1], FROST[2], FROST[3]];
+    for (let i = planted ? 0 : 2; i < blade.length; i += planted ? 2 : 3) {
       const [bx, by] = blade[i];
       const h = Math.round((1.5 + (i / blade.length) * 1.5) * Math.min(1.4, cold) * steam + 0.5);
-      flameField(empty, bx, by - 1, 1.6, h, t, seed + i * 3, STEAM, 0);
+      flameField(empty, bx, by - 1, planted ? 2.4 : 1.6, h, t, seed + i * 3, STEAM, planted ? (side ? 0.6 : (bx > cx ? 0.6 : -0.6)) : 0);
+    }
+    if (planted) {
+      // 剑根贴地的一团白雾往两边淌、再慢慢飘起来；剑柄上结的霜一点点掉下来
+      const [rx, ry] = blade[blade.length - 1];
+      for (let j = 0; j < 10; j++) {
+        const ph = (t * 2.5 + j * 0.1 + phash(j, 2, 9) * 0.3) % 1;
+        const sgn = j & 1 ? 1 : -1;
+        const x = rx + sgn * (1 + ph * (5 + phash(j, 3, 7) * 4));
+        const y = ry - 0.5 - ph * ph * 5 + Math.sin(ph * 7 + j) * 0.6;
+        empty(x, y, ph < 0.3 ? FROST[4] : ph < 0.6 ? FROST[3] : FROST[2]);
+        if (ph < 0.25) empty(x + sgn, y, FROST[3]);
+      }
+      for (let j = 0; j < 4; j++) {
+        const ph = (t * 3 + j * 0.25) % 1;
+        empty(sword.hx + (j - 1.5) * 1.6, sword.hy + 1 + ph * 7, ph < 0.5 ? FROST[3] : FROST[2]);
+      }
     }
     for (let j = 0; j < 6; j++) {
       const ph = (t * 3 + j * 0.17 + phash(j, 4, 9) * 0.5) % 1;
@@ -3121,7 +3139,7 @@ function drawFrostFx(p: Pix, o: Outfit, pose: Pose, at: FxAt, put: (x: number, y
     }
     if (fp === 'nova' || fp === 'shatter') {
       // 冰爆：一圈冰棱从插剑点往外扩着长出来，越靠外越矮；碎剑时一起塌掉成冰屑
-      const ring = fp === 'nova' ? ease(Math.min(1, k * 1.3)) : 1;
+      const ring = fp === 'nova' ? ease(Math.min(1, k * 2.8)) : 1;
       const fall = fp === 'shatter' ? k : 0;
       const n = 10;
       for (let i = 0; i < n; i++) {
@@ -3138,21 +3156,29 @@ function drawFrostFx(p: Pix, o: Outfit, pose: Pose, at: FxAt, put: (x: number, y
           empty(x + Math.cos(a) * ph * 4, y0 - h - ph * 6, ph < 0.5 ? FROST[3] : FROST[2]);
         }
       }
-      if (fp === 'nova') {
-        // 第二道冲击环 + 从插剑点炸开的雪
-        const rr = 2 + ring * 20;
+      if (fp === 'nova' && k < 0.4) {
+        // 第二道冲击环 + 从插剑点炸开的雪（冰爆的头一秒）
+        const g = k / 0.4;
+        const rr = 2 + g * 20;
         for (let i = 0; i < 64; i++) {
           if (i & 1) continue;
           const a = (i / 64) * TAU;
-          empty(ix + Math.cos(a) * rr, iy + Math.sin(a) * rr * 0.32, ring < 0.5 ? FROST[4] : ring < 0.8 ? FROST[2] : FROST[1]);
+          empty(ix + Math.cos(a) * rr, iy + Math.sin(a) * rr * 0.32, g < 0.5 ? FROST[4] : g < 0.8 ? FROST[2] : FROST[1]);
         }
         for (let j = 0; j < 12; j++) {
           const a = (j / 12) * TAU + 0.4;
-          const r = 2 + k * (8 + phash(j, 3, 9) * 8);
+          const r = 2 + g * (8 + phash(j, 3, 9) * 8);
           const x = ix + Math.cos(a) * r;
-          const y = iy - 2 + Math.sin(a) * r * 0.5 - Math.sin(k * Math.PI) * 4;
+          const y = iy - 2 + Math.sin(a) * r * 0.5 - Math.sin(g * Math.PI) * 4;
           if (y > HERO_FEET + 1) continue;
-          empty(x, y, k < 0.4 ? FROST[4] : FROST[3]);
+          empty(x, y, g < 0.4 ? FROST[4] : FROST[3]);
+        }
+      } else if (fp === 'nova') {
+        // 之后冰棱立着，地上一圈寒雾贴着地面慢慢打转，冰棱尖上偶尔闪一下
+        for (let j = 0; j < 14; j++) {
+          const a = (j / 14) * TAU + t * TAU * 0.6;
+          const r = 10 + phash(j, 5, 9) * 8;
+          empty(ix + Math.cos(a) * r, iy + 0.5 + Math.sin(a) * r * 0.3 - (j % 3 === 0 ? 1 : 0), j % 3 ? FROST[1] : FROST[2]);
         }
       }
     }
@@ -3299,8 +3325,8 @@ const CAST_PHASES: [number, Pose['cast']][] = [[12, undefined], [18, 'rise'], [3
  */
 const REAP_PHASES: [number, Pose['reap']][] = [[20, undefined], [32, 'reach'], [40, 'summon'], [64, 'hold'], [80, 'spin'], [92, 'raise'], [100, 'slash'], [110, 'fade'], [120, 'lower']];
 const IDLE_FRAMES = 120;
-/** 永霜领主待机（用户 11-01，120 帧，不能和死神一样）：0-13 站着呼吸，14-25 右手一伸、冰柱托着巨剑从地里升起，26-37 抓住剑柄拔出来扛上肩，38-51 扛肩，52-61 抡到左腰蓄力，62-69 横扫到右，70-77 回扫到左胸，78-87 举剑过头召霜，88-95 劈下插进脚前地里，96-105 半跪冰爆，106-113 剑碎成冰屑被风吹走，114-119 站起放手 */
-const FROST_PHASES: [number, Pose['frost']][] = [[14, undefined], [26, 'rise'], [38, 'grip'], [52, 'shoulder'], [62, 'wind'], [70, 'sweep'], [78, 'sweep2'], [88, 'lift'], [96, 'plant'], [106, 'nova'], [114, 'shatter'], [120, 'stand']];
+/** 永霜领主待机（用户 11-01，120 帧，不能和死神一样；插地那段要久一点）：0-9 站着呼吸，10-20 右手一伸、冰柱托着巨剑从地里升起，21-30 抓住剑柄拔出来扛上肩，31-40 扛肩，41-48 抡到左腰蓄力，49-55 横扫到右，56-62 回扫到左胸，63-70 举剑过头召霜，71-77 劈下插进脚前地里，78-107 半跪着剑插在地里冒寒气（3 秒），108-115 剑碎成冰屑被风吹走，116-119 站起放手 */
+const FROST_PHASES: [number, Pose['frost']][] = [[10, undefined], [21, 'rise'], [31, 'grip'], [41, 'shoulder'], [49, 'wind'], [56, 'sweep'], [63, 'sweep2'], [71, 'lift'], [78, 'plant'], [108, 'nova'], [116, 'shatter'], [120, 'stand']];
 /**
  * 棺材皮肤待机（用户 10-31 录屏，120 帧）：0-15 立着轻晃，16-27 蹦两下，28-39 小鬼从棺材后面探头又缩回去，40-51 棺盖吱呀开一条缝、里面亮起红眼，
  * 52-65 棺盖大开、蝙蝠飞出来，66-75 伯爵剪影龇牙、眼睛闪光，76-85 整口棺材往左倒下去（盖子顺势合上），86-99 躺在地上，100-107 弹起来立住，108-119 落定晃两下
