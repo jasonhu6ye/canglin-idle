@@ -124,8 +124,10 @@ interface Other {
   front?: Phaser.GameObjects.Sprite;
   anim?: string;
   flip: boolean;
-  /** 副本里队友头顶的小血条（10-26） */
+  /** 副本里队友头顶的小血条（10-26）；野外和自己一起打同一只怪时也挂（11-02） */
   bar?: Phaser.GameObjects.Graphics;
+  /** 正和自己一起打同一只怪 */
+  inFight?: boolean;
   /** 估出来的对方移动速度（像素/秒）、目标上次变的时间、上次真在走的时间（10-27 插值） */
   spd: number;
   tAt: number;
@@ -342,6 +344,7 @@ export class OtherPlayers {
       }
       o.tx = tx; o.ty = ty;
       o.hp = p.hp; o.maxHp = p.maxHp;
+      o.inFight = !!spots?.has(p.playerId);
       this.setMount(o, p.mounted ? mountKindOf(p.mounted) : undefined);
       o.anim = at.anim && this.scene.anims.exists(`${key}:${at.anim}`) ? at.anim : undefined;
       if (o.anim) o.flip = !!at.flip;
@@ -368,7 +371,8 @@ export class OtherPlayers {
       // 刚走到上一个同步点、下一个还在路上：多播一小会儿走路动画，不在每格之间站一下又走
       else if (now - o.movedAt < 300 && now - o.tAt < 600) moving = true;
       this.pose(o, moving);
-      if (this.place) this.drawBar(o);
+      if (this.place || o.inFight) this.drawBar(o);
+      else o.bar?.setVisible(false);
       o.box.setDepth(o.box.y + 999);
       if (o.fx && o.front) {
         const fx = o.box.x + o.front.x;
