@@ -87,7 +87,7 @@ export class UnicornFx {
     const pulse = 0.42 + Math.sin(time / 230) * 0.1 + Math.sin(time / 71) * 0.04;
     // 跑起来光环按彩虹色循环（两种相邻色混着闪），站着是粉色
     const hue = o.moving ? RAINBOW[Math.floor(time / 160) % RAINBOW.length] : 0xffffff;
-    this.glow.setVisible(true).setPosition(o.x, o.y - 1).setDepth(o.depth - 1).setAlpha(o.moving ? pulse + 0.25 : pulse).setScale(o.moving ? 1 : 0.7, o.moving ? 0.4 : 0.32).setTint(hue);
+    this.glow.setVisible(true).setPosition(o.x, o.y - 1).setDepth(o.depth - 1).setAlpha(o.moving ? pulse + 0.3 : pulse).setScale(o.moving ? 1.1 : 0.7, o.moving ? 0.42 : 0.32).setTint(hue);
     this.stepHorn(time, o);
     const k = o.lite ? 2.2 : 1;
     if (o.moving) this.stepRun(time, o, k);
@@ -106,9 +106,9 @@ export class UnicornFx {
   private stepRun(time: number, o: PkState, k: number) {
     if (time >= this.nextRibbon) {
       this.nextRibbon = time + 16;
-      // 光带从屁股后面拖出来：侧面锚在身后 12 像素、上下跑时锚在身体中间；每段接着上一段，留在原地慢慢下沉变淡
-      const rx = o.x - o.dir * 12;
-      const ry = o.y - 15;
+      // 光带从蹄子下面贴着地拖出来（用户 11-02：彩虹特效在脚上）：锚在后蹄落点，每段接着上一段，留在原地慢慢变淡
+      const rx = o.x - o.dir * 8;
+      const ry = o.y - 2;
       const last = this.lastRibbon && time - this.lastRibbon[2] < 200 ? this.lastRibbon : [rx, ry, time];
       this.lastRibbon = [rx, ry, time];
       const dx = rx - last[0];
@@ -116,18 +116,24 @@ export class UnicornFx {
       const len = Math.hypot(dx, dy);
       if (len > 0.5 || !o.dir) {
         // 带子顺着跑的方向转：颜色条始终垂直于路线，斜着跑也是一条平滑的彩虹
-        const r = this.scene.add.image((rx + last[0]) / 2, (ry + last[1]) / 2, RIBBON).setDepth(o.depth - 3).setAlpha(0.85).setScale(Math.max(1, len / 3 + 0.5), 1);
+        const r = this.scene.add.image((rx + last[0]) / 2, (ry + last[1]) / 2, RIBBON).setDepth(o.depth - 3).setAlpha(0.95).setScale(Math.max(1, len / 3 + 0.5), 0.9);
         if (len > 0.5) r.setRotation(Math.atan2(dy, dx));
         else if (!o.dir) r.setAngle(90);
         this.scene.tweens.add({
-          targets: r, y: r.y + 5, alpha: 0, scaleY: 0.4,
-          duration: 700 + Math.random() * 150, ease: 'Quad.easeIn', onComplete: () => r.destroy(),
+          targets: r, y: r.y + 2, alpha: 0, scaleY: 0.35,
+          duration: 750 + Math.random() * 150, ease: 'Quad.easeIn', onComplete: () => r.destroy(),
         });
+        // 四只蹄子踩过的地方各闪一下彩虹光点
+        if (!o.lite) {
+          const c = RAINBOW[Math.floor(time / 90) % RAINBOW.length];
+          const h = this.scene.add.image(o.x + (Math.random() - 0.5) * 18, o.y - 1, STAR[0]).setDepth(o.depth + 1).setBlendMode(Phaser.BlendModes.ADD).setTint(c).setScale(1.2, 0.7).setAlpha(0.9);
+          this.scene.tweens.add({ targets: h, alpha: 0, scaleX: 2.2, scaleY: 0.3, duration: 260, onComplete: () => h.destroy() });
+        }
       }
       // 光带外侧再飘一层淡的碎光，让带子毛茸茸的
       if (!o.lite && Math.random() < 0.5) {
         const c = RAINBOW[Math.floor(Math.random() * RAINBOW.length)];
-        const m = this.scene.add.image(rx + (Math.random() - 0.5) * 4, ry + (Math.random() - 0.5) * 12, MOTE).setDepth(o.depth - 2).setBlendMode(Phaser.BlendModes.ADD).setTint(c);
+        const m = this.scene.add.image(rx + (Math.random() - 0.5) * 6, ry - Math.random() * 6, MOTE).setDepth(o.depth - 2).setBlendMode(Phaser.BlendModes.ADD).setTint(c);
         this.scene.tweens.add({ targets: m, x: m.x - o.dir * (6 + Math.random() * 10), y: m.y - 4 - Math.random() * 8, alpha: 0, duration: 500 + Math.random() * 300, onComplete: () => m.destroy() });
       }
     }
