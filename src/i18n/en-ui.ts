@@ -1470,4 +1470,5 @@ export const EN_UI: Record<string, string> = {
   "修复：冰原宝箱开到一半被重置": "Fix: Frost chests resetting halfway",
   "永冬冰原的限时宝箱开箱进度条到一半会自动重置、打不开，现在修好了。": "Timed chests in the Everwinter realm no longer reset halfway through opening.",
   "每个宝箱每一轮每人只能开一次，开完拿到奖励后宝箱会从你的地图上消失，下一轮刷新再出现。": "Each chest can be opened once per spawn per player; after you loot it, it disappears from your map until the next spawn.",
+  '和 {0} 个队友一起打这只（怪物血量 +{1}%，伤害一起算）': 'Fighting with {0} teammate(s) (monster HP +{1}%, damage shared)',
 };

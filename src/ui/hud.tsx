@@ -194,6 +194,7 @@ export function StatusChips({ s, extra, log, chat }: { s: GameState; extra?: Rea
           <span className={food ? '' : 'warn'}>{tl`食物 ${fmtNum(food)}`}</span>
           <span className="muted">{tl`约 ${fmtNum(Math.round(est.perHour))} 只/时`}</span>
         </span>
+        {!!s.combat?.crew && <em className="gold">{tl`和 ${s.combat.crew} 个队友一起打这只（怪物血量 +${Math.round(s.combat.crew * 60)}%，伤害一起算）`}</em>}
         {!food && me < 0.4 && <em className="warn">{tl(' 没有食物了，血量偏低，小心阵亡')}</em>}
       </>
     );
