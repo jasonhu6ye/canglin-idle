@@ -489,8 +489,8 @@ export const EQUIP_TYPES: EquipType[] = [
   W('arbalest', tl('十字弩'), 'ranged', 'fletching', [['plank', 2], ['bar', 2], ['leather', 1]], 7, 1.2, 2.9, 4200, 'ranged', 40, true),
   // 永霜之弓（用户 11-02，特殊装备，只有 T7/T8）：双手长弓，打中时 12% 冻住敌人 1 秒、这一下 150% 伤害。
   // 双手用不了副手，底子比长弓厚一些，整体和幽魂链刃差不多（balance.test）
-  { ...W('frostbow', tl('永霜之弓'), 'ranged', 'fletching', [['plank', 3], ['leather', 1], ['frostheart', 2]], 8, 1.15, 1.9, 3000, 'ranged', 14, true), minTier: 6,
-    stats: { attack: 1.15, strength: 1.9, strFlat: 14, attackMs: 3000, style: 'ranged', twoHanded: true, frost: 0.12 } },
+  { ...W('frostbow', tl('永霜之弓'), 'ranged', 'fletching', [['plank', 3], ['leather', 1], ['frostheart', 2]], 8, 1.25, 2.1, 3000, 'ranged', 0, true), minTier: 6,
+    stats: { attack: 1.25, strength: 2.1, strFlat: 0, attackMs: 3000, style: 'ranged', twoHanded: true, frost: 0.12 } },
   // 魔法：加工木材 + 布料
   W('staff', tl('法杖'), 'magic', 'crafting', [['plank', 2], ['cloth', 1]], 4, 1.0, 1.1, 2400, 'magic'),
   // 护甲：头、身、脚、手
@@ -786,6 +786,9 @@ for (const it of itemList.filter((x) => x.equip && !x.equip.move && x.equip.slot
         ...(e.hp ? { hp: Math.round(e.hp * QUALITY_STAT[q]) } : {}),
         // 幽魂链刃（用户 10-31：材料难拿、高品质难做，品质高的要明显更强）：连斩概率随品质涨，普通 17% → 神话 34%
         ...(e.chain ? { chain: Math.round(e.chain * CHAIN_QUALITY[q] * 100) / 100 } : {}),
+        // 永霜之弓、永霜盾（11-02 平衡）：和链刃一样，触发概率随品质涨（弓 12% → 神话 24%，盾 17% → 神话 34%），高品质才追得上同品质的十字弩
+        ...(e.frost ? { frost: Math.round(e.frost * CHAIN_QUALITY[q] * 100) / 100 } : {}),
+        ...(e.guard ? { guard: Math.round(e.guard * CHAIN_QUALITY[q] * 100) / 100 } : {}),
         ...Object.fromEntries((['xp', 'luck', 'crit', 'dodge', 'work', 'defPct', 'dmgPct'] as const).filter((k) => e[k] && !(k === 'crit' && e.slot === 'offhand')).map((k) => [k, Math.round(e[k]! * QUALITY_SPEED[q] * 1000) / 1000])),
       },
     };

@@ -51,8 +51,11 @@ describe('永霜之弓、永霜盾（11-02）', () => {
       expect(e.twoHanded).toBe(true);
       expect(COMMON_EQUIP().some((x) => x.key === k)).toBe(false);
       expect(EQUIP_TYPES.find((x) => x.key === k)!.mats.some(([m]) => m === 'frostheart')).toBe(true);
-      // 品质不改触发概率
-      expect(ITEMS[`${T8}_${k}@q5`].equip!.frost ?? ITEMS[`${T8}_${k}@q5`].equip!.guard).toBe(k === 'frostbow' ? 0.12 : 0.17);
+      // 触发概率随品质涨：普通就是用户定的 12% / 17%，神话翻倍
+      const ch = (q: number) => { const e = ITEMS[`${T8}_${k}${q ? `@q${q}` : ''}`].equip!; return e.frost ?? e.guard!; };
+      expect(ch(0)).toBe(k === 'frostbow' ? 0.12 : 0.17);
+      expect(ch(5)).toBe(k === 'frostbow' ? 0.24 : 0.34);
+      for (let q = 1; q < 6; q++) expect(ch(q)).toBeGreaterThan(ch(q - 1));
     }
     expect(ITEMS[`${T8}_frostbow`].equip!.style).toBe('ranged');
     expect(ITEMS.frostheart_8).toBeDefined();
@@ -98,8 +101,11 @@ describe('永霜之弓、永霜盾（11-02）', () => {
     for (const ti of [6, 7]) {
       const sc = weaponScores(ti, ['frostbow', 'chainblade']);
       const lamp = weaponScores(ti, ['chainblade'], 'soullamp').chainblade;
-      expect(sc.frostbow, `T${ti + 1}`).toBeGreaterThanOrEqual(104);
-      expect(sc.frostbow, `T${ti + 1}`).toBeLessThanOrEqual(lamp);
+      // 比最强的普通远程（十字弩）稍强，和链刃配灯笼差不多，比不过链刃配提灯
+      expect(sc.frostbow, `T${ti + 1}`).toBeGreaterThan(sc.arbalest);
+      expect(sc.frostbow, `T${ti + 1}`).toBeLessThanOrEqual(sc.arbalest + 6);
+      expect(Math.abs(sc.frostbow - sc.chainblade), `T${ti + 1}`).toBeLessThanOrEqual(6);
+      expect(sc.frostbow, `T${ti + 1}`).toBeLessThan(lamp);
     }
   });
 });
