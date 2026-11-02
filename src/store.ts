@@ -101,6 +101,8 @@ class Store {
   private touched = false;
   /** 切回前台结算前要做的事（联机时对时间），由 sync.ts 设置 */
   beforeResume: () => Promise<unknown> = async () => {};
+  /** 记下了一条新指令（联机层用它尽快送去服务器） */
+  onCmd: (n: CmdName) => void = () => {};
   /**
    * 登录后对过服务器时间：本机时间被调快过的话，读档时多算的离线收益不算，按正确的时间重新结算。
    * 只在进游戏前（玩家还没动过）做。
@@ -241,6 +243,7 @@ class Store {
       this.pending.push({ n, a: JSON.parse(JSON.stringify(a ?? [])) as unknown[], t: now, q: ++this.seq });
       // 一直没登录（离线玩）就不会送出去，只留最近的
       if (this.pending.length > 5000) this.pending.splice(0, this.pending.length - 5000);
+      this.onCmd(n);
     }
     if (r.summary) {
       this.absorb(r.summary);

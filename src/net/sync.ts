@@ -205,8 +205,14 @@ function watchSpeed() {
   }, 10_000);
 }
 
+/** 点了操作之后几秒内就送去服务器（服务器只认最近半小时内的操作时间，别攒太久） */
+let soon: ReturnType<typeof setTimeout> | undefined;
 export function startSync() {
   store.beforeResume = () => syncClock();
+  store.onCmd = (n) => {
+    if (n === 'coop' || soon) return;
+    soon = setTimeout(() => { soon = undefined; void pushNow(); }, 3000);
+  };
   watchSpeed();
   // 每 5 分钟对一次时间，顺便看看自己的状态
   setInterval(() => { if (phase === 'play') { void syncClock(); void refreshAc(); } }, 5 * 60_000);

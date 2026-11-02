@@ -7,6 +7,8 @@ import { ITEMS } from '../core/data';
 import { applyCmd, type Cmd } from '../core/commands';
 import { clearMateHits, setAggroMates, setDgCrew, setFieldCrew } from '../core/aggro';
 import { setPartySize } from '../core/party';
+import { setGuard, type Guard, type MateRun } from '../core/guard';
+import type { DungeonGate } from '../core/types';
 
 /** 组队相关的全局状态清零（服务器一次处理一个玩家，算完不能留给下一个） */
 function resetShared(party = 0) {
@@ -15,6 +17,7 @@ function resetShared(party = 0) {
   setDgCrew(0);
   setAggroMates([]);
   clearMateHits();
+  setGuard(null);
 }
 
 /*
@@ -25,6 +28,11 @@ function resetShared(party = 0) {
 
 /** 一次最多收这么多条指令（离线玩了很久攒下来的也够用） */
 export const MAX_CMDS = 3000;
+/**
+ * 指令时间最多往回算这么久（11-02）：不然攒着不发、过几小时再把指令时间填成以前，
+ * 就能补领错过的每日/每小时奖励、限时首领。正常玩家点了几秒内就送到（net/sync.ts）
+ */
+export const BACKDATE_MS = 30 * 60_000;
 
 /** 服务器从数据库查出来、要合进存档的东西 */
 export interface SyncExtras {
@@ -41,14 +49,28 @@ export interface SyncExtras {
   epoch?: number;
   /** 队伍人数（组队经验加成，没组队 0） */
   partySize?: number;
+  /** 自己的玩家 id、同队的人（含自己） */
+  me?: string;
+  party?: string[];
+  /** 队友存档里开着的洞口、各洞口打到哪了（核对跟队友进副本、队友进度用） */
+  mateGates?: DungeonGate[];
+  mateRuns?: MateRun[];
 }
 
 export interface SyncOut { state: GameState; applied: number; mailIds: string[]; /** 这台设备的指令收到了第几条 */ ack: number }
 
 export function runSync(saved: unknown, cmds: unknown, now: number, ex: SyncExtras, device = '', seed?: number): SyncOut {
   resetShared(ex.partySize ?? 0);
+  const keep = ((saved as { _g?: Partial<Guard> } | null)?._g ?? {}) as Partial<Guard>;
+  const G: Guard = {
+    me: ex.me ?? '', party: ex.party?.length ? ex.party : ex.me ? [ex.me] : [], gates: ex.mateGates ?? [], runs: ex.mateRuns ?? [],
+    mv: keep.mv && Array.isArray(keep.mv.pts) ? keep.mv : undefined, coopAt: Number(keep.coopAt) || undefined,
+  };
+  setGuard(G);
   try {
-    return syncInner(saved, cmds, now, ex, device, seed);
+    const out = syncInner(saved, cmds, now, ex, device, seed);
+    (out.state as GameState & { _g?: Partial<Guard> })._g = { ...(G.mv && { mv: G.mv }), ...(G.coopAt && { coopAt: G.coopAt }) };
+    return out;
   } finally {
     resetShared();
   }
@@ -74,7 +96,7 @@ function syncInner(saved: unknown, cmds: unknown, now: number, ex: SyncExtras, d
     const q = Number(c.q) || 0;
     if (q <= ack) continue;
     ack = q;
-    const t = Math.min(now, Math.max(s.lastTick, Number(c.t) || 0));
+    const t = Math.min(now, Math.max(s.lastTick, now - BACKDATE_MS, Number(c.t) || 0));
     s = advance(s, t).state;
     s = applyCmd(s, c.n, Array.isArray(c.a) ? c.a : [], t).state;
     applied++;
