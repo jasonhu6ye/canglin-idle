@@ -26,6 +26,8 @@ const own = (o: object, k: string) => Object.prototype.hasOwnProperty.call(o, k)
 const SLACK = 8;
 /** 报过的位置留多久（够「停下来、换方向走」连着几条指令用） */
 const MV_KEEP = 20_000;
+/** 记下的点最多留多久（一次自动寻路最长也就十几分钟） */
+const MV_LONG = 20 * 60_000;
 /** 位置差多少格以上才记可疑（差得少多半是本机和服务器步调不一致） */
 const MOVE_FLAG_OVER = 400;
 function anchors(s: GameState, t: number): Pt[] {
@@ -42,7 +44,9 @@ function anchors(s: GameState, t: number): Pt[] {
       if (n) out.push({ ...standOf(n), r: SLACK, t: from });
     }
   }
-  for (const p of G?.mv?.pts ?? []) if (t - p.t <= MV_KEEP) out.push(p);
+  // 以前记下的点：按「记下时那一刻」的时间放宽（11-02：以前只留 20 秒内的，自动寻路走了几十秒后手动点地面，
+  // 出发点被丢掉，服务器只剩寻路起点、对不上，把人拉回起点还记成瞬移）
+  if (G?.mv && t - G.mv.t <= MV_KEEP) for (const p of G.mv.pts) if (t - p.t <= MV_LONG) out.push(p);
   return out;
 }
 /** 服务器结算：p 是不是现在可能站的位置（extra：再放宽几格）。对不上记一条可疑操作（差得很远算严重） */
@@ -68,7 +72,7 @@ function remember(s: GameState, t: number) {
     seen.add(k);
     return true;
   });
-  G.mv = { pts: pts.slice(-16), t };
+  G.mv = { pts: pts.slice(-32), t };
 }
 
 /**
@@ -246,10 +250,15 @@ function enterGate(s: GameState, t: number, gate: unknown, party: unknown, team:
   const G = guard();
   const want = cleanGate(gate);
   if (!want) return s;
-  const real = !G ? want : (s.gates ?? []).find((x) => x.id === want.id) ?? G.gates.find((x) => x.id === want.id);
+  // 自己开的洞口：编号里带开的时刻和随机数，手机和服务器差一两秒（或随机数不同步）编号就对不上，
+  // 所以同种、同阶、同一个位置的也认（11-02 误报：正常开洞口进去被记成「伪造洞口」还会自动处罚）
+  const same = (x: DungeonGate) => x.kind === want.kind && x.tier === want.tier && Math.abs(x.x - want.x) <= 2 && Math.abs(x.y - want.y) <= 2;
+  const real = !G ? want : (s.gates ?? []).find((x) => x.id === want.id) ?? G.gates.find((x) => x.id === want.id) ?? (s.gates ?? []).find(same);
   if (!real) {
     // 没组队也报一个不存在的洞口：只能是改出来的（组队时可能是队友刚开、还没同步）
-    flag('fake_gate', G!.party.length <= 1, { gate: want.id, kind: want.kind, tier: want.tier, floors: want.floors });
+    // 刚开过洞口（服务器那边没开成，比如位置没对上）就不算严重
+    const opened = (s.lastGateAt ?? 0) > t - 30 * 60_000;
+    flag('fake_gate', G!.party.length <= 1 && !opened, { gate: want.id, kind: want.kind, tier: want.tier, floors: want.floors });
     return s;
   }
   let n = int(party, 1, 10);

@@ -1481,9 +1481,9 @@ begin
     perform public.ac_flag(new.player_id, 'rollback', traded,
       jsonb_build_object('back_min', round(-game_ms / 60000), 'traded', traded));
   end if;
-  -- 经验：GM 经验增益期间按比例放宽
+  -- 经验：GM 经验增益期间按比例放宽（11-02 起分战斗/采集/制作经验增益，也一起算）
   select coalesce(sum(pct), 0) / 100.0 into boost from gm_buffs
-    where kind = 'xp' and ends_at > since and starts_at < now() and (target_pid is null or target_pid = me_pid);
+    where kind in ('xp', 'xp_combat', 'xp_gather', 'xp_produce') and ends_at > since and starts_at < now() and (target_pid is null or target_pid = me_pid);
   xp_new := public.ac_sum(new.data -> 'xp');
   xp_cap := public.ac_conf('xp_per_hour', 6000000) * (1 + boost) * hours + public.ac_conf('xp_slack', 300000);
   if xp_new - xp_old > xp_cap then

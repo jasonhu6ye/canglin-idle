@@ -220,6 +220,25 @@ describe('改过的客户端乱传参数', () => {
     expect(k).toEqual({ move: false, fake_gate: true, walk_fast: true, bad_cmd: false });
   });
 
+  it('自动寻路走到一半手动点地面：不记瞬移、不把人拉回起点', () => {
+    const base = { ...newGame(t0, 5), loc: pine };
+    const dest = NODES.find((n) => n.id === 'gold_ridge')!;
+    const to = standOf(dest);
+    const r1 = runSync(base, [{ n: 'startAt', a: [dest.actions[0], dest.id, { type: 'infinite' }], t: t0 + 100, q: 1 }], t0 + 1000, EX, 'dev');
+    const tr = r1.state.travel!;
+    expect(tr.total).toBeGreaterThan(60_000);
+    // 走了 60%（寻路超过 20 秒），画面上的人在路上
+    const k = 0.6;
+    const at = { x: Math.round(pine.x + (to.x - pine.x) * k), y: Math.round(pine.y + (to.y - pine.y) * k) };
+    const t1 = t0 + 100 + tr.total * k;
+    const r2 = runSync(r1.state, [
+      { n: 'leaveWork', a: [], t: t1, q: 2 },
+      { n: 'walk', a: [at, { x: at.x + 3, y: at.y }, 2000], t: t1 + 10, q: 3 },
+    ], t1 + 500, EX, 'dev');
+    expect(r2.flags ?? []).toEqual([]);
+    expect(r2.state.walk?.from ?? r2.state.loc).toEqual(at);
+  });
+
   it('封禁：进度冻结，指令不执行，解封后也不补', () => {
     const base = { ...newGame(t0, 5), loc: far };
     const r = runSync(base, [{ n: 'startNow', a: ['fish_minnow', { type: 'infinite' }], t: t0 + 100, q: 5 }], t0 + 3600_000, { ...EX, frozen: true }, 'dev');
