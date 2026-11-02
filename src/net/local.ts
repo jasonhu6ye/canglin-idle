@@ -1,5 +1,5 @@
 import type { GameState } from '../core/types';
-import type { AiPlayer, CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
+import type { AiPlayer, AltRow, CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { GUILD_MAX, levelSnapshot, type SyncReply } from './api';
 import { runSync } from '../server/sync';
 import type { Cmd } from '../core/commands';
@@ -439,6 +439,8 @@ export class LocalApi implements OnlineApi {
   async gmCheaters(): Promise<CheatRow[]> { return []; }
   async gmAcSet() { /* 本地没有别的玩家 */ }
   async gmAcLimit(): Promise<string> { throw new Error(tl('没有这个 ID 的玩家')); }
+  async gmLinks(): Promise<AltRow[]> { return []; }
+  async gmAcExempt(): Promise<string> { throw new Error(tl('没有这个 ID 的玩家')); }
   async gmTrades(): Promise<GmTrade[]> { return []; }
   async gmSnapshots(): Promise<Snapshot[]> { return []; }
   async gmSnapshotCreate() { /* 本地不做 */ }

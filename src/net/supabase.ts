@@ -1,6 +1,6 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js';
 import type { GameState, GmBuff } from '../core/types';
-import type { CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMail, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildDay, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
+import type { AltRow, CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMail, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildDay, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { type SyncReply } from './api';
 import type { Cmd } from '../core/commands';
 import type { TaskSpec } from '../core/guild';
@@ -591,7 +591,7 @@ export class SupabaseApi implements OnlineApi {
       playerId: r.player_id, pid: Number(r.pid), name: r.name, hidden: !!r.hidden, banned: !!r.banned, note: r.note ?? '',
       n: Number(r.n), severe: Number(r.severe), lastAt: r.last_at ? Date.parse(r.last_at) : null,
       flags: (Array.isArray(r.flags) ? r.flags : []).map((f: Row) => ({ kind: f.kind, severe: !!f.severe, detail: f.detail ?? {}, at: Date.parse(f.at) })),
-      tradeUntil: r.trade_until ? Date.parse(r.trade_until) : null, muteUntil: r.mute_until ? Date.parse(r.mute_until) : null,
+      tradeUntil: r.trade_until ? Date.parse(r.trade_until) : null, muteUntil: r.mute_until ? Date.parse(r.mute_until) : null, exempt: !!r.exempt,
     }));
   }
   async gmAcSet(playerId: string, action: 'hide' | 'unhide' | 'ban' | 'unban' | 'clear', note?: string) {
@@ -599,6 +599,13 @@ export class SupabaseApi implements OnlineApi {
   }
   async gmAcLimit(pid: number, what: 'trade' | 'mute', hours: number) {
     return String(ok(await this.sb.rpc('gm_ac_limit', { p_pid: pid, p_what: what, p_hours: hours })));
+  }
+  async gmLinks(playerId: string) {
+    const rows = ok(await this.sb.rpc('gm_links', { p_player: playerId })) as Row[];
+    return rows.map((r): AltRow => ({ playerId: r.player_id, pid: Number(r.pid), name: r.name, kind: r.kind, lastAt: Date.parse(r.last_at), banned: !!r.banned }));
+  }
+  async gmAcExempt(pid: number, on: boolean) {
+    return String(ok(await this.sb.rpc('gm_ac_exempt', { p_pid: pid, p_on: on })));
   }
   async gmTrades(who?: string) {
     const rows = ok(await this.sb.rpc('gm_trades', { p_who: who?.trim() || null, p_limit: 200 })) as Row[];
