@@ -40,5 +40,7 @@ export function flag(kind: string, severe: boolean, detail: Record<string, unkno
 /** 最快能跑多快（格/秒）：装着的坐骑全速，再放宽三成 */
 export function maxSpeed(s: GameState) {
   const m = ITEMS[s.equipment.mount ?? '']?.equip?.move ?? 0;
-  return WALK_TILES_PER_SEC * (1 + m) * 1.3;
+  // GM 移速增益：存档里所有移速 buff 都算上（不看时间），宁可放宽
+  const gm = (s.gmBuffs ?? []).reduce((a, b) => a + (b.kind === 'move' ? b.pct / 100 : 0), 0);
+  return WALK_TILES_PER_SEC * (1 + m) * (1 + gm) * 1.3;
 }

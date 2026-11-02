@@ -21,7 +21,9 @@ export type BeltSlot = 'food' | 'potion';
 export type BuffKind = 'atk' | 'str' | 'def' | 'speed' | 'xp';
 export interface Buff { kind: BuffKind; pct: number; ms: number }
 /** GM 增益（用户 10-26）：管理员加的，全服或指定玩家 */
-export type GmKind = 'xp' | 'drop' | 'coins' | 'yield' | 'speed' | 'atk' | 'str' | 'def' | 'hp';
+export type GmKind =
+  | 'xp' | 'drop' | 'coins' | 'yield' | 'speed' | 'atk' | 'str' | 'def' | 'hp'
+  | 'xp_combat' | 'xp_gather' | 'xp_produce' | 'crit' | 'critdmg' | 'dodge' | 'haste' | 'leech' | 'reduce' | 'regen' | 'move' | 'quality';
 export interface GmBuff {
   id: string;
   name: string;

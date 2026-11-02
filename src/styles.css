@@ -1064,6 +1064,18 @@ h2.dg-blue { color: #6ab4ff; }
 .gm-actions .primary { flex: 1; }
 .gm-form .good { color: #8ee08a; margin: 0; }
 .gm-form .warn { margin: 0; }
+.gm-kinds { display: flex; gap: 8px; }
+.gm-kinds > span { flex: 0 0 40px; color: var(--muted, #a89a80); display: flex; flex-direction: column; }
+.gm-kinds > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.gm-kind-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.gm-kind-row > small { flex: 0 0 64px; }
+.gm-skills { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 4px 12px; }
+.gm-skills li { display: flex; align-items: center; gap: 6px; padding: 2px 4px; border-radius: 3px; }
+.gm-skills li.on { background: rgba(232, 184, 74, .14); }
+.gm-skills li > span { flex: 1; min-width: 0; }
+.gm-skills li input { width: 48px; text-align: center; }
+.gm-skills li input.bad { border-color: #e0503a; }
+.gm-skills li .pill { padding: 0 8px; }
 .gm-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
 .gm-list li { padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
 .gm-tabs { margin: 0 0 8px; flex: none; }

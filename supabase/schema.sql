@@ -577,7 +577,8 @@ create table if not exists public.gm_buffs (
   target_pid bigint,
   name text not null check (char_length(name) between 1 and 20),
   tag text not null default '' check (char_length(tag) <= 4),
-  kind text not null check (kind in ('xp', 'drop', 'coins', 'yield', 'speed', 'atk', 'str', 'def', 'hp')),
+  kind text not null check (kind in ('xp', 'drop', 'coins', 'yield', 'speed', 'atk', 'str', 'def', 'hp',
+    'xp_combat', 'xp_gather', 'xp_produce', 'crit', 'critdmg', 'dodge', 'haste', 'leech', 'reduce', 'regen', 'move', 'quality')),
   pct numeric not null check (pct > 0 and pct <= 1000),
   starts_at timestamptz not null default now(),
   ends_at timestamptz not null,
@@ -2760,3 +2761,58 @@ begin
 end $$;
 drop trigger if exists ac_filter_chat on public.chat;
 create trigger ac_filter_chat before insert on public.chat for each row execute function public.ac_filter_chat();
+
+-- ============ GM 改技能等级 + 更多增益类型（11-02）============
+-- 增益类型多了 12 种
+alter table public.gm_buffs drop constraint if exists gm_buffs_kind_check;
+alter table public.gm_buffs add constraint gm_buffs_kind_check check (kind in (
+  'xp', 'drop', 'coins', 'yield', 'speed', 'atk', 'str', 'def', 'hp',
+  'xp_combat', 'xp_gather', 'xp_produce', 'crit', 'critdmg', 'dodge', 'haste', 'leech', 'reduce', 'regen', 'move', 'quality'
+));
+
+-- 查一个玩家的各技能经验（GM 面板「技能」页）
+create or replace function public.gm_get_skills(p_pid bigint) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare p profiles; d jsonb;
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  select * into p from profiles where pid = p_pid;
+  if p.id is null then raise exception '找不到这个 UID'; end if;
+  select data into d from saves where player_id = p.id;
+  if d is null then raise exception '这个玩家还没有存档'; end if;
+  return jsonb_build_object('name', p.name, 'xp', coalesce(d -> 'xp', '{}'::jsonb));
+end $$;
+revoke execute on function public.gm_get_skills(bigint) from public, anon;
+grant execute on function public.gm_get_skills(bigint) to authenticated;
+
+-- 改技能经验：p_xp = {"mining": 12345, ...}，只认已知技能，经验 0 到 1e15
+-- 改完存档 rev 会自动 +1，玩家下次同步就用新的等级（正在结算的那次会重试）
+create or replace function public.gm_set_skills(p_pid bigint, p_xp jsonb) returns int
+language plpgsql security definer set search_path = public as $$
+declare p profiles; d jsonb; k text; v jsonb; n int := 0;
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  if jsonb_typeof(p_xp) <> 'object' then raise exception '格式不对'; end if;
+  select * into p from profiles where pid = p_pid;
+  if p.id is null then raise exception '找不到这个 UID'; end if;
+  select data into d from saves where player_id = p.id for update;
+  if d is null then raise exception '这个玩家还没有存档'; end if;
+  for k, v in select * from jsonb_each(p_xp) loop
+    if k not in ('mining', 'woodcutting', 'fishing', 'gathering', 'farming', 'hunting', 'husbandry', 'thieving', 'cooking',
+      'smithing', 'fletching', 'herblore', 'crafting', 'enhancing', 'melee', 'ranged', 'magic', 'defence', 'hitpoints') then
+      raise exception '没有这个技能：%', k;
+    end if;
+    if jsonb_typeof(v) <> 'number' or (v #>> '{}')::numeric < 0 or (v #>> '{}')::numeric > 1e15 then
+      raise exception '经验数值不对：%', k;
+    end if;
+    d := jsonb_set(d, array['xp', k], to_jsonb(floor((v #>> '{}')::numeric)::bigint), true);
+    n := n + 1;
+  end loop;
+  if n = 0 then return 0; end if;
+  perform set_config('ac.bypass', '1', true);
+  update saves set data = d where player_id = p.id;
+  perform set_config('ac.bypass', '0', true);
+  return n;
+end $$;
+revoke execute on function public.gm_set_skills(bigint, jsonb) from public, anon;
+grant execute on function public.gm_set_skills(bigint, jsonb) to authenticated;

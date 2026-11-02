@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { GM_KINDS, GM_KIND_NAME, GM_PCT_MAX } from '../core/gm';
+import { GM_GROUPS, GM_KINDS, GM_KIND_NAME, GM_PCT_MAX, gmGroupOf } from '../core/gm';
 import type { GmKind } from '../core/types';
 import { online, type AiPlayer, type CheatRow, type AltRow, type RedeemCodeRow, type EconRow, type GmPlayer, type GmTrade, type Snapshot, type GmInput, type GmMailRow, type GmRow } from '../net';
 import { aiPlayers, botDoing, botsMuted, setBotsMuted, botName, botOnline, botPresence, botProfile, habitOf, refreshBots, zoneOf } from '../net/bots';
 import { actionName } from './format';
 import { emitToGame } from './GameCanvas';
-import { ITEMS } from '../core/data';
+import { ITEMS, SKILLS } from '../core/data';
+import { levelForXp, XP_TABLE } from '../core/xp';
+import type { SkillId } from '../core/types';
+import { SkillIcon } from './icons';
 import type { ItemStack } from '../core/types';
 import { fmtNum } from './format';
 import { Icon } from './icons';
@@ -31,11 +34,28 @@ interface Form {
   name: string;
   tag: string;
   kind: GmKind;
+  /** 新发放时可以一次选好几种，每种各发一条（11-02） */
+  kinds: GmKind[];
   pct: string;
   len: string;
   unit: Unit;
+  /** 开始时间：空 = 现在；否则 datetime-local 的值 */
+  start: string;
 }
-const EMPTY: Form = { all: true, pid: '', name: '', tag: '', kind: 'xp', pct: '50', len: '2', unit: 'h' };
+const EMPTY: Form = { all: true, pid: '', name: '', tag: '', kind: 'xp', kinds: ['xp'], pct: '50', len: '2', unit: 'h', start: '' };
+/** 一键模板（11-02） */
+const PRESETS: { name: string; tag: string; kinds: GmKind[]; pct: number; len: number; unit: Unit }[] = [
+  { name: tl('周末双倍经验'), tag: tl('双倍'), kinds: ['xp'], pct: 100, len: 2, unit: 'd' },
+  { name: tl('新手福利'), tag: tl('新手'), kinds: ['xp', 'drop', 'speed'], pct: 50, len: 7, unit: 'd' },
+  { name: tl('战斗狂欢'), tag: tl('狂欢'), kinds: ['atk', 'str', 'def', 'crit', 'haste'], pct: 30, len: 6, unit: 'h' },
+  { name: tl('采集节'), tag: tl('丰收'), kinds: ['xp_gather', 'yield', 'speed'], pct: 50, len: 1, unit: 'd' },
+  { name: tl('工匠日'), tag: tl('工匠'), kinds: ['xp_produce', 'quality', 'speed'], pct: 50, len: 1, unit: 'd' },
+  { name: tl('寻宝时刻'), tag: tl('寻宝'), kinds: ['drop', 'coins'], pct: 100, len: 3, unit: 'h' },
+  { name: tl('补偿礼包'), tag: tl('补偿'), kinds: ['xp', 'drop', 'coins', 'speed'], pct: 100, len: 1, unit: 'd' },
+];
+const LEN_PRESETS: [number, Unit][] = [[30, 'm'], [1, 'h'], [2, 'h'], [6, 'h'], [12, 'h'], [1, 'd'], [3, 'd'], [7, 'd']];
+/** datetime-local 要的格式（本地时间） */
+const localInput = (t: number) => { const d = new Date(t - new Date(t).getTimezoneOffset() * 60_000); return d.toISOString().slice(0, 16); };
 
 const left = (ms: number) => {
   const m = Math.ceil(ms / 60_000);
@@ -45,7 +65,7 @@ const left = (ms: number) => {
 };
 
 export function GmPanel({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<'buff' | 'mail' | 'gear' | 'code' | 'econ' | 'ai' | 'players' | 'ac' | 'trade' | 'snap'>('buff');
+  const [tab, setTab] = useState<'buff' | 'mail' | 'gear' | 'code' | 'econ' | 'ai' | 'players' | 'ac' | 'trade' | 'snap' | 'skills'>('buff');
   return (
     <div className="page guild gm-panel">
       <div className="sheet-head">
@@ -55,6 +75,7 @@ export function GmPanel({ onClose }: { onClose: () => void }) {
       </div>
       <div className="gm-seg gm-tabs">
         <button className={`pill ${tab === 'buff' ? 'on' : ''}`} onClick={() => setTab('buff')}>{tl('增益')}</button>
+        <button className={`pill ${tab === 'skills' ? 'on' : ''}`} onClick={() => setTab('skills')}>{tl('技能等级')}</button>
         <button className={`pill ${tab === 'mail' ? 'on' : ''}`} onClick={() => setTab('mail')}>{tl('赠送物品')}</button>
         <button className={`pill ${tab === 'gear' ? 'on' : ''}`} onClick={() => setTab('gear')}>{tl('赠送装备')}</button>
         <button className={`pill ${tab === 'code' ? 'on' : ''}`} onClick={() => setTab('code')}>{tl('兑换码')}</button>
@@ -65,7 +86,7 @@ export function GmPanel({ onClose }: { onClose: () => void }) {
         <button className={`pill ${tab === 'trade' ? 'on' : ''}`} onClick={() => setTab('trade')}>{tl('交易记录')}</button>
         <button className={`pill ${tab === 'snap' ? 'on' : ''}`} onClick={() => setTab('snap')}>{tl('服务器存档')}</button>
       </div>
-      {tab === 'buff' ? <BuffTab /> : tab === 'ai' ? <AiTab onClose={onClose} /> : tab === 'ac' ? <AcTab /> : tab === 'players' ? <PlayersTab /> : tab === 'trade' ? <TradeTab /> : tab === 'econ' ? <EconTab /> : tab === 'snap' ? <SnapTab /> : <MailTab key={tab} gear={tab === 'gear'} code={tab === 'code'} />}
+      {tab === 'buff' ? <BuffTab /> : tab === 'ai' ? <AiTab onClose={onClose} /> : tab === 'ac' ? <AcTab /> : tab === 'players' ? <PlayersTab /> : tab === 'trade' ? <TradeTab /> : tab === 'econ' ? <EconTab /> : tab === 'snap' ? <SnapTab /> : tab === 'skills' ? <SkillTab /> : <MailTab key={tab} gear={tab === 'gear'} code={tab === 'code'} />}
     </div>
   );
 }
@@ -110,8 +131,11 @@ function BuffTab() {
   const pct = Number(form.pct);
   const len = Number(form.len);
   const pid = Number(form.pid);
+  const startAt = form.start ? new Date(form.start).getTime() : NaN;
   const bad =
     !form.name.trim() ? tl('先起个名字') :
+    !editing && !form.kinds.length ? tl('至少选一种类型') :
+    form.start && !(startAt > 0) ? tl('开始时间不对') :
     !(pct > 0 && pct <= GM_PCT_MAX) ? tl`数值要在 1-${GM_PCT_MAX}% 之间` :
     !(len > 0) ? tl('持续时间要大于 0') :
     !form.all && !(Number.isInteger(pid) && pid > 0) ? tl('填玩家的数字 UID') : null;
@@ -119,7 +143,7 @@ function BuffTab() {
   const submit = () => {
     if (bad) return;
     const unit = UNITS.find((u) => u.id === form.unit)!;
-    const from = Date.now();
+    const from = form.start && startAt > Date.now() ? startAt : Date.now();
     const b: GmInput = {
       targetPid: form.all ? null : pid, name: form.name.trim(), tag: form.tag.trim(), kind: form.kind, pct,
       from, to: from + len * unit.ms,
@@ -130,15 +154,20 @@ function BuffTab() {
       if (old) { b.from = old.from; b.to = old.from + len * unit.ms; }
       void run(() => online.gmUpdate(editing, b), tl('已保存修改'));
       setEditing(null);
-    } else void run(() => online.gmAdd(b), form.all ? tl('已发放给全服') : tl`已发放给 UID ${pid}`);
-    setForm({ ...EMPTY, kind: form.kind });
+    } else {
+      const kinds = form.kinds;
+      const who = form.all ? tl('全服') : tl`UID ${pid}`;
+      void run(async () => { for (const kind of kinds) await online.gmAdd({ ...b, kind }); },
+        kinds.length > 1 ? tl`已给${who}发放 ${kinds.length} 种增益` : form.all ? tl('已发放给全服') : tl`已发放给 UID ${pid}`);
+    }
+    setForm({ ...EMPTY, kind: form.kind, kinds: form.kinds });
   };
 
   const edit = (r: GmRow) => {
     const total = r.to - r.from;
     const unit = total % 86_400_000 === 0 ? 'd' : total % 3600_000 === 0 ? 'h' : 'm';
     const ms = UNITS.find((u) => u.id === unit)!.ms;
-    setForm({ all: r.targetPid == null, pid: r.targetPid ? String(r.targetPid) : '', name: r.name, tag: r.tag, kind: r.kind, pct: String(r.pct), len: String(Math.round(total / ms)), unit });
+    setForm({ all: r.targetPid == null, pid: r.targetPid ? String(r.targetPid) : '', name: r.name, tag: r.tag, kind: r.kind, kinds: [r.kind], pct: String(r.pct), len: String(Math.round(total / ms)), unit, start: r.from > Date.now() ? localInput(r.from) : '' });
     setEditing(r.id);
     setMsg(null);
   };
@@ -147,6 +176,13 @@ function BuffTab() {
     <>
       <h3>{editing ? tl('修改增益') : tl('发放增益')}</h3>
       <div className="gm-form frame">
+        {!editing && (
+          <label><span>{tl('模板')}</span>
+            <span className="gm-seg">
+              {PRESETS.map((p) => <button key={p.name} className="pill" title={p.kinds.map((k) => GM_KIND_NAME[k]).join(tl('、'))} onClick={() => set({ name: p.name, tag: p.tag, kinds: p.kinds, kind: p.kinds[0], pct: String(p.pct), len: String(p.len), unit: p.unit })}>{p.name}</button>)}
+            </span>
+          </label>
+        )}
         <label><span>{tl('对象')}</span>
           <span className="gm-seg">
             <button className={`pill ${form.all ? 'on' : ''}`} onClick={() => set({ all: true })}>{tl('全服玩家')}</button>
@@ -156,20 +192,48 @@ function BuffTab() {
         </label>
         <label><span>{tl('名字')}</span><input maxLength={20} placeholder={tl('如：周末双倍经验')} value={form.name} onChange={(e) => set({ name: e.target.value })} /></label>
         <label><span>{tl('标签')}</span><input maxLength={4} placeholder={tl('1-4 个字，如：双倍')} value={form.tag} onChange={(e) => set({ tag: e.target.value })} /></label>
-        <label><span>{tl('类型')}</span>
-          <select value={form.kind} onChange={(e) => set({ kind: e.target.value as GmKind })}>
-            {GM_KINDS.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
-          </select>
-        </label>
+        {editing ? (
+          <label><span>{tl('类型')}</span>
+            <select value={form.kind} onChange={(e) => set({ kind: e.target.value as GmKind, kinds: [e.target.value as GmKind] })}>
+              {GM_KINDS.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
+            </select>
+          </label>
+        ) : (
+          <div className="gm-kinds">
+            <span>{tl('类型')}<small className="muted">{tl('可多选')}</small></span>
+            <div>
+              {GM_GROUPS.map((g) => (
+                <div key={g.id} className="gm-kind-row">
+                  <small className="muted">{g.name}</small>
+                  {GM_KINDS.filter((k) => gmGroupOf(k.id) === g.id).map((k) => {
+                    const on = form.kinds.includes(k.id);
+                    return <button key={k.id} title={k.desc} className={`pill ${on ? 'on' : ''}`} onClick={() => {
+                      const kinds = on ? form.kinds.filter((x) => x !== k.id) : [...form.kinds, k.id];
+                      set({ kinds, kind: on ? kinds[0] ?? form.kind : k.id });
+                    }}>{k.name}</button>;
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <small className="muted gm-hint">{GM_KINDS.find((k) => k.id === form.kind)?.desc}</small>
         <label><span>{tl('数值')}</span><span className="gm-seg"><input inputMode="decimal" value={form.pct} onChange={(e) => set({ pct: e.target.value.replace(/[^\d.]/g, '') })} /><b>%</b>
-          {[25, 50, 100, 200].map((n) => <button key={n} className="pill" onClick={() => set({ pct: String(n) })}>+{n}%</button>)}
+          {[10, 25, 50, 100, 200, 300, 500, 1000].map((n) => <button key={n} className={`pill ${pct === n ? 'on' : ''}`} onClick={() => set({ pct: String(n) })}>+{n}%</button>)}
         </span></label>
         <label><span>{tl('持续')}</span><span className="gm-seg"><input inputMode="decimal" value={form.len} onChange={(e) => set({ len: e.target.value.replace(/[^\d.]/g, '') })} />
           {UNITS.map((u) => <button key={u.id} className={`pill ${form.unit === u.id ? 'on' : ''}`} onClick={() => set({ unit: u.id })}>{u.name}</button>)}
         </span></label>
+        <label><span /><span className="gm-seg">
+          {LEN_PRESETS.map(([n, u]) => <button key={n + u} className={`pill ${len === n && form.unit === u ? 'on' : ''}`} onClick={() => set({ len: String(n), unit: u })}>{n}{UNITS.find((x) => x.id === u)!.name}</button>)}
+        </span></label>
+        <label><span>{tl('开始')}</span><span className="gm-seg">
+          <button className={`pill ${!form.start ? 'on' : ''}`} onClick={() => set({ start: '' })}>{tl('立即')}</button>
+          <input type="datetime-local" style={{ width: 'auto' }} value={form.start} min={localInput(Date.now())} onChange={(e) => set({ start: e.target.value })} />
+          {[1, 6, 24].map((h) => <button key={h} className="pill" onClick={() => set({ start: localInput(Date.now() + h * 3600_000) })}>{tl`${h} 小时后`}</button>)}
+        </span></label>
         <div className="gm-actions">
-          <button className="primary" disabled={!!bad || busy} onClick={submit}>{editing ? tl('保存修改') : tl('发放')}</button>
+          <button className="primary" disabled={!!bad || busy} onClick={submit}>{editing ? tl('保存修改') : form.kinds.length > 1 ? tl`发放 ${form.kinds.length} 种` : tl('发放')}</button>
           {editing && <button className="pill" onClick={() => { setEditing(null); setForm(EMPTY); }}>{tl('取消修改')}</button>}
         </div>
         {(bad && form.name) || msg ? <p className={msg?.ok ? 'good' : 'warn'}>{msg?.text ?? bad}</p> : null}
@@ -911,6 +975,98 @@ function PlayersTab() {
             </li>
           ))}
         </ul>
+      )}
+    </>
+  );
+}
+
+/** GM 改技能等级（用户 11-02）：填 UID 读出各技能等级，改完一起保存，服务器直接改存档里的经验 */
+const GM_LV_MAX = 200;
+function SkillTab() {
+  const [pid, setPid] = useState('');
+  const [who, setWho] = useState<{ pid: number; name: string; xp: Record<string, number> } | null>(null);
+  const [lv, setLv] = useState<Record<string, string>>({});
+  const [all, setAll] = useState('');
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const ids = (Object.keys(SKILLS) as SkillId[]).filter((k) => !SKILLS[k].soon);
+  const cur = (k: string) => levelForXp(who?.xp[k] ?? 0);
+
+  const load = async (n = Number(pid)) => {
+    if (!(Number.isInteger(n) && n > 0)) return setMsg({ text: tl('填玩家的数字 UID'), ok: false });
+    setBusy(true);
+    try {
+      const r = await online.gmGetSkills(n);
+      setWho({ pid: n, ...r });
+      setLv(Object.fromEntries(ids.map((k) => [k, String(levelForXp(r.xp[k] ?? 0))])));
+      setMsg(null);
+    } catch (e) { setWho(null); setMsg({ text: (e as Error).message, ok: false }); }
+    setBusy(false);
+  };
+
+  const want = (k: string) => Math.floor(Number(lv[k]));
+  const okLv = (n: number) => Number.isInteger(n) && n >= 1 && n <= GM_LV_MAX;
+  const changed = who ? ids.filter((k) => okLv(want(k)) && want(k) !== cur(k)) : [];
+  const badLv = who ? ids.some((k) => !okLv(want(k))) : false;
+
+  const save = async () => {
+    if (!who || !changed.length) return;
+    const list = changed.map((k) => tl`${SKILLS[k].name} ${cur(k)} → ${want(k)}`).join('\n');
+    if (!confirm(tl`修改 ${who.name}（UID ${who.pid}）的技能等级？\n${list}`)) return;
+    setBusy(true);
+    try {
+      const n = await online.gmSetSkills(who.pid, Object.fromEntries(changed.map((k) => [k, XP_TABLE[want(k)]])));
+      await load(who.pid);
+      setMsg({ text: tl`已修改 ${n} 个技能。玩家在线的话一分钟内同步到，排行榜在玩家下次同步后更新`, ok: true });
+    } catch (e) { setMsg({ text: (e as Error).message, ok: false }); }
+    setBusy(false);
+  };
+
+  return (
+    <>
+      <h3>{tl('技能等级')} <small className="muted">{tl('直接改玩家存档里的技能经验，改成某一级的起点经验')}</small></h3>
+      <div className="gm-form frame">
+        <label><span>UID</span>
+          <span className="gm-seg">
+            <input inputMode="numeric" placeholder={tl('玩家 UID，如 10000002')} value={pid} onChange={(e) => setPid(e.target.value.replace(/\D/g, '').slice(0, 9))} onKeyDown={(e) => e.key === 'Enter' && void load()} />
+            <button className="pill" disabled={busy} onClick={() => void load()}>{tl('读取')}</button>
+          </span>
+        </label>
+        {msg && <p className={msg.ok ? 'good' : 'warn'}>{msg.text}</p>}
+      </div>
+      {who && (
+        <>
+          <h3>{tl`${who.name}（UID ${who.pid}）`}</h3>
+          <div className="gm-form frame">
+            <label><span>{tl('全部')}</span>
+              <span className="gm-seg">
+                <input inputMode="numeric" placeholder={tl('把所有技能设成同一级')} value={all} onChange={(e) => setAll(e.target.value.replace(/\D/g, '').slice(0, 3))} />
+                <button className="pill" disabled={!okLv(Number(all))} onClick={() => setLv(Object.fromEntries(ids.map((k) => [k, all])))}>{tl('填入')}</button>
+                {[1, 10, 50, 99].map((n) => <button key={n} className="pill" onClick={() => setLv(Object.fromEntries(ids.map((k) => [k, String(n)])))}>{tl`${n} 级`}</button>)}
+                <button className="pill" onClick={() => setLv(Object.fromEntries(ids.map((k) => [k, String(cur(k))])))}>{tl('还原')}</button>
+              </span>
+            </label>
+            <ul className="gm-skills">
+              {ids.map((k) => {
+                const n = want(k), diff = okLv(n) && n !== cur(k);
+                return (
+                  <li key={k} className={diff ? 'on' : ''}>
+                    <SkillIcon skill={k} size={18} />
+                    <span>{SKILLS[k].name}</span>
+                    <small className="muted">{tl`现在 ${cur(k)} 级`}</small>
+                    <button className="pill" onClick={() => setLv({ ...lv, [k]: String(Math.max(1, (okLv(n) ? n : cur(k)) - 1)) })}>−</button>
+                    <input inputMode="numeric" className={okLv(n) ? '' : 'bad'} value={lv[k] ?? ''} onChange={(e) => setLv({ ...lv, [k]: e.target.value.replace(/\D/g, '').slice(0, 3) })} />
+                    <button className="pill" onClick={() => setLv({ ...lv, [k]: String(Math.min(GM_LV_MAX, (okLv(n) ? n : cur(k)) + 1)) })}>+</button>
+                  </li>
+                );
+              })}
+            </ul>
+            {badLv && <p className="warn">{tl`等级要在 1-${GM_LV_MAX} 之间`}</p>}
+            <div className="gm-actions">
+              <button className="primary" disabled={busy || badLv || !changed.length} onClick={() => void save()}>{changed.length ? tl`保存 ${changed.length} 个技能` : tl('没有改动')}</button>
+            </div>
+          </div>
+        </>
       )}
     </>
   );

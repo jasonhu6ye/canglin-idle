@@ -33,15 +33,23 @@ export const baseOf = (id: string) => id.replace(/@q\d$/, '');
  */
 export const FINE_MULT = 2.5;
 /** 某个 T 级（0 = T1）各品质的出货率，百分比，加起来 100。每高一阶，良好以上的概率乘 (1 - 7%×阶)；fine = 加了精炼石 */
-export function qualityOdds(tier = 0, fine = false): number[] {
+export function qualityOdds(tier = 0, fine = false, gm = 0): number[] {
   const f = Math.max(0.3, 1 - 0.07 * tier);
-  const hi = ODDS_T1.slice(1).map((p, i) => Math.round(p * f * (fine && (i === 1 || i === 2) ? FINE_MULT : 1) * 1000) / 1000);
+  // gm = GM「制作品质」增益（0.5 = +50%）：良好、优秀、史诗再乘 (1+gm)，传说神话不变；普通最少留 5%
+  const g = (i: number) => (gm > 0 && i <= 2 ? 1 + gm : 1);
+  let hi = ODDS_T1.slice(1).map((p, i) => p * f * (fine && (i === 1 || i === 2) ? FINE_MULT : 1) * g(i));
+  const top = hi.reduce((a, b) => a + b, 0);
+  if (gm > 0 && top > 95) {
+    const fixed = hi.slice(3).reduce((a, b) => a + b, 0), boosted = top - fixed;
+    hi = hi.map((p, i) => (i <= 2 ? (p * (95 - fixed)) / boosted : p));
+  }
+  hi = hi.map((p) => Math.round(p * 1000) / 1000);
   return [Math.round((100 - hi.reduce((a, b) => a + b, 0)) * 1000) / 1000, ...hi];
 }
 
 /** r 是 0-1 的随机数 */
-export function rollQuality(tier: number | undefined, r: number, fine = false): number {
-  const odds = qualityOdds(tier ?? 0, fine);
+export function rollQuality(tier: number | undefined, r: number, fine = false, gm = 0): number {
+  const odds = qualityOdds(tier ?? 0, fine, gm);
   let x = r * 100;
   for (let q = odds.length - 1; q > 0; q--) {
     if (x < odds[q]) return q;

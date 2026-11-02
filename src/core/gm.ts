@@ -8,6 +8,22 @@ import { tl } from '../i18n';
 export const GM_PIDS = [10000001];
 export const isGmPid = (pid?: number) => !!pid && GM_PIDS.includes(pid);
 
+/** 面板里按这几组排 */
+export const GM_GROUPS = [
+  { id: 'xp', name: tl('经验') },
+  { id: 'loot', name: tl('掉落和产出') },
+  { id: 'fight', name: tl('战斗') },
+  { id: 'misc', name: tl('其他') },
+] as const;
+export type GmGroup = (typeof GM_GROUPS)[number]['id'];
+const GROUP_OF: Record<GmKind, GmGroup> = {
+  xp: 'xp', xp_combat: 'xp', xp_gather: 'xp', xp_produce: 'xp',
+  drop: 'loot', coins: 'loot', yield: 'loot', quality: 'loot',
+  atk: 'fight', str: 'fight', def: 'fight', hp: 'fight', crit: 'fight', critdmg: 'fight', dodge: 'fight', haste: 'fight', leech: 'fight', reduce: 'fight',
+  speed: 'misc', regen: 'misc', move: 'misc',
+};
+export const gmGroupOf = (k: GmKind) => GROUP_OF[k];
+
 export const GM_KINDS: { id: GmKind; name: string; desc: string }[] = [
   { id: 'xp', name: tl('经验'), desc: tl('所有技能获得的经验') },
   { id: 'drop', name: tl('稀有掉落'), desc: tl('打怪和采集的几率掉落物的掉率（必掉的不变）') },
@@ -18,8 +34,23 @@ export const GM_KINDS: { id: GmKind; name: string; desc: string }[] = [
   { id: 'str', name: tl('最高伤害'), desc: tl('战斗最高伤害') },
   { id: 'def', name: tl('防御'), desc: tl('战斗防御') },
   { id: 'hp', name: tl('生命上限'), desc: tl('最大生命值') },
+  // 11-02 新增
+  { id: 'xp_combat', name: tl('战斗经验'), desc: tl('只加战斗类技能（攻击、力量、防御、远程、生命）的经验') },
+  { id: 'xp_gather', name: tl('采集经验'), desc: tl('只加采集类技能（挖矿、伐木、钓鱼、采集、种植等）的经验') },
+  { id: 'xp_produce', name: tl('制作经验'), desc: tl('只加制作类技能（锻造、烹饪、制衣等）的经验') },
+  { id: 'crit', name: tl('暴击率'), desc: tl('暴击几率，加的是百分点（+10% = 暴击率多 10 个点）') },
+  { id: 'critdmg', name: tl('暴击伤害'), desc: tl('暴击时的伤害倍率（原本 150%，+50% 就是 200%）') },
+  { id: 'dodge', name: tl('闪避'), desc: tl('闪避几率，加的是百分点，总闪避最多 75%') },
+  { id: 'haste', name: tl('攻击速度'), desc: tl('出手速度（+100% = 攻击间隔减半）') },
+  { id: 'leech', name: tl('吸血'), desc: tl('打出伤害的这么多百分比回成生命') },
+  { id: 'reduce', name: tl('减伤'), desc: tl('受到的伤害减少，加的是百分点，总减伤最多 75%') },
+  { id: 'regen', name: tl('回血速度'), desc: tl('不打架时自然回血的速度') },
+  { id: 'move', name: tl('移动速度'), desc: tl('走路和骑坐骑的速度') },
+  { id: 'quality', name: tl('制作品质'), desc: tl('制作装备出良好、优秀、史诗的几率（传说、神话不变）') },
 ];
 export const GM_KIND_NAME = Object.fromEntries(GM_KINDS.map((k) => [k.id, k.name])) as Record<GmKind, string>;
+/** 加的是百分点、还要封顶的几种（闪避、减伤），总量最多到这里 */
+export const GM_CAP = 0.75;
 /** 单个 buff 数值上限（百分比） */
 export const GM_PCT_MAX = 1000;
 
