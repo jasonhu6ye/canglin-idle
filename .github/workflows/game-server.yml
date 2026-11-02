@@ -32,6 +32,6 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: latest
-      - run: supabase functions deploy game --project-ref yrmqaanyonmouzlziqqd --use-api
+      - run: supabase functions deploy game --project-ref yrmqaanyonmouzlziqqd --use-api --yes
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
