@@ -941,20 +941,54 @@ function ago(t: number) {
 }
 
 /** 真人玩家（11-01）：新注册的在前，带注册时间、最后在线、等级、公会、防作弊状态 */
+/** 最后同步在这之内算在线（游戏每分钟同步一次） */
+const ONLINE_MS = 3 * 60_000;
+const DAY_MS = 86_400_000;
+type PlayerFilter = 'all' | 'online' | 'today' | 'new' | 'flag' | 'banned';
+const PLAYER_FILTERS: { id: PlayerFilter; name: string; test: (p: GmPlayer, now: number) => boolean }[] = [
+  { id: 'all', name: tl('全部'), test: () => true },
+  { id: 'online', name: tl('在线'), test: (p, now) => now - p.lastSeen < ONLINE_MS },
+  { id: 'today', name: tl('今天来过'), test: (p, now) => now - p.lastSeen < DAY_MS },
+  { id: 'new', name: tl('今天新注册'), test: (p, now) => now - p.joined < DAY_MS },
+  { id: 'flag', name: tl('有可疑记录'), test: (p) => p.flags > 0 },
+  { id: 'banned', name: tl('封禁 / 移出排行'), test: (p) => p.banned || p.hidden },
+];
+/** 复制文字：先用剪贴板接口，不行就用老办法 */
+async function copyText(t: string) {
+  try { await navigator.clipboard.writeText(t); return true; } catch { /* 下面再试 */ }
+  try {
+    const el = document.createElement('textarea');
+    el.value = t; el.style.position = 'fixed'; el.style.opacity = '0';
+    document.body.appendChild(el); el.select();
+    const ok = document.execCommand('copy');
+    el.remove();
+    return ok;
+  } catch { return false; }
+}
+
 function PlayersTab() {
   const [who, setWho] = useState('');
+  const [filter, setFilter] = useState<PlayerFilter>('all');
+  const [copied, setCopied] = useState<number | null>(null);
   const [rows, setRows] = useState<GmPlayer[] | null>(null);
   const [count, setCount] = useState<{ total: number; today: number; week: number } | null>(null);
   const [err, setErr] = useState('');
   const load = async (q = who) => {
     setRows(null); setErr('');
     try {
-      const [r, c] = await Promise.all([online.gmPlayers(q), online.gmPlayerCount()]);
+      const [r, c] = await Promise.all([online.gmPlayers(q, 500), online.gmPlayerCount()]);
       setRows(r); setCount(c);
     } catch (e) { setErr((e as Error).message); setRows([]); }
   };
   useEffect(() => { void load(''); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const list = rows ?? [];
+  const now = Date.now();
+  const all = rows ?? [];
+  const f = PLAYER_FILTERS.find((x) => x.id === filter)!;
+  const list = all.filter((p) => f.test(p, now));
+  const copy = async (pid: number) => {
+    if (await copyText(String(pid))) { setCopied(pid); setTimeout(() => setCopied((c) => (c === pid ? null : c)), 1500); }
+    else setErr(tl('复制失败，请手动选中复制'));
+  };
   return (
     <>
       <h3>{tl('玩家')} <small className="muted">{tl('真人玩家（不含 AI），新注册的在前')}</small></h3>
@@ -962,6 +996,16 @@ function PlayersTab() {
       <div className="gm-form frame">
         <label><span>{tl('玩家')}</span><input value={who} placeholder={tl('数字 ID 或名字，空着看全部')} onChange={(e) => setWho(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void load()} /></label>
         <div className="gm-actions"><button className="primary" onClick={() => void load()}>{tl('搜索')}</button></div>
+        <label><span>{tl('筛选')}</span>
+          <span className="gm-seg">
+            {PLAYER_FILTERS.map((x) => {
+              const n = all.filter((p) => x.test(p, now)).length;
+              return <button key={x.id} className={`pill ${filter === x.id ? 'on' : ''}`} onClick={() => setFilter(x.id)}>{x.name}{rows ? ` ${n}` : ''}</button>;
+            })}
+            <button className="pill" onClick={() => void load()}>{tl('刷新')}</button>
+          </span>
+        </label>
+        {count && rows && count.total > rows.length && !who.trim() && <small className="muted">{tl`只读了最新注册的 ${rows.length} 人，筛选只在这些人里找；找老玩家请搜名字或 ID`}</small>}
         {err && <p className="warn">{err}</p>}
       </div>
       {rows == null ? <p className="muted">{tl('读取中…')}</p> : !list.length ? <p className="muted">{tl('没有玩家')}</p> : (
@@ -969,7 +1013,9 @@ function PlayersTab() {
           {list.map((p) => (
             <li key={p.id} className="frame">
               <div>
+                {now - p.lastSeen < ONLINE_MS && <i className="gm-online" title={tl('在线')} />}
                 <b>{p.name}</b> <small className="muted">#{p.pid}</small>{p.guildTag && <small className="muted"> [{p.guildTag}]</small>}
+                <button className="pill gm-copy" onClick={() => void copy(p.pid)}>{copied === p.pid ? tl('已复制') : tl('复制 UID')}</button>
                 {p.banned ? <b className="warn"> {tl('已封禁')}</b> : p.hidden ? <b className="warn"> {tl('已移出排行榜')}</b> : p.flags > 0 ? <small className="warn"> {tl`${p.flags} 条可疑记录`}</small> : null}
               </div>
               <small className="muted">{tl`注册：${new Date(p.joined).toLocaleString()}（${ago(p.joined)}）`}</small>

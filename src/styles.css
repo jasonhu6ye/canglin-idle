@@ -1243,4 +1243,6 @@ button.chat-who { cursor: pointer; text-decoration: underline dotted; text-under
 .gm-cost { display: flex; flex-direction: column; gap: 2px; padding-left: 4px; border-left: 2px solid rgba(255,255,255,0.12); }
 .gm-stat { display: flex; flex-direction: column; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
 .gm-list .link { cursor: pointer; text-decoration: underline; }
-.gm-count { margin: 4px 0 8px; font-weight: bold; } .gm-players li > small { display: block; }
+.gm-count { margin: 4px 0 8px; font-weight: bold; }
+.gm-online { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #7ad860; box-shadow: 0 0 4px #7ad860; margin-right: 6px; vertical-align: middle; }
+.gm-players .gm-copy { margin-left: 8px; padding: 0 8px; font-size: 12px; } .gm-players li > small { display: block; }

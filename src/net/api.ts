@@ -371,7 +371,7 @@ export interface OnlineApi {
   gmSnapshotDelete(id: number): Promise<void>;
   gmRollback(id: number, pid?: number): Promise<number>;
   /** 管理员：真人玩家，新注册的在前；人数统计 */
-  gmPlayers(who?: string): Promise<GmPlayer[]>;
+  gmPlayers(who?: string, limit?: number): Promise<GmPlayer[]>;
   gmPlayerCount(): Promise<{ total: number; today: number; week: number }>;
   /** 管理员：装备来源（11-02）：某个玩家的记录（数字 ID 或名字），全服最近得到的传说以上装备 */
   gmGear(who: string): Promise<GearProvRow[]>;

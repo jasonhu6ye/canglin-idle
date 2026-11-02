@@ -648,8 +648,8 @@ export class SupabaseApi implements OnlineApi {
   async gmSetSkills(pid: number, xp: Record<string, number>) { return Number(ok(await this.sb.rpc('gm_set_skills', { p_pid: pid, p_xp: xp }))); }
   async gmSnapshotDelete(id: number) { ok(await this.sb.rpc('gm_snapshot_delete', { p_id: id })); }
   async gmRollback(id: number, pid?: number) { return Number(ok(await this.sb.rpc('gm_rollback', { p_snapshot: id, p_pid: pid ?? null }))); }
-  async gmPlayers(who?: string) {
-    const rows = ok(await this.sb.rpc('gm_players', { p_who: who?.trim() || null, p_limit: 300 })) as Row[];
+  async gmPlayers(who?: string, limit = 300) {
+    const rows = ok(await this.sb.rpc('gm_players', { p_who: who?.trim() || null, p_limit: limit })) as Row[];
     return rows.map((r): GmPlayer => ({
       id: r.id, pid: Number(r.pid), name: r.name, joined: Date.parse(r.created_at), lastSeen: Date.parse(r.last_seen),
       total: r.total == null ? null : Number(r.total), combat: r.combat == null ? null : Number(r.combat), guildTag: r.guild_tag ?? null,
