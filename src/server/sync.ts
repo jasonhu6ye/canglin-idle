@@ -7,7 +7,7 @@ import { ITEMS } from '../core/data';
 import { applyCmd, type Cmd } from '../core/commands';
 import { clearMateHits, setAggroMates, setDgCrew, setFieldCrew } from '../core/aggro';
 import { setPartySize } from '../core/party';
-import { setGuard, type Guard, type MateRun } from '../core/guard';
+import { flag, setGuard, type Flag, type Guard, type MateRun } from '../core/guard';
 import type { DungeonGate } from '../core/types';
 
 /** 组队相关的全局状态清零（服务器一次处理一个玩家，算完不能留给下一个） */
@@ -55,9 +55,11 @@ export interface SyncExtras {
   /** 队友存档里开着的洞口、各洞口打到哪了（核对跟队友进副本、队友进度用） */
   mateGates?: DungeonGate[];
   mateRuns?: MateRun[];
+  /** 被 GM 封禁：进度冻结（不执行指令、不结算，时间直接跳到现在，解封后也补不回来） */
+  frozen?: boolean;
 }
 
-export interface SyncOut { state: GameState; applied: number; mailIds: string[]; /** 这台设备的指令收到了第几条 */ ack: number }
+export interface SyncOut { state: GameState; applied: number; mailIds: string[]; /** 这台设备的指令收到了第几条 */ ack: number; /** 可疑操作 */ flags?: Flag[] }
 
 export function runSync(saved: unknown, cmds: unknown, now: number, ex: SyncExtras, device = '', seed?: number): SyncOut {
   resetShared(ex.partySize ?? 0);
@@ -70,7 +72,7 @@ export function runSync(saved: unknown, cmds: unknown, now: number, ex: SyncExtr
   try {
     const out = syncInner(saved, cmds, now, ex, device, seed);
     (out.state as GameState & { _g?: Partial<Guard> })._g = { ...(G.mv && { mv: G.mv }), ...(G.coopAt && { coopAt: G.coopAt }) };
-    return out;
+    return { ...out, flags: G.flags ?? [] };
   } finally {
     resetShared();
   }
@@ -84,6 +86,16 @@ function syncInner(saved: unknown, cmds: unknown, now: number, ex: SyncExtras, d
   }
   // 存档时间在服务器前面（以前本机算、被调过时钟的老存档）：从现在接着算，多出来的不再给
   if (s.lastTick > now) s = { ...s, lastTick: now };
+  if (ex.frozen) {
+    const seqs0 = { ...((saved as { _seq?: Record<string, number> } | null)?._seq ?? {}) };
+    const list0 = Array.isArray(cmds) ? (cmds as Cmd[]).slice(0, MAX_CMDS) : [];
+    const ack0 = Math.max(Number(seqs0[device]) || 0, ...list0.map((c) => Number(c?.q) || 0));
+    if (list0.some((c) => c && typeof c.n === 'string' && c.n !== 'coop')) flag('banned_play', false, { n: list0.length });
+    const out0 = { ...s, lastTick: now } as GameState & { _epoch?: number; _seq?: Record<string, number> };
+    if (ex.epoch) out0._epoch = ex.epoch;
+    if (device) out0._seq = Object.fromEntries(Object.entries({ ...seqs0, [device]: ack0 }).slice(-8));
+    return { state: out0, applied: 0, mailIds: [], ack: ack0 };
+  }
   s = setGmBuffs(s, ex.gmBuffs, s.lastTick);
   s = setGuildLv(s, ex.guildLv, ex.guildTech);
   let applied = 0;
@@ -97,6 +109,7 @@ function syncInner(saved: unknown, cmds: unknown, now: number, ex: SyncExtras, d
     if (q <= ack) continue;
     ack = q;
     const t = Math.min(now, Math.max(s.lastTick, now - BACKDATE_MS, Number(c.t) || 0));
+    if ((Number(c.t) || 0) < now - BACKDATE_MS - 60_000 && Number(c.t) >= s.lastTick) flag('backdate', false, { n: String(c.n).slice(0, 40), ago: Math.round((now - Number(c.t)) / 60_000) });
     s = advance(s, t).state;
     s = applyCmd(s, c.n, Array.isArray(c.a) ? c.a : [], t).state;
     applied++;

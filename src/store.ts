@@ -123,8 +123,8 @@ class Store {
 
   /** 游戏在另一个页面（tab）或另一台设备（device）上开着：这边停下，不再存档 */
   inactive = false;
-  inactiveWhy: 'tab' | 'device' = 'tab';
-  stop(why: 'tab' | 'device') {
+  inactiveWhy: 'tab' | 'device' | 'banned' = 'tab';
+  stop(why: 'tab' | 'device' | 'banned') {
     if (this.inactive) return;
     this.inactive = true;
     this.inactiveWhy = why;

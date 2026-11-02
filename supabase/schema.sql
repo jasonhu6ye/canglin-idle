@@ -2048,3 +2048,7 @@ update public.profiles set
   g_day = least(g_day, (now() at time zone 'utc')::date),
   g_checkin = least(g_checkin, (now() at time zone 'utc')::date)
 where g_exchanged < 0 or g_took < 0 or g_day > (now() at time zone 'utc')::date or g_checkin > (now() at time zone 'utc')::date;
+
+-- ============ 服务器结算记可疑操作（11-02）============
+-- 结算程序（service_role）发现被拒的可疑操作时调用 ac_flag 记进 cheat_flags
+grant execute on function public.ac_flag(uuid, text, boolean, jsonb) to service_role;

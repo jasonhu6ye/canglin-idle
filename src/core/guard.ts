@@ -20,11 +20,22 @@ export interface Guard {
   mv?: { pts: { x: number; y: number; r: number; t: number }[]; t: number };
   /** 上次收队友伤害的时刻 */
   coopAt?: number;
+  /** 这次结算里发现的可疑操作（服务器记进防作弊记录，同一类只记一条） */
+  flags?: Flag[];
 }
+export interface Flag { kind: string; severe: boolean; detail: Record<string, unknown> }
 
 let g: Guard | null = null;
 export const setGuard = (x: Guard | null) => { g = x; };
 export const guard = () => g;
+/** 记一条可疑操作（只在服务器结算时） */
+export function flag(kind: string, severe: boolean, detail: Record<string, unknown> = {}) {
+  if (!g) return;
+  const f = (g.flags ??= []);
+  const old = f.find((x) => x.kind === kind);
+  if (!old) f.push({ kind, severe, detail });
+  else if (severe && !old.severe) Object.assign(old, { severe, detail });
+}
 
 /** 最快能跑多快（格/秒）：装着的坐骑全速，再放宽三成 */
 export function maxSpeed(s: GameState) {

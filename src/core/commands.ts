@@ -8,7 +8,7 @@ import {
   useTownScroll, useWaystone, walkPos, moveSpeed, combatStats, playerAttackMs,
 } from './sim';
 import { dungeonFloor } from './dungeon';
-import { guard, maxSpeed } from './guard';
+import { flag, guard, maxSpeed } from './guard';
 import { claimRepReward, collectHome, deliverOrder, enterHome, leaveHome, petPet, placeBuild, removeAt, upgradeHome } from './home';
 import { harvestAll, installSprinkler, plantAll, tendPlot, waterAll } from './farm';
 import { claimMail, clearMail, readMail } from './mail';
@@ -43,11 +43,16 @@ function anchors(s: GameState, t: number): Pt[] {
   for (const p of G?.mv?.pts ?? []) if (t - p.t <= MV_KEEP) out.push(p);
   return out;
 }
-/** 服务器结算：p 是不是现在可能站的位置（extra：再放宽几格） */
-function canBe(s: GameState, t: number, p: { x: number; y: number }, extra = 0): boolean {
+/** 服务器结算：p 是不是现在可能站的位置（extra：再放宽几格）。对不上记一条可疑操作（差得很远算严重） */
+function canBe(s: GameState, t: number, p: { x: number; y: number }, extra = 0, what = 'move'): boolean {
   if (!guard()) return true;
   const sp = maxSpeed(s) / 1000;
-  return anchors(s, t).some((a) => Math.hypot(p.x - a.x, p.y - a.y) <= a.r + extra + sp * Math.max(0, t - a.t));
+  let over = Infinity;
+  for (const a of anchors(s, t)) over = Math.min(over, Math.hypot(p.x - a.x, p.y - a.y) - (a.r + extra + sp * Math.max(0, t - a.t)));
+  if (over <= 0) return true;
+  // 不算严重：本机和服务器的寻路时间可能差一点，画面上的人会比服务器早到或晚到
+  flag('move', false, { what, x: p.x, y: p.y, at: walkPos(s), over: Math.round(over) });
+  return false;
 }
 /** 每条指令执行前记下当时可能的位置（停下工作、换路走之后还能对上之前的路） */
 function remember(s: GameState, t: number) {
@@ -94,7 +99,11 @@ function coop(s: GameState, t: number, c: unknown): GameState {
     // 服务器：只收正在打的这只怪的伤害，按队友人数和时间限量（每人最多按自己输出的 8 倍、每秒至少怪物血量的 5%）
     const since = Math.min(10_000, Math.max(0, t - (G.coopAt ?? t - 1000)));
     G.coopAt = t;
-    if (!tgt || most <= 0) return { ...s };
+    const asked = hits.reduce((n, h) => n + num(h[1], 0, 1e9), 0);
+    if (!tgt || most <= 0) {
+      if (asked > 0 && most <= 0 && tgt) flag('fake_hits', false, { solo: true, dmg: Math.round(asked) });
+      return { ...s };
+    }
     const st = combatStats(s, tgt.m);
     const dps = (st.playerMaxHit * Math.max(1, st.critMult)) / Math.max(200, playerAttackMs(s));
     let left = most * Math.max(dps * 8, tgt.m.hp * 0.05 / 1000) * since;
@@ -104,6 +113,7 @@ function coop(s: GameState, t: number, c: unknown): GameState {
       left -= d;
       pushMateHit(tgt.key, d);
     }
+    if (left <= 0 && asked > 3 * most * Math.max(dps * 8, tgt.m.hp * 0.05 / 1000) * Math.max(since, 1000)) flag('fake_hits', false, { dmg: Math.round(asked) });
     return { ...s };
   }
   const cap = Math.max(1, (s.combat?.monsterMax ?? s.combat?.monsterHp ?? 1000) * 0.5);
@@ -192,7 +202,11 @@ function enterGate(s: GameState, t: number, gate: unknown, party: unknown, team:
   const want = cleanGate(gate);
   if (!want) return s;
   const real = !G ? want : (s.gates ?? []).find((x) => x.id === want.id) ?? G.gates.find((x) => x.id === want.id);
-  if (!real) return s;
+  if (!real) {
+    // 没组队也报一个不存在的洞口：只能是改出来的（组队时可能是队友刚开、还没同步）
+    flag('fake_gate', G!.party.length <= 1, { gate: want.id, kind: want.kind, tier: want.tier, floors: want.floors });
+    return s;
+  }
   let n = int(party, 1, 10);
   const tm = (team ?? null) as { members?: unknown; me?: unknown } | null;
   let members = Array.isArray(tm?.members)
@@ -258,25 +272,29 @@ export const COMMANDS = {
   },
   walk: (s, t, a, b, ms) => {
     // 服务器：起点要对得上，时间不能比直线跑过去还短（报短了按最快速度算）
-    const from = canBe(s, t, xy(a)) ? xy(a) : walkPos(s);
+    const from = canBe(s, t, xy(a), 0, 'walk') ? xy(a) : walkPos(s);
     const to = xy(b);
     const least = guard() ? (Math.hypot(to.x - from.x, to.y - from.y) / moveSpeed(s)) * 1000 * 0.9 : 0;
-    return startWalk(s, from, to, Math.max(least, num(ms, 0, 24 * 3600_000)));
+    const want = num(ms, 0, 24 * 3600_000);
+    // 报的时间比最快跑过去还短很多：改了走路速度
+    const fastest = (Math.hypot(to.x - from.x, to.y - from.y) / (maxSpeed(s) / 1.3)) * 1000;
+    if (want < fastest * 0.4 && fastest > 3000) flag('walk_fast', true, { ms: Math.round(want), least: Math.round(fastest) });
+    return startWalk(s, from, to, Math.max(least, want));
   },
   /** 回城卷轴用过之后画面上把人挪过去（存档里卷轴已经挪过了）：服务器只在本来就站在那里时才认 */
   teleport: (s, t, node) => {
     const n = NODES.find((x) => x.id === str(node));
-    return n && canBe(s, t, standOf(n), -SLACK + 2) ? teleport(s, n.id) : s;
+    return n && canBe(s, t, standOf(n), -SLACK + 2, 'teleport') ? teleport(s, n.id) : s;
   },
   useWaystone: (s, _t, id) => useWaystone(s, str(id)),
-  unlockWaystone: (s, t, at) => unlockWaystone(s, canBe(s, t, xy(at)) ? xy(at) : walkPos(s)),
+  unlockWaystone: (s, t, at) => unlockWaystone(s, canBe(s, t, xy(at), 0, 'waystone') ? xy(at) : walkPos(s)),
   useGate: (s, _t, id) => useGate(s, str(id)),
   townScroll: (s, _t, bank) => useTownScroll(s, str(bank)),
   // 组队同打
   coop: (s, t, c) => coop(s, t, c),
   // 副本
   // 洞口开在身边找好的空地（在城里会开到最近的城外，最远九十来格）
-  openGate: (s, t, key, at) => (canBe(s, t, xy(at), 92) ? openGate(s, str(key), xy(at), t) : [s, null]),
+  openGate: (s, t, key, at) => (canBe(s, t, xy(at), 92, 'gate') ? openGate(s, str(key), xy(at), t) : [s, null]),
   enterDungeon: (s, t, gate, party, team) => enterGate(s, t, gate, party, team),
   leaveDungeon: (s) => leaveDungeon(s),
   markContrib: (s, _t, id) => (guard() && !guard()!.party.includes(str(id)) ? s : markContrib(s, str(id))),
@@ -329,7 +347,10 @@ export type CmdArgs<N extends CmdName> = Rest<(typeof COMMANDS)[N]>;
 /** 执行一条指令；名字不认识、参数乱传导致出错，都当这条没执行 */
 export function applyCmd(s: GameState, n: string, a: unknown[], t: number): CmdResult {
   const f = own(COMMANDS, n) ? (COMMANDS as Record<string, Fn>)[n] : undefined;
-  if (!f || !Array.isArray(a)) return { state: s };
+  if (!f || !Array.isArray(a)) {
+    flag('bad_cmd', false, { n: String(n).slice(0, 40) });
+    return { state: s };
+  }
   try {
     remember(s, t);
     const r = f(s, t, ...a);

@@ -488,6 +488,8 @@ const AC_KIND: Record<string, string> = {
   xp_drop: tl('经验变少了'), clock_local: tl('游戏中改了系统时间'), save_edit: tl('本地存档被改过'), speed: tl('游戏速度异常'),
   items: tl('物品总价值涨得太快'), bad_item: tl('存档里有不存在或数量不对的物品'), rollback: tl('存档时间倒退（回档）'),
   trade: tl('交易价值严重不对等'), trade_fake: tl('交易给出的东西比存档里还多'), spam: tl('世界频道刷屏'), multi: tl('同一台设备登录多个账号'),
+  move: tl('报的位置对不上（瞬移，服务器已拒绝）'), walk_fast: tl('走路速度被改过'), fake_gate: tl('伪造副本洞口'),
+  fake_hits: tl('伪造队友伤害'), bad_cmd: tl('发了不存在的操作'), backdate: tl('操作时间往前填（补领奖励）'), banned_play: tl('封禁后还在操作'),
 };
 const AC_DEFAULT = { xp_per_hour: 6000000, coins_per_hour: 50000000, value_per_hour: 50000000, trade_gap: 3000000, chat_per_min: 8, multi_accounts: 3, drift_min: 30, snap_keep_auto: 3, auto_hide: 1 };
 const AC_FIELDS: [keyof typeof AC_DEFAULT, string][] = [
