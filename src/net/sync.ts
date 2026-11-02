@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react';
 import { saveTampered, store } from '../store';
 import { calibrate } from '../core/clock';
-import { tl } from '../i18n';
-import { newGame, setSettings } from '../core/sim';
 import type { GameState } from '../core/types';
-import { isRollbackError, online } from './index';
+import { online } from './index';
 import { syncSocial } from './social';
 
 /**
@@ -18,7 +16,6 @@ const OWNER_KEY = 'canglin-save-owner';
 const SYNCED_KEY = 'canglin-save-synced';
 /** 服务器回档版本（11-01）：上传时带上，比服务器旧就会被拒，读回档后的存档 */
 const EPOCH_KEY = 'canglin-save-epoch';
-const epoch = () => Number(ls.get(EPOCH_KEY) ?? 0) || 0;
 const PUSH_EVERY_MS = 60_000;
 /** 传失败了多久后重试 */
 const RETRY_MS = 15_000;
@@ -56,9 +53,6 @@ function deviceId() {
   if (!id) { id = Math.random().toString(36).slice(2, 12); ls.set(DEVICE_KEY, id); }
   return id;
 }
-const xpSum = (s: GameState) => Object.values(s.xp).reduce((a, b) => a + b, 0);
-/** 比新开的档多了经验才算有进度（新档生命值本来就有经验） */
-const hasProgress = (s: GameState) => xpSum(s) > xpSum(newGame(0, 1));
 
 export function useOnline() {
   const [, bump] = useState(0);
@@ -70,38 +64,41 @@ export function useOnline() {
   return { me: online.me(), phase };
 }
 
-export async function pushNow() {
+/**
+ * 和服务器同步（11-02 改服务器结算）：把还没送到的指令交给服务器，服务器按自己的时钟算好存档发回来，
+ * 本机换成服务器的结果（还没送到的指令在上面重放）。本机只负责马上显示，最后算数的是服务器。
+ */
+let syncing: Promise<boolean> | null = null;
+export function pushNow(): Promise<boolean> {
+  if (!syncing) syncing = doSync().finally(() => { syncing = null; });
+  return syncing;
+}
+async function doSync(): Promise<boolean> {
   const me = online.me();
-  if (!me || phase !== 'play' || store.inactive || ls.get(OWNER_KEY) !== me.id) return;
+  if (!me || phase !== 'play' || store.inactive || ls.get(OWNER_KEY) !== me.id) return false;
   lastPush = Date.now();
   try {
-    // 别的设备（或别的浏览器）在这之后传过存档：这边停下，别拿旧进度盖掉它（用户 10-25 离线收益丢了）
+    // 别的设备（或别的浏览器）在这之后同步过：这边停下，免得两边同时操作（用户 10-25）
     const cloud = await online.cloudHead();
     if (cloud && cloud.device && cloud.device !== deviceId() && cloud.tick > Number(ls.get(SYNCED_KEY) ?? 0) + 1000) {
-      // 10-27：手机放在后台一晚、期间在电脑上玩过，回来时以前会停在「别的设备在玩」，
-      // 这边刚算出来的离线收益也作废，看起来像离线没收益。别的设备已经停了一阵就直接读它的存档，
-      // 刷新后从它最后的进度算离线收益
+      // 10-27：别的设备已经停了一阵就直接接着玩（服务器上就是它最后的进度）
       if (Date.now() - cloud.tick > OTHER_IDLE_MS && document.visibilityState === 'visible') {
-        const save = await online.pullSave();
-        if (save) return adoptSave(save, me.id);
-      }
-      store.stop('device');
-      return;
-    }
-    const s = store.state;
-    await online.pushSave(s, deviceId(), epoch());
-    ls.set(SYNCED_KEY, String(s.lastTick));
-  } catch (e) {
-    // 服务器回档了：读回档后的存档（刷新页面）
-    if (isRollbackError(e)) {
-      const save = await online.pullSave().catch(() => null);
-      if (save) {
-        alert(tl('服务器已回档，正在读取回档后的存档。'));
-        return adoptSave(save, me.id);
+        store.pending = [];
+      } else {
+        store.stop('device');
+        return false;
       }
     }
-    // 连不上：过一会儿就重试，不用等满一分钟
+    const sentAt = Date.now();
+    const r = await online.gameSync(store.pending.slice(0, 3000), deviceId());
+    calibrate(r.now, sentAt, Date.now());
+    ls.set(SYNCED_KEY, String(r.state.lastTick));
+    store.adoptServer(r.state, r.ack);
+    return true;
+  } catch {
+    // 连不上：过一会儿就重试，不用等满一分钟（指令留着，下次一起发）
     lastPush = Date.now() - PUSH_EVERY_MS + RETRY_MS;
+    return false;
   }
 }
 
@@ -114,28 +111,25 @@ function adoptSave(s: GameState, ownerId: string) {
   store.replace(s);
 }
 
-/** 登录并有角色后：决定用本机还是云端的存档 */
+/**
+ * 登录并有角色后：存档以服务器为准（11-02）。本机存档是这个账号的就先接着显示、马上和服务器同步；
+ * 不是（换了账号、新设备）就读服务器的（还没有就让服务器开新档）。登录前在本机玩的进度不能带进账号了
+ */
 async function resolveSave() {
   const me = online.me()!;
-  const owner = ls.get(OWNER_KEY);
+  if (ls.get(OWNER_KEY) === me.id) { set('play'); void pushNow(); return; }
+  store.pending = [];
   const cloud = await online.pullSave();
-  if (cloud) {
-    const synced = Number(ls.get(SYNCED_KEY) ?? 0);
-    // 本机存档是这个账号的，且云端没被别的设备动过：继续用本机的
-    if (owner === me.id && cloud.lastTick <= synced + 1000) { set('play'); void pushNow(); return; }
-    adoptSave(cloud, me.id);
-    return;
-  }
-  if (owner === me.id) { set('play'); void pushNow(); return; }
-  if (!owner && hasProgress(store.state)) { set('adopt'); return; }
-  startFresh(me.outfit);
+  if (cloud) { adoptSave(cloud, me.id); return; }
+  await startFresh();
 }
 
-function startFresh(outfit?: string) {
+/** 让服务器开新档（建角色时选的外观由服务器从资料里读） */
+async function startFresh() {
   const me = online.me()!;
-  let s = newGame(Date.now());
-  if (outfit) s = setSettings(s, { skin: outfit });
-  adoptSave(s, me.id);
+  store.pending = [];
+  const r = await online.gameSync([], deviceId());
+  adoptSave(r.state, me.id);
 }
 
 async function afterAuth() {
@@ -177,10 +171,8 @@ export const signIn = (email: string, pw: string) => wrap(async () => { await on
 export const signUp = (email: string, pw: string) => wrap(async () => { await online.signUp(email, pw); await afterAuth(); });
 export const createCharacter = (name: string, outfit: string) => wrap(async () => { await online.createProfile(name, outfit); await afterAuth(); });
 /** 本机登录前的进度：带进这个账号，或者从头开始 */
-export function adoptLocal(keep: boolean) {
-  const me = online.me()!;
-  if (keep) { ls.set(OWNER_KEY, me.id); set('play'); void pushNow(); }
-  else startFresh(me.outfit);
+export function adoptLocal(_keep: boolean) {
+  void startFresh();
 }
 export async function signOut() {
   await pushNow();

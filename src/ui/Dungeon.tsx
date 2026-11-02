@@ -3,13 +3,13 @@ import { ITEMS, KEY_SHOP, MAT_SHOP, MONSTERS, NODES, SCROLL_TOWN, type MapNode }
 import { CHEST_COLOR, chestOdds, mobBuff, coopMates, COOP_DEF, COOP_DMG, dungeonFloor, GATE_REACH, totalMobs } from '../core/dungeon';
 import { allGates, setSharedGates } from '../core/gateShare';
 import { partySize } from '../core/party';
-import { markContrib, syncDungeon, atShop, buyGoods, buyKey, shopBought, shopRow, enterDungeon, gateBlock, leaveDungeon, openDungeonChest, TOWN_BANKS, useTownScroll, walkPos } from '../core/sim';
+import { syncDungeon, atShop, shopBought, shopRow, gateBlock, TOWN_BANKS, walkPos } from '../core/sim';
 import type { DungeonGate, GameState } from '../core/types';
 import { DG_CHEST, DG_MATE_HIT } from '../game/DungeonScene';
-import { dgCrew, pushMateHit, stopKey } from '../core/aggro';
+import { dgCrew, stopKey } from '../core/aggro';
 import { GATE_CLICK, GATE_OPENED } from '../game/MapScene';
 import { online, type Presence } from '../net';
-import { sendRally, useSocial } from '../net/social';
+import { coopHit, sendRally, useSocial } from '../net/social';
 import { store } from '../store';
 import { tl } from '../i18n';
 import { fmtNum } from './format';
@@ -75,11 +75,11 @@ function useDungeonSync() {
         const delta = last && last.key === key ? dmg - last.dmg : dmg;
         seen.set(p.playerId, { key, dmg: Math.max(dmg, last && last.key === key ? last.dmg : 0) });
         if (delta > 0) {
-          pushMateHit(key, delta);
-          if (!run.contrib?.includes(p.playerId)) store.dispatch((g) => markContrib(g, p.playerId));
+          coopHit(key, delta);
+          if (!run.contrib?.includes(p.playerId)) store.run('markContrib', p.playerId);
           emitToGame(DG_MATE_HIT, p.playerId, d.floor, d.idx, delta, !!d.crit);
         }
-        if (syncDungeon(store.state, d) !== store.state) store.dispatch((g) => syncDungeon(g, d));
+        if (syncDungeon(store.state, d) !== store.state) store.run('syncDungeon', d);
       }
     });
   }, []);
@@ -136,7 +136,7 @@ function useDungeonAuto(setMsg: (m: string) => void) {
       if (!s.travel && !s.walk && Math.hypot(p.x - g.x, p.y - g.y) <= GATE_REACH + 0.5) {
         const why = gateBlock(s, g, party);
         if (why) { setMsg(why); setAutoGate(null); return; }
-        store.dispatch((x) => enterDungeon(x, g, party, Date.now(), teamOf(st)));
+        store.run('enterDungeon', g, party, teamOf(st));
         setMsg(a.why === 'death' ? tl('回到洞口，接着上次的进度打') : tl('跟随队长进入副本'));
         return;
       }
@@ -211,14 +211,8 @@ export function DungeonPopups({ s }: { s: GameState }) {
 }
 
 function openChest() {
-  let got: Record<string, number> = {};
-  let q = 0;
-  store.dispatch((g) => {
-    const [next, r] = openDungeonChest(g);
-    got = r;
-    q = next.dungeon?.chest ?? 0;
-    return next;
-  });
+  const q = store.state.dungeon?.chest ?? 0;
+  const got = (store.run('dungeonChest') ?? {}) as Record<string, number>;
   if (Object.keys(got).length) showLoot({ from: CHEST_NAMES()[q], got });
 }
 
@@ -253,7 +247,7 @@ function GateSheet({ s, gate, onClose }: { s: GameState; gate: DungeonGate; onCl
         <div className="go">
           {far && !s.dungeon && <button onClick={() => { emitToGame('walktile', gate.x, gate.y); onClose(); }}>{tl('寻路前往')}</button>}
           {lead && <button onClick={() => { sendRally(); onClose(); }}>{tl('召集队友')}</button>}
-          <button className="primary" disabled={!!why} onClick={() => { store.dispatch((g) => enterDungeon(g, gate, party, Date.now(), team)); onClose(); }}>{tl('进入副本')}</button>
+          <button className="primary" disabled={!!why} onClick={() => { store.run('enterDungeon', gate, party, team); onClose(); }}>{tl('进入副本')}</button>
         </div>
         <button className="pill" onClick={onClose}>{tl('关闭')}</button>
       </div>
@@ -277,7 +271,7 @@ export function DungeonHud({ s }: { s: GameState }) {
       : run.phase === 'chest' ? tl('所有怪都清完了！点宝箱打开') : tl('宝箱已打开');
   const leave = () => {
     if (run.phase !== 'open' && !confirm) return setConfirm(true);
-    store.dispatch(leaveDungeon);
+    store.run('leaveDungeon');
     setConfirm(false);
   };
   return (
@@ -349,7 +343,7 @@ export function ShopSheet({ s, node, onClose }: { s: GameState; node: MapNode; o
                 <small>{tl`${fmtNum(price)} 金币 · 背包 ${s.bag[id] ?? 0} · 仓库 ${s.bank[id] ?? 0}`}</small>
               </div>
               <div className="salv-qty">
-                <button className="primary" disabled={!can} onClick={() => store.dispatch((g) => buyKey(g, id, 1))}>{tl('买 1 把')}</button>
+                <button className="primary" disabled={!can} onClick={() => store.run('buyKey', id, 1)}>{tl('买 1 把')}</button>
               </div>
             </div>
           );
@@ -371,7 +365,7 @@ export function ShopSheet({ s, node, onClose }: { s: GameState; node: MapNode; o
               </div>
               <div className="salv-qty">
                 {opts.map((n) => (
-                  <button key={n} disabled={!near || left < n || coins < price * n} onClick={() => store.dispatch((g) => buyGoods(g, id, n))}>{tl`买 ${n}`}</button>
+                  <button key={n} disabled={!near || left < n || coins < price * n} onClick={() => store.run('buyGoods', id, n)}>{tl`买 ${n}`}</button>
                 ))}
               </div>
             </div>
@@ -390,7 +384,7 @@ export function TownScrollPicker({ onClose }: { onClose: () => void }) {
   const go = (id: string) => {
     const n = (g: typeof store.state) => (g.bag[SCROLL_TOWN] ?? 0) + (g.bank[SCROLL_TOWN] ?? 0);
     const before = n(store.state);
-    store.dispatch((g) => useTownScroll(g, id));
+    store.run('townScroll', id);
     // 在大地图上：直接把角色挪过去；在副本里离开后大地图醒来会自己站到位置上。
     // 卷轴没用成（没有卷轴、在岛上）就不挪，不然等于白送一次传送
     if (n(store.state) < before) emitToGame('teleport', id);

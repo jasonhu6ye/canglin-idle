@@ -79,7 +79,7 @@ export function Wardrobe({ s, onClose }: { s: GameState; onClose: () => void }) 
           <b>{sel.name}</b>{sel.id === OUTFITS[0].id && <small className="muted">{tl(' · 原皮')}</small>}
           <p className="muted">{sel.desc}</p>
           {(sel.code || sel.fx) && <p className="gold small-note">{tl('限定外观 · 自带动态特效')}</p>}
-          <button className="primary" disabled={sel.id === cur || locked(sel)} onClick={() => store.dispatch((g) => setSettings(g, { skin: sel.id }))}>
+          <button className="primary" disabled={sel.id === cur || locked(sel)} onClick={() => store.run('settings', { skin: sel.id })}>
             {sel.id === cur ? tl('穿着中') : sel.sealed ? tl('暂未开放') : locked(sel) ? (sel.event ? tl('需要在祭坛兑换') : tl('需要兑换码解锁')) : tl('换上')}
           </button>
           {sel.sealed ? <p className="muted small-note">{tl('这套外观还没开放获取途径，先看看效果')}</p> : locked(sel) && <p className="muted small-note">{sel.event ? tl('万圣节限定：在苍岭城东门外的活动祭坛用南瓜积分兑换') : tl('在「更多」页输入兑换码领取')}</p>}

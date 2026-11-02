@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { ACTIONS, ITEMS, MONSTERS, nodeOfAction, nearestVariant, navStamp, NODES, SKILLS } from '../core/data';
 import { QUESTS, questProgress, questText } from '../core/quests';
-import { actionDuration, beltSlotOf, combatEstimate, combatLevel, dismissStop, enqueue, rainBonus, isBankId, level, maxHp, moveSpeed, removeTask, resumeWork, toggleMount, weaponStyle } from '../core/sim';
+import { actionDuration, beltSlotOf, combatEstimate, combatLevel, rainBonus, isBankId, level, maxHp, moveSpeed, weaponStyle } from '../core/sim';
 import { jumpTo, producerOf } from './ActionSheet';
 import { openNodeSheet } from './itemOpen';
 import { openCombatLog } from './CombatLog';
@@ -101,7 +101,7 @@ export function QueuePanel({ s }: { s: GameState }) {
             {actionName(t.action)} {modeLabel(t.mode)}
             {t.mode.type === 'count' && i === 0 && <em> ({t.done}/{t.mode.count})</em>}
           </span>
-          <button className="x" onClick={() => store.dispatch((g) => removeTask(g, i))} aria-label={tl("移除")}>✕</button>
+          <button className="x" onClick={() => store.run('removeTask', i)} aria-label={tl("移除")}>✕</button>
         </div>
       ))}
     </div>
@@ -129,14 +129,14 @@ function StopChip({ s }: { s: GameState }) {
   if (!st || !ACTIONS[st.action]) return null;
   const src = st.reason === 'noInput' && st.item ? producerOf(s, st.item) : undefined;
   const node = nodeOfAction(st.action, s.loc, s.waystones, moveSpeed(s));
-  const again = () => store.dispatch((g) => enqueue(g, st.action, st.mode));
+  const again = () => store.run('enqueue', st.action, st.mode);
   return (
     <div className={`chip stop-chip ${st.reason === 'complete' ? '' : 'bad'}`}>
       <b>{st.reason === 'complete' ? tl('空闲') : tl('停了')}</b> · {stopText(st.reason, st.action, st.item)}
       {src && <button className="pill on" onClick={() => jumpTo(src.action, src.node)}>{tl`去做${ITEMS[st.item!].name} ›`}</button>}
       {(st.reason === 'complete' || st.reason === 'death') && <button className="pill on" onClick={again}>{st.reason === 'complete' ? tl('再来一轮') : tl('再试一次')}</button>}
       {node && st.reason !== 'noInput' && <button className="pill" onClick={() => openNodeSheet(node.id)}>{tl('换个任务')}</button>}
-      <button className="pill" title={tl("关掉提示")} onClick={() => store.dispatch(dismissStop)}>×</button>
+      <button className="pill" title={tl("关掉提示")} onClick={() => store.run('dismissStop')}>×</button>
     </div>
   );
 }
@@ -148,7 +148,7 @@ export function StatusChips({ s, extra, log, chat }: { s: GameState; extra?: Rea
   if (task && s.paused) {
     body = (
       <>
-        <b style={{ color: '#9aa0a8' }}>{tl('已暂停')}</b>{tl` · 你离开了${actionName(task.action)}的地点`}<button className="pill on" onClick={() => store.dispatch(resumeWork)}>{tl('继续工作')}</button>
+        <b style={{ color: '#9aa0a8' }}>{tl('已暂停')}</b>{tl` · 你离开了${actionName(task.action)}的地点`}<button className="pill on" onClick={() => store.run('resumeWork')}>{tl('继续工作')}</button>
       </>
     );
   } else if (s.travel) {
@@ -214,7 +214,7 @@ export function MapButtons({ s, onWorldMap }: { s: GameState; onWorldMap: () => 
   return (
     <div className="map-buttons">
       {mount && (
-        <button className={`mount-btn ${s.mounted ? 'on' : ''}`} title={s.mounted ? tl('下坐骑 (R)') : tl('骑乘 (R)')} onClick={() => store.dispatch((g) => toggleMount(g))}>
+        <button className={`mount-btn ${s.mounted ? 'on' : ''}`} title={s.mounted ? tl('下坐骑 (R)') : tl('骑乘 (R)')} onClick={() => store.run('mount')}>
           <img src={mountIconUrl(mount)} width={30} height={30} alt="" draggable={false} />
           <small>{s.mounted ? tl('下骑') : tl('骑乘')}</small>
         </button>

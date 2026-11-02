@@ -1,4 +1,7 @@
 import type { GameState, GmBuff, ItemStack, SkillId } from '../core/types';
+import type { Cmd } from '../core/commands';
+
+export interface SyncReply { state: GameState; ack: number; now: number }
 import { combatLevel, level } from '../core/sim';
 
 /**
@@ -213,12 +216,15 @@ export interface OnlineApi {
 
   /** 云存档：存的是整个 GameState；冲突时比 lastTick，新的赢 */
   pullSave(): Promise<GameState | null>;
-  /** 存档上传时带上设备 id，好认出是不是别的设备传的 */
-  pushSave(s: GameState, device?: string, epoch?: number): Promise<void>;
+  /**
+   * 服务器结算（11-02）：把还没送到的指令交给服务器，服务器按自己的时钟算好存档再发回来。
+   * ack = 这台设备的指令服务器收到第几条（之后的还要再发）
+   */
+  gameSync(cmds: Cmd[], device: string): Promise<SyncReply>;
   /** 云端存档的 lastTick 和上传它的设备（不下载整份存档），没有就是 null */
   cloudHead(): Promise<{ tick: number; device?: string } | null>;
 
-  /** 排行榜读的是 pushSave 时顺便写的等级快照 */
+  /** 排行榜读的是服务器结算时写的等级快照 */
   leaderboard(board: Board, limit?: number): Promise<RankRow[]>;
   myRank(board: Board): Promise<RankRow | null>;
 

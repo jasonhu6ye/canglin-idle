@@ -240,7 +240,7 @@ function Game() {
       if (k >= '1' && k <= '9') pickTab(TABS[+k - 1].id);
       else if (k === 'm' || k === 'M') setWorldMap((v) => !v);
       else if (k === 'g' || k === 'G') pickTab('guild');
-      else if (k === 'r' || k === 'R') store.dispatch((g) => toggleMount(g));
+      else if (k === 'r' || k === 'R') store.run('mount');
       else if (k === 'l' || k === 'L') setCombatLog((v) => !v);
       else if (k === 'Enter') openChatPage();
       else if (k === 'Tab') {

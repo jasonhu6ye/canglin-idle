@@ -1,0 +1,6 @@
+# 只用来部署服务器结算程序（Edge Function「game」，11-02）；数据库表和函数仍在 schema.sql，手动在 SQL Editor 运行
+project_id = "canglin-idle"
+
+[functions.game]
+# 函数自己用玩家的登录令牌问 Supabase 是谁（src/server/edge.ts），网关这里不再检查
+verify_jwt = false

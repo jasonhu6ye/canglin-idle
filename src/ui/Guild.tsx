@@ -5,7 +5,7 @@ import type { GameState, SkillId } from '../core/types';
 import { SKILLS } from '../core/data';
 import { store } from '../store';
 import { online, GUILD_COST, NAME_RE, TAG_RE, type Board, type Guild, type GuildMember, type GuildRole, type RankRow } from '../net';
-import { retry, signOut, useOnline } from '../net/sync';
+import { pushNow, retry, signOut, useOnline } from '../net/sync';
 import { errText as baseErr } from './Login';
 import { openChatPage } from './ChatDock';
 import { tl } from '../i18n';
@@ -224,9 +224,10 @@ function NoGuild({ s, onJoined }: { s: GameState; onJoined: () => Promise<void> 
     if (!TAG_RE.test(tag)) { act.setErr(tl('会标 2-4 个字')); return; }
     if (coins < GUILD_COST) { act.setErr(tl`仓库里金币不够 ${GUILD_COST}`); return; }
     void act.run(async () => {
+      // 建公会的金币由服务器从存档里扣（11-02）：先同步，扣完再同步
+      await pushNow();
       await online.createGuild(name, tag);
-      // 服务器建好了才扣钱
-      store.dispatch((g) => ({ ...g, bank: { ...g.bank, coins: (g.bank.coins ?? 0) - GUILD_COST } }));
+      await pushNow();
       await onJoined();
     });
   };

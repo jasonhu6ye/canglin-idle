@@ -53,6 +53,8 @@ export function pushMateHit(key: string, dmg: number) {
   // 只留最近的几只怪，旧的丢掉
   if (mateHits.size > 20) mateHits.delete(mateHits.keys().next().value!);
 }
+/** 清掉所有还没算的队友伤害（服务器每次结算完清空） */
+export function clearMateHits() { mateHits.clear(); }
 /** 取出还没算进去的队友伤害 */
 export function takeMateHits(key: string): number {
   const n = mateHits.get(key) ?? 0;

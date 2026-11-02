@@ -1774,3 +1774,263 @@ begin
   return query select count(*), count(*) filter (where created_at > now() - interval '1 day'), count(*) filter (where created_at > now() - interval '7 days') from profiles;
 end $$;
 grant execute on function public.gm_player_count() to authenticated;
+
+-- ============ 服务器结算（11-02） ============
+-- 存档改由服务器算：游戏把玩家操作（指令）发给 Edge Function「game」，它按服务器时钟结算后用 service_role
+-- 调 server_commit 写进存档和排行榜。玩家自己不能再写 saves / ranks（网页变速、改存档都没用了）。
+-- 公会仓库、兑换、交易、建公会这些会动物品的，直接在数据库里改存档（save_take / save_give）。
+alter table public.saves add column if not exists rev bigint not null default 0;
+
+drop policy if exists "saves 只有自己" on public.saves;
+drop policy if exists "saves 自己看" on public.saves;
+create policy "saves 自己看" on public.saves for select using (auth.uid() = player_id);
+drop policy if exists "ranks 自己写" on public.ranks;
+revoke insert, update, delete on public.saves from anon, authenticated;
+revoke insert, update, delete on public.ranks from anon, authenticated;
+
+-- 存档内容变了就加版本号（服务器结算写入时自己带上新版本号；数据库里直接改的这里补上）
+create or replace function public.saves_rev() returns trigger
+language plpgsql as $$
+begin
+  if new.rev = old.rev and new.data is distinct from old.data then new.rev := old.rev + 1; end if;
+  return new;
+end $$;
+drop trigger if exists a0_saves_rev on public.saves;
+create trigger a0_saves_rev before update on public.saves for each row execute function public.saves_rev();
+
+-- 服务器结算写入：版本号对得上才写（同时有别的写入就返回 -1，服务器重算一次），顺便标记已领的 GM 邮件、写排行榜
+create or replace function public.server_commit(p_player uuid, p_rev bigint, p_data jsonb, p_tick bigint, p_mail uuid[], p_rank jsonb)
+returns bigint
+language plpgsql security definer set search_path = public as $$
+declare n int; nr bigint;
+begin
+  if p_rev < 0 then
+    insert into saves (player_id, data, last_tick, rev, updated_at) values (p_player, p_data, p_tick, 1, now())
+      on conflict (player_id) do nothing;
+    get diagnostics n = row_count;
+    if n = 0 then return -1; end if;
+    nr := 1;
+  else
+    update saves set data = p_data, last_tick = p_tick, rev = p_rev + 1, updated_at = now()
+      where player_id = p_player and rev = p_rev;
+    get diagnostics n = row_count;
+    if n = 0 then return -1; end if;
+    nr := p_rev + 1;
+  end if;
+  if coalesce(array_length(p_mail, 1), 0) > 0 then
+    update gm_mail set claimed_at = now() where id = any(p_mail) and claimed_at is null;
+    get diagnostics n = row_count;
+    -- 别的请求已经领过了：整个撤回重来，免得发两次
+    if n <> array_length(p_mail, 1) then raise exception 'MAIL_RACE'; end if;
+  end if;
+  insert into ranks (player_id, total, combat, skills, xp, updated_at)
+    values (p_player, (p_rank ->> 'total')::int, (p_rank ->> 'combat')::int, p_rank -> 'skills', p_rank -> 'xp', now())
+    on conflict (player_id) do update set total = excluded.total, combat = excluded.combat, skills = excluded.skills, xp = excluded.xp, updated_at = now();
+  update profiles set last_seen = now() where id = p_player;
+  return nr;
+end $$;
+revoke execute on function public.server_commit(uuid, bigint, jsonb, bigint, uuid[], jsonb) from public, anon, authenticated;
+grant execute on function public.server_commit(uuid, bigint, jsonb, bigint, uuid[], jsonb) to service_role;
+
+-- 从服务器存档里扣东西（先扣仓库，不够的扣背包），不够就报错
+create or replace function public.save_take(p uuid, p_item text, p_qty bigint) returns void
+language plpgsql security definer set search_path = public as $$
+declare d jsonb; bank bigint; bag bigint; a bigint;
+begin
+  if p_qty <= 0 then return; end if;
+  select data into d from saves where player_id = p for update;
+  if d is null then raise exception '找不到存档'; end if;
+  bank := coalesce((d -> 'bank' ->> p_item)::bigint, 0);
+  bag := case when p_item = 'coins' then 0 else coalesce((d -> 'bag' ->> p_item)::bigint, 0) end;
+  if bank + bag < p_qty then raise exception '东西不够：%', p_item; end if;
+  a := least(p_qty, bank);
+  d := jsonb_set(d, '{bank}', case when bank - a > 0 then (d -> 'bank') || jsonb_build_object(p_item, bank - a) else (d -> 'bank') - p_item end);
+  if p_qty > a then
+    d := jsonb_set(d, '{bag}', case when bag - (p_qty - a) > 0 then (d -> 'bag') || jsonb_build_object(p_item, bag - (p_qty - a)) else (d -> 'bag') - p_item end);
+  end if;
+  perform set_config('ac.bypass', '1', true);
+  update saves set data = d where player_id = p;
+  perform set_config('ac.bypass', '0', true);
+end $$;
+revoke execute on function public.save_take(uuid, text, bigint) from public, anon, authenticated;
+
+-- 往服务器存档的仓库里加东西
+create or replace function public.save_give(p uuid, p_item text, p_qty bigint) returns void
+language plpgsql security definer set search_path = public as $$
+declare d jsonb;
+begin
+  if p_qty <= 0 then return; end if;
+  select data into d from saves where player_id = p for update;
+  if d is null then raise exception '找不到存档'; end if;
+  d := jsonb_set(d, '{bank}', coalesce(d -> 'bank', '{}'::jsonb) || jsonb_build_object(p_item, coalesce((d -> 'bank' ->> p_item)::bigint, 0) + p_qty));
+  if p_item <> 'coins' then d := jsonb_set(d, '{seen}', coalesce(d -> 'seen', '{}'::jsonb) || jsonb_build_object(p_item, 1)); end if;
+  perform set_config('ac.bypass', '1', true);
+  update saves set data = d where player_id = p;
+  perform set_config('ac.bypass', '0', true);
+end $$;
+revoke execute on function public.save_give(uuid, text, bigint) from public, anon, authenticated;
+
+-- 下面这些以前是「游戏本地先扣、服务器只记账」，现在在数据库里直接扣 / 加存档
+create or replace function public.create_guild(p_name text, p_tag text) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare g uuid;
+begin
+  if auth.uid() is null then raise exception '请先登录'; end if;
+  if exists (select 1 from guild_members where player_id = auth.uid()) then raise exception '已经在公会里了'; end if;
+  perform save_take(auth.uid(), 'coins', 10000);
+  insert into guilds (name, tag) values (p_name, p_tag) returning id into g;
+  insert into guild_members (player_id, guild_id, role) values (auth.uid(), g, 'leader');
+  update profiles set guild_id = g where id = auth.uid();
+  return g;
+end $$;
+
+create or replace function public.exchange_items(p_item text, p_qty int) returns int
+language plpgsql security definer set search_path = public as $$
+declare m guild_members; left_ bigint; v int; q int; n bigint;
+begin
+  if p_item = 'coins' then raise exception '金币不能兑换贡献'; end if;
+  select * into m from guild_members where player_id = auth.uid();
+  if m.player_id is null then raise exception '还没加入公会'; end if;
+  select value into v from item_values where id = p_item;
+  if v is null or v <= 0 then raise exception '这个东西不能兑换'; end if;
+  perform guild_day_reset(auth.uid());
+  select 2000 - g_exchanged into left_ from profiles where id = auth.uid() for update;
+  if left_ <= 0 then raise exception '今天的兑换已经满了'; end if;
+  q := least(greatest(p_qty, 0)::bigint, (left_ * 10) / v)::int;
+  n := (q::bigint * v) / 10;
+  if q <= 0 or n <= 0 then raise exception '数量太少，换不到 1 点贡献'; end if;
+  perform save_take(auth.uid(), p_item, q);
+  update profiles set g_exchanged = g_exchanged + n where id = auth.uid();
+  perform guild_add_contrib(auth.uid(), n);
+  perform guild_add_xp(m.guild_id, n);
+  return q;
+end $$;
+
+create or replace function public.contribute(p_task uuid, p_qty int) returns int
+language plpgsql security definer set search_path = public as $$
+declare g uuid; t guild_tasks; add int;
+begin
+  select guild_id into g from guild_members where player_id = auth.uid();
+  select * into t from guild_tasks where id = p_task and guild_id = g for update;
+  if t.id is null then raise exception '任务不存在'; end if;
+  if t.ends_at < now() then raise exception '任务已结束'; end if;
+  add := least(greatest(p_qty, 0), t.need - t.have);
+  if add <= 0 then return 0; end if;
+  perform save_take(auth.uid(), t.target, add);
+  update guild_tasks set have = have + add where id = p_task;
+  perform guild_add_contrib(auth.uid(), add::bigint * t.per);
+  perform guild_add_xp(g, add::bigint * t.per);
+  if t.have + add >= t.need then
+    perform guild_add_xp(g, t.reward);
+    perform guild_event(g, 'task', '', t.target);
+  end if;
+  return add;
+end $$;
+
+create or replace function public.guild_deposit(p_item text, p_qty int, p_vault int default 0) returns void
+language plpgsql security definer set search_path = public as $$
+declare g uuid; lv int; nm text; cap int;
+begin
+  if p_qty <= 0 or p_qty > 1000000 then raise exception '数量不对'; end if;
+  if p_item = 'coins' then raise exception '金币不能存进公会仓库'; end if;
+  if not exists (select 1 from item_values where id = p_item) then raise exception '这个东西不能存'; end if;
+  select guild_id into g from guild_members where player_id = auth.uid();
+  if g is null then raise exception '还没加入公会'; end if;
+  if not can_vault(g, p_vault, auth.uid()) then raise exception '没有这个仓库的权限'; end if;
+  select level into lv from guilds where id = g for update;
+  cap := case when p_vault = 0 then guild_slots(lv) else 30 end;
+  if not exists (select 1 from guild_bank where guild_id = g and vault = p_vault and item = p_item)
+    and (select count(*) from guild_bank where guild_id = g and vault = p_vault) >= cap then
+    raise exception '公会仓库满了';
+  end if;
+  perform save_take(auth.uid(), p_item, p_qty);
+  insert into guild_bank (guild_id, vault, item, qty, pos)
+    values (g, p_vault, p_item, p_qty, (select coalesce(max(pos), 0) + 1 from guild_bank where guild_id = g and vault = p_vault))
+    on conflict (guild_id, vault, item) do update set qty = guild_bank.qty + excluded.qty;
+  select name into nm from profiles where id = auth.uid();
+  insert into guild_bank_log (guild_id, vault, player_id, name, item, qty) values (g, p_vault, auth.uid(), coalesce(nm, ''), p_item, p_qty);
+  delete from guild_bank_log where guild_id = g and at < now() - interval '30 days';
+end $$;
+
+create or replace function public.guild_withdraw(p_item text, p_qty int, p_vault int default 0) returns int
+language plpgsql security definer set search_path = public as $$
+declare m guild_members; tm int; td int; have bigint; n int; nm text; v int; took bigint; capped boolean;
+begin
+  select * into m from guild_members where player_id = auth.uid();
+  if m.player_id is null then raise exception '还没加入公会'; end if;
+  if not can_vault(m.guild_id, p_vault, auth.uid()) then raise exception '没有这个仓库的权限'; end if;
+  select take_min, take_day into tm, td from guilds where id = m.guild_id;
+  if p_vault = 0 and m.role = 'member' and (tm < 0 or m.contrib < tm) then raise exception '贡献不够，不能从公会仓库取东西'; end if;
+  select qty into have from guild_bank where guild_id = m.guild_id and vault = p_vault and item = p_item for update;
+  n := least(greatest(p_qty, 0), coalesce(have, 0))::int;
+  if n <= 0 then return 0; end if;
+  -- 10-27：会长可以限制普通成员每天从公共仓库取多少金币价值的东西，防止有人一次搬空
+  capped := p_vault = 0 and m.role = 'member' and td > 0;
+  if capped then
+    perform guild_day_reset(auth.uid());
+    select coalesce(value, 1) into v from item_values where id = p_item;
+    v := greatest(coalesce(v, 1), 1);
+    select g_took into took from profiles where id = auth.uid() for update;
+    n := least(n::bigint, (td - took) / v)::int;
+    if n <= 0 then raise exception '今天从公会仓库取的东西已经到上限了'; end if;
+    update profiles set g_took = g_took + n::bigint * v where id = auth.uid();
+  end if;
+  if n = have then delete from guild_bank where guild_id = m.guild_id and vault = p_vault and item = p_item;
+  else update guild_bank set qty = qty - n where guild_id = m.guild_id and vault = p_vault and item = p_item; end if;
+  perform save_give(auth.uid(), p_item, n);
+  select name into nm from profiles where id = auth.uid();
+  insert into guild_bank_log (guild_id, vault, player_id, name, item, qty) values (m.guild_id, p_vault, auth.uid(), coalesce(nm, ''), p_item, -n);
+  delete from guild_bank_log where guild_id = m.guild_id and at < now() - interval '30 days';
+  return n;
+end $$;
+
+create or replace function public.buy_guild_item(p_item text, p_qty int) returns int
+language plpgsql security definer set search_path = public as $$
+declare m guild_members; sh guild_shop; lv int; today date := (now() at time zone 'utc')::date; bought int; q int;
+begin
+  select * into m from guild_members where player_id = auth.uid() for update;
+  if m.player_id is null then raise exception '还没加入公会'; end if;
+  select * into sh from guild_shop where item = p_item;
+  if sh.item is null then raise exception '商店里没有这个'; end if;
+  select level into lv from guilds where id = m.guild_id;
+  if lv < sh.lv then raise exception '公会等级不够'; end if;
+  select coalesce(sum(qty), 0) into bought from guild_shop_buys where player_id = auth.uid() and item = p_item and day = today;
+  q := least(greatest(p_qty, 0), sh.daily - bought);
+  if q <= 0 then raise exception '今天已经买到上限了'; end if;
+  q := least(q::bigint, (m.contrib - m.spent) / sh.price)::int;
+  if q <= 0 then raise exception '贡献不够'; end if;
+  update guild_members set spent = spent + q::bigint * sh.price where player_id = auth.uid();
+  insert into guild_shop_buys (player_id, item, day, qty) values (auth.uid(), p_item, today, q)
+    on conflict (player_id, item, day) do update set qty = guild_shop_buys.qty + excluded.qty;
+  perform save_give(auth.uid(), p_item, q);
+  delete from guild_shop_buys where player_id = auth.uid() and day < today - 7;
+  return q;
+end $$;
+
+create or replace function public.confirm_trade(p_trade uuid, p_ok boolean) returns text
+language plpgsql security definer set search_path = public as $$
+declare t trades; k text; v jsonb;
+begin
+  select * into t from trades where id = p_trade for update;
+  if t.id is null or auth.uid() not in (t.a, t.b) then raise exception '交易不存在'; end if;
+  if t.status <> 'open' then raise exception '交易已经结束'; end if;
+  if auth.uid() = t.a then t.a_ok := p_ok; else t.b_ok := p_ok; end if;
+  if t.a_ok and t.b_ok then
+    if t.a_items = '{}'::jsonb and t.b_items = '{}'::jsonb then raise exception '双方都没放东西'; end if;
+    t.status := 'done';
+  end if;
+  update trades set a_ok = t.a_ok, b_ok = t.b_ok, status = t.status, updated_at = now() where id = p_trade;
+  if t.status = 'done' then
+    -- 成交：在数据库里把双方的东西换过来（不够就报错，整笔撤回、交易保持未成交）。
+    -- 放在改状态之后，交易检查触发器看到的还是换之前的存档
+    for k, v in select * from jsonb_each(t.a_items) loop
+      perform save_take(t.a, k, (v #>> '{}')::bigint);
+      perform save_give(t.b, k, (v #>> '{}')::bigint);
+    end loop;
+    for k, v in select * from jsonb_each(t.b_items) loop
+      perform save_take(t.b, k, (v #>> '{}')::bigint);
+      perform save_give(t.a, k, (v #>> '{}')::bigint);
+    end loop;
+  end if;
+  return t.status;
+end $$;

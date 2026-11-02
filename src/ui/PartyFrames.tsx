@@ -7,7 +7,7 @@ import { emitToGame, onGameEvent } from './GameCanvas';
 import { ACTIONS, nodesOfAction } from '../core/data';
 import type { GameState } from '../core/types';
 import { MANUAL_MOVE } from '../game/MapScene';
-import { leaveWork, level, startAt, toggleMount, walkPos } from '../core/sim';
+import { level, walkPos } from '../core/sim';
 import { store } from '../store';
 import { portrait } from './hud';
 import { setAutoGate } from './Dungeon';
@@ -70,11 +70,11 @@ function followStep(leader: Presence, party: Party): string | 'manual' {
   const node = join ? nodeNear(join, leader.x, leader.y) : undefined;
   if (join && node) {
     ours = join;
-    if (cur !== join) store.dispatch((g) => startAt(g, join, node));
+    if (cur !== join) store.run('startAt', join, node);
     return a?.kind === 'combat' ? tl`和队长一起打 ${actionName(join)}` : tl`和队长一起 ${actionName(join)}`;
   }
   // 队长换了事、走开了（以前队员会留在原地一直打）：自己也停下，跟上去
-  if (ours && cur === ours) store.dispatch(leaveWork);
+  if (ours && cur === ours) store.run('leaveWork');
   ours = null;
   const me = walkPos(s);
   const i = Math.max(0, party.members.filter((m) => m.playerId !== party.leader).findIndex((m) => m.playerId === online.me()?.id));
@@ -82,7 +82,7 @@ function followStep(leader: Presence, party: Party): string | 'manual' {
   const spot = { x: Math.round(leader.x) + ox, y: Math.round(leader.y) + oy };
   const gap = Math.abs(leader.x - me.x) + Math.abs(leader.y - me.y);
   if (gap <= 3 && !s.walk) {
-    if (autoMounted && s.mounted && !leader.mounted) store.dispatch((g) => toggleMount(g, false));
+    if (autoMounted && s.mounted && !leader.mounted) store.run('mount', false);
     autoMounted = false;
     chaseTo = null;
     return act ? tl`在队长身边（队长在${actionName(act)}，你等级不够一起做）` : tl('在队长身边');
@@ -93,7 +93,7 @@ function followStep(leader: Presence, party: Party): string | 'manual' {
   if ((!moved && s.walk) || Date.now() - lastChase < 1200) return far;
   // 队长骑着坐骑走远路：自己有坐骑也骑上，不然越落越远
   if (leader.mounted && !s.mounted && s.equipment.mount && gap > 12) {
-    store.dispatch((g) => toggleMount(g, true));
+    store.run('mount', true);
     autoMounted = true;
     lastChase = Date.now() - 600;
     return far;

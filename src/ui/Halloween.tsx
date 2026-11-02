@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ITEMS, MONSTERS, NODES } from '../core/data';
 import { HW_ALTAR, HW_BOX, HW_COOLDOWN, HW_END, HW_MOUNT, HW_MOUNT_COST, HW_POINT, HW_SKINS, HW_TIERS, hwBossId, hwFight, hwHasSkin, hwOpen, hwShopOpen, hwWait } from '../core/halloween';
-import { buyHwSkin, buyPumpkinMount, combatEstimate, combatLevel, startNow, summonPumpkin } from '../core/sim';
+import { combatEstimate, combatLevel } from '../core/sim';
 import { OUTFITS } from '../game/hero';
 import { HeroPreview } from './Wardrobe';
 import { pumpkinMountIconUrl } from '../game/pumpkinArt';
@@ -88,7 +88,7 @@ function PumpkinShop({ s, now }: { s: GameState; now: number }) {
             <div className="hw-shop-row">
               <span><img src={pumpkinPointUrl()} alt="" className="inline-icon" />{tl` ${fmtNum(cost)} 南瓜积分`}</span>
               {gotSkin ? <span className="good">{tl('已兑换，在衣橱里')}</span>
-                : <button className="primary" disabled={pts < cost} onClick={() => store.dispatch((g) => buyHwSkin(g, id, Date.now()))}>
+                : <button className="primary" disabled={pts < cost} onClick={() => store.run('hwSkin', id)}>
                   {pts < cost ? tl`还差 ${fmtNum(cost - pts)} 积分` : tl('兑换')}
                 </button>}
             </div>
@@ -104,7 +104,7 @@ function PumpkinShop({ s, now }: { s: GameState; now: number }) {
         <div className="hw-shop-row">
           <span><img src={pumpkinPointUrl()} alt="" className="inline-icon" />{tl` ${fmtNum(HW_MOUNT_COST)} 南瓜积分`}</span>
           {got ? <span className="good">{tl('已兑换，在仓库里')}</span>
-            : <button className="primary" disabled={pts < HW_MOUNT_COST} onClick={() => store.dispatch((g) => buyPumpkinMount(g, Date.now()))}>
+            : <button className="primary" disabled={pts < HW_MOUNT_COST} onClick={() => store.run('hwMount')}>
               {pts < HW_MOUNT_COST ? tl`还差 ${fmtNum(HW_MOUNT_COST - pts)} 积分` : tl('兑换')}
             </button>}
         </div>
@@ -128,12 +128,12 @@ export function AltarSheet({ s, node, onClose }: { s: GameState; node: MapNode; 
   });
   const fighting = s.queue[0]?.action === (summoned !== undefined ? hwFight(summoned) : '');
   const summon = () => {
-    store.dispatch((g) => summonPumpkin(g, pick, Date.now()));
+    store.run('hwSummon', pick);
     onClose();
   };
   const resume = () => {
     if (summoned === undefined) return;
-    store.dispatch((g) => startNow(g, hwFight(summoned), { type: 'count', count: 1 }));
+    store.run('startNow', hwFight(summoned), { type: 'count', count: 1 });
     onClose();
   };
   return (

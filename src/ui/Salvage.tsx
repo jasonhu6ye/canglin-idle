@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ITEMS, type MapNode } from '../core/data';
 import { QUALITY_NAME, qClass } from '../core/quality';
-import { atSalvage, canSalvage, salvage, SALVAGE_BONUS, salvageValue } from '../core/sim';
+import { atSalvage, canSalvage, SALVAGE_BONUS, salvageValue } from '../core/sim';
 import type { GameState } from '../core/types';
 import { store } from '../store';
 import { tl } from '../i18n';
@@ -31,12 +31,7 @@ export function SalvageSheet({ s, node, onClose }: { s: GameState; node: MapNode
   const go = () => {
     const rare = sel.filter(([id]) => (ITEMS[id].quality ?? 0) >= 3);
     if (rare.length && !window.confirm(tl`要分解的里面有 ${rare.length} 种史诗以上品质的装备，确定吗？`)) return;
-    let coins = 0;
-    store.dispatch((g) => {
-      const [next, c] = salvage(g, Object.fromEntries(sel));
-      coins = c;
-      return next;
-    });
+    const coins = Number(store.run('salvage', Object.fromEntries(sel)) ?? 0);
     if (coins) { setGot(coins); setPick({}); }
   };
   return (

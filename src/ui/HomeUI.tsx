@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import { ITEMS, type MapNode } from '../core/data';
 import {
-  affordable, atPortal, BUILD_CATS, BUILDS, buildDef, comfortLevel, comfortOf, COMFORT_SPEED, COMFORT_STEPS, COMFORT_XP, enterHome, HOME_PLOT_MAX, HOME_SIZES,
-  HOME_UPGRADES, collectHome, homeComfort, homeFieldId, homeProduce, homeLevel, homePlots, homeSize, isTrophy, leaveHome, upgradeHome,
-  canPet, claimRepReward, deliverOrder, homeHasBoard, LOVE_STEPS, loveHearts, repUnclaimed, REP_REWARDS, homeOrders, homePets, ORDER_ALL_BONUS, PET_REP, PETS, REP_COIN_BONUS, REP_STEPS, repLevel, VISITORS,
+  affordable, atPortal, BUILD_CATS, BUILDS, buildDef, comfortLevel, comfortOf, COMFORT_SPEED, COMFORT_STEPS, COMFORT_XP, HOME_PLOT_MAX, HOME_SIZES,
+  HOME_UPGRADES, homeComfort, homeFieldId, homeProduce, homeLevel, homePlots, homeSize, isTrophy, canPet, deliverOrder, homeHasBoard, LOVE_STEPS, loveHearts, repUnclaimed, REP_REWARDS, homeOrders, homePets, ORDER_ALL_BONUS, PET_REP, PETS, REP_COIN_BONUS, REP_STEPS, repLevel, VISITORS,
   type BuildCat, type BuildDef,
 } from '../core/home';
 import type { GameState } from '../core/types';
@@ -45,7 +44,7 @@ export function PortalSheet({ s, node, onClose }: { s: GameState; node: MapNode;
         {things > 0 && <p className="muted">{tl`岛上已经摆了 ${things} 件东西。`}</p>}
         <div className="go">
           {here
-            ? <button className="primary" onClick={() => { store.dispatch(enterHome); onClose(); }}>{tl('进入家园岛屿')}</button>
+            ? <button className="primary" onClick={() => { store.run('enterHome'); onClose(); }}>{tl('进入家园岛屿')}</button>
             : <button className="primary" onClick={() => { store.requestWalk(node.id); onClose(); }}>{tl`寻路去${node.name}`}</button>}
         </div>
       </div>
@@ -97,7 +96,7 @@ export function HomeHud({ s }: { s: GameState }) {
   const readyN = Object.values(ready).reduce((a, b) => a + b, 0);
   const collectAll = () => {
     let got: Record<string, number> = {};
-    store.dispatch((g) => { const r = collectHome(g, Date.now()); got = r.got; return r.state; });
+    got = ((store.run('collectHome') as { got?: Record<string, number> } | undefined)?.got) ?? {};
     const text = Object.entries(got).map(([id, n]) => tl`${ITEMS[id]?.name ?? id} ×${n}`).join(tl('、'));
     if (text) { setMsg(tl`收进仓库：${text}`); setTimeout(() => setMsg(''), 2000); }
   };
@@ -113,7 +112,7 @@ export function HomeHud({ s }: { s: GameState }) {
         {readyN > 0 && <button className="pill on" onClick={collectAll} title={Object.entries(ready).map(([id, n]) => `${ITEMS[id]?.name} ×${n}`).join(tl('、'))}>{tl`收取 ${readyN}`}</button>}
         {plots.length > 0 && <button className={`pill ${info === 'farm' ? 'on' : ''}`} onClick={() => toggle('farm')}>{tl`农田 ${plots.length}/${HOME_PLOT_MAX}`}</button>}
         <button className={`pill ${open ? 'on' : ''}`} onClick={() => { setInfo(null); if (open) close(); else setOpen(true); }}>{open ? tl('收起建造') : tl('建造')}</button>
-        <button className="pill" onClick={() => { close(); store.dispatch(leaveHome); }}>{tl('回城')}</button>
+        <button className="pill" onClick={() => { close(); store.run('leaveHome'); }}>{tl('回城')}</button>
       </div>
       {msg && <div className="home-msg">{msg}</div>}
       {info === 'comfort' && <ComfortCard s={s} score={score} lv={clv} onClose={() => setInfo(null)} />}
@@ -194,7 +193,7 @@ export function HomeHud({ s }: { s: GameState }) {
                 <span className={(s.bank.coins ?? 0) >= up.coins ? '' : 'warn'}><Icon item="coins" size={14} info={false} />{fmtNum(up.coins)}</span>
                 {up.items.map((c) => <span key={c.item} className={have(s, c.item) >= c.qty ? '' : 'warn'}><Icon item={c.item} size={14} info={false} />{c.qty}<small>/{fmtNum(have(s, c.item))}</small></span>)}
               </span>
-              <button className="pill on" disabled={(s.bank.coins ?? 0) < up.coins || !affordable(s, up.items)} onClick={() => store.dispatch(upgradeHome)}>{tl('扩建')}</button>
+              <button className="pill on" disabled={(s.bank.coins ?? 0) < up.coins || !affordable(s, up.items)} onClick={() => store.run('upgradeHome')}>{tl('扩建')}</button>
             </div>
           )}
           <div className="go"><button onClick={close}>{tl('完成')}</button></div>
@@ -240,7 +239,7 @@ function RepCard({ s, onClose, onMsg }: { s: GameState; onClose: () => void; onM
     const o = orders[i];
     const next = deliverOrder(store.state, i, Date.now());
     if (next === store.state) return;
-    store.dispatch(() => next);
+    store.run('deliverOrder', i);
     const all = next.home?.orders?.list.every((x) => x.done);
     onMsg(tl`交给${VISITORS[o.who]}：金币 +${fmtNum(o.coins)}、声望 +${o.rep + (all ? ORDER_ALL_BONUS : 0)}`);
   };
@@ -260,7 +259,7 @@ function RepCard({ s, onClose, onMsg }: { s: GameState; onClose: () => void; onM
               <span><Icon item="coins" size={14} info={false} />{fmtNum(r.coins)}</span>
               {r.items.map((c) => <span key={c.item}><Icon item={c.item} size={14} />×{c.qty}</span>)}
             </span>
-            <button className="pill on" onClick={() => { store.dispatch(claimRepReward); onMsg(tl('声望奖励已收进仓库')); }}>{tl('领取')}</button>
+            <button className="pill on" onClick={() => { store.run('repReward'); onMsg(tl('声望奖励已收进仓库')); }}>{tl('领取')}</button>
           </div>
         );
       })()}

@@ -6,9 +6,7 @@ import { useSticky } from './sticky';
 import { useEffect, useState, type ReactNode } from 'react';
 import { standOf, ACTIONS, BUFF_NAME, buffText, cropsOfField, nodesOfAction, WAYSTONES, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, keyOf, SCROLL_TOWN, SHARD_PER_STONE, type MapNode } from '../core/data';
 import {
-  atBank, atMarket, nearestBank, nearestMarket, bagSlots, BELT_CAP, beltSlotOf, eat, fromBelt, POTION_AT, toBelt, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, armorPerks, chainChance, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip, openContainer,
-  weaponStyle, walkPos, buffPct, levelSpeed, maxHp, moveSpeed, playerAttackMs,
-  redeemCode, toggleMount,
+  atBank, atMarket, nearestBank, nearestMarket, bagSlots, BELT_CAP, beltSlotOf, POTION_AT, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, level, playerBonuses, armorPerks, chainChance, slotSpeed, weaponStyle, walkPos, buffPct, levelSpeed, maxHp, moveSpeed, playerAttackMs,
   sortBank, toolSkillNames, TOOL_FOR, playerHaste, combineShards, gearSum,
 } from '../core/sim';
 import { USE_KEY } from '../game/MapScene';
@@ -17,6 +15,7 @@ import type { BuffKind, EquipSlot, GameState, ItemCategory, SkillId, Summary } f
 import { openCombatLog } from './CombatLog';
 import { XP_TABLE, levelProgress, speedForLevel, SPEED_CAP, BONUS_PER_LEVEL } from '../core/xp';
 import { store } from '../store';
+import { quickUseOpens } from '../core/commands';
 import { RAIN_FISH } from '../core/weather';
 import { THREAT_BASE, threatOf } from '../core/aggro';
 import { fmtDuration, fmtNum, gearLine, hitPct } from './format';
@@ -97,7 +96,7 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
         {keyOf(id) && from === 'bag' && <button className="primary" disabled={!!s.dungeon || !!s.home?.inside} onClick={() => emitToGame(USE_KEY, id)}>{tl('使用（在身边开洞口）')}</button>}
         {keyOf(id) && from === 'bank' && <span className="muted">{tl('副本钥匙要放进背包才能用')}</span>}
         {/^enhshard_/.test(id) && (
-          <button className="primary" disabled={qty < SHARD_PER_STONE || (from === 'bank' && !near)} onClick={() => store.dispatch((g) => combineShards(g, id, from))}>
+          <button className="primary" disabled={qty < SHARD_PER_STONE || (from === 'bank' && !near)} onClick={() => store.run('combineShards', id, from)}>
             {tl`合成（每 ${SHARD_PER_STONE} 个碎片合 1 块）`}
           </button>
         )}
@@ -109,20 +108,20 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
             {qty > 1 && <button disabled={from === 'bank' && !near} onClick={() => openBox(id, from, Math.min(qty, 50))}>{tl`打开 ${Math.min(qty, 50)} 个`}</button>}
           </>
         )}
-        {e && <button className="primary" disabled={!canEquip} onClick={() => store.dispatch((g) => equip(g, id))}>{tl('装备')}</button>}
-        {from === 'bag' && item.heals && <button className="primary" onClick={() => store.dispatch((g) => eat(g, id))}>{tl('吃一个')}</button>}
+        {e && <button className="primary" disabled={!canEquip} onClick={() => store.run('equip', id)}>{tl('装备')}</button>}
+        {from === 'bag' && item.heals && <button className="primary" onClick={() => store.run('eat', id)}>{tl('吃一个')}</button>}
         {beltSlotOf(id) && (from === 'bag' || near) && (
-          <button onClick={() => store.dispatch((g) => toBelt(g, id))}>{tl`放进${beltSlotOf(id) === 'food' ? tl('食物栏') : tl('药水栏')}`}</button>
+          <button onClick={() => store.run('toBelt', id)}>{tl`放进${beltSlotOf(id) === 'food' ? tl('食物栏') : tl('药水栏')}`}</button>
         )}
         {from === 'bank' && id !== 'coins' && (
-          <button disabled={!near || bagRoomFor(s.bag, id, bagSlots(s)) <= 0} onClick={() => store.dispatch((g) => toBag(g, id, qty))}>
+          <button disabled={!near || bagRoomFor(s.bag, id, bagSlots(s)) <= 0} onClick={() => store.run('toBag', id, qty)}>
             {bagRoomFor(s.bag, id, bagSlots(s)) > 0 ? tl('放入背包') : tl('背包已满')}
           </button>
         )}
         {from === 'bank' && id !== 'coins' && (
           <>
-            <button disabled={!atMarket(s)} onClick={() => store.dispatch((g) => sell(g, id, 1))}>{tl('卖 1 个')}</button>
-            <button disabled={!atMarket(s)} onClick={() => store.dispatch((g) => sell(g, id, qty))}>{tl('全部卖出')}</button>
+            <button disabled={!atMarket(s)} onClick={() => store.run('sell', id, 1)}>{tl('卖 1 个')}</button>
+            <button disabled={!atMarket(s)} onClick={() => store.run('sell', id, qty)}>{tl('全部卖出')}</button>
           </>
         )}
       </div>
@@ -133,31 +132,23 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
         </div>
       )}
       <div className="go">
-        {from === 'bag' && <button className="primary" disabled={!near} onClick={() => store.dispatch((g) => toBank(g, id, qty))}>{tl('放回仓库')}</button>}
+        {from === 'bag' && <button className="primary" disabled={!near} onClick={() => store.run('toBank', id, qty)}>{tl('放回仓库')}</button>}
       </div>
     </div>
   );
 }
 
 function openBox(id: string, from: 'bag' | 'bank', n: number) {
-  let got: Record<string, number> = {};
-  store.dispatch((g) => {
-    const [next, r] = openContainer(g, id, from, n);
-    got = r;
-    return next;
-  });
+  const got = (store.run('openContainer', id, from, n) ?? {}) as Record<string, number>;
   if (Object.keys(got).length) showLoot({ from: n > 1 ? `${ITEMS[id].name} ×${n}` : ITEMS[id].name, got });
 }
 
-/** 背包里右键物品：能穿就穿，食物药水放进补给栏，别的不动 */
-function quickUse(g: GameState, id: string) {
-  const it = ITEMS[id];
-  if (it?.equip) return equip(g, id);
-  if (beltSlotOf(id)) return toBelt(g, id);
-  if (it?.opens) queueMicrotask(() => openBox(id, 'bag', 1));
-  if (keyOf(id) && !g.dungeon && !g.home?.inside) queueMicrotask(() => emitToGame(USE_KEY, id));
-  if (/^enhshard_/.test(id)) return combineShards(g, id, 'bag');
-  return g;
+/** 背包里右键物品：能穿就穿，食物药水放进补给栏，箱子打开、钥匙开副本，别的不动 */
+function quickUseItem(id: string) {
+  const o = quickUseOpens(store.state, id);
+  store.run('quickUse', id);
+  if (o.box) openBox(id, 'bag', 1);
+  if (o.key) emitToGame(USE_KEY, id);
 }
 
 function ItemGrid({ items, sel, onSel, onAct, empty = 0, split = false }: { items: [string, number][]; sel: string | null; onSel: (id: string) => void; onAct?: (id: string) => void; empty?: number; split?: boolean }) {
@@ -193,7 +184,7 @@ export function BankPanel({ s }: { s: GameState }) {
   return (
     <div className="page">
       <h2 className="bank-head">{tl('仓库 ')}<small className="muted">{tl`${all.length} 种 · 估值 ${fmtNum(value)} 金币`}</small>
-        {all.length > 1 && <button className="pill sort-btn" title={tl('按分类、阶级、品质排好')} onClick={() => store.dispatch(sortBank)}>{tl('整理')}</button>}
+        {all.length > 1 && <button className="pill sort-btn" title={tl('按分类、阶级、品质排好')} onClick={() => store.run('sortBank')}>{tl('整理')}</button>}
       </h2>
       {!atBank(s) && <FarFromBank />}
       <div className="chips-row">
@@ -204,7 +195,7 @@ export function BankPanel({ s }: { s: GameState }) {
         })}
       </div>
       <ItemGrid items={items} sel={sel} onSel={setSel}
-        onAct={(id) => atBank(s) && store.dispatch((g) => toBag(g, id, g.bank[id] ?? 0))} />
+        onAct={(id) => atBank(s) && store.run('toBag', id, store.state.bank[id] ?? 0)} />
       {!all.length && <p className="muted">{tl('仓库是空的。采集、制作和打怪得到的东西都会放进这里，容量不限。')}</p>}
       {sel && <ItemDetail s={s} id={sel} from="bank" />}
     </div>
@@ -262,7 +253,7 @@ function SlotPicker({ s, slot, name, onClose }: { s: GameState; slot: EquipSlot;
             <Icon item={cur} size={28} info={false} />
             <div><b>{ITEMS[cur].name}</b> <small className="muted">{tl('已装备')}</small><small className="muted">{gearStats(cur)}</small></div>
             <button onClick={() => openItem(cur)}>{tl('详情')}</button>
-            <button onClick={() => { store.dispatch((g) => unequip(g, slot)); onClose(); }}>{tl('卸下')}</button>
+            <button onClick={() => { store.run('unequip', slot); onClose(); }}>{tl('卸下')}</button>
           </div>
         ) : <p className="muted">{tl('这一栏现在是空的。')}</p>}
         <h3 className="muted">{tl`可装备 ${list.length} 件${bank ? tl('（含仓库）') : ''}`}</h3>
@@ -280,7 +271,7 @@ function SlotPicker({ s, slot, name, onClose }: { s: GameState; slot: EquipSlot;
                   <CompareChip s={s} id={id} />
                 </div>
                 <button onClick={() => openItem(id)}>{tl('详情')}</button>
-                <button className="primary" disabled={!ok} onClick={() => { store.dispatch((g) => equip(g, id)); onClose(); }}>{cur ? tl('替换') : tl('装备')}</button>
+                <button className="primary" disabled={!ok} onClick={() => { store.run('equip', id); onClose(); }}>{cur ? tl('替换') : tl('装备')}</button>
               </div>
             );
           })}
@@ -301,7 +292,7 @@ export function CharacterPanel({ s }: { s: GameState }) {
     return (
       <button key={slotId} className={`slot ${id ? 'full' : ''}`} title={FINE_POINTER ? tl('左键换装备，右键卸下') : tl('点击换装备或卸下')}
         onClick={() => setPick([slotId, name])}
-        onContextMenu={(e) => { e.preventDefault(); if (id) store.dispatch((g) => unequip(g, slotId)); }}>
+        onContextMenu={(e) => { e.preventDefault(); if (id) store.run('unequip', slotId); }}>
         {id ? <Icon item={id} size={28} info={false} /> : <span className="empty" />}
         <small>{id ? ITEMS[id].name : name}</small>
       </button>
@@ -320,7 +311,7 @@ export function CharacterPanel({ s }: { s: GameState }) {
       {!s.equipment.mount && <p className="muted">{tl('还没有坐骑。得到坐骑后从背包装备到这一栏（测试服可在「更多」页输入兑换码领取）。')}</p>}
       {s.equipment.mount && (
         <div className="go">
-          <button className={s.mounted ? '' : 'primary'} onClick={() => store.dispatch((g) => toggleMount(g))}>{s.mounted ? tl('下坐骑') : tl('骑乘')}{FINE_POINTER ? ' (R)' : ''}</button>
+          <button className={s.mounted ? '' : 'primary'} onClick={() => store.run('mount')}>{s.mounted ? tl('下坐骑') : tl('骑乘')}{FINE_POINTER ? ' (R)' : ''}</button>
           <span className="muted">{s.mounted ? tl`骑乘中，移动速度 +${Math.round((ITEMS[s.equipment.mount].equip?.move ?? 0) * 100)}%` : tl('未骑乘')}</span>
         </div>
       )}
@@ -330,8 +321,8 @@ export function CharacterPanel({ s }: { s: GameState }) {
           const b = s.belt?.[k];
           return (
             <button key={k} className={`slot ${b ? 'full' : ''}`} title={b ? (FINE_POINTER ? tl('左键看详情，右键取下') : tl('点击取下放回背包')) : ''}
-              onClick={() => b && (FINE_POINTER ? openItem(b.id) : store.dispatch((g) => fromBelt(g, k)))}
-              onContextMenu={(e) => { e.preventDefault(); if (b) store.dispatch((g) => fromBelt(g, k)); }}>
+              onClick={() => b && (FINE_POINTER ? openItem(b.id) : store.run('fromBelt', k))}
+              onContextMenu={(e) => { e.preventDefault(); if (b) store.run('fromBelt', k); }}>
               {b ? <Icon item={b.id} size={28} info={false} /> : <span className="empty" />}
               <small>{b ? `${ITEMS[b.id].name} ×${b.qty}` : k === 'food' ? tl('食物栏') : tl('药水栏')}</small>
             </button>
@@ -448,14 +439,14 @@ export function BagPanel({ s }: { s: GameState }) {
     <div className="page">
       <h2>{tl('背包 ')}<small className="muted">{tl`${used}/${bagSlots(s)} 格 · 物品每格 ${BAG_STACK} 个，装备每件一格`}</small></h2>
       <div className="bag-meter"><i style={{ width: `${(used / bagSlots(s)) * 100}%` }} /></div>
-      <ItemGrid items={items} sel={sel} onSel={setSel} onAct={(id) => store.dispatch((g) => quickUse(g, id))} empty={Math.max(0, bagSlots(s) - used)} split />
+      <ItemGrid items={items} sel={sel} onSel={setSel} onAct={(id) => quickUseItem(id)} empty={Math.max(0, bagSlots(s) - used)} split />
       {sel && <ItemDetail s={s} id={sel} from="bag" />}
-      {items.length > 0 && <button className="primary" disabled={!atBank(s)} onClick={() => store.dispatch(depositLoot)}>{tl('全部存入仓库')}</button>}
+      {items.length > 0 && <button className="primary" disabled={!atBank(s)} onClick={() => store.run('depositLoot')}>{tl('全部存入仓库')}</button>}
       {items.length > 0 && !atBank(s) && <FarFromBank />}
       <div className="opts">
         <span className="lbl">{tl('开战自动从仓库带食物')}</span>
         {[0, 20, 50, 100, -1].map((n) => (
-          <button key={n} className={s.settings.carryFood === n ? 'on' : ''} onClick={() => store.dispatch((g) => setSettings(g, { carryFood: n }))}>
+          <button key={n} className={s.settings.carryFood === n ? 'on' : ''} onClick={() => store.run('settings', { carryFood: n })}>
             {n < 0 ? tl('全部') : n === 0 ? tl('不带') : n}
           </button>
         ))}
@@ -650,7 +641,7 @@ function SettingsPage({ s, onClose }: { s: GameState; onClose: () => void }) {
       <div className="opts">
         <span className="lbl">{tl('开战自动从仓库带食物')}</span>
         {[0, 20, 50, 100, -1].map((n) => (
-          <button key={n} className={s.settings.carryFood === n ? 'on' : ''} onClick={() => store.dispatch((g) => setSettings(g, { carryFood: n }))}>
+          <button key={n} className={s.settings.carryFood === n ? 'on' : ''} onClick={() => store.run('settings', { carryFood: n })}>
             {n < 0 ? tl('全部') : n === 0 ? tl('不带') : n}
           </button>
         ))}
@@ -658,7 +649,7 @@ function SettingsPage({ s, onClose }: { s: GameState; onClose: () => void }) {
       <div className="opts">
         <span className="lbl">{tl('带药水')}</span>
         {[true, false].map((v) => (
-          <button key={String(v)} className={(s.settings.carryPotion !== false) === v ? 'on' : ''} onClick={() => store.dispatch((g) => setSettings(g, { carryPotion: v }))}>
+          <button key={String(v)} className={(s.settings.carryPotion !== false) === v ? 'on' : ''} onClick={() => store.run('settings', { carryPotion: v })}>
             {v ? tl('带') : tl('不带')}
           </button>
         ))}
@@ -727,12 +718,7 @@ function Redeem() {
   const [code, setCode] = useState('');
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const submit = () => {
-    let r = { ok: false, msg: '' };
-    store.dispatch((g) => {
-      const out = redeemCode(g, code);
-      r = out;
-      return out.state;
-    });
+    const r = (store.run('redeem', code) as { ok: boolean; msg: string } | undefined) ?? { ok: false, msg: '' };
     if (r.ok) setCode('');
     setMsg({ text: r.ok ? tl`${r.msg}。到「角色」页的坐骑栏装备，地图右下角点「骑乘」或按 R 上坐骑` : r.msg, ok: r.ok });
   };
@@ -769,6 +755,8 @@ function SaveBackup({ s }: { s: GameState }) {
   // 先解出来给玩家对比两边，确认了才覆盖，防止拿旧档盖掉新档（用户 10-23）
   const [pending, setPending] = useState<GameState | null>(null);
   const doImport = async (text = code) => {
+    // 11-02 起存档由服务器结算：登录后导入的存档会被服务器的盖掉，不让导入
+    if (online.me()) return setMsg(tl('登录后存档由服务器保存，不能导入存档码。'));
     const next = await importSave(text);
     if (!next) return setMsg(importError || tl('存档码不对，请检查是否复制完整'));
     setMsg('');

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { MapNode } from '../core/data';
 import { COAT_NAME, coatOf, FOAL, growMs, RANCH, RANCH_PENS } from '../core/ranch';
-import { atRanch, collectHorse, level, penLeft, placeFoal } from '../core/sim';
+import { atRanch, level, penLeft } from '../core/sim';
 import type { GameState } from '../core/types';
 import { foalIconUrl, horseIconUrl, paintFoal } from '../game/horseArt';
 import { store } from '../store';
@@ -55,14 +55,9 @@ export function RanchSheet({ s, node, onClose }: { s: GameState; node: MapNode; 
   const lv = level(s, 'husbandry');
   const foals = (s.bag[FOAL] ?? 0) + (s.bank[FOAL] ?? 0);
   const pens = Array.from({ length: RANCH_PENS }, (_, i) => s.ranch?.pens[i] ?? null);
-  const place = (i: number) => store.dispatch((g) => placeFoal(g, i, Date.now()));
+  const place = (i: number) => store.run('placeFoal', i);
   const collect = (i: number) => {
-    let apt = 0;
-    store.dispatch((g) => {
-      const [next, a] = collectHorse(g, i, Date.now());
-      apt = a;
-      return next;
-    });
+    const apt = Number(store.run('collectHorse', i) ?? 0);
     if (apt) setReveal(apt);
   };
   return (
