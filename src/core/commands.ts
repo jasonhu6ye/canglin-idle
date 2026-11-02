@@ -26,6 +26,8 @@ const own = (o: object, k: string) => Object.prototype.hasOwnProperty.call(o, k)
 const SLACK = 8;
 /** 报过的位置留多久（够「停下来、换方向走」连着几条指令用） */
 const MV_KEEP = 20_000;
+/** 位置差多少格以上才记可疑（差得少多半是本机和服务器步调不一致） */
+const MOVE_FLAG_OVER = 400;
 function anchors(s: GameState, t: number): Pt[] {
   const G = guard();
   const out: Pt[] = [{ ...walkPos(s), r: SLACK, t }, { ...s.loc, r: SLACK, t }];
@@ -50,8 +52,9 @@ function canBe(s: GameState, t: number, p: { x: number; y: number }, extra = 0, 
   let over = Infinity;
   for (const a of anchors(s, t)) over = Math.min(over, Math.hypot(p.x - a.x, p.y - a.y) - (a.r + extra + sp * Math.max(0, t - a.t)));
   if (over <= 0) return true;
-  // 不算严重：本机和服务器的寻路时间可能差一点，画面上的人会比服务器早到或晚到
-  flag('move', false, { what, x: p.x, y: p.y, at: walkPos(s), over: Math.round(over) });
+  // 不算严重：本机和服务器的寻路时间可能差一点，画面上的人会比服务器早到或晚到。
+  // 报的位置不认、照服务器的位置算，作弊也拿不到好处，所以差得不多就不记（11-02：正常玩家也常被记，GM 页一堆误报）
+  if (over > MOVE_FLAG_OVER) flag('move', false, { what, x: p.x, y: p.y, at: walkPos(s), over: Math.round(over) });
   return false;
 }
 /** 每条指令执行前记下当时可能的位置（停下工作、换路走之后还能对上之前的路） */
@@ -314,13 +317,15 @@ export const COMMANDS = {
   },
   walk: (s, t, a, b, ms) => {
     // 服务器：起点要对得上，时间不能比直线跑过去还短（报短了按最快速度算）
-    const from = canBe(s, t, xy(a), 0, 'walk') ? xy(a) : walkPos(s);
+    const ok = canBe(s, t, xy(a), 0, 'walk');
+    const from = ok ? xy(a) : walkPos(s);
     const to = xy(b);
     const least = guard() ? (Math.hypot(to.x - from.x, to.y - from.y) / moveSpeed(s)) * 1000 * 0.9 : 0;
     const want = num(ms, 0, 24 * 3600_000);
-    // 报的时间比最快跑过去还短很多：改了走路速度
+    // 报的时间比最快跑过去还短很多：改了走路速度。
+    // 只在起点对得上时判（11-02 误报：起点对不上时以前拿服务器的位置算距离，本机只走一小段也被当成「瞬间跑完一大段」，还会被自动处罚）
     const fastest = (Math.hypot(to.x - from.x, to.y - from.y) / (maxSpeed(s) / 1.3)) * 1000;
-    if (want < fastest * 0.4 && fastest > 3000) flag('walk_fast', true, { ms: Math.round(want), least: Math.round(fastest) });
+    if (ok && want < fastest * 0.4 && fastest > 3000) flag('walk_fast', true, { ms: Math.round(want), least: Math.round(fastest) });
     return startWalk(s, from, to, Math.max(least, want));
   },
   /** 回城卷轴用过之后画面上把人挪过去（存档里卷轴已经挪过了）：服务器只在本来就站在那里时才认 */
