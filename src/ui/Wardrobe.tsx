@@ -5,6 +5,8 @@ import { hwHasSkin } from '../core/halloween';
 import { FRAME_H, FRAME_W, HERO_ANIMS, HERO_H, HERO_PAD, HERO_W, OUTFITS, paintHeroSheet, type Outfit } from '../game/hero';
 import { store } from '../store';
 import { tl } from '../i18n';
+import { ITEMS } from '../core/data';
+import { mountFrameOf, mountPreviewFrame, MOUNT_GALLERY } from '../game/mounts';
 
 /** 衣橱只展示正面待机（用户 10-30：不用轮播其他动作） */
 const PREVIEW = 'idle-down';
@@ -61,6 +63,62 @@ export function HeroPreview({ outfit, scale = 3 }: { outfit: Outfit; scale?: num
   return <canvas ref={ref} width={box.w} height={box.h} className="pix" style={{ width: box.w * k, height: box.h * k }} />;
 }
 
+/** 衣橱「坐骑」栏里的坐骑：侧面待机循环播放（后层 + 前层） */
+export function MountPreview({ kind, scale = 2 }: { kind: string; scale?: number }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const fr = mountFrameOf(kind);
+  const frames = useMemo(() => Array.from({ length: 24 }, (_, i) => mountPreviewFrame(kind, i).map((p) => p.canvas())), [kind]);
+  useEffect(() => {
+    let tick = 0;
+    const draw = () => {
+      const ctx = ref.current?.getContext('2d');
+      if (!ctx) return;
+      const [b, f] = frames[tick % 24];
+      ctx.clearRect(0, 0, fr.w, fr.h);
+      ctx.drawImage(b, 0, 0);
+      ctx.drawImage(f, 0, 0);
+      tick++;
+    };
+    draw();
+    const id = setInterval(draw, 100);
+    return () => clearInterval(id);
+  }, [frames, fr]);
+  return <canvas ref={ref} width={fr.w} height={fr.h} className="pix" style={{ width: fr.w * scale, height: fr.h * scale }} />;
+}
+
+/** 限定坐骑图鉴（用户 11-02：新坐骑先放衣橱展示，获取方式暂无） */
+function MountGallery({ s }: { s: GameState }) {
+  const [pick, setPick] = useState(MOUNT_GALLERY[MOUNT_GALLERY.length - 1].kind);
+  const sel = MOUNT_GALLERY.find((m) => m.kind === pick) ?? MOUNT_GALLERY[0];
+  const owned = (id: string) => !!(s.bank[id] || s.bag[id]) || s.equipment.mount === id;
+  const how = (kind: string, id: string) => (owned(id) ? tl('已拥有') : kind === 'unicorn' ? tl('🔒 暂未开放') : kind === 'pumpkin' ? tl('🔒 祭坛积分兑换') : tl('🔒 兑换码'));
+  const it = ITEMS[sel.id];
+  return (
+    <>
+      <h3 className="wardrobe-sub">{tl('坐骑')}</h3>
+      <div className="wardrobe-stage mount frame">
+        <MountPreview kind={sel.kind} scale={3.5} />
+        <div>
+          <b>{it.name}</b>
+          <p className="muted">{it.desc}</p>
+          {(sel.kind === 'unicorn' || sel.kind === 'pumpkin') && <p className="gold small-note">{tl('限定坐骑 · 自带动态特效')}</p>}
+          <p className="muted small-note">{sel.kind === 'unicorn' ? tl('这只坐骑还没开放获取途径，先看看效果') : how(sel.kind, sel.id)}</p>
+        </div>
+      </div>
+      <div className="wardrobe-grid">
+        {MOUNT_GALLERY.map((m) => (
+          <button key={m.kind} className={`slot ${m.kind === pick ? 'on' : ''}`} onClick={() => setPick(m.kind)}>
+            <MountPreview kind={m.kind} scale={1.6} />
+            <span>{ITEMS[m.id].name}</span>
+            <small className={owned(m.id) ? 'gold' : 'muted'}>{how(m.kind, m.id)}</small>
+          </button>
+        ))}
+      </div>
+      <p className="muted small-note">{tl('坐骑马在城镇畜牧站养大，装在角色页的坐骑栏。')}</p>
+    </>
+  );
+}
+
 export function Wardrobe({ s, onClose }: { s: GameState; onClose: () => void }) {
   const cur = s.settings.skin ?? OUTFITS[0].id;
   const [pick, setPick] = useState(cur);
@@ -95,6 +153,7 @@ export function Wardrobe({ s, onClose }: { s: GameState; onClose: () => void }) 
           </button>
         ))}
       </div>
+      <MountGallery s={s} />
     </div>
   );
 }

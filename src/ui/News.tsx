@@ -8,6 +8,13 @@ import { tl } from '../i18n';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-11-02-r', date: tl('11 月 2 日'), title: tl('新坐骑预告：晨曦独角兽'),
+    lines: [
+      tl('樱粉色的独角兽，金色螺旋角、彩虹长鬃长尾、金蹄，骑乘时移动速度 +210%，脚下粉光、一路星光花瓣、角尖光尘。'),
+      tl('先在「更多 → 衣橱」底部的坐骑栏展示动态效果，获取方式暂未开放。'),
+    ],
+  },
+  {
     id: '2026-11-02-q', date: tl('11 月 2 日'), title: tl('新材料：精炼石'),
     lines: [
       tl('制作装备时可以勾选「加精炼石」：每做一件用掉一颗同阶精炼石，优秀、史诗品质的概率变成 2.5 倍，传说、神话概率不变。'),

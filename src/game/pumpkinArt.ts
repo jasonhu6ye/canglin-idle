@@ -342,6 +342,9 @@ function poseOf(key: string, t: number, i: number) {
   return key.startsWith('run') ? run(t, i) : key.startsWith('idle') ? idle(t, i) : key === 'sit' ? sit(t, i) : howl(t, i);
 }
 
+export function pumpkinFrame(key: string, i: number, n: number): [Pix, Pix] {
+  return drawPumpkin(key, i, n);
+}
 function drawPumpkin(key: string, i: number, n: number): [Pix, Pix] {
   const back = new Pix(PK_W, PK_H);
   const front = new Pix(PK_W, PK_H);

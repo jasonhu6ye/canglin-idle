@@ -6,11 +6,8 @@ import { rallyTime, takeFieldHits, updateAggro, type FieldMateHit } from '../net
 import { maxHp } from '../core/sim';
 import type { GameState } from '../core/types';
 import { FIGHT, FIGHT_RANGE, FRAME_H, FRAME_W, HERO_ANIMS, type FightWeapon, HERO_FEET, HERO_PAD, outfitOf, paintHeroSheet } from './hero';
-import { besideXOf, ensureMountTex, mountKindOf, saddleBob, seatOf } from './mounts';
-import { PumpkinFx } from './pumpkinFx';
-import { pumpkinEyes } from './pumpkinArt';
+import { besideXOf, ensureMountTex, mountEyes, mountFrameOf, mountFxOf, mountKindOf, saddleBob, seatOf, type MountFx } from './mounts';
 import { T } from './tiles';
-import { WOLF_FEET, WOLF_H } from './wolfArt';
 
 /**
  * 地图上的其他在线玩家（10-25）：位置每几秒同步一次，这边平滑走过去。
@@ -130,8 +127,8 @@ interface Other {
   movedAt: number;
   hp?: number;
   maxHp?: number;
-  /** 骑南瓜坐骑时的特效 */
-  fx?: PumpkinFx;
+  /** 骑南瓜、独角兽坐骑时的特效 */
+  fx?: MountFx;
 }
 
 export class OtherPlayers {
@@ -214,11 +211,12 @@ export class OtherPlayers {
     o.back?.destroy(); o.front?.destroy();
     o.fx?.destroy();
     o.back = o.front = undefined;
-    o.fx = mk === 'pumpkin' ? new PumpkinFx(this.scene) : undefined;
+    o.fx = mk ? mountFxOf(this.scene, mk) : undefined;
     o.mk = mk;
     if (!mk) return;
     ensureMountTex(this.scene, mk);
-    const mk2 = (y: number) => this.scene.add.sprite(0, y, `mount-${mk}`).setOrigin(0.5, WOLF_FEET / WOLF_H);
+    const fr = mountFrameOf(mk);
+    const mk2 = (y: number) => this.scene.add.sprite(0, y, `mount-${mk}`).setOrigin(0.5, fr.feet / fr.h);
     o.back = mk2(0);
     o.front = mk2(0);
     o.box.addAt(o.back, 0);
@@ -362,7 +360,7 @@ export class OtherPlayers {
         const fx = o.box.x + o.front.x;
         const fy = o.box.y + o.front.y;
         const flip = o.front.flipX ? -1 : 1;
-        const eyes = pumpkinEyes(String(o.front.anims.currentFrame?.frame.name ?? '')).map(([x, y]): [number, number] => [fx + x * flip, fy + y]);
+        const eyes = mountEyes(o.mk ?? '', String(o.front.anims.currentFrame?.frame.name ?? '')).map(([x, y]): [number, number] => [fx + x * flip, fy + y]);
         o.fx.step(now, { x: o.box.x + (o.back?.x ?? 0), y: o.box.y + (o.back?.y ?? 0), moving: moving && !o.anim, dir: o.dir === 'side' ? (o.flip ? -1 : 1) : 0, depth: o.box.depth, lite: true, eyes });
       }
     }

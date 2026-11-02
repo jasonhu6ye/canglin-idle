@@ -24,7 +24,7 @@ export const COATS: Coat[] = [
 export { coatOf } from '../core/ranch';
 
 const TAU = Math.PI * 2;
-const ramp = (c: string) => [mix(c, '#000000', 0.58), mix(c, '#000000', 0.34), mix(c, '#000000', 0.12), c, mix(c, '#ffffff', 0.28)];
+export const ramp = (c: string) => [mix(c, '#000000', 0.58), mix(c, '#000000', 0.34), mix(c, '#000000', 0.12), c, mix(c, '#ffffff', 0.28)];
 const HOOF = ['#141014', '#2a2228', '#4a4048'];
 const LEATHER = ['#2a160a', '#4a2a14', '#6e4220', '#8e5a2c'];
 const METAL = '#d8d0b0';
@@ -99,7 +99,9 @@ function ik(hx: number, hy: number, fx: number, fy: number, l1: number, l2: numb
   return [hx + Math.cos(ang) * l1, hy + Math.sin(ang) * l1];
 }
 
-interface Look { R: string[]; M: string[]; coat: Coat; saddle: boolean; foal?: boolean }
+/** 独角兽的额外部件（unicornArt.ts 传进来）：角、彩虹鬃尾、金蹄、浅色鞍具 */
+export interface UniLook { horn: string[]; rainbow: string[][]; hoof: string[]; leather: string[]; eye: string; blanket: string[]; sparkle: string[] }
+export interface Look { R: string[]; M: string[]; coat: Coat; saddle: boolean; foal?: boolean; uni?: UniLook }
 
 /** 一条腿：髋 → 膝/跗 → 蹄，后腿粗、前腿细一点；dim 是远侧变暗 */
 function horseLeg(d: Pen, L: Look, hx: number, hy: number, fx: number, fy: number, hind: boolean, dim: number) {
@@ -110,7 +112,85 @@ function horseLeg(d: Pen, L: Look, hx: number, hy: number, fx: number, fy: numbe
   seg(d, kx, ky, fx, fy - 1.2, 1.5, 1.2, L.R, dim);
   // 栗色马四只白袜子
   if (L.coat.sock && !dim) seg(d, fx + (kx - fx) * 0.25, fy - 1.2 - (fy - ky) * 0.25, fx, fy - 1.2, 1.3, 1.2, ramp('#e8e0d0'));
-  seg(d, fx - 1.1, fy - 0.6, fx + 1.3, fy - 0.6, 0.9, 0.9, HOOF, 0);
+  seg(d, fx - 1.1, fy - 0.6, fx + 1.3, fy - 0.6, 0.9, 0.9, L.uni?.hoof ?? HOOF, dim && L.uni ? 1 : 0);
+}
+
+/** 独角兽的角：从额头斜着往上前伸，金色带螺旋纹，尖上一点亮光 */
+/** 最近画的那一帧角尖在帧里的位置（相对脚底中心，侧面按朝右算）；背面画的角不算（被骑手挡着） */
+export let lastHornTip: [number, number] | null = null;
+function horn(d: Pen, U: UniLook, x: number, y: number, ang: number, len: number, dim = 0) {
+  const ex = x + Math.cos(ang) * len;
+  const ey = y + Math.sin(ang) * len;
+  lastHornTip = dim ? null : [Math.round(ex - HORSE_W / 2), Math.round(ey - HORSE_FEET)];
+  seg(d, x, y, ex, ey, 1.25, 0.35, U.horn, dim);
+  // 螺旋：沿着角每隔一小段在左右两侧交替点一个深色点
+  for (let k = 1; k < len; k += 1.4) {
+    const q = k / len;
+    const px = x + Math.cos(ang) * k;
+    const py = y + Math.sin(ang) * k;
+    const side = Math.floor(k / 1.4) % 2 ? 1 : -1;
+    const r = 1.1 * (1 - q) + 0.2;
+    dot(d, px - Math.sin(ang) * r * side * 0.8, py + Math.cos(ang) * r * side * 0.8, U.horn[1]);
+  }
+  dot(d, ex, ey, U.sparkle[1]);
+}
+/** 一缕彩虹鬃毛/尾毛：pts 是走向，颜色按 ramp 的中间色，边上一笔浅色 */
+function flow(d: Pen, pts: [number, number][], R: string[], w: number) {
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const q = i / (pts.length - 1);
+    const ww = w * (1 - q * 0.55);
+    seg(d, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], ww, ww * 0.85, R);
+  }
+}
+/** 一条顺着方向飘的彩虹发缕：从 (x,y) 出发，主方向 (dx,dy)，带波浪 */
+function lock(d: Pen, R: string[], x: number, y: number, dx: number, dy: number, len: number, w: number, wave: number, ph: number) {
+  const pts: [number, number][] = [];
+  const nx = -dy;
+  const ny = dx;
+  for (let k = 0; k <= 5; k++) {
+    const q = k / 5;
+    const s = Math.sin(q * 4.2 + ph) * wave * q;
+    pts.push([x + dx * len * q + nx * s, y + dy * len * q + ny * s + q * q * len * 0.25]);
+  }
+  flow(d, pts, R, w);
+}
+/**
+ * 独角兽的鬃毛：一整片顺着脖子垂下来的柔顺长发（不是一缕缕的线），颜色从发根到发梢粉 → 紫 → 淡蓝渐变，
+ * 底边带波浪，每隔几个像素一道深一号的分缕线；跑起来整片往后飘。crest 是发根沿脖子的两端。
+ */
+function mane(d: Pen, U: UniLook, x0: number, y0: number, x1: number, y1: number, wind: number, ph: number, len0 = 9.5, len1 = 12.5) {
+  const [PINK, PURPLE, BLUE] = U.rainbow;
+  const L = Math.hypot(x1 - x0, y1 - y0);
+  const n = Math.ceil(L * 3);
+  // 下垂方向：静止时略往后，跑起来往后躺
+  let dx = -0.42 - wind * 0.3;
+  let dy = 0.95 - wind * 0.25;
+  const m = Math.hypot(dx, dy);
+  dx /= m; dy /= m;
+  for (let k = 0; k <= n; k++) {
+    const q = k / n;
+    const rx = x0 + (x1 - x0) * q;
+    const ry = y0 + (y1 - y0) * q;
+    const wave = 1 + 0.16 * Math.sin(q * 11 + ph) + 0.08 * Math.sin(q * 23 - ph);
+    const len = (len0 + (len1 - len0) * q + wind * 2.2) * wave;
+    const part = (Math.floor(q * L / 2.6) % 3) === 0;
+    for (let s2 = 0; s2 <= len; s2 += 0.5) {
+      const t = s2 / len;
+      const bend = Math.sin(t * 2.2 + q * 3 + ph * 0.5) * 0.9 * t;
+      const px = rx + dx * s2 + dy * bend;
+      const py = ry + dy * s2 - dx * bend;
+      const R = t < 0.42 ? PINK : t < 0.72 ? PURPLE : BLUE;
+      // 发根亮、发梢稍暗；分缕线深一号
+      const i = part ? 1 : t < 0.12 ? 4 : t < 0.85 ? 3 : 2;
+      d.p.set(Math.floor(d.ox + px * d.k), Math.floor(d.oy + py * d.k), R[i]);
+    }
+  }
+}
+/** 小四角星（鬃毛和角周围的闪光） */
+function star(d: Pen, x: number, y: number, c: string, big = false) {
+  dot(d, x, y, c);
+  if (!big) return;
+  dot(d, x - 1, y, c); dot(d, x + 1, y, c); dot(d, x, y - 1, c); dot(d, x, y + 1, c);
 }
 
 /** 侧面一帧的姿势 */
@@ -224,7 +304,15 @@ function drawSide(back: Pen, front: Pen, L: Look, o: SidePose) {
     const q = k / 5;
     tailPts.push([tx - q * (3 + o.wind * 3.5) - sw * q * q * 2, ty + q * (13 - o.wind * 3) + Math.sin(q * 3 + sw) * 0.8]);
   }
-  for (let j = -1; j <= 1; j++) strand(front, tailPts.map(([x, y], k) => [x + j * 0.6 * (k / 5), y + j * 0.4]), j ? M[2] : M[1], 1.1 - Math.abs(j) * 0.3);
+  if (L.uni) {
+    // 独角兽：六缕彩虹长尾从屁股垂到脚边，跑起来往后飘（画在前层、身体之前，根部被屁股盖住）
+    const U = L.uni;
+    for (let j = 0; j < 6; j++) {
+      const R2 = U.rainbow[j % U.rainbow.length];
+      const a = 1.05 + j * 0.16 - o.wind * 0.28 + sw * 0.1;
+      lock(front, R2, tx + 1 - j * 0.3, ty - 2 + j * 0.8, -Math.cos(a - Math.PI / 2 + 0.3), Math.sin(a), 11 + (j % 2) * 1.5 + o.wind * 1.5, 1.4 - j * 0.1, 1.8, j * 1.3 + sw);
+    }
+  } else for (let j = -1; j <= 1; j++) strand(front, tailPts.map(([x, y], k) => [x + j * 0.6 * (k / 5), y + j * 0.4]), j ? M[2] : M[1], 1.1 - Math.abs(j) * 0.3);
   // 身体：屁股、肚子、胸三团
   const [rx, ry] = rot(20, by - 1);
   const [mx, my] = rot(30, by);
@@ -252,12 +340,29 @@ function drawSide(back: Pen, front: Pen, L: Look, o: SidePose) {
   if (o.mouth) seg(front, hx + fdx * 5, hy + fdy * 5 + 1.6, hx + fdx * 7.6, hy + fdy * 7.6 + 2, 0.6, 0.6, ['#2a0a08', '#2a0a08', '#2a0a08', '#2a0a08', '#2a0a08']);
   dot(front, hx + fdx * 8, hy + fdy * 8 - 0.6, '#140a0a');
   // 眼睛、耳朵
-  if (!o.blink) { dot(front, hx + 1.2, hy - 0.6, '#0a0608'); dot(front, hx + 1.2, hy - 1.4, '#ffffff'); }
+  if (L.uni) {
+    // 独角兽：紫晶色的大眼睛带睫毛
+    if (!o.blink) { dot(front, hx + 1.2, hy - 0.6, L.uni.eye); dot(front, hx + 1.2, hy - 1.4, '#ffffff'); dot(front, hx + 2.2, hy - 1.6, R[0]); dot(front, hx + 1.2, hy + 0.4, mix(L.uni.eye, '#000000', 0.5)); }
+    else { dot(front, hx + 1.2, hy - 0.4, R[0]); dot(front, hx + 2.2, hy - 0.6, R[0]); }
+  } else if (!o.blink) { dot(front, hx + 1.2, hy - 0.6, '#0a0608'); dot(front, hx + 1.2, hy - 1.4, '#ffffff'); }
   else dot(front, hx + 1.2, hy - 0.4, R[0]);
   const earA = -1.9 + o.ear * 0.5;
   seg(front, hx - 1, hy - 2, hx - 1 + Math.cos(earA) * 4, hy - 2 + Math.sin(earA) * 4, 1.1, 0.4, R);
-  // 鬃毛：沿着脖子一缕缕往后飘
-  for (let k = 0; k < 8; k++) {
+  if (L.uni) {
+    // 独角兽的角和彩虹鬃毛：鬃毛更长更密，一缕缕顺脖子往后飘，额前一撮垂下来
+    const U = L.uni;
+    horn(front, U, hx + 1.2, hy - 2.6, -1.15 + o.pitch, 7.5);
+    mane(front, U, hx - 1.5, hy - 3, nx - 6, ny - 5, o.wind, o.tail * 2);
+    // 额前一撮刘海垂到眼睛旁边
+    mane(front, U, hx + 1.5, hy - 2.8, hx - 1, hy - 3, o.wind * 0.3, 1, 4.5, 3.5);
+    // 闪光：鬃毛和角旁边几点一闪一闪
+    for (let k = 0; k < 4; k++) {
+      const f = phash(k, Math.round((o.tail + o.wind) * 7), 11);
+      if (f < 0.45) continue;
+      star(front, hx - 2 + k * -4.5 + f * 2, hy - 7 + (k % 2) * 3 + f * 2, U.sparkle[f > 0.8 ? 1 : 0], f > 0.9);
+    }
+    star(front, hx + 1.2 + Math.cos(-1.15 + o.pitch) * 9.2, hy - 2.6 + Math.sin(-1.15 + o.pitch) * 9.2, U.sparkle[1], true);
+  } else for (let k = 0; k < 8; k++) {
     const q = k / 7;
     const x = hx - 2 + (nx - 4 - (hx - 2)) * q;
     const y = hy - 2.5 + (ny - 3 - (hy - 2.5)) * q;
@@ -269,19 +374,21 @@ function drawSide(back: Pen, front: Pen, L: Look, o: SidePose) {
   if (L.saddle) {
     const [s0x, s0y] = rot(26, by - 6);
     const [s1x, s1y] = rot(36, by - 6.3);
-    const bl = ramp(L.coat.blanket);
+    const bl = L.uni?.blanket ?? ramp(L.coat.blanket);
+    const LE = L.uni?.leather ?? LEATHER;
+    const ME = L.uni ? L.uni.horn[3] : METAL;
     seg(front, s0x - 1, s0y + 2.5, s1x + 1, s1y + 2.5, 2.4, 2.4, bl);
-    for (let k = 0; k < 5; k++) dot(front, s0x + k * 2.6, s0y + 4.6, '#f0e0a0');
-    seg(front, s0x, s0y, s1x, s1y, 1.6, 1.6, LEATHER);
-    seg(front, s0x - 0.5, s0y + 0.5, s0x - 1.2, s0y - 2, 1, 0.8, LEATHER);
-    seg(front, s1x, s1y + 0.5, s1x + 0.6, s1y - 1.8, 1, 0.8, LEATHER);
+    for (let k = 0; k < 5; k++) dot(front, s0x + k * 2.6, s0y + 4.6, L.uni ? L.uni.horn[4] : '#f0e0a0');
+    seg(front, s0x, s0y, s1x, s1y, 1.6, 1.6, LE);
+    seg(front, s0x - 0.5, s0y + 0.5, s0x - 1.2, s0y - 2, 1, 0.8, LE);
+    seg(front, s1x, s1y + 0.5, s1x + 0.6, s1y - 1.8, 1, 0.8, LE);
     const [stx, sty] = rot(31, by + 3);
-    seg(front, (s0x + s1x) / 2, s0y + 1, stx, sty + 2, 0.4, 0.4, [LEATHER[0], LEATHER[0], LEATHER[1], LEATHER[1], LEATHER[1]]);
-    dot(front, stx, sty + 3, METAL);
-    dot(front, stx + 1, sty + 3, METAL);
+    seg(front, (s0x + s1x) / 2, s0y + 1, stx, sty + 2, 0.4, 0.4, [LE[0], LE[0], LE[1], LE[1], LE[1]]);
+    dot(front, stx, sty + 3, ME);
+    dot(front, stx + 1, sty + 3, ME);
     // 缰绳：嘴角到鞍桥
-    strand(front, [[hx + fdx * 6, hy + fdy * 6], [hx - 1, hy + 3], [s1x + 1, s1y - 1]], LEATHER[1], 0.35);
-    dot(front, hx + fdx * 6, hy + fdy * 6, METAL);
+    strand(front, [[hx + fdx * 6, hy + fdy * 6], [hx - 1, hy + 3], [s1x + 1, s1y - 1]], LE[1], 0.35);
+    dot(front, hx + fdx * 6, hy + fdy * 6, ME);
   }
 }
 
@@ -294,13 +401,15 @@ function drawFront(back: Pen, front: Pen, L: Look, t: number, run: boolean, i: n
   ball(back, 32, 24 + bob, 9.5, 7, R, 1, L.coat.dapple);
   seg(back, 27, 28 + bob, 27, 41 - lift(0) * 0.6, 2.6, 1.4, R, 1);
   seg(back, 37, 28 + bob, 37, 41 - lift(0.1) * 0.6, 2.6, 1.4, R, 1);
-  seg(back, 25.8, 41 - lift(0) * 0.6, 28.2, 41 - lift(0) * 0.6, 0.9, 0.9, HOOF);
-  seg(back, 35.8, 41 - lift(0.1) * 0.6, 38.2, 41 - lift(0.1) * 0.6, 0.9, 0.9, HOOF);
+  const HF = L.uni?.hoof ?? HOOF;
+  seg(back, 25.8, 41 - lift(0) * 0.6, 28.2, 41 - lift(0) * 0.6, 0.9, 0.9, HF);
+  seg(back, 35.8, 41 - lift(0.1) * 0.6, 38.2, 41 - lift(0.1) * 0.6, 0.9, 0.9, HF);
   const sw = Math.sin(t * TAU * (run ? 1 : 2)) * 2;
-  strand(back, [[37, 22 + bob], [41 + sw, 26 + bob], [42 + sw, 32]], M[2], 1);
+  if (L.uni) for (let j = 0; j < 4; j++) lock(back, L.uni.rainbow[j % L.uni.rainbow.length], 38 + j * 0.4, 21 + bob + j, 0.35 + sw * 0.08, 0.95, 11 - j, 1.1, 1, j + t * TAU);
+  else strand(back, [[37, 22 + bob], [41 + sw, 26 + bob], [42 + sw, 32]], M[2], 1);
   if (L.saddle) {
-    seg(back, 24, 18 + bob, 40, 18 + bob, 2.2, 2.2, ramp(L.coat.blanket));
-    seg(back, 25, 16.5 + bob, 39, 16.5 + bob, 1.4, 1.4, LEATHER);
+    seg(back, 24, 18 + bob, 40, 18 + bob, 2.2, 2.2, L.uni?.blanket ?? ramp(L.coat.blanket));
+    seg(back, 25, 16.5 + bob, 39, 16.5 + bob, 1.4, 1.4, L.uni?.leather ?? LEATHER);
   }
   // 前层：胸、前腿
   ball(front, 32, 27 + bob, 7, 6.2, R, 0, L.coat.dapple);
@@ -309,7 +418,7 @@ function drawFront(back: Pen, front: Pen, L: Look, t: number, run: boolean, i: n
     seg(front, x, 30 + bob, x, 36 - up * 0.5 + bob * 0.3, 2.4, 1.6, R);
     seg(front, x, 36 - up * 0.5 + bob * 0.3, x, 41 - up, 1.6, 1.3, R);
     if (L.coat.sock) seg(front, x, 39 - up, x, 41 - up, 1.4, 1.3, ramp('#e8e0d0'));
-    seg(front, x - 1.2, 41.4 - up, x + 1.2, 41.4 - up, 0.9, 0.9, HOOF);
+    seg(front, x - 1.2, 41.4 - up, x + 1.2, 41.4 - up, 0.9, 0.9, HF);
   }
   // 脖子和朝向镜头的长脸
   const hb = bob * 0.5 + (run ? 0 : Math.sin(t * TAU) * 0.4);
@@ -320,20 +429,38 @@ function drawFront(back: Pen, front: Pen, L: Look, t: number, run: boolean, i: n
   dot(front, 31, 20 + hb, '#140a0a');
   dot(front, 33, 20 + hb, '#140a0a');
   // 白色额星（栗色、乌骓）
-  if (!L.coat.dapple && !L.coat.shine) { dot(front, 32, 11 + hb, '#f4f0e8'); dot(front, 32, 12 + hb, '#f4f0e8'); }
+  if (!L.coat.dapple && !L.coat.shine && !L.uni) { dot(front, 32, 11 + hb, '#f4f0e8'); dot(front, 32, 12 + hb, '#f4f0e8'); }
   const blink = !run && i === 20;
   for (const s of [-1, 1]) {
-    dot(front, 32 + s * 3, 11 + hb, blink ? R[0] : '#0a0608');
+    dot(front, 32 + s * 3, 11 + hb, blink ? R[0] : L.uni ? L.uni.eye : '#0a0608');
+    if (L.uni && !blink) dot(front, 32 + s * 3, 10 + hb, '#ffffff');
     seg(front, 32 + s * 2.4, 8.5 + hb, 32 + s * 3.6, 4.5 + hb, 1.1, 0.4, R);
   }
-  // 额前的鬃毛和脖子两边的鬃毛
-  strand(front, [[31, 8 + hb], [32, 10.5 + hb], [33, 9 + hb]], M[3], 0.7);
-  for (const s of [-1, 1]) strand(front, [[32 + s * 2, 14 + hb], [32 + s * 4.5, 18 + hb + (run ? 1 : 0)], [32 + s * 5, 22 + bob]], M[2], 0.7);
+  if (L.uni) {
+    // 独角兽：角朝上，鬃毛从头顶顺两边长长地垂下来
+    const U = L.uni;
+    horn(front, U, 32, 7.5 + hb, -Math.PI / 2 + 0.05, 7.5);
+    for (const s of [-1, 1]) for (let k = 0; k < 4; k++) {
+      lock(front, U.rainbow[(k + (s > 0 ? 2 : 0)) % U.rainbow.length], 32 + s * (1.5 + k * 0.8), 8.5 + hb + k * 2.2, s * 0.42, 0.9, 9 + k * 1.2 + (run ? 2 : 0), 1.1, 0.9 + (run ? 0.6 : 0), k * 1.1 + s + t * TAU);
+    }
+    lock(front, U.rainbow[1], 31.5, 8 + hb, 0.15, 1, 4, 0.8, 0.4, 0.5);
+    for (let k = 0; k < 3; k++) {
+      const f = phash(k, i, 12);
+      if (f > 0.5) star(front, 24 + k * 8 + f * 3, 6 + hb + f * 5, U.sparkle[f > 0.8 ? 1 : 0], f > 0.9);
+    }
+    star(front, 32 + Math.cos(-Math.PI / 2 + 0.05) * 9.2, 7.5 + hb + Math.sin(-Math.PI / 2 + 0.05) * 9.2, U.sparkle[1], true);
+  } else {
+    // 额前的鬃毛和脖子两边的鬃毛
+    strand(front, [[31, 8 + hb], [32, 10.5 + hb], [33, 9 + hb]], M[3], 0.7);
+    for (const s of [-1, 1]) strand(front, [[32 + s * 2, 14 + hb], [32 + s * 4.5, 18 + hb + (run ? 1 : 0)], [32 + s * 5, 22 + bob]], M[2], 0.7);
+  }
   if (L.saddle) {
-    strand(front, [[29.5, 19 + hb], [27, 22 + bob]], LEATHER[1], 0.35);
-    strand(front, [[34.5, 19 + hb], [37, 22 + bob]], LEATHER[1], 0.35);
-    dot(front, 29.5, 19 + hb, METAL);
-    dot(front, 34.5, 19 + hb, METAL);
+    const LE = L.uni?.leather ?? LEATHER;
+    const ME = L.uni ? L.uni.horn[3] : METAL;
+    strand(front, [[29.5, 19 + hb], [27, 22 + bob]], LE[1], 0.35);
+    strand(front, [[34.5, 19 + hb], [37, 22 + bob]], LE[1], 0.35);
+    dot(front, 29.5, 19 + hb, ME);
+    dot(front, 34.5, 19 + hb, ME);
   }
 }
 
@@ -346,11 +473,17 @@ function drawBack(back: Pen, front: Pen, L: Look, t: number, run: boolean) {
   seg(back, 32, 22 + bob, 32, 12 + bob * 0.5, 4.2, 3.4, R, 1);
   ball(back, 32, 10 + bob * 0.5, 3.4, 3, R, 1);
   for (const s of [-1, 1]) seg(back, 32 + s * 2.2, 8 + bob * 0.5, 32 + s * 3.2, 4 + bob * 0.5, 1.1, 0.4, R, 1);
-  strand(back, [[32, 8 + bob * 0.5], [31.5, 14 + bob * 0.5], [32.5, 20 + bob]], M[2], 1.2);
+  if (L.uni) {
+    const U = L.uni;
+    horn(back, U, 32, 7.5 + bob * 0.5, -Math.PI / 2 - 0.08, 7, 1);
+    for (let k = 0; k < 4; k++) lock(back, U.rainbow[k % U.rainbow.length], 30 + k * 1.3, 8 + bob * 0.5 + k * 0.6, (k - 1.5) * 0.12, 1, 11 + (k % 2) * 2 + (run ? 2 : 0), 1.2, 0.8, k * 1.3 + t * TAU);
+    star(back, 32 + Math.cos(-Math.PI / 2 - 0.08) * 8.6, 7.5 + bob * 0.5 + Math.sin(-Math.PI / 2 - 0.08) * 8.6, U.sparkle[1], true);
+  } else strand(back, [[32, 8 + bob * 0.5], [31.5, 14 + bob * 0.5], [32.5, 20 + bob]], M[2], 1.2);
+  const HF = L.uni?.hoof ?? HOOF;
   for (const [x, ph] of [[28, 0.38], [36, 0.48]] as const) {
     const up = lift(ph);
     seg(back, x, 30 + bob, x, 41 - up * 0.7, 2, 1.3, R, 1);
-    seg(back, x - 1, 41 - up * 0.7, x + 1, 41 - up * 0.7, 0.8, 0.8, HOOF);
+    seg(back, x - 1, 41 - up * 0.7, x + 1, 41 - up * 0.7, 0.8, 0.8, HF);
   }
   // 前层：屁股两团、后腿、尾巴
   for (const [x, ph] of [[27, 0], [37, 0.1]] as const) {
@@ -358,16 +491,17 @@ function drawBack(back: Pen, front: Pen, L: Look, t: number, run: boolean) {
     seg(front, x, 27 + bob, x, 35 - up * 0.4, 3, 2, R);
     seg(front, x, 35 - up * 0.4, x, 41 - up, 1.8, 1.4, R);
     if (L.coat.sock) seg(front, x, 39 - up, x, 41 - up, 1.5, 1.3, ramp('#e8e0d0'));
-    seg(front, x - 1.3, 41.4 - up, x + 1.3, 41.4 - up, 0.9, 0.9, HOOF);
+    seg(front, x - 1.3, 41.4 - up, x + 1.3, 41.4 - up, 0.9, 0.9, HF);
   }
   ball(front, 28, 24 + bob, 6, 6.4, R, 0, L.coat.dapple);
   ball(front, 36, 24 + bob, 6, 6.4, R, 0, L.coat.dapple);
   if (L.saddle) {
-    seg(front, 25, 18.5 + bob, 39, 18.5 + bob, 1.8, 1.8, ramp(L.coat.blanket));
-    seg(front, 26, 17 + bob, 38, 17 + bob, 1.3, 1.3, LEATHER);
+    seg(front, 25, 18.5 + bob, 39, 18.5 + bob, 1.8, 1.8, L.uni?.blanket ?? ramp(L.coat.blanket));
+    seg(front, 26, 17 + bob, 38, 17 + bob, 1.3, 1.3, L.uni?.leather ?? LEATHER);
   }
   const sw = Math.sin(t * TAU * (run ? 1 : 2)) * (run ? 1.5 : 2.5);
-  for (let j = -1; j <= 1; j++) strand(front, [[32 + j * 0.6, 21 + bob], [32 + sw * 0.5 + j, 28 + bob * 0.5], [32 + sw + j * 1.2, 35 - (run ? 2 : 0)]], j ? M[2] : M[1], 1);
+  if (L.uni) for (let j = 0; j < 5; j++) lock(front, L.uni.rainbow[j % L.uni.rainbow.length], 30.5 + j * 0.75, 20 + bob + (j % 2), sw * 0.09 + (j - 2) * 0.05, 1, 16 - (run ? 3 : 0) - (j % 2) * 1.5, 1.3, 1.4, j * 1.2 + t * TAU * 0.5);
+  else for (let j = -1; j <= 1; j++) strand(front, [[32 + j * 0.6, 21 + bob], [32 + sw * 0.5 + j, 28 + bob * 0.5], [32 + sw + j * 1.2, 35 - (run ? 2 : 0)]], j ? M[2] : M[1], 1);
 }
 
 // ---- 坐骑精灵表 ----
@@ -392,13 +526,14 @@ const lookOf = (coat: number, saddle = true): Look => {
   return { R: ramp(c.body), M: ramp(c.mane), coat: c, saddle };
 };
 
-function drawHorse(coat: number, key: string, i: number, n: number): [Pix, Pix] {
+/** 按一个 Look 画一帧（马和独角兽共用骨架） */
+export function drawHorseLook(L: Look, key: string, i: number, n: number): [Pix, Pix] {
   const back = new Pix(HORSE_W, HORSE_H);
   const front = new Pix(HORSE_W, HORSE_H);
   const B = { p: back, k: 1, ox: 0, oy: 0 };
   const F = { p: front, k: 1, ox: 0, oy: 0 };
-  const L = lookOf(coat);
   const t = i / n;
+  lastHornTip = null;
   if (key === 'run-side') drawSide(B, F, L, gallop(t));
   else if (key === 'idle-side') drawSide(B, F, L, standing(t, i));
   else if (key === 'sit') drawSide(B, F, L, grazing(t, i));
@@ -407,10 +542,12 @@ function drawHorse(coat: number, key: string, i: number, n: number): [Pix, Pix] 
   else if (key === 'idle-down') drawFront(B, F, L, t, false, i);
   else if (key === 'run-up') drawBack(B, F, L, t, true);
   else drawBack(B, F, L, t, false);
-  back.outlineTinted('#0a0608', 0.6);
-  front.outlineTinted('#0a0608', 0.6);
+  const oc = L.uni ? '#3a1838' : '#0a0608';
+  back.outlineTinted(oc, L.uni ? 0.5 : 0.6);
+  front.outlineTinted(oc, L.uni ? 0.5 : 0.6);
   return [back, front];
 }
+const drawHorse = (coat: number, key: string, i: number, n: number) => drawHorseLook(lookOf(coat), key, i, n);
 
 /** 坐骑的动画前缀：狼是 wolf，马按毛色 horse0…horse3 */
 export const horseKind = (coat: number) => `horse${coat}`;
