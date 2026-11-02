@@ -91,6 +91,8 @@ const CROWD: [number, number][] = [[0, 0], [-6, -10], [-6, 10], [-14, 0], [-14, 
  * 近战的在怪的两侧（右边那个朝左打），[横向 × 贴身距离, 纵向像素]；远程的在自己身后错开，[往后退, 纵向]。
  * 自己永远在怪的左边，所以自己是近战就不占左边正中，自己是远程就不占远程正中。
  */
+/** 多久没收到某人的伤害，就改成按节奏自己播出手动作 */
+const AUTO_SWING_AFTER = 2500;
 /** 一起打的人停手多久之内还站在怪旁边（等刷新、换下一只的空档） */
 const CREW_HOLD_MS = 5000;
 const MELEE_SPOTS: [number, number][] = [[1, 0], [-0.85, -11], [0.85, 11], [-0.85, 11], [0.85, -11], [1.5, -6], [1.5, 6]];
@@ -184,6 +186,23 @@ export class OtherPlayers {
     if (!o || !w) return -1;
     this.swingAt.set(id, this.scene.time.now);
     return Math.round(FIGHT[w].ms * FIGHT[w].hit);
+  }
+
+  /**
+   * 打怪的人播哪个动作（11-02 用户要求队友也要有攻击动作）：刚收到他的伤害就播一次出手；
+   * 一阵子没收到（没算成一起打、或在打别的怪）也按节奏自己挥，不会一直摆着架势不动
+   */
+  private fightAnim(p: Presence, now: number) {
+    const w = weaponOfAnim(p.anim);
+    if (!w || !p.anim?.endsWith('-ready')) return p.anim;
+    const hit = Math.min(FIGHT[w].ms, 700);
+    const last = this.swingAt.get(p.playerId) ?? -1e9;
+    if (now - last < hit) return `fight-${w}`;
+    if (now - last < AUTO_SWING_AFTER) return p.anim;
+    const period = Math.max(1200, FIGHT[w].ms + 700);
+    let h = 0;
+    for (let i = 0; i < p.playerId.length; i++) h = (h * 31 + p.playerId.charCodeAt(i)) | 0;
+    return (now + Math.abs(h)) % period < hit ? `fight-${w}` : p.anim;
   }
 
   /** 和自己打同一只怪的人各站哪（按 id 排序，各家算出来的顺序一样） */
@@ -297,12 +316,7 @@ export class OtherPlayers {
       if (p.dg) return null;
       if (Math.abs(p.x - near.x) > VIEW_TILES || Math.abs(p.y - near.y) > VIEW_TILES) return null;
       const spot = spots?.get(p.playerId);
-      if (spot) {
-        // 刚打中一下：播出手动作，播完回到架势
-        const w = weaponOfAnim(p.anim);
-        const swing = w && now - (this.swingAt.get(p.playerId) ?? -1e9) < Math.min(FIGHT[w].ms, 700);
-        return { x: spot.x, y: spot.y, anim: swing ? `fight-${w}` : p.anim, flip: spot.flip };
-      }
+      if (spot) return { x: spot.x, y: spot.y, anim: this.fightAnim(p, now), flip: spot.flip };
       let x = p.x * T + T / 2, y = p.y * T + T / 2 + 7;
       if (p.anim) {
         const cell = `${p.x},${p.y}`;
@@ -313,7 +327,7 @@ export class OtherPlayers {
         x += ox - (w ? (FIGHT_RANGE[w] ?? 0) * T : 0);
         y += oy;
       }
-      return { x, y, anim: p.anim, flip: p.flip };
+      return { x, y, anim: this.fightAnim(p, now), flip: p.flip };
     };
     for (const p of this.latest) {
       const at = (this.place ?? onMap)(p);
