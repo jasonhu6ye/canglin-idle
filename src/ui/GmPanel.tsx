@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { GM_KINDS, GM_KIND_NAME, GM_PCT_MAX } from '../core/gm';
 import type { GmKind } from '../core/types';
-import { online, type AiPlayer, type CheatRow, type GmPlayer, type GmTrade, type Snapshot, type GmInput, type GmMailRow, type GmRow } from '../net';
+import { online, type AiPlayer, type CheatRow, type AltRow, type GmPlayer, type GmTrade, type Snapshot, type GmInput, type GmMailRow, type GmRow } from '../net';
 import { aiPlayers, botDoing, botsMuted, setBotsMuted, botName, botOnline, botPresence, botProfile, habitOf, refreshBots, zoneOf } from '../net/bots';
 import { actionName } from './format';
 import { emitToGame } from './GameCanvas';
@@ -489,10 +489,10 @@ const AC_KIND: Record<string, string> = {
   items: tl('物品总价值涨得太快'), bad_item: tl('存档里有不存在或数量不对的物品'), rollback: tl('存档时间倒退（回档）'),
   trade: tl('交易价值严重不对等'), trade_fake: tl('交易给出的东西比存档里还多'), spam: tl('世界频道刷屏'), multi: tl('同一台设备登录多个账号'),
   move: tl('报的位置对不上（瞬移，服务器已拒绝）'), walk_fast: tl('走路速度被改过'), fake_gate: tl('伪造副本洞口'),
-  fake_hits: tl('伪造队友伤害'), bad_cmd: tl('发了不存在的操作'), backdate: tl('操作时间往前填（补领奖励）'), banned_play: tl('封禁后还在操作'),
+  fake_hits: tl('伪造队友伤害'), bad_cmd: tl('发了不存在的操作'), backdate: tl('操作时间往前填（补领奖励）'), banned_play: tl('封禁后还在操作'), alt_trade: tl('和关联账号交易'), alt_bank: tl('从公会仓库取关联账号存的东西'),
   auto_rollback: tl('已自动回档'), auto_wipe: tl('已自动删档封号'),
 };
-const AC_DEFAULT = { xp_per_hour: 6000000, coins_per_hour: 50000000, value_per_hour: 50000000, trade_gap: 3000000, chat_per_min: 8, multi_accounts: 3, drift_min: 30, snap_keep_auto: 3, auto_hide: 1, auto_punish: 1, wipe_strikes: 3, trade_new_hours: 24, trade_day_value: 0, lock_hidden: 1, punish_trade_days: 7 };
+const AC_DEFAULT = { xp_per_hour: 6000000, coins_per_hour: 50000000, value_per_hour: 50000000, trade_gap: 3000000, chat_per_min: 8, multi_accounts: 3, drift_min: 30, snap_keep_auto: 3, auto_hide: 1, auto_punish: 1, wipe_strikes: 3, trade_new_hours: 24, trade_day_value: 0, lock_hidden: 1, punish_trade_days: 7, same_dev_trade: 1, same_ip_trade: 0, link_days: 30 };
 const AC_FIELDS: [keyof typeof AC_DEFAULT, string][] = [
   ['xp_per_hour', tl('每小时经验上限')], ['coins_per_hour', tl('每小时金币上限')], ['value_per_hour', tl('每小时物品价值上限')],
   ['trade_gap', tl('交易价值差多少算不对等')], ['chat_per_min', tl('世界频道每分钟最多几句')], ['multi_accounts', tl('一台设备几个账号算多开')],
@@ -500,6 +500,7 @@ const AC_FIELDS: [keyof typeof AC_DEFAULT, string][] = [
   ['auto_punish', tl('明显作弊自动回档（1 开 / 0 关）')], ['wipe_strikes', tl('30 天内第几次自动删档封号')],
   ['trade_new_hours', tl('新账号几小时后才能交易（0 不限）')], ['trade_day_value', tl('每天交易最多收到多少价值（0 不限）')],
   ['lock_hidden', tl('移出排行榜的不能交易和用公会仓库（1 开 / 0 关）')], ['punish_trade_days', tl('自动回档后限制交易几天')],
+  ['same_dev_trade', tl('同设备的账号不能互相交易（1 开 / 0 关）')], ['same_ip_trade', tl('同网络的账号不能互相交易（1 开 / 0 只记录）')], ['link_days', tl('多少天内用过同设备 / 网络算关联')],
 ];
 function acDetail(d: Record<string, unknown>) {
   const n = (k: string) => fmtNum(Number(d[k] ?? 0));
@@ -510,6 +511,7 @@ function acDetail(d: Record<string, unknown>) {
   if ('jump_min' in d) return tl`系统时间跳了 ${n('jump_min')} 分钟`;
   if ('ratio' in d) return tl`系统时间走得是正常的 ${d.ratio} 倍`;
   if ('back_min' in d) return d.traded ? tl`倒退 ${n('back_min')} 分钟，期间做过交易` : tl`倒退 ${n('back_min')} 分钟`;
+  if ('with' in d) return d.by === 'dev' ? tl`对方 ${String(d.with)}（#${String(d.with_pid)}），同一台设备` : tl`对方 ${String(d.with)}（#${String(d.with_pid)}），同一个网络`;
   if ('got' in d) return tl`从 ${String(d.from)} 收到价值 ${n('got')}，只给出 ${n('gave')}`;
   if ('per_min' in d) return tl`一分钟 ${n('per_min')} 句`;
   if ('accounts' in d) return tl`这台设备登录过 ${n('accounts')} 个账号`;
@@ -520,6 +522,11 @@ function AcTab() {
   const [rows, setRows] = useState<CheatRow[] | null>(null);
   const [conf, setConf] = useState<Record<string, string>>({});
   const [open, setOpen] = useState<string | null>(null);
+  const [alts, setAlts] = useState<AltRow[] | null>(null);
+  useEffect(() => {
+    setAlts(null);
+    if (open) online.gmLinks(open).then(setAlts, () => setAlts([]));
+  }, [open]);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   const load = async () => {
@@ -596,6 +603,7 @@ function AcTab() {
                   {r.flags.map((f, i) => (
                     <li key={i}><b className={f.severe ? 'warn' : ''}>{AC_KIND[f.kind] ?? f.kind}</b> <small className="muted">{new Date(f.at).toLocaleString()} · {acDetail(f.detail)}</small></li>
                   ))}
+                  <li><b>{tl('关联账号')}</b> <small className="muted">{alts == null ? tl('读取中…') : !alts.length ? tl('没有') : alts.map((a) => `${a.name} #${a.pid}（${a.kind === 'dev' ? tl('同设备') : tl('同网络')}${a.banned ? tl('，已封禁') : ''}）`).join(tl('、'))}</small></li>
                 </ul>
               )}
               <div className="gm-row-tools">

@@ -2401,3 +2401,125 @@ begin
     limit least(p_limit, 300);
 end $$;
 grant execute on function public.gm_cheaters(int) to authenticated;
+
+-- ============ 多开 / 同网络检测（11-02）============
+-- 防止开小号送资源。服务器同步时记下每个账号用过的设备和网络（网络只存加密后的代号，不存 IP 本身）。
+-- 两个账号 link_days 天内用过同一台设备 → 不能互相交易、不能从对方存进公会仓库的东西里取（same_dev_trade = 1）；
+-- 同一个网络（家里 / 学校 / 网吧常见，手机流量也可能共用）默认只记录（same_ip_trade = 0），填 1 也禁止。
+-- GM 和白名单不受限制。GM 面板可疑玩家「看记录」里能看到关联账号。
+create table if not exists public.ac_links (
+  player_id uuid not null references public.profiles(id) on delete cascade,
+  kind text not null check (kind in ('ip', 'dev')),
+  v text not null,
+  first_at timestamptz not null default now(),
+  last_at timestamptz not null default now(),
+  n int not null default 1,
+  primary key (player_id, kind, v)
+);
+create index if not exists ac_links_v on public.ac_links (kind, v, last_at desc);
+alter table public.ac_links enable row level security;
+drop policy if exists "ac_links 管理员看" on public.ac_links;
+create policy "ac_links 管理员看" on public.ac_links for select using (public.is_gm());
+
+-- 服务器同步时调用（service_role）
+create or replace function public.ac_seen(p uuid, p_ip text, p_dev text) returns void
+language plpgsql security definer set search_path = public as $$
+declare n_acc int;
+begin
+  if coalesce(p_ip, '') <> '' then
+    insert into ac_links (player_id, kind, v) values (p, 'ip', left(p_ip, 64))
+      on conflict (player_id, kind, v) do update set last_at = now(), n = ac_links.n + 1;
+  end if;
+  if coalesce(p_dev, '') <> '' then
+    insert into ac_links (player_id, kind, v) values (p, 'dev', left(p_dev, 64))
+      on conflict (player_id, kind, v) do update set last_at = now(), n = ac_links.n + 1;
+    select count(distinct l.player_id) into n_acc from ac_links l
+      where l.kind = 'dev' and l.v = left(p_dev, 64) and l.last_at > now() - interval '30 days';
+    if n_acc >= public.ac_conf('multi_accounts', 3) then
+      perform public.ac_flag(p, 'multi', false, jsonb_build_object('accounts', n_acc));
+    end if;
+  end if;
+  delete from ac_links where player_id = p and last_at < now() - interval '90 days';
+end $$;
+revoke execute on function public.ac_seen(uuid, text, text) from public, anon, authenticated;
+grant execute on function public.ac_seen(uuid, text, text) to service_role;
+
+-- 两个账号怎么关联的：'dev' 同设备、'ip' 同网络、null 没关联
+create or replace function public.ac_link_of(a uuid, b uuid) returns text
+language sql stable security definer set search_path = public as $$
+  select case
+    when exists (select 1 from ac_links x join ac_links y on y.kind = x.kind and y.v = x.v
+      where x.player_id = a and y.player_id = b and x.kind = 'dev'
+        and x.last_at > now() - make_interval(days => public.ac_conf('link_days', 30)::int)
+        and y.last_at > now() - make_interval(days => public.ac_conf('link_days', 30)::int)) then 'dev'
+    when exists (select 1 from ac_links x join ac_links y on y.kind = x.kind and y.v = x.v
+      where x.player_id = a and y.player_id = b and x.kind = 'ip'
+        and x.last_at > now() - make_interval(days => public.ac_conf('link_days', 30)::int)
+        and y.last_at > now() - make_interval(days => public.ac_conf('link_days', 30)::int)) then 'ip'
+  end
+$$;
+revoke execute on function public.ac_link_of(uuid, uuid) from public, anon, authenticated;
+
+-- 关联账号之间能不能转东西：不能就报错；同网络放行时记一条
+create or replace function public.ac_link_check(p_other uuid, p_what text) returns void
+language plpgsql security definer set search_path = public as $$
+declare k text; me profiles; ot profiles;
+begin
+  if p_other is null or p_other = auth.uid() or public.is_gm() then return; end if;
+  select * into me from profiles where id = auth.uid();
+  select * into ot from profiles where id = p_other;
+  if me.ac_exempt or ot.ac_exempt then return; end if;
+  k := public.ac_link_of(auth.uid(), p_other);
+  if k is null then return; end if;
+  if k = 'dev' and public.ac_conf('same_dev_trade', 1) > 0 or k = 'ip' and public.ac_conf('same_ip_trade', 0) > 0 then
+    raise exception '%', case when k = 'dev' then '同一台设备上的账号之间不能交易或转东西' else '同一个网络下的账号之间不能交易或转东西' end;
+  end if;
+  perform public.ac_flag(auth.uid(), 'alt_' || p_what, false, jsonb_build_object('with', ot.name, 'with_pid', ot.pid, 'by', k));
+end $$;
+revoke execute on function public.ac_link_check(uuid, text) from public, anon, authenticated;
+
+-- 交易：发起和确认时都会调这个（start_trade / confirm_trade）
+create or replace function public.ac_trade_check(p_other uuid default null) returns void
+language plpgsql security definer set search_path = public as $$
+declare why text;
+begin
+  why := public.ac_trade_block(auth.uid());
+  if why is not null then raise exception '%', why; end if;
+  if p_other is not null and public.ac_trade_block(p_other) is not null then raise exception '对方暂时不能交易'; end if;
+  if p_other is not null then perform public.ac_link_check(p_other, 'trade'); end if;
+end $$;
+revoke execute on function public.ac_trade_check(uuid) from public, anon, authenticated;
+
+-- 公会仓库：取东西时，看最近 7 天存进这个东西的人里有没有自己的关联账号
+create or replace function public.ac_check_guild_bank() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare d uuid;
+begin
+  if auth.uid() is null then return new; end if;
+  perform public.ac_trade_check(null);
+  if new.qty < 0 then
+    for d in select distinct l.player_id from guild_bank_log l
+      where l.guild_id = new.guild_id and l.vault = new.vault and l.item = new.item and l.qty > 0
+        and l.player_id <> auth.uid() and l.at > now() - interval '7 days' loop
+      perform public.ac_link_check(d, 'bank');
+    end loop;
+  end if;
+  return new;
+end $$;
+
+-- 管理员：某个玩家的关联账号
+create or replace function public.gm_links(p_player uuid)
+returns table (player_id uuid, pid bigint, name text, kind text, last_at timestamptz, banned boolean)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  return query
+    select p.id, p.pid, p.name, y.kind, max(y.last_at), p.banned
+    from ac_links x join ac_links y on y.kind = x.kind and y.v = x.v and y.player_id <> x.player_id
+      join profiles p on p.id = y.player_id
+    where x.player_id = p_player and y.last_at > now() - interval '90 days'
+    group by p.id, y.kind
+    order by y.kind, max(y.last_at) desc
+    limit 50;
+end $$;
+grant execute on function public.gm_links(uuid) to authenticated;

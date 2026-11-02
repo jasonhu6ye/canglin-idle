@@ -89,6 +89,16 @@ async function extras(uid: string, now: number): Promise<SyncExtras & { found: b
   };
 }
 
+/** 网络代号（11-02 多开检测）：IP 不存原文，只存加密后的前 16 位；IPv6 按前 4 段（同一个家庭 / 手机的网段） */
+async function netKey(req: Request) {
+  const raw = (req.headers.get('x-forwarded-for') ?? req.headers.get('cf-connecting-ip') ?? '').split(',')[0].trim();
+  if (!raw) return '';
+  const ip = raw.includes(':') ? raw.split(':').slice(0, 4).join(':') : raw;
+  const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`canglin-net:${ip}`));
+  return Array.from(new Uint8Array(h).slice(0, 8), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+const SEEN_MS = 30 * 60_000;
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   try {
@@ -105,7 +115,12 @@ Deno.serve(async (req) => {
       if (!ex.found) return json({ error: 'profile' }, 404);
       const row = rows[0];
       const { state, applied, mailIds, ack, flags } = runSync(row?.data ?? null, body.cmds, now, ex, device ?? '');
-      const data = device ? { ...state, _device: device } : state;
+      const data: Row = device ? { ...state, _device: device } : { ...state };
+      // 记下用过的设备和网络（变了或者半小时一次），给多开检测用
+      const net = await netKey(req).catch(() => '');
+      const old = (row?.data ?? {}) as Row;
+      const seen = (net || device) && (old._net !== net || old._device !== device || !(now - Number(old._netAt ?? 0) < SEEN_MS));
+      data._net = net; data._netAt = seen ? now : old._netAt ?? now;
       const rev = await rest('rpc/server_commit', {
         method: 'POST',
         body: JSON.stringify({
@@ -118,6 +133,7 @@ Deno.serve(async (req) => {
         await Promise.all((flags ?? []).slice(0, 6).map((f) => rest('rpc/ac_flag', {
           method: 'POST', body: JSON.stringify({ p: uid, p_kind: f.kind, p_severe: f.severe, p_detail: f.detail }),
         }).catch(() => {})));
+        if (seen) await rest('rpc/ac_seen', { method: 'POST', body: JSON.stringify({ p: uid, p_ip: net, p_dev: device ?? '' }) }).catch(() => {});
         return json({ state: data, rev, now, applied, ack });
       }
     }

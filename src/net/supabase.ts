@@ -1,6 +1,6 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js';
 import type { GameState, GmBuff } from '../core/types';
-import type { CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMail, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildDay, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
+import type { AltRow, CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMail, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildDay, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { type SyncReply } from './api';
 import type { Cmd } from '../core/commands';
 import type { TaskSpec } from '../core/guild';
@@ -599,6 +599,10 @@ export class SupabaseApi implements OnlineApi {
   }
   async gmAcLimit(pid: number, what: 'trade' | 'mute', hours: number) {
     return String(ok(await this.sb.rpc('gm_ac_limit', { p_pid: pid, p_what: what, p_hours: hours })));
+  }
+  async gmLinks(playerId: string) {
+    const rows = ok(await this.sb.rpc('gm_links', { p_player: playerId })) as Row[];
+    return rows.map((r): AltRow => ({ playerId: r.player_id, pid: Number(r.pid), name: r.name, kind: r.kind, lastAt: Date.parse(r.last_at), banned: !!r.banned }));
   }
   async gmAcExempt(pid: number, on: boolean) {
     return String(ok(await this.sb.rpc('gm_ac_exempt', { p_pid: pid, p_on: on })));
