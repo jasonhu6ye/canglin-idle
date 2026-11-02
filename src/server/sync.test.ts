@@ -162,6 +162,24 @@ describe('改过的客户端乱传参数', () => {
     expect(r.state.dungeon?.gate.kind).toBe('blue');
   });
 
+  it('一起打：下次结算开头接着上次的人数，新刷的怪不会变成单人怪', () => {
+    const grove = standOf(NODES.find((n) => n.id === 'starter_grove')!);
+    // 已经补过给（不用先回仓库拿吃的）
+    const base = { ...newGame(t0, 5), loc: grove, queue: [{ action: 'fight_rabbit', mode: { type: 'infinite' as const }, done: 0, elapsedMs: 0, stocked: true }] };
+    const ex = { ...EX, me: 'me', party: ['me', 'mate'], partySize: 2 };
+    const co = (t: number, q: number) => ({ n: 'coop' as const, a: [{ crew: 1, dg: 0, mates: [], hits: [] }], t, q });
+    const r1 = runSync(base, Array.from({ length: 20 }, (_, i) => co(t0 + 500 + i * 3000, i + 1)), t0 + 60_000, ex, 'dev');
+    // 这次结算只有别的指令（每 5 秒一条，结算一段一段都是实时的），还没收到 coop
+    const other = (from: number) => Array.from({ length: 5 }, (_, i) => ({ n: 'sortBank' as const, a: [], t: from + (i + 1) * 5000, q: 100 + i }));
+    const r2 = runSync(JSON.parse(JSON.stringify(r1.state)), other(t0 + 60_000), t0 + 85_000, ex, 'dev');
+    expect(r2.state.combat?.copy ?? 0).toBeGreaterThan(r1.state.combat?.copy ?? 0);
+    expect(r2.state.combat?.crew).toBe(1);
+    // 一直没再报一起打：再下一次按单人算
+    const r3 = runSync(JSON.parse(JSON.stringify(r2.state)), other(t0 + 85_000).map((c) => ({ ...c, q: c.q + 10 })), t0 + 110_000, ex, 'dev');
+    expect(r3.state.combat?.copy ?? 0).toBeGreaterThan(r2.state.combat?.copy ?? 0);
+    expect(r3.state.combat?.crew ?? 0).toBe(0);
+  });
+
   it('没组队时报的队友伤害不算', () => {
     const grove = standOf(NODES.find((n) => n.id === 'starter_grove')!);
     const base = { ...newGame(t0, 5), loc: grove };

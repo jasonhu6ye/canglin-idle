@@ -11,6 +11,8 @@ import { flag, setGuard, type Flag, type Guard, type MateRun } from '../core/gua
 import type { DungeonGate } from '../core/types';
 import { gearHeld, gearSuspects, setMaker, trimMarks, matTotals, matsHeld, newEvents, newProv, provSettle, provSettleMats, provTotals, type GearSuspect } from '../core/prov';
 
+/** 上次结算末尾的一起打人数，隔多久之内下次接着用 */
+const COOP_KEEP_MS = 10_000;
 /** 组队相关的全局状态清零（服务器一次处理一个玩家，算完不能留给下一个） */
 function resetShared(party = 0) {
   setPartySize(party);
@@ -75,6 +77,16 @@ export function runSync(saved: unknown, cmds: unknown, now: number, ex: SyncExtr
     mv: keep.mv && Array.isArray(keep.mv.pts) ? keep.mv : undefined, coopAt: Number(keep.coopAt) || undefined,
   };
   setGuard(G);
+  // 上次结算末尾还在一起打（10 秒内）：接着按那时的人数算，等这次的 coop 指令再更新
+  const kc = keep.coop;
+  const last = Number((saved as { lastTick?: number } | null)?.lastTick) || 0;
+  if (kc && typeof kc === 'object' && last - Number(kc.t) < COOP_KEEP_MS && last >= Number(kc.t)) {
+    // 存下来时已经按队伍人数（冰原同打最多 4 人）限过量
+    setFieldCrew(Math.min(4, Math.max(0, Math.floor(Number(kc.crew) || 0))));
+    setDgCrew(Math.min(4, Math.max(0, Math.floor(Number(kc.dg) || 0))));
+    setAggroMates((Array.isArray(kc.mates) ? kc.mates : []).slice(0, 4).map((x) => Math.max(1, Math.min(5000, Math.floor(Number(x) || 1)))));
+    G.coop = kc;
+  }
   setMaker(ex.maker || null);
   try {
     const p0 = (saved as { prov?: { seq?: number; ev?: unknown[] } } | null)?.prov;
@@ -83,7 +95,7 @@ export function runSync(saved: unknown, cmds: unknown, now: number, ex: SyncExtr
     // 可疑装备（11-02）：这次新记下的传说以上装备，按概率/来源/数量挑出来，交给管理员看
     const gear = p0 ? gearSuspects(out.state.prov, newEvents(out.state.prov, seq0)) : [];
     if (gear.length) out.gear = gear;
-    (out.state as GameState & { _g?: Partial<Guard> })._g = { ...(G.mv && { mv: G.mv }), ...(G.coopAt && { coopAt: G.coopAt }) };
+    (out.state as GameState & { _g?: Partial<Guard> })._g = { ...(G.mv && { mv: G.mv }), ...(G.coopAt && { coopAt: G.coopAt }), ...(G.coop && { coop: G.coop }) };
     return { ...out, flags: G.flags ?? [] };
   } finally {
     resetShared();

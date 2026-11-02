@@ -93,7 +93,9 @@ function coop(s: GameState, t: number, c: unknown): GameState {
   const most = !G ? 4 : Math.min(4, Math.max(G.party.length - 1, !s.dungeon && tgt && SHARED.has(s.queue[0]?.action ?? '') ? 4 : 0));
   setFieldCrew(Math.min(most, int(o.crew, 0, 4)));
   setDgCrew(Math.min(most, int(o.dg, 0, 4)));
-  setAggroMates((Array.isArray(o.mates) ? o.mates : []).slice(0, most).map((x) => int(x, 1, 5000)));
+  const mates = (Array.isArray(o.mates) ? o.mates : []).slice(0, most).map((x) => int(x, 1, 5000));
+  setAggroMates(mates);
+  if (G) G.coop = { crew: Math.min(most, int(o.crew, 0, 4)), dg: Math.min(most, int(o.dg, 0, 4)), mates, t };
   const hits = (Array.isArray(o.hits) ? o.hits : []).slice(0, 20).filter((h): h is [string, number] => Array.isArray(h));
   if (G) {
     // 服务器：只收正在打的这只怪的伤害，按队友人数和时间限量（每人最多按自己输出的 8 倍、每秒至少怪物血量的 5%）

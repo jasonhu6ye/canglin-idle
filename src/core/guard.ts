@@ -20,6 +20,11 @@ export interface Guard {
   mv?: { pts: { x: number; y: number; r: number; t: number }[]; t: number };
   /** 上次收队友伤害的时刻 */
   coopAt?: number;
+  /**
+   * 上次 coop 指令定下的一起打人数（11-02）：下次结算开头接着用。以前每次结算开头清零，
+   * 到这次第一条 coop 之前刷出来的怪就成了单人怪（没有 crew），整只怪看不到队友伤害
+   */
+  coop?: { crew: number; dg: number; mates: number[]; t: number };
   /** 这次结算里发现的可疑操作（服务器记进防作弊记录，同一类只记一条） */
   flags?: Flag[];
 }
