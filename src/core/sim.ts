@@ -1186,7 +1186,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     const kill = () => {
       const got: Record<string, number> = {};
       if (c.crew && c.monsterMax) assistXp(c.pTotal ?? 0, c.monsterMax);
-      if (!c.crew || (c.pTotal ?? 0) > 0) {
+      if (!c.crew || (c.pTotal ?? 0) > 0 || c.tanked) {
         for (const d of m.drops) {
           if (d.chance === undefined || rand() < dropChance(s, d.chance)) {
             const q = coinQty(s, d.item, d.qty);
@@ -1284,7 +1284,10 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       c.mDmg = -1;
       c.mFrost = undefined;
       // 组队打同一个目标：普通攻击按嘲讽挑一个人，没挑中自己就是去打队友了（-2）；大招打全体
-      if (!big && aimsAtMate(s, rand)) c.mDmg = -2;
+      const atMate = !big && aimsAtMate(s, rand);
+      // 一起打时普通攻击挑中了自己 = 在扛怪，没打出伤害也有掉落
+      if (!atMate && !big && c.crew) c.tanked = true;
+      if (atMate) c.mDmg = -2;
       else if (st.monsterMaxHit > 0 && rand() < st.monsterHit && rand() >= st.dodge) {
         const rage = has('berserk') && c.monsterHp < m.hp / 2 ? 1.5 : 1;
         const mult = big && move ? (wm ? wm.mult[alt ? 1 : 0] : move.mult) : 1;
@@ -1368,7 +1371,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     const kill = (dmg: number, crit: boolean, mine: boolean) => {
       const got: Record<string, number> = {};
       if (c.crew) assistXp(c.pTotal ?? 0, c.monsterMax ?? 0);
-      if ((c.pTotal ?? 0) > 0) {
+      if ((c.pTotal ?? 0) > 0 || c.tanked) {
         for (const d of m.drops) {
           if (d.chance === undefined || rand() < dropChance(s, d.chance)) {
             const q = coinQty(s, d.item, d.qty);
@@ -1452,7 +1455,10 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       c.mDmg = -1;
       c.mFrost = undefined;
       // 组队打同一个目标：普通攻击按嘲讽挑一个人，没挑中自己就是去打队友了（-2）；大招打全体
-      if (!big && aimsAtMate(s, rand)) c.mDmg = -2;
+      const atMate = !big && aimsAtMate(s, rand);
+      // 一起打时普通攻击挑中了自己 = 在扛怪，没打出伤害也有掉落
+      if (!atMate && !big && c.crew) c.tanked = true;
+      if (atMate) c.mDmg = -2;
       else if (st.monsterMaxHit > 0 && rand() < st.monsterHit && rand() >= st.dodge) {
         const rage = has('berserk') && c.monsterHp < m.hp / 2 ? 1.5 : 1;
         let dmg = Math.max(1, Math.round((1 + Math.floor(rand() * st.monsterMaxHit * rage)) * (1 - st.reduce) * (big && move ? move.mult : 1)));

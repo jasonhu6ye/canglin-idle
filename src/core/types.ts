@@ -263,6 +263,8 @@ export interface CombatState {
   mFrost?: boolean;
   /** 副本（10-26）：自己对这只怪一共打了多少伤害（发给队友）、怪的血量上限和开打时洞里有几个队友 */
   pTotal?: number;
+  /** 组队时怪的普通攻击挑中过自己（扛过怪）：没打出伤害也算出了力，照样有掉落（11-02） */
+  tanked?: boolean;
   monsterMax?: number;
   crew?: number;
   /** 野外（10-27）：这是第几只（刷新一只加一），队友按它分辨伤害打在哪一只上 */
