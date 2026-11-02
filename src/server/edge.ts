@@ -10,6 +10,7 @@
 import { rankOf, runSync, type SyncExtras } from './sync';
 import type { DungeonGate, GmBuff, ItemStack } from '../core/types';
 import type { MateRun } from '../core/guard';
+import { onlinePartySize, PARTY_ONLINE_MS } from '../core/party';
 
 declare const Deno: { env: { get(k: string): string | undefined }; serve(h: (r: Request) => Promise<Response>): void };
 
@@ -54,9 +55,12 @@ async function extras(uid: string, now: number): Promise<SyncExtras & { found: b
     rest(`party_members?player_id=eq.${uid}&select=party_id`) as Promise<Row[]>,
   ]);
   const members = party[0] ? ((await rest(`party_members?party_id=eq.${party[0].party_id}&select=player_id`)) as Row[]).map((r) => String(r.player_id)) : [];
-  const partySize = members.length;
   // 队友存档里的洞口和副本进度：跟队友进洞口、按队友进度拉进度时核对（不信客户端报的）
   const mates = members.filter((id) => id !== uid && /^[0-9a-f-]{36}$/.test(id));
+  // 组队经验只算在线的队员（11-02）：离线的队友不算人数
+  const seen = mates.length ? (await rest(`profiles?id=in.(${mates.join(',')})&select=id,last_seen`)) as Row[] : [];
+  const onlineIds = new Set(seen.filter((r) => now - Date.parse(r.last_seen) < PARTY_ONLINE_MS).map((r) => String(r.id)));
+  const partySize = onlinePartySize(members, uid, (id) => onlineIds.has(id));
   const mateSaves = mates.length
     ? (await rest(`saves?player_id=in.(${mates.join(',')})&select=gates:data->gates,dungeon:data->dungeon,resume:data->dgResume,used:data->gatesUsed`)) as Row[]
     : [];
