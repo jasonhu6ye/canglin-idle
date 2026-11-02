@@ -1315,4 +1315,5 @@ export const EN_TEXT: Record<string, string> = {
   "万圣节祭坛 11 月 7 日移除": "Halloween Altar leaves Nov 7",
   "万圣节活动已经结束，祭坛现在只能兑换南瓜积分（南瓜灵驹、幽冥死神、棺材伯爵）。11 月 7 日祭坛从地图上移除，积分请在那之前用掉。": "The Halloween event is over. The altar now only trades Pumpkin Points (Jack-o'-Lantern Steed, Netherworld Reaper, Coffin Count). It leaves the map on Nov 7, so spend your points before then.",
   "「永冬之裔」限时活动正式开启：主界面的活动按钮点「寻路」直接去最近的永冬传送门。": "The Scions of Everwinter event is live: tap Go on the event button to head to the nearest Everwinter Portal.",
+  '本机时间比服务器快，这段时间多算的进度不算，已按服务器时间读取云端存档。': "Your device clock is running ahead of the server, so the extra progress doesn't count. Your cloud save has been loaded using server time.",
 };

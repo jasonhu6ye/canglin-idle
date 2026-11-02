@@ -364,6 +364,11 @@ export interface Snapshot { id: number; label: string; auto: boolean; players: n
 
 export type CheatKind = 'clock_local' | 'save_edit' | 'speed';
 /** 上传存档被拒：服务器回档过了（ROLLBACK:新版本号） */
+/** 上传存档没被收下：存档里的游戏时间跑到服务器时间前面去了（本机时钟被调快 / 网页变速） */
+export const SPEED_ERROR = 'SAVE_AHEAD';
+export const isSpeedError = (e: unknown) => String((e as Error)?.message ?? e).includes(SPEED_ERROR);
+/** 服务器允许存档时间比服务器快多少（和 SQL speed_slack_s 一致） */
+export const SAVE_AHEAD_MS = 180_000;
 export const isRollbackError = (e: unknown) => /ROLLBACK:\d+/.test(String((e as Error)?.message ?? e));
 export interface CheatFlag { kind: string; severe: boolean; detail: Record<string, unknown>; at: number }
 export interface CheatRow { playerId: string; pid: number; name: string; hidden: boolean; banned: boolean; note: string; n: number; severe: number; lastAt: number | null; flags: CheatFlag[] }

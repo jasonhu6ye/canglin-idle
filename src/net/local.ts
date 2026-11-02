@@ -1,6 +1,6 @@
 import type { GameState } from '../core/types';
 import type { AiPlayer, CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
-import { GUILD_MAX, levelSnapshot } from './api';
+import { GUILD_MAX, levelSnapshot, SAVE_AHEAD_MS, SPEED_ERROR } from './api';
 import { tl } from '../i18n';
 import { ITEMS } from '../core/data';
 import { GUILD_SHOP, GUILD_TECH, checkinGain, techCap, techCost, EXCHANGE_DAY_MAX, VAULT_COST, VAULT_SLOTS, exchangeGain, guildLevelOf, guildMembersCap, guildSlots, utcDay, utcWeek, type TaskSpec } from '../core/guild';
@@ -80,6 +80,7 @@ export class LocalApi implements OnlineApi {
 
   async pushSave(s: GameState) {
     this.need();
+    if (s.lastTick > Date.now() + SAVE_AHEAD_MS) throw new Error(SPEED_ERROR);
     this.db.save = s;
     this.db.snap = levelSnapshot(s);
     this.flush();

@@ -1774,3 +1774,28 @@ begin
   return query select count(*), count(*) filter (where created_at > now() - interval '1 day'), count(*) filter (where created_at > now() - interval '7 days') from profiles;
 end $$;
 grant execute on function public.gm_player_count() to authenticated;
+
+-- ============ 存档时间以服务器为准（11-02） ============
+-- 游戏按时间结算，网页变速 / 加速插件让本机时钟走快就能多拿收益。
+-- 存档里的游戏时间（last_tick）不许跑到服务器时间前面去（留 3 分钟误差）：超了这次上传不收（返回 null 跳过写入，
+-- 客户端发现没写进去，就按服务器时间对表、读回云端存档），多出来的进度作废。记一条 speed。
+create or replace function public.ac_check_save_speed() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare now_ms numeric := extract(epoch from now()) * 1000; ahead numeric;
+begin
+  if current_setting('ac.bypass', true) = '1' then return new; end if;
+  if public.ac_conf('speed_enforce', 1) = 0 then return new; end if;
+  if (select exists (select 1 from gm_admins a join profiles p on p.pid = a.pid where p.id = new.player_id)) then
+    return new;
+  end if;
+  ahead := new.last_tick - now_ms;
+  if ahead > public.ac_conf('speed_slack_s', 180) * 1000 then
+    perform public.ac_flag(new.player_id, 'speed', ahead > 30 * 60000,
+      jsonb_build_object('ahead_min', round(ahead / 60000, 1), 'rejected', true));
+    return null;
+  end if;
+  return new;
+end $$;
+drop trigger if exists ab_check_save_speed on public.saves;
+-- 名字排在 aa_check_save_epoch 后、ac_check_save 前
+create trigger ab_check_save_speed before insert or update on public.saves for each row execute function public.ac_check_save_speed();

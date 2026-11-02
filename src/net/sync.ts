@@ -4,7 +4,7 @@ import { calibrate } from '../core/clock';
 import { tl } from '../i18n';
 import { newGame, setSettings } from '../core/sim';
 import type { GameState } from '../core/types';
-import { isRollbackError, online } from './index';
+import { isRollbackError, isSpeedError, online } from './index';
 import { syncSocial } from './social';
 
 /**
@@ -92,6 +92,16 @@ export async function pushNow() {
     await online.pushSave(s, deviceId(), epoch());
     ls.set(SYNCED_KEY, String(s.lastTick));
   } catch (e) {
+    // 存档时间跑到服务器前面了（本机时钟被调快、网页开了变速）：服务器没收，
+    // 先按服务器对表，再读回云端最后收下的存档，这段时间多算的进度作废（11-02）
+    if (isSpeedError(e)) {
+      await syncClock(15_000);
+      const save = await online.pullSave().catch(() => null);
+      if (save) {
+        alert(tl('本机时间比服务器快，这段时间多算的进度不算，已按服务器时间读取云端存档。'));
+        return adoptSave(save, me.id);
+      }
+    }
     // 服务器回档了：读回档后的存档（刷新页面）
     if (isRollbackError(e)) {
       const save = await online.pullSave().catch(() => null);

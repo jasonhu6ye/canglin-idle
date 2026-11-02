@@ -1,7 +1,7 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js';
 import type { GameState, GmBuff } from '../core/types';
 import type { CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMail, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildDay, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
-import { levelSnapshot } from './api';
+import { levelSnapshot, SPEED_ERROR } from './api';
 import type { TaskSpec } from '../core/guild';
 import { fastOf, readFast, slowKey, withMove, type Fast } from './presenceSync';
 import { tl } from '../i18n';
@@ -145,7 +145,9 @@ export class SupabaseApi implements OnlineApi {
     const id = this.need().id;
     const snap = levelSnapshot(s);
     const data = { ...s, ...(device ? { _device: device } : {}), ...(epoch ? { _epoch: epoch } : {}) };
-    ok(await this.sb.from('saves').upsert({ player_id: id, data, last_tick: s.lastTick, updated_at: new Date().toISOString() }));
+    // 服务器不收时间跑在前面的存档（触发器跳过写入，返回 0 行）
+    const rows = ok(await this.sb.from('saves').upsert({ player_id: id, data, last_tick: s.lastTick, updated_at: new Date().toISOString() }).select('player_id')) as Row[] | null;
+    if (!rows?.length) throw new Error(SPEED_ERROR);
     this.touchSeen(id);
     ok(await this.sb.from('ranks').upsert({ player_id: id, total: snap.total, combat: snap.combat, skills: snap.skills, xp: snap.xp, updated_at: new Date().toISOString() }));
   }
