@@ -89,6 +89,7 @@ async function doSync(): Promise<boolean> {
         return false;
       }
     }
+    store.serverMail = true;
     const sentAt = Date.now();
     const r = await online.gameSync(store.pending.slice(0, 3000), deviceId());
     calibrate(r.now, sentAt, Date.now());

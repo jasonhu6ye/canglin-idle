@@ -115,10 +115,19 @@ class Store {
     // 读档时用的时间和校准后的差不多：不用重算
     if (Math.abs(now - Date.now() - this.loadedSkew) < 60_000) return;
     const { state, summary } = advance(loaded, now);
-    this.state = stepMail(state, now);
+    this.state = this.mailStep(state, now);
     this.offline = summary.elapsedMs >= OFFLINE_POPUP_MS ? summary : null;
     this.save();
     this.emit();
+  }
+
+  /**
+   * 登录过账号：邮件（每日礼物、全服赠礼）由服务器结算时发，本机不再自己发（11-02：以前本机发的邮件服务器没有，
+   * 同步后消失又重发，反复弹、反复领）。没登录过的离线玩还是本机发
+   */
+  serverMail = (() => { try { return !!localStorage.getItem('canglin-save-owner'); } catch { return false; } })();
+  private mailStep(s: GameState, now: number) {
+    return this.serverMail ? s : stepMail(s, now);
   }
 
   /** 游戏在另一个页面（tab）或另一台设备（device）上开着：这边停下，不再存档 */
@@ -143,7 +152,7 @@ class Store {
     this.loaded = loaded;
     this.loadedSkew = gameNow() - Date.now();
     const { state, summary } = advance(loaded, gameNow());
-    this.state = stepMail(state, gameNow());
+    this.state = this.mailStep(state, gameNow());
     this.absorb(summary);
     if (summary.elapsedMs >= OFFLINE_POPUP_MS) this.offline = summary;
     setInterval(() => this.tick(), TICK_MS);
@@ -159,7 +168,7 @@ class Store {
   private tick(fromBackground = false) {
     if (this.inactive) return;
     const { state, summary } = advance(this.state, gameNow());
-    this.state = stepMail(state, gameNow());
+    this.state = this.mailStep(state, gameNow());
     this.absorb(summary);
     const hidden = document.visibilityState === 'hidden';
     // 在后台、或者一下子结算了很久（锁屏回来定时器先跑了）：都记进离开期间的收获

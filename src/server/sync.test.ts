@@ -193,4 +193,17 @@ describe('改过的客户端乱传参数', () => {
     expect(r.state.xp.fishing).toBe(base.xp.fishing);
     expect(r.flags?.map((f) => f.kind)).toEqual(['banned_play']);
   });
+
+  it('全服赠礼、每日礼物由服务器发，领了就是领了，不会再发', () => {
+    const r1 = runSync(null, [], t0, EX, 'dev');
+    const gift = r1.state.mail?.find((m) => m.kind === 'gift');
+    expect(gift).toBeTruthy();
+    const r2 = runSync(r1.state, [{ n: 'claimMail', a: [gift!.id], t: t0 + 500, q: 1 }], t0 + 1000, EX, 'dev');
+    expect(r2.state.mail?.find((m) => m.id === gift!.id)?.claimed).toBe(true);
+    const keys = (st: GameState) => (st.bag.dkey_g4 ?? 0) + (st.bank.dkey_g4 ?? 0);
+    expect(keys(r2.state)).toBe(5);
+    const r3 = runSync(r2.state, [{ n: 'claimMail', a: [gift!.id], t: t0 + 1500, q: 2 }], t0 + 86_400_000 * 2, EX, 'dev');
+    expect(keys(r3.state)).toBe(5);
+    expect(r3.state.mail?.filter((m) => m.kind === 'gift').length).toBe(1);
+  });
 });

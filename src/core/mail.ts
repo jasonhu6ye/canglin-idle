@@ -16,10 +16,13 @@ export const GIFTS: { key: string; items: ItemStack[] }[] = [
   { key: 'dg-launch', items: [{ item: 'dkey_g4', qty: 5 }] },
 ];
 
-/** 本地日期，当作每日礼物的去重键 */
+/**
+ * 日期（北京时间），当作每日礼物、家园每日的去重键。
+ * 11-02 改服务器结算：以前按玩家本地时区算，服务器（UTC）和手机算出来的「今天」不一样，会两边来回发
+ */
 export const dayKey = (now: number) => {
-  const d = new Date(now);
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+  const d = new Date(now + 8 * 3600_000);
+  return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`;
 };
 
 /** 往存档里塞一封邮件（直接改 s） */

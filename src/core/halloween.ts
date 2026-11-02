@@ -5,8 +5,10 @@ import { tl } from '../i18n';
  * 活动到 11 月 1 日 0 点（本地时间）关闭。这里只放常量和纯函数，data/sim/ui 都从这里取。
  */
 
-/** 活动结束时间：2026 年 11 月 1 日 0 点（玩家本地时间） */
-export const HW_END = new Date(2026, 10, 1).getTime();
+/** 北京时间某天 0 点（服务器和玩家手机算出来一样） */
+const bj = (y: number, m: number, d: number) => Date.UTC(y, m, d) - 8 * 3600_000;
+/** 活动结束时间：2026 年 11 月 1 日 0 点（北京时间） */
+export const HW_END = bj(2026, 10, 1);
 /** 召唤冷却：1 小时 */
 export const HW_COOLDOWN = 3_600_000;
 export const HW_ALTAR = 'hw_altar';
@@ -41,12 +43,12 @@ export const HW_SKINS: { id: string; cost: number }[] = [{ id: 'reaper', cost: 8
 export const HW_SKIN_COST = 800;
 /** 这套万圣节外观换过了没（老存档的死神记在 halloween.skin 上） */
 export const hwHasSkin = (h: { skin?: boolean; skins?: string[] } | undefined, id: string) => !!h && ((id === 'reaper' && !!h.skin) || !!h.skins?.includes(id));
-export const HW_REVEAL = new Date(2026, 9, 30).getTime();
+export const HW_REVEAL = bj(2026, 9, 30);
 export const hwShopOpen = (now: number) => now >= HW_REVEAL;
 
 export const hwOpen = (now: number) => now < HW_END;
 /** 祭坛（和积分兑换）留到 11 月 7 日，那天起地图上移除（用户 11-02） */
-export const HW_GONE = new Date(2026, 10, 7).getTime();
+export const HW_GONE = bj(2026, 10, 7);
 export const hwGone = (now: number) => now >= HW_GONE;
 /** 还要等多久才能再召唤（毫秒，0 表示现在就行） */
 export const hwWait = (last: number | undefined, now: number) => (last === undefined ? 0 : Math.max(0, last + HW_COOLDOWN - now));

@@ -2,7 +2,7 @@ import type { GameState, GmBuff, ItemStack, SkillId } from '../core/types';
 import { advance, combatLevel, level, migrate, newGame, setSettings } from '../core/sim';
 import { setGmBuffs } from '../core/gm';
 import { setGuildLv } from '../core/guild';
-import { sendMail } from '../core/mail';
+import { sendMail, stepMail } from '../core/mail';
 import { ITEMS } from '../core/data';
 import { applyCmd, type Cmd } from '../core/commands';
 import { clearMateHits, setAggroMates, setDgCrew, setFieldCrew } from '../core/aggro';
@@ -98,6 +98,8 @@ function syncInner(saved: unknown, cmds: unknown, now: number, ex: SyncExtras, d
   }
   s = setGmBuffs(s, ex.gmBuffs, s.lastTick);
   s = setGuildLv(s, ex.guildLv, ex.guildTech);
+  // 每日礼物、全服赠礼、过期清理：由服务器发（玩家领邮件的指令要能找到这封）
+  s = stepMail(s, now);
   let applied = 0;
   const seqs = { ...((saved as { _seq?: Record<string, number> } | null)?._seq ?? {}) };
   let ack = Number(seqs[device]) || 0;
@@ -115,6 +117,7 @@ function syncInner(saved: unknown, cmds: unknown, now: number, ex: SyncExtras, d
     applied++;
   }
   s = advance(s, now).state;
+  s = stepMail(s, now);
   const mailIds: string[] = [];
   if (ex.mails.length) {
     const next: GameState = JSON.parse(JSON.stringify(s));
