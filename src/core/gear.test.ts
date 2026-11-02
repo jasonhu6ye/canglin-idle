@@ -78,3 +78,13 @@ describe('护甲分工和灯笼（10-26）', () => {
     expect(healed).toBeGreaterThan(0);
   });
 });
+
+describe('双手盾装备条件（11-02）', () => {
+  it('双手大盾、永霜盾看防御等级，战斗方式仍是近战', () => {
+    for (const id of [...TIERS.map((t) => `${t.id}_greatshield`), ...TIERS.slice(6).map((t) => `${t.id}_frostshield`)]) {
+      const e = ITEMS[id].equip!;
+      expect(e.skill).toBe('defence');
+      expect(e.style).toBe('melee');
+    }
+  });
+});

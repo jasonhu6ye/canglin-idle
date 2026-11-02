@@ -1498,4 +1498,7 @@ export const EN_UI: Record<string, string> = {
   "材料可以一直采，所以传说和神话装备的出货率调低了：T1 传说 1% → 0.2%（约 500 件出一件），神话 0.3% → 0.02%（约 5000 件出一件）。": "Materials are unlimited, so Legendary and Mythic odds are lower: T1 Legendary 1% → 0.2% (about 1 in 500), Mythic 0.3% → 0.02% (about 1 in 5,000).",
   "阶级越高越难：T8 传说约 0.06%（约 1700 件），神话约 0.006%（约 1.7 万件）。副本宝箱里开出的装备也按同样的概率。": "Higher tiers are harder: T8 Legendary about 0.06% (1 in 1,700), Mythic about 0.006% (1 in 17,000). Gear from dungeon chests uses the same odds.",
   "良好、优秀、史诗的概率不变，少掉的部分变成普通；精炼石的效果不变。已经做出来的装备不受影响。": "Good, Excellent and Epic odds are unchanged (the difference goes to Common); refining stones are unchanged. Gear already made is not affected.",
+  '双手大盾和永霜盾看防御等级才能装备（不是近战等级），拿着打怪照样算近战。': 'The Tower Shield and the Everfrost Shield require a Defence level to equip (not a Melee level). Fighting with them still counts as Melee.',
+  '双手盾改看防御等级': 'Two-handed shields now use Defence',
+  '双手大盾和永霜盾的装备条件从近战等级改成防御等级，拿着打怪照样算近战经验。': 'The Tower Shield and the Everfrost Shield now require a Defence level instead of a Melee level. Fighting with them still gives Melee XP.',
 };

@@ -8,6 +8,12 @@ import { tl } from '../i18n';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-11-02-y', date: tl('11 月 2 日'), title: tl('双手盾改看防御等级'),
+    lines: [
+      tl('双手大盾和永霜盾的装备条件从近战等级改成防御等级，拿着打怪照样算近战经验。'),
+    ],
+  },
+  {
     id: '2026-11-02-x', date: tl('11 月 2 日'), title: tl('交易规则调整'),
     lines: [
       tl('系统赠送的物品（奖励邮件发的）只能自己用，不能交易，也不能存进公会仓库；兑换码奖励和自己采集、制作、打怪得到的不受影响。'),

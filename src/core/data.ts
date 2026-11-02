@@ -498,10 +498,10 @@ export const EQUIP_TYPES: EquipType[] = [
     stats: { attack: 1.05, strength: 0.9, strFlat: -4, attackMs: 2300, style: 'melee', chain: 0.17 } },
   // 永霜盾（用户 11-02，特殊装备，只有 T7/T8）：双手，底子比双手大盾略好；挨打时 17% 冻住敌人 1 秒，自己防御 +50% 持续 7 秒。
   // 材料永霜之心只在永冬冰原的首领和限时宝箱里出
-  { ...W('frostshield', tl('永霜盾'), 'melee', 'smithing', [['bar', 4], ['plank', 1], ['frostheart', 2]], 8, 0.6, 0.65, 2800, 'melee'), minTier: 6,
+  { ...W('frostshield', tl('永霜盾'), 'defence', 'smithing', [['bar', 4], ['plank', 1], ['frostheart', 2]], 8, 0.6, 0.65, 2800, 'melee'), minTier: 6,
     stats: { attack: 0.6, strength: 0.65, defence: 1.65, attackMs: 2800, style: 'melee', twoHanded: true, threat: 160, guard: 0.17 } },
   // 双手大盾（用户 10-25）：攻击低、防御很高，双手持握，装上就不能用副手
-  { ...W('greatshield', tl('双手大盾'), 'melee', 'smithing', [['bar', 4], ['plank', 1]], 5, 0.55, 0.6, 2800, 'melee'), stats: { attack: 0.55, strength: 0.6, defence: 1.5, attackMs: 2800, style: 'melee', twoHanded: true, threat: 150 } },
+  { ...W('greatshield', tl('双手大盾'), 'defence', 'smithing', [['bar', 4], ['plank', 1]], 5, 0.55, 0.6, 2800, 'melee'), stats: { attack: 0.55, strength: 0.6, defence: 1.5, attackMs: 2800, style: 'melee', twoHanded: true, threat: 150 } },
   // ---- 远程：皮革 + 加工木材 ----
   W('shortbow', tl('短弓'), 'ranged', 'fletching', [['plank', 2], ['leather', 1]], 1, 1.0, 1.0, 2200, 'ranged'),
   W('longbow', tl('长弓'), 'ranged', 'fletching', [['plank', 3], ['leather', 1]], 4, 1.2, 1.4, 2800, 'ranged', 8),
