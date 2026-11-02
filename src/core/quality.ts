@@ -15,8 +15,14 @@ export const QUALITY_SPEED = [1, 1.1, 1.2, 1.32, 1.48, 1.7];
 export const CHAIN_QUALITY = [1, 1.12, 1.25, 1.42, 1.65, 2];
 /** 卖价、分解金币乘这个 */
 export const QUALITY_VALUE = [1, 1.5, 2.5, 4, 7, 12];
-/** T1 的出货率（百分比）：普通 60、良好 26、优秀 9.5、史诗 3.2、传说 1、神话 0.3 */
-const ODDS_T1 = [60, 26, 9.5, 3.2, 1, 0.3];
+/**
+ * T1 的出货率（百分比）：普通 60、良好 26、优秀 9.5、史诗 3.2、传说 0.2、神话 0.02。
+ * 11-02 用户：材料不限量，100 份材料就能做出神话太容易了。传说从 1% 降到 0.2%（约 500 件出一件），
+ * 神话从 0.3% 降到 0.02%（约 5000 件出一件）；高阶再按 LEG_TIER 降得更多。
+ */
+const ODDS_T1 = [60, 26, 9.5, 3.2, 0.2, 0.02];
+/** 传说、神话每高一阶乘 (1 - 10%×阶)，最低 0.25（T8 是 0.3）：T8 传说 0.06%（约 1700 件）、神话 0.006%（约 1.7 万件） */
+const legTier = (tier: number) => Math.max(0.25, 1 - 0.1 * tier);
 
 export const qid = (base: string, q: number) => (q > 0 ? `${base}@q${q}` : base);
 export const qualityOf = (id: string) => {
@@ -37,14 +43,14 @@ export function qualityOdds(tier = 0, fine = false, gm = 0): number[] {
   const f = Math.max(0.3, 1 - 0.07 * tier);
   // gm = GM「制作品质」增益（0.5 = +50%）：良好、优秀、史诗再乘 (1+gm)，传说神话不变；普通最少留 5%
   const g = (i: number) => (gm > 0 && i <= 2 ? 1 + gm : 1);
-  let hi = ODDS_T1.slice(1).map((p, i) => p * f * (fine && (i === 1 || i === 2) ? FINE_MULT : 1) * g(i));
+  let hi = ODDS_T1.slice(1).map((p, i) => p * (i >= 3 ? legTier(tier) : f) * (fine && (i === 1 || i === 2) ? FINE_MULT : 1) * g(i));
   const top = hi.reduce((a, b) => a + b, 0);
   if (gm > 0 && top > 95) {
     const fixed = hi.slice(3).reduce((a, b) => a + b, 0), boosted = top - fixed;
     hi = hi.map((p, i) => (i <= 2 ? (p * (95 - fixed)) / boosted : p));
   }
-  hi = hi.map((p) => Math.round(p * 1000) / 1000);
-  return [Math.round((100 - hi.reduce((a, b) => a + b, 0)) * 1000) / 1000, ...hi];
+  hi = hi.map((p) => Math.round(p * 10000) / 10000);
+  return [Math.round((100 - hi.reduce((a, b) => a + b, 0)) * 10000) / 10000, ...hi];
 }
 
 /** r 是 0-1 的随机数 */

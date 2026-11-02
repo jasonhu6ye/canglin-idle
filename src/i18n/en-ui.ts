@@ -1490,4 +1490,12 @@ export const EN_UI: Record<string, string> = {
   "可以看「这一场」（隔 15 秒没人出手就算新的一场）或「最近 5 分钟」；正在打怪时还会显示你打这只怪的理论 DPS，方便比较装备。": "View this fight (a new fight starts after 15s without hits) or the last 5 minutes; while fighting it also shows your expected DPS against that monster for comparing gear.",
   '修复：队友一箭暴击时伤害被截掉一截，两边怪物血量对不上、怪物血量突然「回血」；队友离开后，正在打的这只怪血量会降回一个人打的水平。': 'Fix: a teammate\'s big crit was partly cut off, so the two monster HP bars drifted apart and the monster seemed to "heal"; when a teammate leaves, the monster you are fighting drops back to solo HP.',
   '一起打时专门扛怪的人（怪一直打他、自己没打出伤害）也有掉落了；两个远程队友不再叠在同一个位置。': 'In a shared fight, the player tanking the monster now gets drops even without dealing damage; two ranged teammates no longer stand on the same spot.',
+  "（白）：基础属性，T1 出货约 61%": " (white): base stats, about 61% at T1",
+  "（金）：属性 ×1.55，T1 出货 0.2%（约 500 件出一件）": " (gold): stats ×1.55, 0.2% at T1 (about 1 in 500)",
+  "（红）：属性 ×1.8，T1 出货 0.02%（约 5000 件出一件）": " (red): stats ×1.8, 0.02% at T1 (about 1 in 5,000)",
+  "阶级越高，高品质越难出：每高一阶，良好、优秀、史诗的概率乘 (1 - 7%×阶)，传说、神话乘 (1 - 10%×阶)。T8 的传说约 0.06%（约 1700 件出一件），神话只有约 0.006%（约 1.7 万件出一件）。制作页每件装备下面都列出了各品质的概率，物品详情里能看到每个品质的属性。": "Higher tiers make high quality rarer: each tier multiplies Good/Excellent/Epic odds by (1 - 7%×tier) and Legendary/Mythic by (1 - 10%×tier). At T8 Legendary is about 0.06% (1 in 1,700) and Mythic only about 0.006% (1 in 17,000). The crafting page lists each quality's odds under every item, and item details show each quality's stats.",
+  "传说、神话装备更稀有了": "Legendary and Mythic gear is rarer",
+  "材料可以一直采，所以传说和神话装备的出货率调低了：T1 传说 1% → 0.2%（约 500 件出一件），神话 0.3% → 0.02%（约 5000 件出一件）。": "Materials are unlimited, so Legendary and Mythic odds are lower: T1 Legendary 1% → 0.2% (about 1 in 500), Mythic 0.3% → 0.02% (about 1 in 5,000).",
+  "阶级越高越难：T8 传说约 0.06%（约 1700 件），神话约 0.006%（约 1.7 万件）。副本宝箱里开出的装备也按同样的概率。": "Higher tiers are harder: T8 Legendary about 0.06% (1 in 1,700), Mythic about 0.006% (1 in 17,000). Gear from dungeon chests uses the same odds.",
+  "良好、优秀、史诗的概率不变，少掉的部分变成普通；精炼石的效果不变。已经做出来的装备不受影响。": "Good, Excellent and Epic odds are unchanged (the difference goes to Common); refining stones are unchanged. Gear already made is not affected.",
 };

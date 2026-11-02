@@ -326,9 +326,11 @@ describe('制作者署名', () => {
   it('做出传说以上记上制作者，件数少了署名跟着少', () => {
     const base = newGame(t0, 7);
     base.loc = { ...standOf(NODES.find((n) => n.id === 'smithy')!) };
-    base.bank = { wood_bar: 3000 };
+    base.bank = { wood_bar: 20000 };
     let r = runSync(JSON.parse(JSON.stringify(base)), [], t0, { ...EX, maker: 'Smith#12345678' }, 'dev');
-    r = runSync(JSON.parse(JSON.stringify(r.state)), [{ n: 'startNow', a: ['smith_wood_dagger', { type: 'infinite' }], t: t0 + 100, q: 1 }], t0 + 4 * 3600_000, { ...EX, maker: 'Smith#12345678' }, 'dev');
+    r = runSync(JSON.parse(JSON.stringify(r.state)), [{ n: 'startNow', a: ['smith_wood_dagger', { type: 'infinite' }], t: t0 + 100, q: 1 }], t0 + 1800_000, { ...EX, maker: 'Smith#12345678' }, 'dev');
+    // 传说 0.2%（11-02 调低）：多结算几段，做够几千件
+    for (let k = 2; k <= 16; k++) r = runSync(JSON.parse(JSON.stringify(r.state)), [], t0 + k * 1800_000, { ...EX, maker: 'Smith#12345678' }, 'dev');
     const s = r.state;
     const hi = Object.entries({ ...s.bank }).filter(([id]) => /@q[45]$/.test(id));
     expect(hi.length).toBeGreaterThan(0);
@@ -338,7 +340,7 @@ describe('制作者署名', () => {
     const mid = JSON.parse(JSON.stringify(s));
     const before = mid.marks[id].length;
     mid.bank[id] -= 1; if (!mid.bank[id]) delete mid.bank[id];
-    r = runSync(mid, [], t0 + 4 * 3600_000 + 1000, EX, 'dev');
+    r = runSync(mid, [], t0 + 16 * 1800_000 + 1000, EX, 'dev');
     expect(r.state.marks?.[id]?.length ?? 0).toBe(before - 1);
   });
 });

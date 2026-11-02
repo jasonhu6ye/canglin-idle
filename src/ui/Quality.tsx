@@ -7,7 +7,7 @@ import { Icon } from './icons';
 /*
  * 装备品质（用户 10-25）：制作页、物品详情里列出每个品质的出货率和属性。
  */
-const pct = (p: number) => (p >= 10 ? p.toFixed(1) : p >= 1 ? p.toFixed(1) : p.toFixed(2)).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
+const pct = (p: number) => (p >= 1 ? p.toFixed(1) : p >= 0.1 ? p.toFixed(2) : p > 0 ? p.toPrecision(1) : '0').replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
 
 /** 制作页：做这件装备每个品质的概率 */
 export function QualityOdds({ item, fine = false, gm = 0 }: { item: string; fine?: boolean; gm?: number }) {
