@@ -167,6 +167,11 @@ export function lacking(items: Record<string, number>) {
  * 附近打同一只的所有人都算一起打——伤害互相记到对方的怪上，血量按人数加厚（和野外组队一样）。
  */
 const SHARED = new Set(NODES.filter((n) => n.timed && (n.timed.kind === 'elite' || n.timed.kind === 'boss')).flatMap((n) => n.actions));
+/**
+ * 野外打同一种怪、离多近算一起打同一只（格）。11-02 从 10 放宽到 30：同一个刷怪点上各自站的位置
+ * 可能差十几格（用户截图：冰原猛犸两人隔着半个屏幕各打各的）。不同刷怪点之间远得多，不会算错
+ */
+export const FIELD_CREW = 30;
 export const sharedFight = (action: string | undefined) => !!action && SHARED.has(action);
 /** 最近一次收到的所有在线玩家（打冰原精英/首领时找一起打的人） */
 let lastAll: Presence[] = [];
@@ -183,7 +188,7 @@ function fightMates(action: string | undefined, meId: string): { id: string; nam
 let aggroAt = 0;
 /**
  * 嘲讽（用户 10-26）：找出正和我打同一个目标的队友，把他们的嘲讽值交给 sim。
- * 副本里看同一个洞口、同一层、同一个停靠点都在打；野外看同一个战斗动作、都在出手、离得近（10 格内）。
+ * 副本里看同一个洞口、同一层、同一个停靠点都在打；野外看同一个战斗动作、都在出手、离得近（FIELD_CREW 格内）。
  * 地图和副本场景每帧发位置时顺便调用，半秒算一次。
  */
 export function updateAggro(s: GameState, x: number, y: number, fighting: boolean, dg?: DungeonPresence) {
@@ -207,7 +212,7 @@ export function updateAggro(s: GameState, x: number, y: number, fighting: boolea
     if (!p || now - p.at > 60_000) continue;
     const same = dg
       ? p.dg && p.dg.gate === dg.gate && p.dg.floor === dg.floor && p.dg.idx === dg.idx && p.dg.phase === 'fight'
-      : !p.dg && p.action === action && !!p.anim?.startsWith('fight-') && Math.abs(p.x - x) + Math.abs(p.y - y) <= 10;
+      : !p.dg && p.action === action && !!p.anim?.startsWith('fight-') && Math.abs(p.x - x) + Math.abs(p.y - y) <= FIELD_CREW;
     if (same) out.push(threatOf(p.equip ?? {}));
   }
   sendCoop(dg ? 0 : out.length, dgN, out);

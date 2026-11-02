@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { levelSnapshot, online, type DungeonPresence, type Presence } from '../net';
 import { setBotViewer } from '../net/bots';
 import { moveCadence } from '../net/presenceSync';
-import { assistTime, rallyTime, takeFieldHits, updateAggro, type FieldMateHit } from '../net/social';
+import { FIELD_CREW, assistTime, rallyTime, takeFieldHits, updateAggro, type FieldMateHit } from '../net/social';
 import { maxHp } from '../core/sim';
 import type { GameState } from '../core/types';
 import { FIGHT, FIGHT_RANGE, FRAME_H, FRAME_W, HERO_ANIMS, type FightWeapon, HERO_FEET, HERO_PAD, outfitOf, paintHeroSheet } from './hero';
@@ -194,7 +194,7 @@ export class OtherPlayers {
     if (!f) return out;
     const crew = this.latest
       .filter((p) => {
-        if (p.dg || p.action !== f.action || Math.abs(p.x - near.x) + Math.abs(p.y - near.y) > 10) return false;
+        if (p.dg || p.action !== f.action || Math.abs(p.x - near.x) + Math.abs(p.y - near.y) > FIELD_CREW) return false;
         if (p.anim?.startsWith('fight-')) { this.crewAt.set(p.playerId, now); return true; }
         return now - (this.crewAt.get(p.playerId) ?? -1e9) < CREW_HOLD_MS;
       })
