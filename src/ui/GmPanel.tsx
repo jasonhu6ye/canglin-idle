@@ -492,12 +492,14 @@ const AC_KIND: Record<string, string> = {
   fake_hits: tl('伪造队友伤害'), bad_cmd: tl('发了不存在的操作'), backdate: tl('操作时间往前填（补领奖励）'), banned_play: tl('封禁后还在操作'),
   auto_rollback: tl('已自动回档'), auto_wipe: tl('已自动删档封号'),
 };
-const AC_DEFAULT = { xp_per_hour: 6000000, coins_per_hour: 50000000, value_per_hour: 50000000, trade_gap: 3000000, chat_per_min: 8, multi_accounts: 3, drift_min: 30, snap_keep_auto: 3, auto_hide: 1, auto_punish: 1, wipe_strikes: 3 };
+const AC_DEFAULT = { xp_per_hour: 6000000, coins_per_hour: 50000000, value_per_hour: 50000000, trade_gap: 3000000, chat_per_min: 8, multi_accounts: 3, drift_min: 30, snap_keep_auto: 3, auto_hide: 1, auto_punish: 1, wipe_strikes: 3, trade_new_hours: 24, trade_day_value: 0, lock_hidden: 1, punish_trade_days: 7 };
 const AC_FIELDS: [keyof typeof AC_DEFAULT, string][] = [
   ['xp_per_hour', tl('每小时经验上限')], ['coins_per_hour', tl('每小时金币上限')], ['value_per_hour', tl('每小时物品价值上限')],
   ['trade_gap', tl('交易价值差多少算不对等')], ['chat_per_min', tl('世界频道每分钟最多几句')], ['multi_accounts', tl('一台设备几个账号算多开')],
   ['drift_min', tl('游戏时间允许超前（分钟）')], ['snap_keep_auto', tl('每日自动存档保留几份')], ['auto_hide', tl('严重的自动移出排行榜（1 开 / 0 关）')],
   ['auto_punish', tl('明显作弊自动回档（1 开 / 0 关）')], ['wipe_strikes', tl('30 天内第几次自动删档封号')],
+  ['trade_new_hours', tl('新账号几小时后才能交易（0 不限）')], ['trade_day_value', tl('每天交易最多收到多少价值（0 不限）')],
+  ['lock_hidden', tl('移出排行榜的不能交易和用公会仓库（1 开 / 0 关）')], ['punish_trade_days', tl('自动回档后限制交易几天')],
 ];
 function acDetail(d: Record<string, unknown>) {
   const n = (k: string) => fmtNum(Number(d[k] ?? 0));
@@ -532,9 +534,9 @@ function AcTab() {
     }
   };
   useEffect(() => { void load(); }, []);
-  const run = async (f: () => Promise<void>, ok: string) => {
+  const run = async (f: () => Promise<void | string>, ok: string) => {
     setBusy(true);
-    try { await f(); setMsg({ text: ok, ok: true }); await load(); } catch (e) { setMsg({ text: (e as Error).message, ok: false }); }
+    try { const t = await f(); setMsg({ text: t || ok, ok: true }); await load(); } catch (e) { setMsg({ text: (e as Error).message, ok: false }); }
     setBusy(false);
   };
   const saveConf = () => {
@@ -550,6 +552,20 @@ function AcTab() {
     if (ask && !confirm(ask)) return;
     void run(() => online.gmAcSet(r.playerId, a), ok);
   };
+  const [lim, setLim] = useState({ pid: '', what: 'trade' as 'trade' | 'mute', hours: '168' });
+  const limit = (pid: number, what: 'trade' | 'mute', hours: number) => {
+    void run(async () => {
+      const nm = await online.gmAcLimit(pid, what, hours);
+      return hours <= 0 ? tl`已解除 ${nm} 的限制` : what === 'trade' ? tl`${nm} 限制交易 ${hours} 小时` : tl`${nm} 禁言 ${hours} 小时`;
+    }, '');
+  };
+  const submitLim = () => {
+    const pid = Number(lim.pid), h = Number(lim.hours);
+    if (!/^\d{8}$/.test(lim.pid)) return setMsg({ text: tl('数字 ID 是 8 位数字'), ok: false });
+    if (!Number.isFinite(h) || h < 0) return setMsg({ text: tl('时长要填不小于 0 的数字'), ok: false });
+    limit(pid, lim.what, h);
+  };
+  const until = (t: number) => new Date(t).toLocaleString();
   const list = rows ?? [];
   return (
     <>
@@ -563,6 +579,8 @@ function AcTab() {
               <div>
                 <b>{r.name}</b> <small className="muted">#{r.pid}</small>
                 {r.banned ? <b className="warn"> {tl('已封禁')}</b> : r.hidden ? <b className="warn"> {tl('已移出排行榜')}</b> : null}
+                {r.tradeUntil && <b className="warn"> {tl`限制交易到 ${until(r.tradeUntil)}`}</b>}
+                {r.muteUntil && <b className="warn"> {tl`禁言到 ${until(r.muteUntil)}`}</b>}
               </div>
               <small className="muted">{tl`${r.n} 条记录（严重 ${r.severe}）`}{r.lastAt ? tl` · 最近 ${new Date(r.lastAt).toLocaleString()}` : ''}{r.note ? ` · ${r.note}` : ''}</small>
               {open === r.playerId && (
@@ -579,12 +597,30 @@ function AcTab() {
                 {r.banned
                   ? <button className="pill" disabled={busy} onClick={() => act(r, 'unban', tl`已解封 ${r.name}`)}>{tl('解封')}</button>
                   : <button className="pill" disabled={busy} onClick={() => act(r, 'ban', tl`已封禁 ${r.name}`, tl`封禁 ${r.name}？不上排行榜、不能在世界频道说话`)}>{tl('封禁')}</button>}
+                {r.tradeUntil
+                  ? <button className="pill" disabled={busy} onClick={() => limit(r.pid, 'trade', 0)}>{tl('解除交易限制')}</button>
+                  : <button className="pill" disabled={busy} onClick={() => limit(r.pid, 'trade', 168)}>{tl('限制交易 7 天')}</button>}
+                {r.muteUntil
+                  ? <button className="pill" disabled={busy} onClick={() => limit(r.pid, 'mute', 0)}>{tl('解除禁言')}</button>
+                  : <button className="pill" disabled={busy} onClick={() => limit(r.pid, 'mute', 24)}>{tl('禁言 1 天')}</button>}
                 <button className="pill" disabled={busy} onClick={() => act(r, 'clear', tl`已清除 ${r.name} 的记录`, tl`清除 ${r.name} 的全部记录（误判时用）？`)}>{tl('清除记录')}</button>
               </div>
             </li>
           ))}
         </ul>
       )}
+      <h3>{tl('限制玩家')} <small className="muted">{tl('限制交易期间不能交易、不能存取公会仓库；禁言期间世界、公会、队伍频道不能说话。时长填 0 解除')}</small></h3>
+      <div className="gm-form frame">
+        <label><span>{tl('数字 ID')}</span><input inputMode="numeric" value={lim.pid} onChange={(e) => setLim({ ...lim, pid: e.target.value.replace(/\D/g, '').slice(0, 8) })} /></label>
+        <label><span>{tl('限制什么')}</span>
+          <select value={lim.what} onChange={(e) => setLim({ ...lim, what: e.target.value as 'trade' | 'mute' })}>
+            <option value="trade">{tl('交易和公会仓库')}</option>
+            <option value="mute">{tl('禁言')}</option>
+          </select>
+        </label>
+        <label><span>{tl('多少小时')}</span><input inputMode="numeric" value={lim.hours} onChange={(e) => setLim({ ...lim, hours: e.target.value.replace(/[^\d.]/g, '') })} /></label>
+        <div className="gm-actions"><button className="primary" disabled={busy} onClick={submitLim}>{tl('确定')}</button></div>
+      </div>
       <h3>{tl('检查阈值')}</h3>
       <div className="gm-form gm-ac-form frame">
         {AC_FIELDS.map(([k, name]) => (

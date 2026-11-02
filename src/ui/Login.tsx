@@ -15,9 +15,19 @@ const ERRS: [RegExp, string][] = [
   [/valid email|invalid format/i, tl('邮箱格式不对')],
   [/rate limit/i, tl('操作太频繁，请稍等一会儿')],
 ];
+/** 服务器报错里带时间、数字的几句（11-02） */
+const DYN: [RegExp, (m: RegExpMatchArray) => string][] = [
+  [/^账号交易受限，(.+) 后恢复$/, (m) => tl`账号交易受限，${m[1]} 后恢复`],
+  [/^你被禁言了，(.+) 后恢复$/, (m) => tl`你被禁言了，${m[1]} 后恢复`],
+  [/^新账号满 (.+) 小时后才能交易或使用公会仓库$/, (m) => tl`新账号满 ${m[1]} 小时后才能交易或使用公会仓库`],
+  [/^超过每天交易能收到的价值上限（(.+)金币），明天再来$/, (m) => tl`超过每天交易能收到的价值上限（${m[1]}金币），明天再来`],
+];
 export const errText = (e: unknown) => {
   const m = e instanceof Error ? e.message : String(e);
-  return ERRS.find(([re]) => re.test(m))?.[1] ?? m;
+  const fixed = ERRS.find(([re]) => re.test(m))?.[1];
+  if (fixed) return fixed;
+  for (const [re, f] of DYN) { const x = m.match(re); if (x) return f(x); }
+  return tl(m);
 };
 
 /** 不用兑换码的外观才能在建角色时选 */

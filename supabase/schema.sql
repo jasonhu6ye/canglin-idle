@@ -2126,3 +2126,204 @@ begin
 end $$;
 revoke execute on function public.ac_flag(uuid, text, boolean, jsonb) from public, anon, authenticated;
 grant execute on function public.ac_flag(uuid, text, boolean, jsonb) to service_role;
+
+-- ============ 交易 / 公会仓库 / 聊天限制（11-02）============
+-- 防止作弊号把东西转给别的号：
+-- · 封禁、正在核查（被移出排行榜，lock_hidden 开着）、GM 限制交易期间：不能交易、不能存取公会仓库
+-- · 新账号满 trade_new_hours 小时才能交易（0 = 不限）
+-- · 每天从交易里收到的东西不超过 trade_day_value 金币价值（0 = 不限）
+-- · 自动回档 / 删档时：取消进行中的交易，交易限制 punish_trade_days 天
+-- · GM 可以按数字 ID 限制交易、禁言（禁言期间世界 / 公会 / 队伍频道不能说话，私聊照常）
+alter table public.profiles add column if not exists trade_until timestamptz;
+alter table public.profiles add column if not exists mute_until timestamptz;
+
+-- 自己为什么不能交易（null = 可以）。GM 不受限制
+create or replace function public.ac_trade_block(p uuid) returns text
+language plpgsql stable security definer set search_path = public as $$
+declare pr profiles; h numeric;
+begin
+  select * into pr from profiles where id = p;
+  if pr.id is null then return '账号不存在'; end if;
+  if exists (select 1 from gm_admins a where a.pid = pr.pid) then return null; end if;
+  if pr.banned then return '账号已被限制，不能交易或使用公会仓库'; end if;
+  if pr.trade_until > now() then
+    return '账号交易受限，' || to_char(pr.trade_until at time zone 'Asia/Shanghai', 'MM-DD HH24:MI') || ' 后恢复';
+  end if;
+  if pr.ac_hidden and public.ac_conf('lock_hidden', 1) > 0 then return '账号数据正在核查，暂时不能交易或使用公会仓库'; end if;
+  h := public.ac_conf('trade_new_hours', 24);
+  if h > 0 and pr.created_at > now() - make_interval(secs => h * 3600) then
+    return '新账号满 ' || h || ' 小时后才能交易或使用公会仓库';
+  end if;
+  return null;
+end $$;
+revoke execute on function public.ac_trade_block(uuid) from public, anon, authenticated;
+
+create or replace function public.ac_trade_check(p_other uuid default null) returns void
+language plpgsql stable security definer set search_path = public as $$
+declare why text;
+begin
+  why := public.ac_trade_block(auth.uid());
+  if why is not null then raise exception '%', why; end if;
+  if p_other is not null and public.ac_trade_block(p_other) is not null then raise exception '对方暂时不能交易'; end if;
+end $$;
+revoke execute on function public.ac_trade_check(uuid) from public, anon, authenticated;
+
+-- 今天（北京时间）从交易里收到了多少金币价值
+create or replace function public.ac_trade_got_today(p uuid) returns numeric
+language sql stable security definer set search_path = public as $$
+  select coalesce(sum(public.ac_value(case when t.a = p then t.b_items else t.a_items end)), 0)
+  from trades t
+  where t.status = 'done' and p in (t.a, t.b)
+    and t.updated_at >= ((now() at time zone 'Asia/Shanghai')::date::timestamp at time zone 'Asia/Shanghai')
+$$;
+revoke execute on function public.ac_trade_got_today(uuid) from public, anon, authenticated;
+
+create or replace function public.start_trade(p_other uuid) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare t uuid;
+begin
+  if not is_friend(auth.uid(), p_other) then raise exception '只能和好友交易'; end if;
+  perform public.ac_trade_check(p_other);
+  select id into t from trades where status = 'open' and ((a = auth.uid() and b = p_other) or (a = p_other and b = auth.uid()));
+  if t is not null then return t; end if;
+  if (select count(*) from trades where status = 'open' and auth.uid() in (a, b)) >= 5 then raise exception '同时最多 5 笔交易'; end if;
+  insert into trades (a, b) values (auth.uid(), p_other) returning id into t;
+  return t;
+end $$;
+
+create or replace function public.set_offer(p_trade uuid, p_items jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+declare t trades; k text; v jsonb;
+begin
+  select * into t from trades where id = p_trade for update;
+  if t.id is null or auth.uid() not in (t.a, t.b) then raise exception '交易不存在'; end if;
+  if t.status <> 'open' then raise exception '交易已经结束'; end if;
+  perform public.ac_trade_check(null);
+  if jsonb_typeof(p_items) <> 'object' then raise exception '物品格式不对'; end if;
+  if (select count(*) from jsonb_object_keys(p_items)) > 12 then raise exception '一次最多放 12 种东西'; end if;
+  for k, v in select * from jsonb_each(p_items) loop
+    if jsonb_typeof(v) <> 'number' or (v::text)::numeric <= 0 or (v::text)::numeric <> floor((v::text)::numeric) then
+      raise exception '数量不对';
+    end if;
+  end loop;
+  if auth.uid() = t.a then update trades set a_items = p_items, a_ok = false, b_ok = false, updated_at = now() where id = p_trade;
+  else update trades set b_items = p_items, a_ok = false, b_ok = false, updated_at = now() where id = p_trade; end if;
+end $$;
+
+create or replace function public.confirm_trade(p_trade uuid, p_ok boolean) returns text
+language plpgsql security definer set search_path = public as $$
+declare t trades; k text; v jsonb; cap numeric; other uuid;
+begin
+  select * into t from trades where id = p_trade for update;
+  if t.id is null or auth.uid() not in (t.a, t.b) then raise exception '交易不存在'; end if;
+  if t.status <> 'open' then raise exception '交易已经结束'; end if;
+  other := case when auth.uid() = t.a then t.b else t.a end;
+  if p_ok then perform public.ac_trade_check(other); end if;
+  if auth.uid() = t.a then t.a_ok := p_ok; else t.b_ok := p_ok; end if;
+  if t.a_ok and t.b_ok then
+    if t.a_items = '{}'::jsonb and t.b_items = '{}'::jsonb then raise exception '双方都没放东西'; end if;
+    cap := public.ac_conf('trade_day_value', 0);
+    if cap > 0 and not public.is_gm() then
+      if public.ac_trade_got_today(t.a) + public.ac_value(t.b_items) > cap
+        or public.ac_trade_got_today(t.b) + public.ac_value(t.a_items) > cap then
+        raise exception '超过每天交易能收到的价值上限（%金币），明天再来', cap;
+      end if;
+    end if;
+    t.status := 'done';
+  end if;
+  update trades set a_ok = t.a_ok, b_ok = t.b_ok, status = t.status, updated_at = now() where id = p_trade;
+  if t.status = 'done' then
+    -- 成交：在数据库里把双方的东西换过来（不够就报错，整笔撤回、交易保持未成交）。
+    -- 放在改状态之后，交易检查触发器看到的还是换之前的存档
+    for k, v in select * from jsonb_each(t.a_items) loop
+      perform save_take(t.a, k, (v #>> '{}')::bigint);
+      perform save_give(t.b, k, (v #>> '{}')::bigint);
+    end loop;
+    for k, v in select * from jsonb_each(t.b_items) loop
+      perform save_take(t.b, k, (v #>> '{}')::bigint);
+      perform save_give(t.a, k, (v #>> '{}')::bigint);
+    end loop;
+  end if;
+  return t.status;
+end $$;
+
+-- 公会仓库存取前检查（同交易）
+create or replace function public.ac_check_guild_bank() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is not null then perform public.ac_trade_check(null); end if;
+  return new;
+end $$;
+drop trigger if exists ac_check_guild_bank on public.guild_bank_log;
+create trigger ac_check_guild_bank before insert on public.guild_bank_log for each row execute function public.ac_check_guild_bank();
+
+-- 禁言：世界 / 公会 / 队伍频道不能说话（私聊好友照常）
+create or replace function public.ac_check_mute() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare mu timestamptz;
+begin
+  if new.channel = 'private' then return new; end if;
+  select mute_until into mu from profiles where id = new.player_id;
+  if mu > now() then
+    raise exception '你被禁言了，% 后恢复', to_char(mu at time zone 'Asia/Shanghai', 'MM-DD HH24:MI');
+  end if;
+  return new;
+end $$;
+drop trigger if exists ac_check_mute on public.chat;
+create trigger ac_check_mute before insert on public.chat for each row execute function public.ac_check_mute();
+
+-- 自动回档 / 删档后：取消进行中的交易、限制交易
+create or replace function public.ac_after_punish() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare d numeric := public.ac_conf('punish_trade_days', 7);
+begin
+  if new.kind not in ('auto_rollback', 'auto_wipe') then return new; end if;
+  update trades set status = 'cancelled', updated_at = now() where status = 'open' and new.player_id in (a, b);
+  if d > 0 then
+    update profiles set trade_until = greatest(coalesce(trade_until, now()), now() + make_interval(secs => d * 86400))
+      where id = new.player_id;
+  end if;
+  return new;
+end $$;
+drop trigger if exists ac_after_punish on public.cheat_flags;
+create trigger ac_after_punish after insert on public.cheat_flags for each row execute function public.ac_after_punish();
+
+-- 管理员：按数字 ID 限制交易 / 禁言。p_what: trade / mute；p_hours = 0 解除。返回玩家名字
+create or replace function public.gm_ac_limit(p_pid bigint, p_what text, p_hours numeric) returns text
+language plpgsql security definer set search_path = public as $$
+declare nm text; u timestamptz;
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  if p_hours < 0 or p_hours > 24 * 3650 then raise exception '时长不对'; end if;
+  u := case when p_hours > 0 then now() + make_interval(secs => p_hours * 3600) end;
+  if p_what = 'trade' then update profiles set trade_until = u where pid = p_pid returning name into nm;
+  elsif p_what = 'mute' then update profiles set mute_until = u where pid = p_pid returning name into nm;
+  else raise exception '未知操作'; end if;
+  if nm is null then raise exception '没有这个 ID 的玩家'; end if;
+  if p_what = 'trade' and u is not null then
+    update trades set status = 'cancelled', updated_at = now()
+      where status = 'open' and (select id from profiles where pid = p_pid) in (a, b);
+  end if;
+  return nm;
+end $$;
+grant execute on function public.gm_ac_limit(bigint, text, numeric) to authenticated;
+
+-- 可疑玩家列表加上限制到什么时候；被限制的人也列出来
+drop function if exists public.gm_cheaters(int);
+create or replace function public.gm_cheaters(p_limit int default 100)
+returns table (player_id uuid, pid bigint, name text, hidden boolean, banned boolean, note text, n bigint, severe bigint, last_at timestamptz, flags jsonb,
+  trade_until timestamptz, mute_until timestamptz)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  return query
+    select p.id, p.pid, p.name, p.ac_hidden, p.banned, p.ac_note, count(f.id), count(f.id) filter (where f.severe), max(f.at),
+      (select jsonb_agg(x order by x.at desc) from (select f2.kind, f2.severe, f2.detail, f2.at from cheat_flags f2 where f2.player_id = p.id order by f2.at desc limit 10) x),
+      case when p.trade_until > now() then p.trade_until end, case when p.mute_until > now() then p.mute_until end
+    from profiles p left join cheat_flags f on f.player_id = p.id
+    where f.id is not null or p.ac_hidden or p.banned or p.trade_until > now() or p.mute_until > now()
+    group by p.id
+    order by max(f.at) desc nulls last
+    limit least(p_limit, 300);
+end $$;
+grant execute on function public.gm_cheaters(int) to authenticated;
