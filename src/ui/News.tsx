@@ -8,6 +8,13 @@ import { tl } from '../i18n';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-11-02-e', date: tl('11 月 2 日'), title: tl('新坐骑预览：守护者的曙光'),
+    lines: [
+      tl('一条披着金色符文甲、燃着蓝焰的珍珠白巨龙，骑乘时移动速度 +200%，脚下圣光、身后蓝焰尾迹。'),
+      tl('衣橱新增「坐骑」栏，能看到它和其他限定坐骑的动态效果。这只坐骑的获取方式暂未开放，敬请期待。'),
+    ],
+  },
+  {
     id: '2026-11-02-d', date: tl('11 月 2 日'), title: tl('修复邮件反复弹出'),
     lines: [
       tl('修复登录后邮件反复弹出、领了又出现的问题：每日礼物和全服赠礼改由服务器发放，领过就是领过了。'),

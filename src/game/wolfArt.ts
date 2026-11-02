@@ -563,6 +563,9 @@ export const WOLF_ANIMS: WolfAnim[] = [
   { key: 'wolf-howl', frames: 24, rate: 24 },
 ];
 
+export function wolfFrame(key: string, i: number, n: number): [Pix, Pix] {
+  return drawWolf(key, i, n);
+}
 function drawWolf(key: string, i: number, n: number): [Pix, Pix] {
   const back = new Pix(WOLF_W, WOLF_H);
   const front = new Pix(WOLF_W, WOLF_H);

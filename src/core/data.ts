@@ -630,6 +630,12 @@ item('mount_danmark', 'Chinese can fly', 'gear', 0, {
   desc: tl('黑毛银鬃的巨狼，红眼，身上有旧伤疤。骑乘时移动速度 +160%。在「更多」页输入兑换码获得。'),
   equip: { slot: 'mount', skill: 'hitpoints', level: 1, attack: 0, strength: 0, defence: 0, move: 1.6 },
 });
+// 白龙坐骑「守护者的曙光」（用户 11-02 给的参考图）：画法在 game/dragonArt.ts，获取方式暂无
+export const DRAGON_MOUNT = 'mount_dragon';
+item(DRAGON_MOUNT, tl('守护者的曙光'), 'gear', 0, {
+  desc: tl('珍珠白的巨龙，披着镶蓝水晶的金色符文甲，头顶一冠金角，眼睛、焰鬃、翼尖和尾尖都燃着蓝焰，脚下一圈圣光。骑乘时移动速度 +200%。获取方式暂未开放。'),
+  equip: { slot: 'mount', skill: 'hitpoints', level: 1, attack: 0, strength: 0, defence: 0, move: 2 },
+});
 // 南瓜坐骑（用户 10-27）：万圣节南瓜积分兑换，见 halloween.ts
 item(HW_MOUNT, tl('南瓜灵驹'), 'gear', 0, {
   desc: tl('万圣节限定坐骑。没有腿的巨型南瓜灯，靠底下一团幽紫鬼火托着悬浮，肚子里的火光从刻出来的眼睛和嘴里透出来，飞起来一路拖着鬼火、洒下火星。骑乘时移动速度 +200%。用南瓜积分兑换。'),

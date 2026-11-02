@@ -2,8 +2,9 @@ import { homeItemIconUrl } from '../game/homeArt';
 import { baseOf } from '../core/quality';
 import { HW_BOX, HW_MOUNT, HW_POINT } from '../core/halloween';
 import { pumpkinMountIconUrl } from '../game/pumpkinArt';
+import { dragonMountIconUrl } from '../game/dragonArt';
 import { pumpkinBoxUrl, pumpkinPointUrl } from '../game/halloweenArt';
-import { CROPS, ITEMS, MONSTERS, TIERS, tierName } from '../core/data';
+import { CROPS, DRAGON_MOUNT, ITEMS, MONSTERS, TIERS, tierName } from '../core/data';
 
 const CROP_COLOR: Record<string, [string, string]> = Object.fromEntries(CROPS.map((c) => [c[0], [c[3], c[5]]]));
 import { resIconUrl } from '../game/resArt';
@@ -15,8 +16,8 @@ import { wolfIconUrl } from '../game/wolfArt';
 import { foalIconUrl, horseIconUrl } from '../game/horseArt';
 import { aptOf, coatOf, FOAL } from '../core/ranch';
 
-/** 坐骑图标：马按毛色画，别的是狼 */
-export const mountIconUrl = (id: string) => (id === HW_MOUNT ? pumpkinMountIconUrl() : aptOf(id) ? horseIconUrl(coatOf(aptOf(id))) : wolfIconUrl());
+/** 坐骑图标：马按毛色画，南瓜、白龙各自画，别的是狼 */
+export const mountIconUrl = (id: string) => (id === HW_MOUNT ? pumpkinMountIconUrl() : id === DRAGON_MOUNT ? dragonMountIconUrl() : aptOf(id) ? horseIconUrl(coatOf(aptOf(id))) : wolfIconUrl());
 import type { SkillId } from '../core/types';
 
 /*

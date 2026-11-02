@@ -1597,6 +1597,7 @@ insert into public.item_values (id, value, task_tier) values
 ('moon_herb_potion',87,null),
 ('moon_melon',55,null),
 ('mount_danmark',0,null),
+('mount_dragon',0,null),
 ('mount_horse_100',0,null),
 ('mount_horse_101',0,null),
 ('mount_horse_102',0,null),

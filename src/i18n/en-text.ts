@@ -1323,4 +1323,18 @@ export const EN_TEXT: Record<string, string> = {
   '登录后不能再导入存档码；登录前在本机玩的进度不能带进账号。': "Save codes can no longer be imported once you're signed in, and progress made on this device before signing in can't be brought into an account.",
   '登录后存档由服务器保存，不能导入存档码。': "Once you're signed in, your save is kept by the server, so save codes can't be imported.",
   '云存档：存档由服务器按服务器时间结算并保存，你的操作会自动发给服务器（大约每分钟同步一次），换设备登录同一个账号就接着玩。断网也能继续挂机，连上后会把这段时间的操作一起交给服务器。': 'Cloud save: your save is calculated and kept by the server using server time. Your actions are sent to the server automatically (about once a minute), so you can sign in on another device and carry on. You can keep idling offline, and everything you did is sent to the server when you reconnect.',
+  // 守护者的曙光（11-02）
+  '守护者的曙光': "Guardian's Dawn",
+  '珍珠白的巨龙，披着镶蓝水晶的金色符文甲，头顶一冠金角，眼睛、焰鬃、翼尖和尾尖都燃着蓝焰，脚下一圈圣光。骑乘时移动速度 +200%。获取方式暂未开放。': 'A pearl-white dragon in gold rune armor set with blue crystals, crowned with golden horns. Its eyes, mane, wingtips and tail burn with blue flame, and holy light pools at its feet. +200% movement speed while riding. Not yet obtainable.',
+  '「更多」页的衣橱有「坐骑」栏，能看限定坐骑的动态效果和获取方式：巨狼「Chinese can fly」靠兑换码，南瓜灵驹靠祭坛积分，白龙「守护者的曙光」暂未开放获取。': "The Wardrobe (More tab) has a Mounts section showing each limited mount in motion and how to get it: the wolf Chinese can fly needs a redeem code, the Jack-o'-Lantern Steed costs altar points, and the dragon Guardian's Dawn is not yet obtainable.",
+  '新坐骑预览：守护者的曙光': "New mount preview: Guardian's Dawn",
+  '一条披着金色符文甲、燃着蓝焰的珍珠白巨龙，骑乘时移动速度 +200%，脚下圣光、身后蓝焰尾迹。': 'A pearl-white dragon in gold rune armor wreathed in blue flame: +200% movement speed, holy light underfoot and a trail of blue fire.',
+  '衣橱新增「坐骑」栏，能看到它和其他限定坐骑的动态效果。这只坐骑的获取方式暂未开放，敬请期待。': 'The Wardrobe now has a Mounts section where you can watch it and the other limited mounts in motion. How to get it is not yet open. Stay tuned.',
+  '已拥有': 'Owned',
+  '🔒 祭坛积分兑换': '🔒 Altar points',
+  '🔒 兑换码': '🔒 Redeem code',
+  '坐骑': 'Mounts',
+  '限定坐骑 · 自带动态特效': 'Limited mount · animated effects',
+  '这只坐骑还没开放获取途径，先看看效果': 'This mount is not obtainable yet. Enjoy the preview.',
+  '坐骑马在城镇畜牧站养大，装在角色页的坐骑栏。': 'Horses are raised at the town ranch and equipped in the mount slot on the Character tab.',
 };

@@ -16,7 +16,7 @@ import { WORLD_SKILL } from '../core/bestiary';
 import { WOLF_FEET, WOLF_H } from './wolfArt';
 import { paintFoal, paintRanch, PADDOCK_SPOTS, RANCH_H, RANCH_W } from './horseArt';
 import { RANCH } from '../core/ranch';
-import { besideXOf, ensureMountTex, mountKindOf, saddleBob, seatOf } from './mounts';
+import { besideXOf, ensureMountTex, mountEyes, mountFrameOf, mountFxOf, mountKindOf, saddleBob, seatOf, type MountFx } from './mounts';
 import { PumpkinFx } from './pumpkinFx';
 import { pumpkinEyes } from './pumpkinArt';
 import { FIGHT, FIGHT_RANGE, fightWeapon, FRAME_H, FRAME_W, HERO_ANIMS, HERO_FEET, HERO_PAD, NPC_ANIMS, NPC_OUTFITS, outfitOf, paintHeroSheet, type HeroDir } from './hero';
@@ -906,7 +906,7 @@ export class MapScene extends Phaser.Scene {
     this.camMid.y = this.cameras.main.midPoint.y;
     this.syncMount();
     this.stepRider();
-    this.stepPumpkin(time);
+    this.stepMountFx(time);
     this.stepShowcase(time);
     this.stepKeys(time);
     this.stepHold(time);
@@ -2924,6 +2924,9 @@ export class MapScene extends Phaser.Scene {
   }
   private ensureMount(kind: string) {
     ensureMountTex(this, kind);
+    // 龙的帧比狼大，脚底行不一样，origin 跟着换
+    const fr = mountFrameOf(kind);
+    for (const w of [this.wolfBack, this.wolfFront]) w?.setOrigin(0.5, fr.feet / fr.h);
   }
 
   private playWolf(key: string) {
@@ -3019,29 +3022,36 @@ export class MapScene extends Phaser.Scene {
     this.player.moveAbove(this.playerBody, this.wolfFront);
   }
 
-  /** 南瓜坐骑的光、火星、鬼火（10-27） */
-  private pkFx?: PumpkinFx;
-  private stepPumpkin(time: number) {
-    const on = this.mk === 'pumpkin' && this.mountMode !== 'none' && this.wolfBack.visible;
-    if (!on && !this.pkFx) return;
-    this.pkFx ??= new PumpkinFx(this);
+  /** 带特效的坐骑（南瓜 10-27、白龙 11-02）：光、火星、鬼火/蓝焰 */
+  private mountFx?: MountFx;
+  private mountFxKind = '';
+  private getMountFx(kind: string) {
+    if (this.mountFxKind !== kind) {
+      this.mountFx?.destroy();
+      this.mountFx = mountFxOf(this, kind);
+      this.mountFxKind = kind;
+    }
+    return this.mountFx;
+  }
+  private stepMountFx(time: number) {
+    const on = this.mountMode !== 'none' && this.wolfBack.visible && (this.mk === 'pumpkin' || this.mk === 'dragon');
+    if (!on) return this.mountFx?.step(time, null);
+    const fx0 = this.getMountFx(this.mk);
+    if (!fx0) return;
     const riding = this.mountMode === 'ride' && !this.mountBusy;
     const dir = !riding || this.facing !== 'side' ? 0 : this.wolfBack.flipX ? -1 : 1;
     const fx = this.player.x + this.wolfFront.x;
     const fy = this.player.y + this.wolfFront.y;
     const flip = this.wolfFront.flipX ? -1 : 1;
-    const eyes = on ? pumpkinEyes(String(this.wolfFront.anims.currentFrame?.frame.name ?? '')).map(([x, y]): [number, number] => [fx + x * flip, fy + y]) : [];
-    this.pkFx.step(time, on ? {
+    const eyes = mountEyes(this.mk, String(this.wolfFront.anims.currentFrame?.frame.name ?? '')).map(([x, y]): [number, number] => [fx + x * flip, fy + y]);
+    fx0.step(time, {
       x: this.player.x + this.wolfBack.x, y: this.player.y + this.wolfBack.y,
       moving: riding && !!this.walker, dir, depth: this.player.depth, eyes,
-    } : null);
+    });
   }
 
   private puff(x: number, y: number) {
-    if (this.mk === 'pumpkin') {
-      this.pkFx ??= new PumpkinFx(this);
-      this.pkFx.burst(this.player.x + x, this.player.y + 7 + y, this.player.depth);
-    }
+    this.getMountFx(this.mk)?.burst(this.player.x + x, this.player.y + 7 + y, this.player.depth);
     for (let i = 0; i < 10; i++) {
       const a = (i / 10) * Math.PI * 2;
       const p = this.add.image(this.player.x + x, this.player.y + y, 'p-smoke').setDepth(D_FLOAT - 3).setAlpha(0.85).setScale(0.8);

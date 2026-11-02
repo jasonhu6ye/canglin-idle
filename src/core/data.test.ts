@@ -45,6 +45,8 @@ describe('数据闭环', () => {
     // 兑换码送的坐骑
     made.add('mount_danmark');
     made.add('mount_pumpkin');
+    // 白龙坐骑获取方式暂无（用户 11-02）
+    made.add('mount_dragon');
     // 品质版本由制作随机出（用户 10-25）
     for (const it of Object.values(ITEMS)) if (it.quality) made.add(it.id);
     // 畜牧站养大的马；小马崽放进马栏
