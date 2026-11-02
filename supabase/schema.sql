@@ -3128,3 +3128,85 @@ create trigger gm_grants_log after insert or update of claimed_at or delete on p
 insert into public.gm_grants (mail_id, target_pid, src, title, items, created_by, created_at, claimed_at)
   select id, target_pid, case when created_by is null then 'code' else 'gm' end, title, items, created_by, created_at, claimed_at from public.gm_mail
   on conflict (mail_id) do nothing;
+
+-- ============ 物品来源记账（11-02）============
+-- 每个活跃玩家每天从哪得到了什么、多少（服务器结算时算出来，北京时间按天累计）。存档回档、GM 改档都不影响这张表。
+-- src：craft:配方 / skill:动作 / drop:怪 / cmd:指令 / mail:gm|code|quest|gift|hw_daily / outside（交易、公会仓库、GM 改档）/ auto
+create table if not exists public.item_log (
+  player_id uuid not null references public.profiles(id) on delete cascade,
+  day date not null,
+  src text not null,
+  item text not null,
+  qty bigint not null default 0,
+  updated_at timestamptz not null default now(),
+  primary key (player_id, day, src, item)
+);
+create index if not exists item_log_item on public.item_log (item, day);
+alter table public.item_log enable row level security;
+-- 不开策略：只能通过下面的函数读写
+
+create or replace function public.item_log_add(p uuid, p_rows jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+declare d date := (now() at time zone 'Asia/Shanghai')::date;
+begin
+  insert into item_log (player_id, day, src, item, qty)
+    select p, d, left(r ->> 'src', 80), left(r ->> 'item', 80), sum(floor((r ->> 'n')::numeric))::bigint
+    from jsonb_array_elements(coalesce(p_rows, '[]'::jsonb)) r
+    where coalesce(r ->> 'src', '') <> '' and coalesce(r ->> 'item', '') <> '' and (r ->> 'n')::numeric > 0
+    group by 3, 4
+  on conflict (player_id, day, src, item) do update set qty = item_log.qty + excluded.qty, updated_at = now();
+end $$;
+revoke execute on function public.item_log_add(uuid, jsonb) from public, anon, authenticated;
+grant execute on function public.item_log_add(uuid, jsonb) to service_role;
+
+-- 管理员：查一个玩家（UID 或名字）最近 p_days 天的来源，可只看某个物品
+create or replace function public.gm_item_log(p_who text, p_days int default 30, p_item text default null)
+returns table (pid bigint, name text, day date, src text, item text, qty bigint)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  return query
+    select x.pid, x.name, l.day, l.src, l.item, l.qty
+    from item_log l join profiles x on x.id = l.player_id
+    where (x.pid::text = trim(p_who) or lower(x.name) = lower(trim(p_who)))
+      and l.day >= (now() at time zone 'Asia/Shanghai')::date - greatest(coalesce(p_days, 30), 1)
+      and (coalesce(p_item, '') = '' or l.item = p_item)
+    order by l.day desc, l.qty desc
+    limit 2000;
+end $$;
+grant execute on function public.gm_item_log(text, int, text) to authenticated;
+
+-- ============ 公测审查（11-02）============
+-- GM 面板「装备来源」查玩家时多带：技能经验、gmGot、服务器记的 GM 发放合计、邮箱、未处理的可疑装备，网页上算每样东西能不能带进公测。
+drop function if exists public.gm_gear(text);
+create or replace function public.gm_gear(p_who text)
+returns table (player_id uuid, pid bigint, name text, prov jsonb, bank jsonb, bag jsonb, equipment jsonb, belt jsonb, last_tick bigint, marks jsonb,
+  xp jsonb, gm_got jsonb, mail jsonb, grants jsonb, flagged jsonb, sent jsonb)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  return query
+    select p.id, p.pid, p.name, s.data->'prov', s.data->'bank', s.data->'bag', s.data->'equipment', s.data->'belt', s.last_tick, s.data->'marks',
+      s.data->'xp', s.data->'gmGot', s.data->'mail',
+      (select coalesce(jsonb_object_agg(t.item, t.qty), '{}'::jsonb) from (
+        select it ->> 'item' as item, sum((it ->> 'qty')::numeric) as qty
+        from gm_grants g, jsonb_array_elements(g.items) it
+        where g.target_pid = p.pid and g.claimed_at is not null and g.revoked_at is null
+        group by 1) t),
+      (select coalesce(jsonb_agg(distinct f.item), '[]'::jsonb) from gear_flags f where f.player_id = p.id and f.status = 'open'),
+      -- 转出去的东西（防偷跑：GM 发的东西转给小号）：成交的交易里自己给出的，存进公会仓库的
+      (select coalesce(jsonb_agg(z), '[]'::jsonb) from (
+        select jsonb_build_object('to', o.name || '#' || o.pid, 'items', case when t.a = p.id then t.a_items else t.b_items end) z
+        from trades t join profiles o on o.id = case when t.a = p.id then t.b else t.a end
+        where (t.a = p.id or t.b = p.id) and t.status = 'done'
+        union all
+        select jsonb_build_object('to', '公会仓库', 'items', jsonb_object_agg(l.item, l.qty))
+        from guild_bank_log l where l.player_id = p.id and l.qty > 0
+        having count(*) > 0
+        limit 300) q)
+    from profiles p join saves s on s.player_id = p.id
+    where p.pid::text = trim(p_who) or lower(p.name) like '%' || lower(trim(p_who)) || '%'
+    order by (p.pid::text = trim(p_who)) desc, p.last_seen desc nulls last
+    limit 5;
+end $$;
+grant execute on function public.gm_gear(text) to authenticated;

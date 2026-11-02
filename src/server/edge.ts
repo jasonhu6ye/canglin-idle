@@ -120,7 +120,7 @@ Deno.serve(async (req) => {
       ]);
       if (!ex.found) return json({ error: 'profile' }, 404);
       const row = rows[0];
-      const { state, applied, mailIds, ack, flags, results, gear } = runSync(row?.data ?? null, body.cmds, now, ex, device ?? '');
+      const { state, applied, mailIds, ack, flags, results, gear, got } = runSync(row?.data ?? null, body.cmds, now, ex, device ?? '');
       const data: Row = device ? { ...state, _device: device } : { ...state };
       // 记下用过的设备和网络（变了或者半小时一次），给多开检测用
       const net = await netKey(req).catch(() => '');
@@ -143,6 +143,8 @@ Deno.serve(async (req) => {
         await Promise.all((gear ?? []).slice(0, 10).map((g) => rest('rpc/gear_flag', {
           method: 'POST', body: JSON.stringify({ p: uid, p_item: g.item, p_src: g.src, p_reason: g.reason, p_at: g.t, p_detail: g.detail }),
         }).catch(() => {})));
+        // 物品来源（11-02）：这次新得到的东西按北京时间的天、来源累计进 item_log
+        if (got?.length) await rest('rpc/item_log_add', { method: 'POST', body: JSON.stringify({ p: uid, p_rows: got }) }).catch(() => {});
         if (seen) await rest('rpc/ac_seen', { method: 'POST', body: JSON.stringify({ p: uid, p_ip: net, p_dev: device ?? '' }) }).catch(() => {});
         return json({ state: data, rev, now, applied, ack, results });
       }

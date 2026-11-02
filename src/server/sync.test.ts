@@ -267,6 +267,28 @@ describe('改过的客户端乱传参数', () => {
     const r5 = runSync(r4.state, [{ n: 'claimMail', a: ['all'], t: t0 + 1500, q: 1 }], t0 + 2000, EX, 'dev');
     expect(r5.state.gmGot).toEqual({ coins: 1000, dkey_g4: 3 });
   });
+
+  it('物品来源：领邮件按邮件种类记来源，结算返回这次新得到的（got）', () => {
+    const mails = [{ id: 'a', title: 'GM', body: '', items: [{ item: 'coins', qty: 1000 }] }];
+    const r1 = runSync(null, [], t0, { ...EX, mails }, 'dev');
+    const r2 = runSync(r1.state, [{ n: 'claimMail', a: ['all'], t: t0 + 500, q: 1 }], t0 + 1000, EX, 'dev');
+    expect(r2.state.prov?.mats.coins?.['mail:gm']).toBe(1000);
+    expect(r2.state.prov?.mats.dkey_g4?.['mail:gift']).toBe(5);
+    expect(r2.got).toEqual(expect.arrayContaining([{ src: 'mail:gm', item: 'coins', n: 1000 }, { src: 'mail:gift', item: 'dkey_g4', n: 5 }]));
+    // 再同步一次没有新东西
+    const r3 = runSync(r2.state, [], t0 + 1500, EX, 'dev');
+    expect(r3.got?.some((g) => g.src.startsWith('mail:'))).toBeFalsy();
+  });
+
+  it('金币开始记来源前的老记录：现有余额不算外面来的', () => {
+    const r1 = runSync(null, [], t0, EX, 'dev');
+    const old = JSON.parse(JSON.stringify(r1.state));
+    delete old.prov.coinV;
+    old.bank.coins = 99999;
+    const r2 = runSync(old, [], t0 + 1000, EX, 'dev');
+    expect(r2.state.prov?.mats.coins?.outside).toBeUndefined();
+    expect(r2.state.prov?.coinV).toBe(1);
+  });
 });
 
 describe('开箱随机数（11-02）', () => {

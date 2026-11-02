@@ -1,5 +1,6 @@
 import { ITEMS } from './data';
 import { HW_BOX, HW_END, hwOpen } from './halloween';
+import { provGot } from './prov';
 import type { GameState, ItemStack, Mail, MailKind } from './types';
 
 /*
@@ -93,9 +94,12 @@ export function claimMail(prev: GameState, id: number | 'all', room: RoomFn): [G
   const s: GameState = JSON.parse(JSON.stringify(prev));
   for (const m of s.mail!) {
     if (!targets.some((t) => t.id === m.id)) continue;
+    // 来源按邮件种类记（mail:gm 管理员 / mail:code 兑换码 / mail:quest 新手任务 / mail:gift 全服赠礼 / mail:hw_daily 活动礼物）
+    const src = `mail:${m.gm ?? m.kind}`;
     for (const { item, qty } of m.items) {
       if (!ITEMS[item] || qty <= 0) continue;
       got[item] = (got[item] ?? 0) + qty;
+      provGot(s, item, qty, src, s.lastTick);
       if (item === 'coins') { s.bank.coins = (s.bank.coins ?? 0) + qty; continue; }
       const n = Math.min(qty, room(s.bag, item));
       if (n > 0) s.bag[item] = (s.bag[item] ?? 0) + n;

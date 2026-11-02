@@ -1,5 +1,5 @@
 import type { GameState } from '../core/types';
-import type { AiPlayer, AltRow, GearEvRow, GearFlagRow, GearProvRow, EconRow, RedeemCodeRow, CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
+import type { AiPlayer, AltRow, GearEvRow, GearFlagRow, GearProvRow, ItemLogRow, EconRow, RedeemCodeRow, CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { GUILD_MAX, levelSnapshot, type SyncReply } from './api';
 import { runSync } from '../server/sync';
 import type { Cmd } from '../core/commands';
@@ -459,6 +459,7 @@ export class LocalApi implements OnlineApi {
   async gmRollback() { return 0; }
   async gmPlayers(): Promise<GmPlayer[]> { return []; }
   async gmGear(): Promise<GearProvRow[]> { return []; }
+  async gmItemLog(): Promise<ItemLogRow[]> { return []; }
   async gmGearRecent(): Promise<GearEvRow[]> { return []; }
   async gmGearFlags(): Promise<GearFlagRow[]> { return []; }
   async gmGearFlagSet() {}

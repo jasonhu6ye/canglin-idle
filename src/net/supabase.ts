@@ -1,6 +1,8 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js';
 import type { GameState, GmBuff } from '../core/types';
-import type { EconRow, RedeemCodeRow, AltRow, GearEvRow, GearFlagRow, GearProvRow, CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMail, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildDay, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
+import { betaAudit } from '../core/beta';
+import { migrateMail } from '../core/mail';
+import type { EconRow, RedeemCodeRow, AltRow, GearEvRow, GearFlagRow, GearProvRow, ItemLogRow, CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMail, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildDay, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { type SyncReply } from './api';
 import type { Cmd } from '../core/commands';
 import type { TaskSpec } from '../core/guild';
@@ -661,7 +663,16 @@ export class SupabaseApi implements OnlineApi {
     return rows.map((r): GearProvRow => ({
       playerId: r.player_id, pid: Number(r.pid), name: r.name, prov: migrateProv(r.prov) ?? null, lastTick: Number(r.last_tick), marks: migrateMarks(r.marks),
       held: gearHeld({ bank: r.bank ?? {}, bag: r.bag ?? {}, equipment: r.equipment ?? {} } as GameState),
+      audit: betaAudit({
+        bank: r.bank ?? {}, bag: r.bag ?? {}, equipment: r.equipment ?? {}, belt: r.belt ?? {}, xp: r.xp ?? {}, prov: migrateProv(r.prov) ?? null,
+        gmGot: r.gm_got ?? {}, grants: r.grants ?? {}, mail: migrateMail(r.mail), flagged: Array.isArray(r.flagged) ? r.flagged : [],
+        sent: (Array.isArray(r.sent) ? r.sent : []).map((e: Row) => ({ to: String(e.to ?? ''), items: e.items && typeof e.items === 'object' ? e.items : {} })),
+      }),
     }));
+  }
+  async gmItemLog(who: string, days = 30, item = '') {
+    const rows = ok(await this.sb.rpc('gm_item_log', { p_who: who.trim(), p_days: days, p_item: item || null })) as Row[];
+    return rows.map((r): ItemLogRow => ({ pid: Number(r.pid), name: r.name, day: String(r.day), src: r.src, item: r.item, qty: Number(r.qty) }));
   }
   async gmGearRecent() {
     const rows = ok(await this.sb.rpc('gm_gear_recent', { p_limit: 300 })) as Row[];

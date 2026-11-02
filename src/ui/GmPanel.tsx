@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { GM_GROUPS, GM_KINDS, GM_KIND_NAME, GM_PCT_MAX, gmGroupOf } from '../core/gm';
 import type { GmKind } from '../core/types';
-import { online, type GearEvRow, type GearFlagRow, type GearProvRow, type AiPlayer, type CheatRow, type AltRow, type RedeemCodeRow, type EconRow, type GmPlayer, type GmTrade, type Snapshot, type GmInput, type GmMailRow, type GmRow } from '../net';
+import { online, type GearEvRow, type GearFlagRow, type GearProvRow, type ItemLogRow, type AiPlayer, type CheatRow, type AltRow, type RedeemCodeRow, type EconRow, type GmPlayer, type GmTrade, type Snapshot, type GmInput, type GmMailRow, type GmRow } from '../net';
 import { aiPlayers, botDoing, botsMuted, setBotsMuted, botName, botOnline, botPresence, botProfile, habitOf, refreshBots, zoneOf } from '../net/bots';
 import { actionName, fmtDuration } from './format';
+import { oweTotal } from '../core/beta';
 import { marksOf, PROV_EV_Q, type Prov, type ProvEv } from '../core/prov';
 import { emitToGame } from './GameCanvas';
 import { ACTIONS, ITEMS, MONSTERS, SKILLS } from '../core/data';
@@ -1039,6 +1040,9 @@ const CMD_SRC: Record<string, string> = {
   deliverOrder: tl('家园订单'), repReward: tl('家园声望奖励'), salvage: tl('分解'), redeem: tl('兑换码'), combineShards: tl('合成碎片'),
   collectHorse: tl('畜牧'), unequip: tl('卸下装备'), hwSummon: tl('万圣节'), hwSkin: tl('万圣节'), hwMount: tl('万圣节'),
 };
+const MAIL_SRC: Record<string, string> = {
+  gm: tl('GM 邮件'), code: tl('兑换码邮件'), quest: tl('新手任务奖励'), gift: tl('全服赠礼'), hw_daily: tl('万圣节每日礼物'), redeem: tl('兑换码邮件'), custom: tl('GM 邮件'),
+};
 const CHEST_Q = [tl('绿'), tl('蓝'), tl('紫'), tl('金')];
 function srcName(src: string): string {
   const [k, a = '', b = '', c = '0'] = src.split(':');
@@ -1046,6 +1050,7 @@ function srcName(src: string): string {
   if (k === 'drop') return tl`打${MONSTERS[a]?.name ?? a}`;
   if (k === 'outside') return tl('交易 / 公会仓库 / GM 改档');
   if (k === 'auto') return tl('离线结算中自动得到');
+  if (k === 'mail') return MAIL_SRC[a] ?? tl('领邮件');
   if (k === 'cmd' && a === 'dungeonChest' && b) {
     const kind = b.startsWith('blue') ? tl('蓝洞') : tl('绿洞');
     return tl`副本宝箱（${kind} T${b.replace(/\D/g, '')}，${CHEST_Q[Number(c)] ?? ''}箱）`;
@@ -1114,11 +1119,80 @@ const qCount = (out: Record<string, number>) => {
   return q.map((n, i) => (n && i >= 2 ? <span key={i} style={{ color: QUALITY_COLOR[i] }}> {QUALITY_NAME[i]} {fmtNum(n)}</span> : null));
 };
 
+/*
+ * 公测审查（11-02）：core/beta.ts 自动判断身上每样东西能不能带进公测，只标记不动存档。
+ * 回收 = GM 邮件 / 兑换码发的；待人工看 = 交易 / 公会仓库 / 改档来的、有可疑标记、查不到来历的高品质或做不出来的装备；其余保留
+ */
+const BETA_WHY: Record<string, string> = {
+  gm: tl('GM 邮件 / 兑换码发的'), outside: tl('交易、公会仓库或改档来的'), flag: tl('有未处理的可疑标记'),
+  old_hi: tl('记录开始前就有的传说以上装备，查不到来历'), no_way: tl('查不到来历，以他现在的等级做不出来，也没有怪物掉'), old: tl('部分是记录开始前就有的'),
+  used: tl('GM 发的已经不在身上（卖掉 / 用掉 / 做成别的）'), sent: tl('GM 发的已经不在身上，同种东西转给过别人'),
+};
+function BetaAudit({ r }: { r: GearProvRow }) {
+  const [all, setAll] = useState(false);
+  const lines = r.audit ?? [];
+  const bad = lines.filter((l) => l.recall || l.review || l.short);
+  const owe = oweTotal(lines);
+  const sum = (k: 'recall' | 'review') => lines.filter((l) => l[k]).length;
+  const shown = all ? lines : bad;
+  return (
+    <details open={bad.length > 0}>
+      <summary><b>{tl('公测审查')}</b> <small className={bad.length ? 'warn' : 'muted'}>{tl`回收 ${sum('recall')} 种 · 待人工看 ${sum('review')} 种 · 共 ${lines.length} 种`}</small></summary>
+      <small className="muted">{tl('自动判断，只做标记，不会动存档。同一种东西有几个来源时先算回收、再算待看，剩下的保留。')}</small>
+      {owe > 0 && <small className="warn">{tl`GM 发的东西已经不在身上，折合 ${fmtNum(owe)} 金币（公测时从金币里扣）`}</small>}
+      {!shown.length ? <small className="muted">{tl('没有要回收或要看的东西')}</small> : (
+        <ul className="gm-list">
+          {shown.map((l) => (
+            <li key={l.item}>
+              <small>{qName(l.item)} × {fmtNum(l.held)}
+                {l.recall > 0 && <b className="warn"> {tl`回收 ${fmtNum(l.recall)}`}</b>}
+                {l.review > 0 && <b style={{ color: '#e0a030' }}> {tl`待看 ${fmtNum(l.review)}`}</b>}
+                {l.keep > 0 && <span className="muted"> {tl`保留 ${fmtNum(l.keep)}`}</span>}
+                {(l.short ?? 0) > 0 && <b className="warn"> {tl`已不在身上 ${fmtNum(l.short!)}（折 ${fmtNum(l.owe ?? 0)} 金币）`}</b>}
+                {l.to && <span className="warn"> · {tl('转给过：')}{l.to.join(tl('、'))}</span>}
+                {l.why.length > 0 && <span className="muted"> · {l.why.map((w) => BETA_WHY[w] ?? w).join(tl('；'))}</span>}
+              </small>
+            </li>
+          ))}
+        </ul>
+      )}
+      <button className="pill" onClick={() => setAll(!all)}>{all ? tl('只看要处理的') : tl('看全部物品')}</button>
+    </details>
+  );
+}
+
+/** 物品来源流水（11-02）：服务器按天记的 item_log，最近 30 天，可按物品筛 */
+function ItemLog({ pid }: { pid: number }) {
+  const [rows, setRows] = useState<ItemLogRow[] | null>(null);
+  const [item, setItem] = useState('');
+  const [err, setErr] = useState('');
+  const load = () => { setErr(''); online.gmItemLog(String(pid), 30, item.trim()).then(setRows).catch((e) => setErr((e as Error).message)); };
+  const days = rows ? [...new Set(rows.map((x) => x.day))] : [];
+  return (
+    <details onToggle={(e) => (e.currentTarget as HTMLDetailsElement).open && rows == null && load()}>
+      <summary><b>{tl('物品来源流水')}</b> <small className="muted">{tl('最近 30 天，每天从哪得到了什么')}</small></summary>
+      <div className="gm-actions">
+        <input value={item} placeholder={tl('物品 id（空 = 全部）')} onChange={(e) => setItem(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && load()} />
+        <button className="pill" onClick={load}>{tl('查询')}</button>
+      </div>
+      {err && <small className="warn">{err}</small>}
+      {rows == null ? null : !rows.length ? <small className="muted">{tl('还没有记录（11-02 开始记）')}</small> : days.map((d) => (
+        <div key={d} className="gm-stat">
+          <small><b>{d}</b></small>
+          {rows.filter((x) => x.day === d).slice(0, 60).map((x, i) => (
+            <small key={i} className={x.src === 'outside' || x.src === 'mail:gm' || x.src === 'mail:code' ? 'warn' : 'muted'}>{itemLabel(x.item)} × {fmtNum(x.qty)} ← {srcName(x.src)}</small>
+          ))}
+        </div>
+      ))}
+    </details>
+  );
+}
+
 function GearPlayer({ r }: { r: GearProvRow }) {
   const p = r.prov;
   const hi = Object.entries(r.held).filter(([id]) => qualityOf(id) >= PROV_EV_Q);
   if (!p) return (
-    <li className="frame"><div><b>{r.name}</b> <small className="muted">#{r.pid}</small></div><small className="muted">{tl('还没有来源记录（这个玩家上线后由服务器开始记）')}</small></li>
+    <li className="frame"><div><b>{r.name}</b> <small className="muted">#{r.pid}</small></div><small className="muted">{tl('还没有来源记录（这个玩家上线后由服务器开始记）')}</small><BetaAudit r={r} /><ItemLog pid={r.pid} /></li>
   );
   const got = (id: string) => (p.base[id] ?? 0) + Object.values(p.craft).reduce((a, c) => a + (c.out[id] ?? 0), 0)
     + Object.values(p.drop).reduce((a, d) => a + (d.out[id] ?? 0), 0) + Object.values(p.other).reduce((a, o) => a + (o[id] ?? 0), 0);
@@ -1127,6 +1201,8 @@ function GearPlayer({ r }: { r: GearProvRow }) {
   return (
     <li className="frame">
       <div><b>{r.name}</b> <small className="muted">#{r.pid} · {tl`从 ${new Date(p.since).toLocaleString()} 开始记录`}</small></div>
+      <BetaAudit r={r} />
+      <ItemLog pid={r.pid} />
       <b>{tl('身上的传说以上装备')}</b>
       {!hi.length ? <small className="muted">{tl('没有')}</small> : hi.map(([id, n]) => {
         const lost = n - got(id);
