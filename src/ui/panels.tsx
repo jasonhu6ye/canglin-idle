@@ -6,7 +6,7 @@ import { useSticky } from './sticky';
 import { useEffect, useState, type ReactNode } from 'react';
 import { standOf, ACTIONS, BUFF_NAME, buffText, cropsOfField, nodesOfAction, WAYSTONES, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, keyOf, SCROLL_TOWN, SHARD_PER_STONE, type MapNode } from '../core/data';
 import {
-  atBank, atMarket, nearestBank, nearestMarket, bagSlots, BELT_CAP, beltSlotOf, eat, fromBelt, POTION_AT, toBelt, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, armorPerks, chainChance, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip, openContainer,
+  atBank, atMarket, nearestBank, nearestMarket, bagSlots, BELT_CAP, beltSlotOf, eat, fromBelt, POTION_AT, toBelt, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, equip, level, playerBonuses, armorPerks, chainChance, frostChance, guardChance, sell, setSettings, toBag, toBank, depositLoot, slotSpeed, unequip, openContainer,
   weaponStyle, walkPos, buffPct, levelSpeed, maxHp, moveSpeed, playerAttackMs,
   redeemCode, toggleMount,
   sortBank, toolSkillNames, TOOL_FOR, playerHaste, combineShards, gearSum,
@@ -235,6 +235,8 @@ export function gearStats(id: string) {
   if (e.work) out.push(tl`干活速度 +${Math.round(e.work * 1000) / 10}%`);
   if (e.leech) out.push(tl`吸血 ${Math.round(e.leech * 100)}%`);
   if (e.chain) out.push(tl`连斩 ${Math.round(e.chain * 100)}%（打中后再砍一刀）`);
+  if (e.frost) out.push(tl`冻结 ${Math.round(e.frost * 100)}%（打中时冻住敌人 1 秒，这一下 150% 伤害）`);
+  if (e.guard) out.push(tl`寒冰护体 ${Math.round(e.guard * 100)}%（挨打时冻住敌人 1 秒，防御 +50% 持续 7 秒）`);
   if (e.proc) out.push(tl`武器特效触发 +${Math.round(e.proc * 100)}%`);
   if (e.threat) out.push(tl`嘲讽 +${e.threat}`);
   if (e.twoHanded) out.push(tl('双手'));
@@ -406,6 +408,8 @@ function Attributes({ s }: { s: GameState }) {
             {row(tl('闪避'), pct(perks.dodge), <>{tl('基础 3%')}{perks.dodge > 0.03 && <>{tl` · 装备 +${pct(perks.dodge - 0.03)}`}</>}</>)}
             {row(tl('减伤'), pct(perks.reduce), perks.reduce > 0 ? tl('板甲每件 3%') : tl('穿板甲每件减 3%'))}
             {chainChance(s) > 0 && row(tl('连斩'), pct(chainChance(s)), gearSum(s, 'proc') > 0 ? tl`幽魂链刃 ${pct(chainChance(s) - gearSum(s, 'proc'))} · 提灯 +${pct(gearSum(s, 'proc'))}` : tl('幽魂链刃：打中后再砍一刀'))}
+            {frostChance(s) > 0 && row(tl('冻结'), pct(frostChance(s)), tl('永霜之弓：打中时冻住敌人 1 秒，这一下 150% 伤害'))}
+            {guardChance(s) > 0 && row(tl('寒冰护体'), pct(guardChance(s)), (s.frostGuard ?? 0) > 0 ? tl`生效中，还剩 ${Math.ceil(s.frostGuard! / 1000)} 秒` : tl('永霜盾：挨打时冻住敌人 1 秒，防御 +50% 持续 7 秒'))}
             {gearSum(s, 'leech') > 0 && row(tl('吸血'), pct(gearSum(s, 'leech')), tl('灯笼：打出伤害的这部分回成生命'))}
           </>;
         })()}

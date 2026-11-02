@@ -32,6 +32,8 @@ const STATS: Stat[] = [
   { label: tl('干活速度'), get: (e) => e.work ?? 0, fmt: p1 },
   { label: tl('吸血'), get: (e) => e.leech ?? 0, fmt: p1 },
   { label: tl('连斩'), get: (e) => e.chain ?? 0, fmt: p1 },
+  { label: tl('冻结'), get: (e) => e.frost ?? 0, fmt: p1 },
+  { label: tl('寒冰护体'), get: (e) => e.guard ?? 0, fmt: p1 },
   { label: tl('武器特效触发'), get: (e) => e.proc ?? 0, fmt: p1 },
   { label: tl('嘲讽'), get: (e) => e.threat ?? 0, fmt: (v) => `${v}` },
 ];

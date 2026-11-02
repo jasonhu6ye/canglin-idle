@@ -1161,4 +1161,11 @@ export const EN_UI: Record<string, string> = {
   "永冬冰晶兑换限定外观「永霜领主」等奖励之后开放。": "Everwinter Shard rewards, like the Permafrost Lord outfit, open later.",
   "寻路去永冬传送门": "Go to Everwinter Portal",
   "限时活动进行中": "limited event is live",
+  "寒冰护体": "Frost Guard",
+  "还有 {0}% 概率开出一颗永霜之心（打造永霜之弓、永霜盾的材料）。": "{0}% chance of a Frostheart (for the Everfrost Bow and Shield).",
+  "冻结 {0}%（打中时冻住敌人 1 秒，这一下 150% 伤害）": "Freeze {0}% (on hit: freeze 1s, 150% damage)",
+  "寒冰护体 {0}%（挨打时冻住敌人 1 秒，防御 +50% 持续 7 秒）": "Frost Guard {0}% (when hit: freeze 1s, +50% defence for 7s)",
+  "永霜之弓：打中时冻住敌人 1 秒，这一下 150% 伤害": "Everfrost Bow: on hit, freeze 1s and deal 150%",
+  "生效中，还剩 {0} 秒": "Active, {0}s left",
+  "永霜盾：挨打时冻住敌人 1 秒，防御 +50% 持续 7 秒": "Everfrost Shield: when hit, freeze 1s, +50% defence for 7s",
 };

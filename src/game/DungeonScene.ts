@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { frostBurst } from './frostFx';
 import { MONSTERS } from '../core/data';
 import { DG_TILE_MS, dungeonFloor, type DgFloor, type DgStop } from '../core/dungeon';
 import { baseOf } from '../core/quality';
@@ -485,6 +486,11 @@ export class DungeonScene extends Phaser.Scene {
         this.tweens.add({ targets: spr, x: x0 + gx * k, y: y0 + gy * k, duration: 160, ease: 'Quad.easeOut', yoyo: true, hold: 120, onComplete: () => spr.setPosition(x0, y0) });
       }
       if (d !== -2) this.popText(this.player.x - 6, this.player.y - 30, d < 0 ? tl('闪避') : `-${d}`, d < 0 ? '#a8d8ff' : '#ff5a4a', 8);
+      if (c.mFrost) {
+        frostBurst(this, spr, spr.displayHeight, D_FLOAT - 4);
+        this.popText(spr.x - 6, spr.y - 30, tl('冻结'), '#9fe6ff', 9);
+        this.popText(this.player.x, this.player.y - 40, tl('寒冰护体'), '#9fe6ff', 8);
+      }
       if (d > 0) {
         this.body.setTintFill(0xff4a4a);
         this.time.delayedCall(80, () => this.body.clearTint());
@@ -498,6 +504,7 @@ export class DungeonScene extends Phaser.Scene {
     const f = FIGHT[w];
     const st = combatStats(store.state, m);
     const d2 = store.state.combat?.pDmg2 ?? 0;
+    const frost = !!store.state.combat?.pFrost;
     const dur = Math.min(f.ms, Math.max(200, (store.state.combat?.playerTimerMs ?? 2000) * 0.85));
     const key = `fight-${w}`;
     this.anim = key;
@@ -520,6 +527,12 @@ export class DungeonScene extends Phaser.Scene {
       if (leech > 0) this.popText(this.player.x + 6, this.player.y - 30, `+${leech}`, '#6ee86a', 8);
       if (crit) this.cameras.main.shake(110, 0.003);
       // 幽魂链刃连斩（10-31）
+      // 永霜之弓（11-02）：冻结
+      if (frost) {
+        const S = spr.displayHeight;
+        frostBurst(this, spr, S, D_FLOAT - 4);
+        this.popText(spr.x - 6, spr.y - 30, tl('冻结'), '#9fe6ff', 9);
+      }
       if (d2 > 0) this.time.delayedCall(220, () => {
         if (!spr.active) return;
         spr.setTintFill(0xaaf8ff);

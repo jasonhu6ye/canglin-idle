@@ -873,6 +873,48 @@ function greatshield(p: Pix, t: number) {
   });
 }
 
+/*
+ * 永霜之弓、永霜盾（用户 11-02，特殊装备，只有 T8）：冰蓝配色，冰晶点缀。
+ */
+const ICE = ['#2a5a8a', '#4a90c8', '#8fd0f0', '#cff4ff', '#ffffff'];
+function frostbow(p: Pix, t: number) {
+  // 永霜之弓：冰晶长弓，弓臂是半透明的冰，两端各一簇冰刺，握把缠深蓝皮，上方嵌一颗冰心
+  const u0 = -2, u1 = 25.5, mid = (u0 + u1) / 2, bend = 4.2;
+  const parts: Part[] = [
+    string(u0 + 0.4, u1 - 0.4, '#e8fbff', 1.2),
+    bowLimb(u0, u1, bend, 1.35, ICE, 1.1),
+    (u, v) => (Math.abs(u - mid) <= 1.7 && Math.abs(v + bend) <= 1.4 ? (Math.floor(u) % 2 ? '#1a2a4a' : '#2e4a72') : null),
+    ball(mid, -bend - 0.4, 1.5, [ICE[1], ICE[2], ICE[3], ICE[4]]),
+    dots(u0 + 4, u1 - 4, 3.4, -bend * 0.75, ICE[4]),
+    // 两端冰刺
+    (u, v) => (u < u0 + 3.6 && u > u0 - 0.2 && v > -2.2 + (u - u0) * 0.4 && v < 2.8 - (u - u0) * 0.6 ? (v > 0.8 ? ICE[3] : ICE[2]) : null),
+    (u, v) => (u > u1 - 3.6 && u < u1 + 0.2 && v > -2.2 + (u1 - u) * 0.4 && v < 2.8 - (u1 - u) * 0.6 ? (v > 0.8 ? ICE[3] : ICE[2]) : null),
+  ];
+  axis(p, parts, 3, 21);
+}
+function frostshield(p: Pix, t: number) {
+  // 永霜盾：冰晶塔盾，上宽下尖，银白边框，盾面一朵六角雪花，边上冒冰刺
+  const M = ramp(METAL[t]);
+  sym(p, (dx, y) => {
+    if (y < 0 || y > 23) return null;
+    let half = y < 3 ? 7 + y * 1.2 : y > 15 ? 10 - (y - 15) * 1.25 : 10;
+    // 顶上两角的冰刺
+    if (y <= 2 && dx > 8.6 && dx < 10.6) return y === 0 ? ICE[4] : ICE[3];
+    if (dx > half) return null;
+    if (dx > half - 1.1 || y <= 1) return dx > half - 0.55 ? M[1] : M[3];
+    // 雪花：六条臂 + 中心
+    const cy = 10.5, ry = y - cy;
+    const r = Math.hypot(dx, ry);
+    const ang = Math.atan2(ry, dx);
+    const arm = r < 6.2 && [0, Math.PI / 3, (2 * Math.PI) / 3].some((a) => Math.abs(Math.sin(ang - a)) * r < 0.6);
+    if (r < 1.3) return ICE[4];
+    if (arm) return r > 4.6 ? ICE[4] : ICE[3];
+    // 冰面：上亮下暗，带几道裂纹高光
+    if ((y * 3 + Math.floor(dx) * 5) % 11 === 0) return ICE[3];
+    return y < 6 ? ICE[2] : dx > 6 ? ICE[0] : ICE[1];
+  });
+}
+
 function buckler(p: Pix, t: number) {
   // 副手盾：小圆盾或小鸢盾，正中一个盾心
   const { M, A, W, T } = shieldFace(t);
@@ -1754,6 +1796,8 @@ export function equipIconUrl(key: string, tier: number): string | null {
   else if (key === 'warhammer') warhammer(p, tier);
   else if (key === 'warscythe') warscythe(p, tier);
   else if (key === 'greatshield') greatshield(p, tier);
+  else if (key === 'frostshield') frostshield(p, tier);
+  else if (key === 'frostbow') frostbow(p, tier);
   else if (key === 'buckler') buckler(p, tier);
   else if (key === 'torch') torch(p, tier);
   else if (key === 'lantern') lantern(p, tier);

@@ -1315,4 +1315,11 @@ export const EN_TEXT: Record<string, string> = {
   "万圣节祭坛 11 月 7 日移除": "Halloween Altar leaves Nov 7",
   "万圣节活动已经结束，祭坛现在只能兑换南瓜积分（南瓜灵驹、幽冥死神、棺材伯爵）。11 月 7 日祭坛从地图上移除，积分请在那之前用掉。": "The Halloween event is over. The altar now only trades Pumpkin Points (Jack-o'-Lantern Steed, Netherworld Reaper, Coffin Count). It leaves the map on Nov 7, so spend your points before then.",
   "「永冬之裔」限时活动正式开启：主界面的活动按钮点「寻路」直接去最近的永冬传送门。": "The Scions of Everwinter event is live: tap Go on the event button to head to the nearest Everwinter Portal.",
+  "T{0} 永霜之心": "T{0} Frostheart",
+  "永冬特殊武器（只有 T7、T8，双手）：永霜之弓打中时有 12% 概率冻住敌人 1 秒（它下一下晚 1 秒出手），这一下 150% 伤害，飘冰蓝色「冻结」；永霜盾挨打时有 17% 概率冻住敌人 1 秒，同时得到 7 秒「寒冰护体」（防御 +50%，再触发就重新计时）。概率固定，不随品质变。材料永霜之心分 T7、T8 两种，只在永冬冰原出：首领每次击杀每种 15%，限时宝箱每种绿 4%、蓝 10%、金 25%。": "Everfrost weapons (T7/T8 only, two-handed): the Everfrost Bow has a 12% chance on hit to freeze the enemy for 1s and deal 150% damage. The Everfrost Shield has a 17% chance when hit to freeze the enemy for 1s and grant Frost Guard (+50% defence for 7s). Chances don't scale with quality. Frostheart (T7 and T8) drops only in the Icefield: 15% each per boss kill; timed chests 4% / 10% / 25% each (green / blue / gold).",
+  "新特殊武器：永霜之弓、永霜盾": "New special weapons: Everfrost Bow & Shield",
+  "两件新的双手特殊武器，只有 T7、T8 版本。材料「永霜之心」（T7、T8 两种）只在永冬冰原出：打永霜巨人、雪堡男爵每次每种 15%，开限时宝箱每种绿 4%、蓝 10%、金 25%。": "Two new two-handed special weapons, T7 and T8 only. Their Frostheart material drops only in the Icefield: 15% each per Giant or Baron kill; timed chests 4% / 10% / 25% each.",
+  "永霜之弓（远程）：打中时 12% 概率冻住敌人 1 秒，这一下造成 150% 伤害。强度和幽魂链刃差不多。": "Everfrost Bow (ranged): 12% on hit to freeze the enemy 1s and deal 150%. About as strong as the Phantom Chainblade.",
+  "永霜盾（近战坦克）：挨打时 17% 概率冻住敌人 1 秒，自己得到「寒冰护体」，防御 +50% 持续 7 秒。底子比双手大盾略好，嘲讽 +160。": "Everfrost Shield (melee tank): 17% when hit to freeze the enemy 1s and gain Frost Guard, +50% defence for 7s. Slightly better base than the Tower Shield, +160 threat.",
+  "两件都是固定概率，不随品质变；在制弓台（弓）和铁匠铺（盾）打造。": "Chances are fixed regardless of quality. Craft the bow at the Bowyer and the shield at the Smithy.",
 };

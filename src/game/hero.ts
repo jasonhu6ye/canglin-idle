@@ -242,10 +242,12 @@ const GOLD = ['#8a5a1a', '#c8902a', '#f0c050', '#fff0a0'];
 const EYE = '#20141c';
 const WOOD = ['#3a2414', '#6a4426', '#9a6a3c'];
 const STEEL = ['#3e444c', '#7a828c', '#bcc4ce', '#f4f8fc'];
+/** 永霜之弓、永霜盾（11-02）的冰蓝色：暗、中、亮 */
+const HERO_ICE = ['#2a5a8a', '#5aa8d8', '#bff0ff'];
 const BELT = ['#1e120a', '#3a2414', '#5a3a20'];
 
 export type HeroDir = 'down' | 'up' | 'side';
-export type HeroTool = 'pickaxe' | 'axe' | 'hoe' | 'sickle' | 'rod' | 'hammer' | 'knife' | 'sword' | 'spear' | 'dagger' | 'bow' | 'staff' | 'handaxe' | 'shortsword' | 'broadsword' | 'greataxe' | 'warhammer' | 'warscythe' | 'chainblade' | 'greatshield' | 'longbow' | 'crossbow' | 'warbow' | 'arbalest' | 'scythe' | 'greatsword' | 'none';
+export type HeroTool = 'pickaxe' | 'axe' | 'hoe' | 'sickle' | 'rod' | 'hammer' | 'knife' | 'sword' | 'spear' | 'dagger' | 'bow' | 'staff' | 'handaxe' | 'shortsword' | 'broadsword' | 'greataxe' | 'warhammer' | 'warscythe' | 'chainblade' | 'greatshield' | 'frostshield' | 'longbow' | 'frostbow' | 'crossbow' | 'warbow' | 'arbalest' | 'scythe' | 'greatsword' | 'none';
 
 interface Pose {
   dir: HeroDir;
@@ -567,18 +569,23 @@ function drawTool(p: Pix, tool: HeroTool, hx: number, hy: number, a: number, pos
       p.set(bx, by, '#e04a4a');
       p.set(bx, by - 1, '#ffffff');
     }
-  } else if (tool === 'bow' || tool === 'longbow' || tool === 'warbow') {
+  } else if (tool === 'bow' || tool === 'longbow' || tool === 'warbow' || tool === 'frostbow') {
     // 弓竖在手里，弓背朝前；长弓更高、弯得更深、拉得更开；单手战弓短小、两端反曲
-    const L = tool === 'longbow' ? 10 : tool === 'warbow' ? 6 : 7;
-    const pull = (pose.draw ?? 0) * (tool === 'longbow' ? 7 : tool === 'warbow' ? 4.5 : 5);
+    // 永霜之弓（11-02）：和长弓一样大，弓臂是冰蓝色，两端冰刺
+    const ice = tool === 'frostbow';
+    const long = tool === 'longbow' || ice;
+    const L = long ? 10 : tool === 'warbow' ? 6 : 7;
+    const pull = (pose.draw ?? 0) * (long ? 7 : tool === 'warbow' ? 4.5 : 5);
+    const BW = ice ? HERO_ICE : WOOD;
     p.line(hx, hy - L, hx - pull, hy, '#e8e8e8');
     p.line(hx - pull, hy, hx, hy + L, '#e8e8e8');
     for (let i = -L; i <= L; i++) {
-      const bulge = (1 - (i * i) / (L * L)) * (tool === 'longbow' ? 3.6 : 3);
-      p.set(hx + bulge, hy + i, Math.abs(i) > L - 2 ? WOOD[0] : i < 0 ? WOOD[2] : WOOD[1]);
-      p.set(hx + bulge + 1, hy + i, WOOD[0]);
+      const bulge = (1 - (i * i) / (L * L)) * (long ? 3.6 : 3);
+      p.set(hx + bulge, hy + i, Math.abs(i) > L - 2 ? BW[0] : i < 0 ? BW[2] : BW[1]);
+      p.set(hx + bulge + 1, hy + i, BW[0]);
     }
     if (tool === 'longbow') for (const i of [-L, L]) p.set(hx + 0.6, hy + i, GOLD[2]);
+    if (ice) for (const sg of [-1, 1]) { p.set(hx + 0.6, hy + sg * L, '#ffffff'); p.set(hx + 1, hy + sg * (L + 1), HERO_ICE[2]); p.set(hx - 0.4, hy + sg * (L + 1), HERO_ICE[2]); p.set(hx + 4, hy - 1, '#cff4ff'); }
     // 战弓：两端往前翻卷的弓梢
     if (tool === 'warbow') for (const sg of [-1, 1]) { p.set(hx + 1, hy + sg * (L + 1), WOOD[0]); p.set(hx + 2, hy + sg * (L + 1), WOOD[2]); p.set(hx + 2, hy + sg * L, STEEL[2]); }
     p.rect(Math.round(hx + 2), Math.round(hy) - 1, 2, 2, '#e0d0a8');
@@ -720,7 +727,7 @@ function drawTool(p: Pix, tool: HeroTool, hx: number, hy: number, a: number, pos
 }
 
 /** 双手大盾：竖着挡在身前，盾面朝外，压在前手上面（手握在盾背后） */
-function drawGreatShield(p: Pix, hx: number, hy: number) {
+function drawGreatShield(p: Pix, hx: number, hy: number, ice = false) {
   const x0 = Math.round(hx) - 1;
   const y0 = Math.round(hy) - 9;
   const W = 5;
@@ -731,9 +738,20 @@ function drawGreatShield(p: Pix, hx: number, hy: number) {
     const off = Math.floor((W - w) / 2);
     for (let x = 0; x < w; x++) {
       const edge = x === 0 || x === w - 1 || y === 0 || y === H - 1;
-      const c = edge ? STEEL[x === 0 ? 1 : 2] : x < 2 ? STEEL[1] : x < 3 ? '#4a5a7a' : '#3a4866';
+      const c = ice
+        ? (edge ? STEEL[x === 0 ? 2 : 3] : x < 2 ? HERO_ICE[2] : x < 3 ? HERO_ICE[1] : HERO_ICE[0])
+        : edge ? STEEL[x === 0 ? 1 : 2] : x < 2 ? STEEL[1] : x < 3 ? '#4a5a7a' : '#3a4866';
       p.set(x0 + off + x, y0 + y, c);
     }
+  }
+  if (ice) {
+    // 永霜盾：盾面一朵小雪花，顶上两角冒冰刺
+    const cx = x0 + 2, cy = y0 + 6;
+    for (const [dx, dy] of [[0, 0], [0, -2], [0, 2], [-1, -1], [1, 1], [-1, 1], [1, -1]]) p.set(cx + dx, cy + dy, dx || dy ? '#e8fbff' : '#ffffff');
+    p.set(x0, y0 - 1, HERO_ICE[2]);
+    p.set(x0 + W - 1, y0 - 1, HERO_ICE[2]);
+    p.set(x0 + 1, y0 + 1, '#ffffff');
+    return;
   }
   // 中间一道金色的盾饰和高光
   for (let y = 3; y < H - 4; y++) p.set(x0 + 2, y0 + y, y === 6 ? GOLD[3] : GOLD[2]);
@@ -1358,9 +1376,9 @@ export function drawFrame(pose: Pose, o: Outfit): Pix {
     } else if (fs?.show) {
       sword = { hx: fs.anchor ? cx + fs.anchor[0] : arm.hx, hy: fs.anchor ? sy + fs.anchor[1] : arm.hy, a: fs.a, grow: fs.grow, fade: fs.fade, bury: ground + 0.6 };
       blade = drawFrostSword(p, sword, pose);
-    } else if (tool !== 'none' && tool !== 'greatshield') drawTool(p, tool, arm.hx, arm.hy, arm.a + (pose.toolTurn ?? 0), pose);
+    } else if (tool !== 'none' && tool !== 'greatshield' && tool !== 'frostshield') drawTool(p, tool, arm.hx, arm.hy, arm.a + (pose.toolTurn ?? 0), pose);
     arm.draw();
-    if (tool === 'greatshield') drawGreatShield(p, arm.hx, arm.hy);
+    if (tool === 'greatshield' || tool === 'frostshield') drawGreatShield(p, arm.hx, arm.hy, tool === 'frostshield');
     hands = [[back!.hx, back!.hy], [arm.hx, arm.hy]];
     if (o.offhand === 'lantern') {
       // 空手时灯提在前手，拿着工具就换到后手
@@ -3409,7 +3427,7 @@ const ride = (dir: HeroDir, run: boolean): HeroAnim => ({
  * 出手只在真正攻击的那一下播一遍（地图场景按攻速缩放），两次攻击之间停在架势里不乱挥。
  * 出手动作开头的蓄力要短，hit 是打中的时刻（0-1），特效在这时候放。
  */
-export type FightWeapon = 'sword' | 'spear' | 'dagger' | 'handaxe' | 'shortsword' | 'chainblade' | 'broadsword' | 'greataxe' | 'warhammer' | 'warscythe' | 'greatshield' | 'shortbow' | 'longbow' | 'crossbow' | 'warbow' | 'arbalest' | 'staff' | 'fist';
+export type FightWeapon = 'sword' | 'spear' | 'dagger' | 'handaxe' | 'shortsword' | 'chainblade' | 'broadsword' | 'greataxe' | 'warhammer' | 'warscythe' | 'greatshield' | 'frostshield' | 'shortbow' | 'longbow' | 'frostbow' | 'crossbow' | 'warbow' | 'arbalest' | 'staff' | 'fist';
 export const FIGHT: Record<FightWeapon, { hit: number; ms: number }> = {
   sword: { hit: 0.42, ms: 640 },
   spear: { hit: 0.4, ms: 700 },
@@ -3422,6 +3440,8 @@ export const FIGHT: Record<FightWeapon, { hit: number; ms: number }> = {
   warhammer: { hit: 0.58, ms: 1000 },
   warscythe: { hit: 0.5, ms: 860 },
   greatshield: { hit: 0.45, ms: 760 },
+  frostshield: { hit: 0.45, ms: 760 },
+  frostbow: { hit: 0.6, ms: 900 },
   shortbow: { hit: 0.55, ms: 720 },
   longbow: { hit: 0.6, ms: 900 },
   crossbow: { hit: 0.22, ms: 1100 },
@@ -3432,8 +3452,8 @@ export const FIGHT: Record<FightWeapon, { hit: number; ms: number }> = {
 };
 /** 战斗站位（用户 10-25）：离怪多远开打，单位格。近战贴身，长枪隔半格，远程隔几格 */
 export const FIGHT_RANGE: Record<FightWeapon, number> = {
-  sword: 0, spear: 0.6, dagger: 0, handaxe: 0, shortsword: 0, chainblade: 0, broadsword: 0.2, greataxe: 0.3, warhammer: 0.3, warscythe: 0.6, greatshield: 0, fist: 0,
-  shortbow: 3, longbow: 4, crossbow: 3.5, warbow: 3, arbalest: 4.5, staff: 3,
+  sword: 0, spear: 0.6, dagger: 0, handaxe: 0, shortsword: 0, chainblade: 0, broadsword: 0.2, greataxe: 0.3, warhammer: 0.3, warscythe: 0.6, greatshield: 0, frostshield: 0, fist: 0,
+  shortbow: 3, longbow: 4, frostbow: 4, crossbow: 3.5, warbow: 3, arbalest: 4.5, staff: 3,
 };
 /** 装备的武器 id（已去掉品质后缀）对应哪套动作 */
 export function fightWeapon(base: string): FightWeapon {
@@ -3685,6 +3705,11 @@ export const HERO_ANIMS: HeroAnim[] = [
     pose: (t) => ({ dir: 'side', crouch: 2, armF: keys([[0, 1.2], [0.5, 1.7], [1, 1.2]], t), reach: keys([[0, 0], [0.5, 3], [1, 0]], t), armB: -0.4, legF: 0.5, legB: -0.5, cape: 1 }),
   },
   ...FIGHT_ANIMS,
+  // 永霜之弓、永霜盾（11-02）：动作和长弓、双手大盾一样，只换手里的武器
+  ...FIGHT_ANIMS.filter((a) => /^fight-(longbow|greatshield)(-|$)/.test(a.key)).map((a): HeroAnim => {
+    const ice = a.key.includes('longbow') ? 'frostbow' : 'frostshield';
+    return { ...a, key: a.key.replace(/longbow|greatshield/, ice), pose: (t, i) => ({ ...a.pose(t, i), tool: ice }) };
+  }),
 ];
 
 /** 生成整张精灵表；frames 里是每帧在表上的位置 */
