@@ -9,7 +9,7 @@ interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
     id: '2026-11-02-t', date: tl('11 月 2 日'), title: tl('修复：冰原宝箱开到一半被重置'),
-    lines: [tl('永冬冰原的限时宝箱开箱进度条到一半会自动重置、打不开，现在修好了。')],
+    lines: [tl('永冬冰原的限时宝箱开箱进度条到一半会自动重置、打不开，现在修好了。'), tl('每个宝箱每一轮每人只能开一次，开完拿到奖励后宝箱会从你的地图上消失，下一轮刷新再出现。')],
   },
   {
     id: '2026-11-02-s', date: tl('11 月 2 日'), title: tl('怪物推荐'),

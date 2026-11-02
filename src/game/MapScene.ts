@@ -1559,11 +1559,18 @@ export class MapScene extends Phaser.Scene {
     for (const [id, objs] of this.timedViz) {
       const n = (this.timedNode ??= new Map(NODES.filter((x) => x.timed).map((x) => [x.id, x]))).get(id)!;
       const win = timedWindow(n, now);
-      const on = !!win;
+      // 宝箱自己这一轮开过了就不再显示（用户 11-02：开一次拿完奖励就消失）
+      const opened = n.timed?.kind === 'chest' && !!win && store.state.realmChest?.got?.[id] === win.round;
+      const on = !!win && !opened;
       const was = this.timedOn.get(id);
       if (was !== on) {
         this.timedOn.set(id, on);
         for (const o of objs) (o as unknown as Phaser.GameObjects.Components.Visible).setVisible(on);
+        // 开完消失：冒一圈光再隐去
+        if (!on && opened && was && view.contains(n.x * T, n.y * T)) {
+          const fx = this.add.image(n.x * T + T / 2, n.y * T, 'glow').setTint(0xffe08a).setBlendMode(Phaser.BlendModes.ADD).setDepth(D_FLOAT).setScale(0.4);
+          this.tweens.add({ targets: fx, scale: 2.4, alpha: 0, duration: 700, onComplete: () => fx.destroy() });
+        }
         if (on && was === false && view.contains(n.x * T, n.y * T)) {
           const fx = this.add.image(n.x * T + T / 2, n.y * T, 'glow').setTint(0x9ae8ff).setBlendMode(Phaser.BlendModes.ADD).setDepth(D_FLOAT).setScale(0.3);
           this.tweens.add({ targets: fx, scale: 3, alpha: 0, duration: 1200, onComplete: () => fx.destroy() });
