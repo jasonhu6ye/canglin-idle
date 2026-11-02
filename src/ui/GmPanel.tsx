@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { GM_GROUPS, GM_KINDS, GM_KIND_NAME, GM_PCT_MAX, gmGroupOf } from '../core/gm';
 import type { GmKind } from '../core/types';
-import { online, type GearEvRow, type GearProvRow, type AiPlayer, type CheatRow, type AltRow, type RedeemCodeRow, type EconRow, type GmPlayer, type GmTrade, type Snapshot, type GmInput, type GmMailRow, type GmRow } from '../net';
+import { online, type GearEvRow, type GearFlagRow, type GearProvRow, type AiPlayer, type CheatRow, type AltRow, type RedeemCodeRow, type EconRow, type GmPlayer, type GmTrade, type Snapshot, type GmInput, type GmMailRow, type GmRow } from '../net';
 import { aiPlayers, botDoing, botsMuted, setBotsMuted, botName, botOnline, botPresence, botProfile, habitOf, refreshBots, zoneOf } from '../net/bots';
 import { actionName, fmtDuration } from './format';
 import { PROV_EV_Q, type Prov, type ProvEv } from '../core/prov';
@@ -1166,6 +1166,68 @@ function GearPlayer({ r }: { r: GearProvRow }) {
   );
 }
 
+const FLAG_STATUS: Record<GearFlagRow['status'], string> = { open: tl('待处理'), ok: tl('已确认没问题'), taken: tl('已没收') };
+function flagReason(f: GearFlagRow): string {
+  const d = f.detail;
+  if (f.reason === 'outside') return tl('凭空多出来：不是自己做的或打的（交易 / 公会仓库 / GM 改档）');
+  if (f.reason === 'burst') return tl`一小时内出了 ${d.hour ?? '?'} 件传说以上`;
+  return tl`运气极好：每次 ${pctText(d.p ?? 0)}，${fmtNum(d.n ?? 0)} 次就出了，这么多次内出一件的概率只有 ${pctText(d.chance ?? 0)}`;
+}
+
+/** 可疑装备（11-02）：服务器自动标出来的，等管理员处理 */
+function GearFlags({ onView }: { onView: (pid: number) => void }) {
+  const [all, setAll] = useState(false);
+  const [rows, setRows] = useState<GearFlagRow[] | null>(null);
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(0);
+  const load = async (a = all) => {
+    setErr('');
+    try { setRows(await online.gmGearFlags(a ? 'all' : 'open')); } catch (e) { setErr((e as Error).message); setRows([]); }
+  };
+  useEffect(() => { void load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const act = async (f: GearFlagRow, status: GearFlagRow['status']) => {
+    if (status === 'taken' && !confirm(tl`从 ${f.name} 的存档里没收 ${ITEMS[f.item]?.name ?? f.item}？`)) return;
+    setBusy(f.id); setErr('');
+    try { await online.gmGearFlagSet(f.id, status); await load(); } catch (e) { setErr((e as Error).message); }
+    setBusy(0);
+  };
+  const ban = async (f: GearFlagRow) => {
+    if (!confirm(tl`封禁 ${f.name}？`)) return;
+    setBusy(f.id);
+    try { await online.gmAcSet(f.playerId, 'ban', tl('可疑装备')); await load(); } catch (e) { setErr((e as Error).message); }
+    setBusy(0);
+  };
+  const list = rows ?? [];
+  return (
+    <>
+      <h4>{all ? tl('可疑装备（全部）') : tl`待处理的可疑装备（${list.length}）`} <button className="pill" onClick={() => { setAll(!all); void load(!all); }}>{all ? tl('只看待处理') : tl('看全部')}</button></h4>
+      {err && <p className="warn">{err}</p>}
+      {rows == null ? <p className="muted">{tl('读取中…')}</p> : !list.length ? <p className="muted">{tl('没有')}</p> : (
+        <ul className="gm-list">
+          {list.map((f) => (
+            <li key={f.id} className={`frame ${f.status !== 'open' ? 'off' : ''}`}>
+              <div><b className="link" onClick={() => onView(f.pid)}>{f.name}</b> <small className="muted">#{f.pid}</small> {qName(f.item)} <small className={f.status === 'open' ? 'warn' : 'muted'}>{FLAG_STATUS[f.status]}</small>{f.banned && <b className="warn"> {tl('已封禁')}</b>}</div>
+              <small className="warn">{flagReason(f)}</small>
+              <small className="muted">{tl('来源：')}{srcName(f.src)} · {new Date(f.gotAt || f.at).toLocaleString()}{f.detail.ms ? tl` · 干了 ${fmtDuration(f.detail.ms)}` : ''}</small>
+              {f.detail.cost && <small className="muted">{tl('用掉：')}{itemsText(f.detail.cost)}</small>}
+              <div className="gm-actions">
+                <button onClick={() => onView(f.pid)}>{tl('查看玩家')}</button>
+                {f.status === 'open' ? (
+                  <>
+                    <button disabled={busy === f.id} onClick={() => void act(f, 'ok')}>{tl('没问题')}</button>
+                    <button disabled={busy === f.id} onClick={() => void act(f, 'taken')}>{tl('没收这件')}</button>
+                    {!f.banned && <button disabled={busy === f.id} onClick={() => void ban(f)}>{tl('封禁')}</button>}
+                  </>
+                ) : f.status === 'ok' && <button disabled={busy === f.id} onClick={() => void act(f, 'open')}>{tl('改回待处理')}</button>}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
 function GearSrcTab() {
   const [who, setWho] = useState('');
   const [recent, setRecent] = useState<GearEvRow[] | null>(null);
@@ -1189,6 +1251,7 @@ function GearSrcTab() {
       </div>
       {rows ? (!rows.length ? <p className="muted">{tl('没找到这个玩家')}</p> : <ul className="gm-list">{rows.map((r) => <GearPlayer key={r.playerId} r={r} />)}</ul>) : (
         <>
+          <GearFlags onView={(pid) => { setWho(String(pid)); setRows([]); void online.gmGear(String(pid)).then(setRows); }} />
           <h4>{tl('全服最近得到的传说、神话装备')}</h4>
           {recent == null ? <p className="muted">{tl('读取中…')}</p> : !recent.length ? <p className="muted">{tl('还没有')}</p> : (
             <ul className="gm-list">

@@ -9,7 +9,7 @@ import { clearMateHits, setAggroMates, setDgCrew, setFieldCrew } from '../core/a
 import { setPartySize } from '../core/party';
 import { flag, setGuard, type Flag, type Guard, type MateRun } from '../core/guard';
 import type { DungeonGate } from '../core/types';
-import { gearHeld, matTotals, matsHeld, newProv, provSettle, provSettleMats, provTotals } from '../core/prov';
+import { gearHeld, gearSuspects, matTotals, matsHeld, newEvents, newProv, provSettle, provSettleMats, provTotals, type GearSuspect } from '../core/prov';
 
 /** 组队相关的全局状态清零（服务器一次处理一个玩家，算完不能留给下一个） */
 function resetShared(party = 0) {
@@ -62,7 +62,7 @@ export interface SyncExtras {
   frozen?: boolean;
 }
 
-export interface SyncOut { state: GameState; applied: number; mailIds: string[]; /** 这台设备的指令收到了第几条 */ ack: number; /** 可疑操作 */ flags?: Flag[]; /** 开箱这类指令服务器算出来的结果（按指令序号） */ results?: { q: number; out: unknown }[] }
+export interface SyncOut { state: GameState; applied: number; mailIds: string[]; /** 这台设备的指令收到了第几条 */ ack: number; /** 可疑操作 */ flags?: Flag[]; /** 可疑装备 */ gear?: GearSuspect[]; /** 开箱这类指令服务器算出来的结果（按指令序号） */ results?: { q: number; out: unknown }[] }
 
 export function runSync(saved: unknown, cmds: unknown, now: number, ex: SyncExtras, device = '', seed?: number): SyncOut {
   resetShared(ex.partySize ?? 0);
@@ -73,7 +73,12 @@ export function runSync(saved: unknown, cmds: unknown, now: number, ex: SyncExtr
   };
   setGuard(G);
   try {
+    const p0 = (saved as { prov?: { seq?: number; ev?: unknown[] } } | null)?.prov;
+    const seq0 = Number(p0?.seq ?? (Array.isArray(p0?.ev) ? p0!.ev!.length : 0)) || 0;
     const out = syncInner(saved, cmds, now, ex, device, seed);
+    // 可疑装备（11-02）：这次新记下的传说以上装备，按概率/来源/数量挑出来，交给管理员看
+    const gear = p0 ? gearSuspects(out.state.prov, newEvents(out.state.prov, seq0)) : [];
+    if (gear.length) out.gear = gear;
     (out.state as GameState & { _g?: Partial<Guard> })._g = { ...(G.mv && { mv: G.mv }), ...(G.coopAt && { coopAt: G.coopAt }) };
     return { ...out, flags: G.flags ?? [] };
   } finally {

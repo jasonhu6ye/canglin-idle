@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
       ]);
       if (!ex.found) return json({ error: 'profile' }, 404);
       const row = rows[0];
-      const { state, applied, mailIds, ack, flags, results } = runSync(row?.data ?? null, body.cmds, now, ex, device ?? '');
+      const { state, applied, mailIds, ack, flags, results, gear } = runSync(row?.data ?? null, body.cmds, now, ex, device ?? '');
       const data: Row = device ? { ...state, _device: device } : { ...state };
       // 记下用过的设备和网络（变了或者半小时一次），给多开检测用
       const net = await netKey(req).catch(() => '');
@@ -133,6 +133,10 @@ Deno.serve(async (req) => {
         // 可疑操作记进防作弊记录（GM 面板看得到；严重的自动移出排行榜）。记不上不影响同步
         await Promise.all((flags ?? []).slice(0, 6).map((f) => rest('rpc/ac_flag', {
           method: 'POST', body: JSON.stringify({ p: uid, p_kind: f.kind, p_severe: f.severe, p_detail: f.detail }),
+        }).catch(() => {})));
+        // 可疑装备（11-02）：记进待处理列表，等管理员看
+        await Promise.all((gear ?? []).slice(0, 10).map((g) => rest('rpc/gear_flag', {
+          method: 'POST', body: JSON.stringify({ p: uid, p_item: g.item, p_src: g.src, p_reason: g.reason, p_at: g.t, p_detail: g.detail }),
         }).catch(() => {})));
         if (seen) await rest('rpc/ac_seen', { method: 'POST', body: JSON.stringify({ p: uid, p_ip: net, p_dev: device ?? '' }) }).catch(() => {});
         return json({ state: data, rev, now, applied, ack, results });

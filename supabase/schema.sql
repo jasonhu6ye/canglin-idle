@@ -2848,3 +2848,69 @@ begin
 end $$;
 revoke execute on function public.gm_set_skills(bigint, jsonb) from public, anon;
 grant execute on function public.gm_set_skills(bigint, jsonb) to authenticated;
+
+-- ============ 可疑装备（11-02） ============
+-- 服务器结算时自动标出可疑的传说、神话装备（概率极低就出了、凭空多出来、一小时出太多），等 GM 处理：
+-- 没问题（ok）、没收（taken，从存档里拿走这件）。玩家看不到这张表。
+create table if not exists public.gear_flags (
+  id bigint generated always as identity primary key,
+  player_id uuid not null references public.profiles(id) on delete cascade,
+  item text not null,
+  src text not null default '',
+  reason text not null,
+  got_at bigint not null default 0,
+  detail jsonb not null default '{}'::jsonb,
+  status text not null default 'open' check (status in ('open', 'ok', 'taken')),
+  note text,
+  created_at timestamptz not null default now(),
+  handled_at timestamptz
+);
+create index if not exists gear_flags_open on public.gear_flags (status, created_at desc);
+alter table public.gear_flags enable row level security;
+-- 不开策略：只能通过下面的函数读写
+
+create or replace function public.gear_flag(p uuid, p_item text, p_src text, p_reason text, p_at bigint, p_detail jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  -- GM 自己的号不记；同一件同一时刻只记一次（同步重试）
+  if exists (select 1 from gm_admins a join profiles x on x.pid = a.pid where x.id = p) then return; end if;
+  if exists (select 1 from gear_flags where player_id = p and item = p_item and got_at = coalesce(p_at, 0) and reason = p_reason) then return; end if;
+  insert into gear_flags (player_id, item, src, reason, got_at, detail)
+    values (p, left(p_item, 80), left(coalesce(p_src, ''), 80), left(p_reason, 20), coalesce(p_at, 0), coalesce(p_detail, '{}'::jsonb));
+end $$;
+revoke execute on function public.gear_flag(uuid, text, text, text, bigint, jsonb) from public, anon, authenticated;
+grant execute on function public.gear_flag(uuid, text, text, text, bigint, jsonb) to service_role;
+
+-- 管理员：可疑装备列表（p_status 空 = 待处理）
+create or replace function public.gm_gear_flags(p_status text default 'open', p_limit int default 200)
+returns table (id bigint, player_id uuid, pid bigint, name text, item text, src text, reason text, got_at bigint, detail jsonb,
+  status text, note text, created_at timestamptz, handled_at timestamptz, banned boolean)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  return query
+    select f.id, f.player_id, p.pid, p.name, f.item, f.src, f.reason, f.got_at, f.detail, f.status, f.note, f.created_at, f.handled_at, p.banned
+    from gear_flags f join profiles p on p.id = f.player_id
+    where (coalesce(p_status, 'open') = 'all' or f.status = coalesce(p_status, 'open'))
+    order by f.created_at desc
+    limit least(greatest(p_limit, 1), 500);
+end $$;
+grant execute on function public.gm_gear_flags(text, int) to authenticated;
+
+-- 管理员：处理一条。ok = 没问题；taken = 从存档里没收这件（背包、仓库里没有了就报错）；open = 改回待处理
+create or replace function public.gm_gear_flag_set(p_id bigint, p_status text, p_note text default null) returns void
+language plpgsql security definer set search_path = public as $$
+declare f gear_flags;
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  if p_status not in ('open', 'ok', 'taken') then raise exception '状态不对'; end if;
+  select * into f from gear_flags where id = p_id for update;
+  if f.id is null then raise exception '找不到这条'; end if;
+  if p_status = 'taken' and f.status <> 'taken' then
+    perform public.save_take(f.player_id, f.item, 1);
+  end if;
+  update gear_flags set status = p_status, note = coalesce(left(p_note, 200), note),
+    handled_at = case when p_status = 'open' then null else now() end
+  where id = p_id;
+end $$;
+grant execute on function public.gm_gear_flag_set(bigint, text, text) to authenticated;

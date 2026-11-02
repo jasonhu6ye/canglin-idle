@@ -35,6 +35,8 @@ export interface Prov {
   /** 材料（非装备、非金币）从哪来：物品 → 来源 → 数量。来源同上（skill:动作 / drop:怪 / cmd:指令 / outside / auto） */
   mats: Record<string, Record<string, number>>;
   ev: ProvEv[];
+  /** 一共记过几件（ev 只留最近的，用这个找出这次结算新记的） */
+  seq?: number;
 }
 
 /** 这个品质以上逐件记（用户 11-02：只记传说、神话） */
@@ -91,10 +93,11 @@ export function migrateProv(raw: unknown): Prov | undefined {
       ...(e.cost && { cost: rec(e.cost) }), ...(Number.isFinite(e.p) && { p: e.p }),
     }))
     .slice(-PROV_EV_CAP);
-  return { since: p.since!, base: rec(p.base), held: rec(p.held), ...(p.matHeld && { matHeld: rec(p.matHeld) }), craft, drop, other: recOf(p.other), pend, mats: recOf(p.mats), ev };
+  return { since: p.since!, base: rec(p.base), held: rec(p.held), ...(p.matHeld && { matHeld: rec(p.matHeld) }), craft, drop, other: recOf(p.other), pend, mats: recOf(p.mats), ev, ...(Number.isInteger(p.seq) && p.seq! >= ev.length && { seq: p.seq }) };
 }
 
 const pushEv = (p: Prov, e: ProvEv) => {
+  p.seq = (p.seq ?? p.ev.length) + 1;
   p.ev.push(e);
   if (p.ev.length > PROV_EV_CAP) p.ev.splice(0, p.ev.length - PROV_EV_CAP);
 };
@@ -221,4 +224,38 @@ export function provSettleMats(s: GameState, src: string, before: Record<string,
     const gain = n - (before[id] ?? 0) - ((tot2[id] ?? 0) - (tot[id] ?? 0));
     if (gain > 0) provMat(s, id, gain, src);
   }
+}
+
+/*
+ * 可疑装备（用户 11-02：自动标出来，等管理员处理）。服务器结算新记下的传说以上装备里：
+ * - luck：按概率，这么多次里出一件的机会低于 LUCK_MIN（比如 0.3% 的东西只做了 1 次就出）
+ * - outside：不是自己做的或打的，两次结算之间凭空多出来（交易、公会仓库、GM 改档）
+ * - burst：一小时内出了超过 BURST_N 件
+ */
+export const LUCK_MIN = 0.005;
+export const BURST_N = 4;
+export interface GearSuspect { item: string; src: string; reason: 'luck' | 'outside' | 'burst'; t: number; detail: Record<string, unknown> }
+
+/** 这次结算新记下的传说以上装备（seq0 = 结算前的 seq） */
+export function newEvents(p: Prov | undefined, seq0: number): ProvEv[] {
+  if (!p) return [];
+  const n = Math.min(p.ev.length, Math.max(0, (p.seq ?? p.ev.length) - seq0));
+  return n ? p.ev.slice(-n) : [];
+}
+
+export function gearSuspects(p: Prov | undefined, fresh: ProvEv[]): GearSuspect[] {
+  if (!p) return [];
+  const out: GearSuspect[] = [];
+  for (const e of fresh) {
+    const base = { item: e.id, src: e.src, t: e.t };
+    const detail = { ...(e.n !== undefined && { n: e.n }), ...(e.p !== undefined && { p: e.p }), ...(e.ms !== undefined && { ms: e.ms }), ...(e.cost && { cost: e.cost }) };
+    if (e.src === 'outside') { out.push({ ...base, reason: 'outside', detail }); continue; }
+    if (e.p && e.n) {
+      const chance = 1 - Math.pow(1 - e.p, e.n);
+      if (chance < LUCK_MIN) { out.push({ ...base, reason: 'luck', detail: { ...detail, chance } }); continue; }
+    }
+    const hour = p.ev.filter((x) => x.t <= e.t && x.t > e.t - 3600_000 && x.src !== 'cmd:claimMail').length;
+    if (hour > BURST_N && e.src !== 'cmd:claimMail') out.push({ ...base, reason: 'burst', detail: { ...detail, hour } });
+  }
+  return out;
 }

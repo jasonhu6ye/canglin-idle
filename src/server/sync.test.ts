@@ -259,3 +259,29 @@ describe('装备来源记录', () => {
     expect(runSync(JSON.parse(JSON.stringify(r.state)), [], t0 + 12 * 60_000, EX, 'dev').state.prov!.other.outside).toEqual({ 'wood_sword@q5': 1 });
   });
 });
+
+describe('可疑装备', () => {
+  it('凭空多出来的、概率极低就出的、一小时太多的会被标出来；第一次记录时已有的不标', () => {
+    const base = newGame(t0, 7);
+    base.bank = { 'wood_sword@q5': 1 };
+    let r = runSync(JSON.parse(JSON.stringify(base)), [], t0 + 1000, EX, 'dev');
+    expect(r.gear ?? []).toEqual([]);
+    const mid = JSON.parse(JSON.stringify(r.state));
+    mid.bank['wood_axe@q4'] = 1;
+    r = runSync(mid, [], t0 + 2000, EX, 'dev');
+    expect(r.gear).toEqual([expect.objectContaining({ item: 'wood_axe@q4', reason: 'outside' })]);
+    // 再结算一次不重复标
+    r = runSync(JSON.parse(JSON.stringify(r.state)), [], t0 + 3000, EX, 'dev');
+    expect(r.gear ?? []).toEqual([]);
+  });
+  it('按概率和数量挑', async () => {
+    const { gearSuspects } = await import('../core/prov');
+    const p = { since: 0, base: {}, held: {}, craft: {}, drop: {}, other: {}, pend: {}, mats: {}, ev: [] as import('../core/prov').ProvEv[] };
+    const lucky = { t: t0, id: 'wood_dagger@q5', src: 'craft:smith_wood_dagger', n: 1, p: 0.003 };
+    const fair = { t: t0, id: 'wood_dagger@q5', src: 'craft:smith_wood_dagger', n: 400, p: 0.003 };
+    expect(gearSuspects(p, [lucky]).map((g) => g.reason)).toEqual(['luck']);
+    expect(gearSuspects(p, [fair])).toEqual([]);
+    p.ev = Array.from({ length: 6 }, (_, i) => ({ ...fair, t: t0 + i * 60_000 }));
+    expect(gearSuspects(p, [p.ev[5]]).map((g) => g.reason)).toEqual(['burst']);
+  });
+});

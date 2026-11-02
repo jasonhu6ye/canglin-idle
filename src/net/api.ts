@@ -376,11 +376,19 @@ export interface OnlineApi {
   /** 管理员：装备来源（11-02）：某个玩家的记录（数字 ID 或名字），全服最近得到的传说以上装备 */
   gmGear(who: string): Promise<GearProvRow[]>;
   gmGearRecent(): Promise<GearEvRow[]>;
+  /** 管理员：可疑装备（status 'open' 待处理 / 'all'），处理一条（ok 没问题 / taken 没收 / open 改回待处理） */
+  gmGearFlags(status?: 'open' | 'all'): Promise<GearFlagRow[]>;
+  gmGearFlagSet(id: number, status: GearFlagRow['status'], note?: string): Promise<void>;
 }
 
 /** 管理员看的装备来源：prov 见 core/prov.ts（没记过是 null），held 是身上的装备，mats 是身上的材料 */
 export interface GearProvRow { playerId: string; pid: number; name: string; prov: Prov | null; held: Record<string, number>; lastTick: number }
 export interface GearEvRow { pid: number; name: string; ev: ProvEv }
+export interface GearFlagRow {
+  id: number; playerId: string; pid: number; name: string; item: string; src: string; reason: 'luck' | 'outside' | 'burst';
+  gotAt: number; detail: { n?: number; p?: number; ms?: number; chance?: number; hour?: number; cost?: Record<string, number> };
+  status: 'open' | 'ok' | 'taken'; note: string | null; at: number; handledAt: number | null; banned: boolean;
+}
 
 export interface GmPlayer {
   id: string; pid: number; name: string; joined: number; lastSeen: number;

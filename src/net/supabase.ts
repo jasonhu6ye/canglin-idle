@@ -1,6 +1,6 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js';
 import type { GameState, GmBuff } from '../core/types';
-import type { EconRow, RedeemCodeRow, AltRow, GearEvRow, GearProvRow, CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMail, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildDay, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
+import type { EconRow, RedeemCodeRow, AltRow, GearEvRow, GearFlagRow, GearProvRow, CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMail, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildDay, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { type SyncReply } from './api';
 import type { Cmd } from '../core/commands';
 import type { TaskSpec } from '../core/guild';
@@ -669,6 +669,17 @@ export class SupabaseApi implements OnlineApi {
       const p = migrateProv({ since: 0, ev: [r.ev] });
       return p?.ev[0] ? { pid: Number(r.pid), name: r.name, ev: p.ev[0] } : null;
     }).filter((x): x is GearEvRow => !!x);
+  }
+  async gmGearFlags(status: 'open' | 'all' = 'open') {
+    const rows = ok(await this.sb.rpc('gm_gear_flags', { p_status: status, p_limit: 300 })) as Row[];
+    return rows.map((r): GearFlagRow => ({
+      id: Number(r.id), playerId: r.player_id, pid: Number(r.pid), name: r.name, item: r.item, src: r.src ?? '', reason: r.reason,
+      gotAt: Number(r.got_at), detail: (r.detail ?? {}) as GearFlagRow['detail'], status: r.status, note: r.note ?? null,
+      at: Date.parse(r.created_at), handledAt: r.handled_at ? Date.parse(r.handled_at) : null, banned: !!r.banned,
+    }));
+  }
+  async gmGearFlagSet(id: number, status: GearFlagRow['status'], note?: string) {
+    ok(await this.sb.rpc('gm_gear_flag_set', { p_id: id, p_status: status, p_note: note ?? null }));
   }
   async gmPlayerCount() {
     const r = (ok(await this.sb.rpc('gm_player_count')) as Row[])[0] ?? {};
