@@ -947,6 +947,10 @@ html[lang="en"] .login-box h1 { letter-spacing: 2px; }
 .qual.q5 { animation: qual-myth 1.6s ease-in-out infinite; }
 @keyframes qual-myth { 50% { box-shadow: inset 0 0 0 2px var(--qc), 0 0 12px 1px var(--qc); } }
 .q-odds { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 2px; }
+.q-fine { flex-basis: 100%; display: flex; flex-direction: column; gap: 4px; }
+.fine-toggle { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.fine-toggle input { margin: 0; }
+.fine-toggle i.warn { font-style: normal; color: #e0604a; }
 .q-chip { padding: 0 5px; border-radius: 3px; background: rgba(0, 0, 0, 0.35); color: #e8e8e8; }
 .q-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .q-table td { padding: 2px 4px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }

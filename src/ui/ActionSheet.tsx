@@ -8,7 +8,7 @@ import { RANCH } from '../core/ranch';
 import { SalvageSheet } from './Salvage';
 import { MonsterDetail, MonsterIcon, TraitChips } from './Bestiary';
 import { useEffect, useRef, useState } from 'react';
-import { ACTIONS, nodeOfAction, nodesOfAction, ITEMS, MONSTERS, NODES, REGIONS, SEED_SHOP, seedLevel, seedPrice, SKILLS, tierName } from '../core/data';
+import { ACTIONS, fineMatOf, nodeOfAction, nodesOfAction, ITEMS, MONSTERS, NODES, REGIONS, SEED_SHOP, seedLevel, seedPrice, SKILLS, tierName } from '../core/data';
 import {
   actionDuration, atMarket, bestFood, seedLocked, combatEstimate, combatStats, level, MAX_QUEUE, moveSpeed, nearNode, xpPerHour,
 } from '../core/sim';
@@ -220,7 +220,23 @@ function Recipe({ s, a }: { s: GameState; a: SkillAction }) {
       {a.inputs?.map((st) => cell(st, true))}
       {a.inputs && <b className="rc-arrow">→</b>}
       {a.outputs.map((st) => cell(st, false))}
-      {a.outputs.map((st) => <QualityOdds key={`q${st.item}`} item={st.item} />)}
+      {a.outputs.map((st) => {
+        // 精工石（11-02）：打开开关、背包或仓库里有同阶的，每做一件自动加一颗
+        const fm = fineMatOf(st.item);
+        const on = !!s.settings.fineCraft && !!fm && have(fm) > 0;
+        return (
+          <span key={`q${st.item}`} className="q-fine">
+            <QualityOdds item={st.item} fine={on} />
+            {fm && (
+              <label className="fine-toggle">
+                <input type="checkbox" checked={!!s.settings.fineCraft} onChange={(e) => store.run('settings', { fineCraft: e.target.checked })} />
+                <Icon item={fm} size={18} />
+                <small>{tl`加${ITEMS[fm].name.replace(/^T\d+ /, '')}（每件一颗，有 ${fmtNum(have(fm))} 颗）`}{s.settings.fineCraft && !have(fm) && <i className="warn">{tl(' 没有了，按普通概率做')}</i>}</small>
+              </label>
+            )}
+          </span>
+        );
+      })}
       <small className="muted rc-tip">{a.inputs ? tl('点材料跳到它的制作或采集地点（缺的标红）；点产物看详情') : tl('点图标看物品详情')}</small>
     </span>
   );

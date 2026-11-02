@@ -986,4 +986,8 @@ export const EN_CORE: Record<string, string> = {
   "永冬冰原深处凝成的一颗冰心，握久了手会结霜。打造永霜之弓、永霜盾要用。只在永冬冰原打首领、开限时宝箱有概率得到。": "A heart of ice from deep in the Icefield; it frosts your hand. Used for the Everfrost Bow and Shield. Drops only from Icefield bosses and timed chests.",
   "永霜盾": "Everfrost Shield",
   "永霜之弓": "Everfrost Bow",
+  "T{0} 精工石": "T{0} Masterwork Stone",
+  "打磨得极细的工匠石。制作同阶装备时加一颗，做出优秀、史诗品质的概率提高到 2.5 倍（传说、神话不变）。只能从副本宝箱里开出，宝箱几阶就出几阶。": "A finely ground crafting stone. Add one when crafting same-tier gear for 2.5× Superior and Epic odds (Legendary and Mythic unchanged). Only from dungeon chests, same tier as the chest.",
+  "T{0} 永霜精工石": "T{0} Everfrost Masterwork Stone",
+  "冰原寒气里淬过的工匠石。制作同阶永霜之弓、永霜盾时加一颗，做出优秀、史诗品质的概率提高到 2.5 倍（传说、神话不变）。只在永冬冰原打首领、开限时宝箱有概率得到。": "A crafting stone tempered in Icefield frost. Add one when crafting a same-tier Everfrost Bow or Shield for 2.5× Superior and Epic odds. Drops only from Icefield bosses and timed chests.",
 };

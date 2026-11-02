@@ -354,6 +354,8 @@ const Q_KEY = [0.06, 0.1, 0.15, 0.22];
 const Q_POTION = [0.3, 0.4, 0.5, 0.6];
 /** 特殊装备材料每种的出货率（绿/蓝/紫/金箱），蓝洞再 ×1.3 */
 export const Q_SPECIAL = [0.03, 0.045, 0.07, 0.1];
+/** 精工石（11-02）：绿/蓝/紫/金箱开出的概率（蓝洞再 ×1.3），金箱一次 1-2 颗 */
+export const Q_FINE = [0.12, 0.18, 0.28, 0.4];
 const Q_EYE = [0.06, 0.1, 0.16, 0.26];
 const POTIONS = () => Object.values(ITEMS).filter((i) => i.category === 'potion').sort((a, b) => a.value - b.value).map((i) => i.id);
 const GEAR = COMMON_EQUIP().filter((e) => !e.stats.speed && e.slot !== 'ring' && e.slot !== 'neck').map((e) => e.key);
@@ -410,6 +412,8 @@ export function rollChest(gate: DungeonGate, q: number, rand: () => number): Rec
     if (rand() < k) add(`wraith_${n}`, 1);
     if (rand() < k) add(`wick_${n}`, 1);
   }
+  // 精工石（用户 11-02）：和宝箱同阶，箱子越好越容易出、越多
+  if (rand() < Q_FINE[q] * (gate.kind === 'blue' ? 1.3 : 1)) add(`finecraft_${n}`, q >= 3 ? ri(1, 2) : 1);
   return out;
 }
 

@@ -321,6 +321,28 @@ for (const i of [6, 7]) {
     tier: i, desc: tl('永冬冰原深处凝成的一颗冰心，握久了手会结霜。打造永霜之弓、永霜盾要用。只在永冬冰原打首领、开限时宝箱有概率得到。'),
   });
 }
+/**
+ * 精工石（用户 11-02）：制作装备时加一颗，优秀、史诗的概率 ×2.5（传说、神话不变，quality.ts FINE_MULT）。
+ * 普通装备和幽魂链刃、提灯用「精工石」，T1-T8，只从副本宝箱开出（宝箱几阶就出几阶）；
+ * 永霜之弓、永霜盾用「永霜精工石」，T7/T8，只在永冬冰原打首领、开限时宝箱得到。
+ */
+TIERS.forEach((_, i) => item(`finecraft_${i + 1}`, tl`T${i + 1} 精工石`, 'material', BAR_VALUE[i] * 3, {
+  tier: i, desc: tl('打磨得极细的工匠石。制作同阶装备时加一颗，做出优秀、史诗品质的概率提高到 2.5 倍（传说、神话不变）。只能从副本宝箱里开出，宝箱几阶就出几阶。'),
+}));
+for (const i of [6, 7]) item(`frostcraft_${i + 1}`, tl`T${i + 1} 永霜精工石`, 'material', BAR_VALUE[i] * 3, {
+  tier: i, desc: tl('冰原寒气里淬过的工匠石。制作同阶永霜之弓、永霜盾时加一颗，做出优秀、史诗品质的概率提高到 2.5 倍（传说、神话不变）。只在永冬冰原打首领、开限时宝箱有概率得到。'),
+});
+/** 做这件装备（产物 id，不带品质）能加哪种精工石；不能加就是 undefined */
+export function fineMatOf(item: string): string | undefined {
+  const it = ITEMS[item];
+  if (!it?.equip || it.equip.move || it.equip.slot === 'pack' || it.tier === undefined) return undefined;
+  const key = item.slice(item.indexOf('_') + 1);
+  if (key === 'frostbow' || key === 'frostshield') return `frostcraft_${it.tier + 1}`;
+  return `finecraft_${it.tier + 1}`;
+}
+/** 永霜精工石的掉率：永冬首领每次击杀每阶、限时宝箱每阶 */
+export const FROSTCRAFT_BOSS = 0.2;
+export const FROSTCRAFT_CHEST = { green: 0.06, blue: 0.12, gold: 0.25 } as const;
 /** 洞察之瞳（用户 10-26）：洞察者背包的特殊材料，只能开副本宝箱得到（宝箱越好越容易出，也会开出比钥匙低阶的） */
 TIERS.forEach((t, i) => {
   item(`sageeye_${i + 1}`, tl`T${i + 1} 洞察之瞳`, 'material', Math.round(60 + t.level * 20), {
@@ -877,7 +899,7 @@ function speciesDrops(sp: Species, idx: number): Drop[] {
   if (sp.rank === 'normal') add(`luckybag_${n}`, 1, 0.004);
   if (sp.rank === 'elite') { add(`luckybag_${n}`, 1, 0.12); add(`chest_${n}`, 1, 0.04); }
   // 永冬首领（用户 11-02）：有概率掉永霜之心
-  if (sp.winter) { add('frostheart_7', 1, FROSTHEART_BOSS); add('frostheart_8', 1, FROSTHEART_BOSS); }
+  if (sp.winter) { add('frostheart_7', 1, FROSTHEART_BOSS); add('frostheart_8', 1, FROSTHEART_BOSS); add('frostcraft_7', 1, FROSTCRAFT_BOSS); add('frostcraft_8', 1, FROSTCRAFT_BOSS); }
   // 世界首领：必掉宝库，战利品和战旗比普通首领好拿（传说装备用户 10-24 说先不出，留到以后）
   if (sp.world) {
     add(`worldchest_${sp.id}`, 1);

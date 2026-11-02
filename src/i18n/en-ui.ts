@@ -1279,4 +1279,7 @@ export const EN_UI: Record<string, string> = {
   "兑换码已过期": "This code has expired",
   "兑换码已经被领完了": "This code has run out",
   "输错太多次了，一小时后再试": "Too many wrong codes. Try again in an hour",
+  "加{0}（每件一颗，有 {1} 颗）": "Add {0} (1 per item, have {1})",
+  " 没有了，按普通概率做": " none left, normal odds",
+  "品质概率（加精工石）：": "Quality odds (with stone): ",
 };
