@@ -1333,4 +1333,5 @@ export const EN_TEXT: Record<string, string> = {
   "寻路修复": "Pathfinding fixes",
   "近距离的路程（比如营地石碑到永冬传送门、城里的建筑之间）以前会多算一倍时间，角色走得慢、有时选了绕远的路线；现在按真实路线算。": "Short trips (like the camp waystone to the Winter Gate, or between town buildings) used to be estimated at twice their real length, so your character walked slowly and sometimes picked a longer route. They now use the real path.",
   "去永冬冰原的路上切回页面或刷新，角色以前可能被摆到海上；现在会出现在路线上对应的位置接着走。": "If you came back to the page while on the way to the Everwinter Realm, your character could be placed out at sea. You now appear at the right spot on the route and keep walking.",
+  "存档改成服务器结算后，服务器以前按直线估路程，几秒后会把本机按真实路线算的行程时间盖掉（隔着河、湖的地方尤其明显）；现在本机和服务器查同一张步行距离表，时间一致。": "Since saves moved to server-side settlement, the server estimated trips as straight lines and overwrote the real-route travel time a few seconds later (most noticeable around rivers and lakes). Your device and the server now use the same walking-distance table, so the times match.",
 };

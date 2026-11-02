@@ -11,6 +11,7 @@ import { doorOf, FACILITY_NAME, townAt, TOWNS, type Facility, type TownDef } fro
  */
 
 export { MAP_W, MAP_H, MAIN_SIZE, MID_BOX, OLD_BOX, at, atW, atF } from './geo';
+import { NAV_TABLE } from './navTable.gen';
 import { atR, CAMP, inRealm, MYSTERY_BOX, PORTAL_MS, REALM_BOX, REALM_LEVELS, REALM_REGIONS, REALM_SEEDS, strHash, timedWindow, TIMED_RULES, type RealmRegion, type Timed, type TimedKind } from './realm';
 import { MAP_W, MAP_H, MID_BOX, OLD_BOX, at, atW, atF } from './geo';
 import { APT_MAX, APT_MIN, COAT_NAME, coatOf, FOAL, FOAL_CHANCE, horseItem, RANCH } from './ranch';
@@ -1878,21 +1879,95 @@ export const WALK_TILES_PER_SEC = 4;
 type Pt = { x: number; y: number };
 /** 步行距离场（地图模块注册）：从几个起点出发，到某点最近走多远（格）、从第几个起点出发；走不到 d = Infinity */
 export type NavField = (seeds: Pt[]) => (p: Pt) => { d: number; i: number };
-let navField: NavField | undefined;
-/** 地图加载后注册真实的步行距离；没注册（单元测试、地图还没载入）就按直线 × 1.25 估 */
+/** 地图载入、块图建好后注册（界面缓存估时看 navStamp 有没有变；估时本身用下面的步行距离表） */
 let navStampN = 0;
-export const setNavField = (f: NavField | undefined) => { navField = f; navStampN++; };
+export const setNavField = (_f: NavField | undefined) => { navStampN++; };
 /** 步行距离场换过几次（界面缓存估时用：换了就重算） */
 export const navStamp = () => navStampN;
 const straight = (from: Pt) => (p: Pt) => Math.hypot(p.x - from.x, p.y - from.y) * 1.25;
-/** 从 from 出发走到各处要走多少格 */
+
+/**
+ * 步行距离表（11-02）：所有地点、石碑、传送门两两之间的真实步行距离，预先按地图算好（scripts/nav-table.ts）。
+ * 存档改由服务器结算后，服务器没有地图、只能按直线估，几秒后就把本机按真实路线算的行程盖掉；
+ * 现在本机和服务器都查这张表，算出来一样。每对存「真实距离 ÷ 直线距离」，1 个字节，按对数刻度
+ */
+export const navAnchors = (): Pt[] => {
+  const seen = new Set<string>();
+  const out: Pt[] = [];
+  for (const n of [...NODES.filter((x) => !x.sea), ...WAYSTONES]) {
+    const p = standOf(n);
+    const k = `${p.x},${p.y}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(p);
+  }
+  return out;
+};
+/** 地点坐标变了表就作废（生成的表里存着这个值） */
+export const navHash = (pts: Pt[]) => {
+  let h = 2166136261;
+  for (const p of pts) for (const v of [p.x, p.y]) h = Math.imul(h ^ v, 16777619) >>> 0;
+  return h.toString(36);
+};
+export const NAV_LOG = Math.log(6);
+interface NavIdx { key: Map<string, number>; pts: Pt[]; side: number[]; pos: number[]; size: number[]; bytes: Uint8Array[] }
+let navIdx: NavIdx | null | undefined;
+function navTable(): NavIdx | null {
+  if (navIdx !== undefined) return navIdx;
+  const pts = navAnchors();
+  if (!NAV_TABLE.hash || NAV_TABLE.hash !== navHash(pts)) return (navIdx = null);
+  const side = pts.map((p) => (inRealm(p) ? 1 : 0));
+  const count = [0, 0];
+  const pos = side.map((k) => count[k]++);
+  const dec = (b64: string) => {
+    const bin = typeof atob === 'function' ? atob(b64) : '';
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  };
+  const key = new Map(pts.map((p, i) => [`${p.x},${p.y}`, i]));
+  return (navIdx = { key, pts, side, pos, size: count, bytes: [dec(NAV_TABLE.main), dec(NAV_TABLE.realm)] });
+}
+/** 两个表里的点之间走多少格；不在同一边、走不到返回 undefined */
+function tableDist(T: NavIdx, i: number, j: number): number | undefined {
+  if (i === j) return 0;
+  if (T.side[i] !== T.side[j]) return undefined;
+  let a = T.pos[i], b = T.pos[j];
+  if (a > b) [a, b] = [b, a];
+  const n = T.size[T.side[i]];
+  const v = T.bytes[T.side[i]][a * n - (a * (a + 1)) / 2 + (b - a - 1)];
+  if (v === undefined || v === 255) return undefined;
+  const p = T.pts[i], q = T.pts[j];
+  return Math.max(1, Math.hypot(p.x - q.x, p.y - q.y)) * Math.exp((v / 254) * NAV_LOG);
+}
+/** 离 p 最近的表里的点（同一边，40 格内） */
+function nearAnchor(T: NavIdx, p: Pt): number | undefined {
+  const exact = T.key.get(`${Math.round(p.x)},${Math.round(p.y)}`);
+  if (exact !== undefined) return exact;
+  let best: number | undefined, bd = 40;
+  const side = inRealm(p) ? 1 : 0;
+  T.pts.forEach((q, i) => {
+    if (T.side[i] !== side) return;
+    const d = Math.hypot(q.x - p.x, q.y - p.y);
+    if (d < bd) { bd = d; best = i; }
+  });
+  return best;
+}
+/** 从 from 出发走到各处要走多少格：两头都在表里（或离表里的点很近）查表，否则按直线 × 1.25 估 */
 export function walkFrom(from: Pt): (to: Pt) => number {
-  if (!navField) return straight(from);
-  const f = navField([from]);
   const s = straight(from);
+  const T = navTable();
+  if (!T) return s;
+  const a = nearAnchor(T, from);
+  if (a === undefined) return s;
+  const off = Math.hypot(T.pts[a].x - from.x, T.pts[a].y - from.y) * 1.25;
   return (to) => {
-    const d = f(to).d;
-    return Number.isFinite(d) ? d : s(to);
+    const b = nearAnchor(T, to);
+    if (b === undefined) return s(to);
+    const d = tableDist(T, a, b);
+    if (d === undefined) return s(to);
+    const tail = Math.hypot(T.pts[b].x - to.x, T.pts[b].y - to.y) * 1.25;
+    return Math.max(Math.hypot(to.x - from.x, to.y - from.y), off + d + tail);
   };
 }
 /** 自动寻路要走多久：按真实的绕路距离（隔着河湖要绕的都算上） */
@@ -1948,21 +2023,8 @@ function sideRouteFrom(stones: string[] | undefined, from: Pt, speed: number): (
   const toA = stands.map((p) => ms(walk(p)));
   // 走到哪座石碑最快；终点最近的石碑正好是它时用第二快的
   const order = toA.map((_, i) => i).sort((a, b) => toA[a] - toA[b]);
-  const field = navField?.(stands);
-  const fromB = (to: Pt): { i: number; ms: number }[] => {
-    const hit = field?.(to);
-    if (hit && hit.i >= 0 && Number.isFinite(hit.d)) {
-      const out = [{ i: hit.i, ms: ms(hit.d) }];
-      // 离终点最近的石碑正好是走过去最快的那座：再看看除它以外离终点最近的
-      if (hit.i === order[0] && stands.length > 1) {
-        const rest = stands.map((_, j) => j).filter((j) => j !== order[0]);
-        const h2 = navField!(rest.map((j) => stands[j]))(to);
-        if (h2.i >= 0 && Number.isFinite(h2.d)) out.push({ i: rest[h2.i], ms: ms(h2.d) });
-      }
-      return out;
-    }
-    return stands.map((p, i) => ({ i, ms: ms(walkFrom(p)(to)) }));
-  };
+  const fromStone = stands.map((p) => walkFrom(p));
+  const fromB = (to: Pt): { i: number; ms: number }[] => fromStone.map((f, i) => ({ i, ms: ms(f(to)) }));
   return (to) => {
     const direct = ms(walk(to));
     let best: Route = { ms: direct };
