@@ -884,7 +884,9 @@ function frostbow(p: Pix, t: number) {
     string(u0 + 0.4, u1 - 0.4, '#e8fbff', 1.2),
     bowLimb(u0, u1, bend, 1.35, ICE, 1.1),
     (u, v) => (Math.abs(u - mid) <= 1.7 && Math.abs(v + bend) <= 1.4 ? (Math.floor(u) % 2 ? '#1a2a4a' : '#2e4a72') : null),
-    ball(mid, -bend - 0.4, 1.5, [ICE[1], ICE[2], ICE[3], ICE[4]]),
+    // T8：握把上的冰心换成金边，弓臂上的冰晶多一排
+    ball(mid, -bend - 0.4, t >= 7 ? 1.8 : 1.5, t >= 7 ? GOLDS : [ICE[1], ICE[2], ICE[3], ICE[4]]),
+    ...(t >= 7 ? [dots(u0 + 6, u1 - 6, 4, -bend * 0.95, ICE[3])] : []),
     dots(u0 + 4, u1 - 4, 3.4, -bend * 0.75, ICE[4]),
     // 两端冰刺
     (u, v) => (u < u0 + 3.6 && u > u0 - 0.2 && v > -2.2 + (u - u0) * 0.4 && v < 2.8 - (u - u0) * 0.6 ? (v > 0.8 ? ICE[3] : ICE[2]) : null),
