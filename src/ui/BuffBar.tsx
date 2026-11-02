@@ -85,7 +85,7 @@ function buffsOf(s: GameState, region: RegionId, now: number): Buff[] {
   }
   if (partySize() > 0) {
     const n = partySize();
-    out.push({ key: 'party', icon: 'party', name: tl('组队经验'), value: `+${Math.round(partyXpPct() * 100)}%`, desc: tl`组队中（${n} 人）：所有技能经验 +${Math.round(partyXpPct() * 100)}%。每个队员 +${PARTY_XP_PER * 100}%，5 人满队 +${PARTY_MAX * PARTY_XP_PER * 100}%` });
+    out.push({ key: 'party', icon: 'party', name: tl('组队经验'), value: `+${Math.round(partyXpPct() * 100)}%`, desc: tl`组队中（在线 ${n} 人）：所有技能经验 +${Math.round(partyXpPct() * 100)}%。每个在线队员 +${PARTY_XP_PER * 100}%，5 人满队 +${PARTY_MAX * PARTY_XP_PER * 100}%，离线的队友不算` });
   }
   if (s.mounted && s.equipment.mount) {
     const mv = ITEMS[s.equipment.mount]?.equip?.move ?? 0;

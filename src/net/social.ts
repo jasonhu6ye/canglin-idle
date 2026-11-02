@@ -1,4 +1,4 @@
-import { setPartySize } from '../core/party';
+import { onlinePartySize, setPartySize } from '../core/party';
 import { fieldKey, threatOf } from '../core/aggro';
 import type { GameState } from '../core/types';
 import { useEffect, useState } from 'react';
@@ -34,9 +34,15 @@ const st: State = {
 };
 type Fn = () => void;
 const fns = new Set<Fn>();
+/** 地图上在线的玩家（组队经验只算在线的队员，11-02） */
+let onlineIds = new Set<string>();
+const updateParty = () => {
+  const me = online.me()?.id ?? '';
+  setPartySize(st.party ? onlinePartySize(st.party.members.map((m) => m.playerId), me, (id) => onlineIds.has(id)) : 0);
+};
 const emit = () => {
-  // 组队经验加成按队伍人数算（用户 10-25）
-  setPartySize(st.party?.members.length ?? 0);
+  // 组队经验加成按在线的队员人数算（用户 10-25；11-02 起离线队员不算）
+  updateParty();
   fns.forEach((f) => f());
 };
 
@@ -84,6 +90,7 @@ export function syncSocial() {
     emit();
   }));
   offs.push(online.onSocial(() => void refreshSocial()));
+  offs.push(online.onPresence((all) => { onlineIds = new Set(all.map((p) => p.playerId)); updateParty(); }));
   void refreshSocial();
   // GM 增益（10-26）：登录后马上拉一次，之后每分钟一次
   void pullGm();

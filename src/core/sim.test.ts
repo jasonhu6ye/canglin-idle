@@ -1054,8 +1054,10 @@ describe('组队经验加成', () => {
   it('每个队员 +5%，5 人满队 +25%，离开队伍就没了', async () => {
     const { setPartySize, partyXpPct } = await import('./party');
     const run = () => {
-      const s = startHere(newGame(T0, 1), 'fish_minnow', { type: 'infinite' });
-      return advance(s, T0 + 10 * 60_000).state.xp.fishing;
+      // 在线时每分钟结算一次（一次补算超过 3 分钟算离线，不吃组队加成）
+      let s = startHere(newGame(T0, 1), 'fish_minnow', { type: 'infinite' });
+      for (let t = T0 + 60_000; t <= T0 + 10 * 60_000; t += 60_000) s = advance(s, t).state;
+      return s.xp.fishing;
     };
     const base = run();
     setPartySize(5);

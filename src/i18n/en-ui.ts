@@ -1407,4 +1407,11 @@ export const EN_UI: Record<string, string> = {
   "只读了最新注册的 {0} 人，筛选只在这些人里找；找老玩家请搜名字或 ID": "Loaded the newest {0} players only; search by name or ID for older ones",
   "已复制": "Copied",
   "复制 UID": "Copy UID",
+  "组队中（在线 {0} 人）：所有技能经验 +{1}%。每个在线队员 +{2}%，5 人满队 +{3}%，离线的队友不算": "In a party ({0} online): all skill XP +{1}%. +{2}% per online member, +{3}% for a full party of 5; offline members don't count",
+  "组队怎么算经验：打怪的战斗经验按自己打出的伤害算（谁补最后一刀都一样）。另外有助攻经验：只要你打过这只怪，它死的时候队友在它身上打出的伤害有 25% 也算给你。组队加成每个在线队员 +5%（5 人满队 +25%），离线的队友不算，下线后补算的那段也不加。野外和副本都一样。": "Party XP: combat XP comes from the damage you deal (last hit doesn't matter). Plus assist XP: if you hit a monster, when it dies you also get 25% of the damage your teammates dealt to it. The party bonus is +5% per online member (+25% for 5); offline teammates don't count, and offline catch-up gets no bonus. Same in the field and in dungeons.",
+  "组队进的副本全队同步：能看到同一层的队友，谁先清掉的怪大家都算清掉，晚进来的人直接赶上进度。队伍每多一个人，副本怪物全属性 +5%，最多 +20%。": "Party dungeons stay in sync: you see teammates on the same floor, monsters cleared by anyone count for all, and latecomers catch up. Each extra member gives dungeon monsters +5% to all stats, up to +20%.",
+  "组队经验调整": "Party XP changes",
+  "新增助攻经验：和队友一起打怪（野外一起打同一只，或副本里），只要你打过这只怪，它死的时候队友在它身上打出的伤害有 25% 也算成你的战斗经验。输出低的新人、坦克跟着打也能涨得快。": "New assist XP: when fighting with teammates (same monster in the field, or in dungeons), if you hit a monster, 25% of the damage teammates dealt to it also becomes your combat XP when it dies. Newcomers and tanks level faster in a party.",
+  "打怪的经验本身还是按自己打出的伤害算，最后一刀谁补的都一样。": "Your own combat XP still comes from the damage you deal; who lands the last hit doesn't matter.",
+  "组队经验加成（每人 +5%）只算在线的队员，离线的队友不再算人数；下线挂机回来补算的那段也不加，只有在线时生效。": "The party XP bonus (+5% each) now only counts online members, and offline catch-up time gets no bonus.",
 };

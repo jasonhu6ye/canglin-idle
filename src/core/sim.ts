@@ -1,4 +1,4 @@
-import { partyXpPct } from './party';
+import { ASSIST_XP, PARTY_LIVE_MS, partyXpPct } from './party';
 import { cleanGm, GM_CAP, gmPct, setGmClock } from './gm';
 import { GUILD_MAX_LV, cleanTech, guildPct, utcDay } from './guild';
 import { APT_MAX, APT_MIN, FOAL, growMs, HORSE_XP, horseItem, RANCH, RANCH_PENS } from './ranch';
@@ -747,6 +747,8 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   const from = now - dt;
   /** 实时结算（正开着游戏）：组队一起打怪只在这时候算 */
   const live = dt <= LIVE_MS;
+  /** 组队经验加成只在线时算：下线几个小时回来补算的那段不加（11-02） */
+  const partyXp = dt <= PARTY_LIVE_MS ? partyXpPct() : 0;
 
   const rand = () => {
     const [r, next] = nextRandom(s.rng);
@@ -905,7 +907,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   };
 
   const addXp = (skill: SkillId, amount: number) => {
-    amount = sageXp(s, Math.round(amount * (1 + boostPct(s, 'xp') + gmPct(s, `xp_${SKILLS[skill].group}`) + gearSum(s, 'xp') + partyXpPct())), amount);
+    amount = sageXp(s, Math.round(amount * (1 + boostPct(s, 'xp') + gmPct(s, `xp_${SKILLS[skill].group}`) + gearSum(s, 'xp') + partyXp)), amount);
     if (tally) tally.xp[skill] = (tally.xp[skill] ?? 0) + amount;
     // 打怪的经验记在这只怪头上，打死时一起写进战斗日志
     if (s.combat && amount > 0) {
@@ -917,7 +919,19 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     sum.xp[skill] = (sum.xp[skill] ?? 0) + amount;
     const after = level(s, skill);
     if (after > before) sum.levelUps.push({ skill, level: after });
+  };  /**
+   * 助攻经验（11-02）：组队一起打的怪死了，自己打过它的话，队友在这只怪上打出的伤害按 ASSIST_XP 也算给你经验。
+   * 打怪本身的经验还是按自己的伤害算；这一份让输出低的队员（新人、坦克）也能跟着涨。
+   */
+  const assistXp = (mine: number, max: number) => {
+    if (mine <= 0) return;
+    const x = Math.max(0, max - mine) * ASSIST_XP;
+    if (x < 1) return;
+    addXp(weaponStyle(s), x);
+    addXp('defence', x / 3);
+    addXp('hitpoints', x / 3);
   };
+
 
   const endTask = (reason: TaskEndReason, item?: string) => {
     const task = s.queue.shift()!;
@@ -1134,6 +1148,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     /** 怪倒下：掉落（组队时自己打过它才有）、记战绩、开始刷新；新刷出来的按当时队友人数定血量 */
     const kill = () => {
       const got: Record<string, number> = {};
+      if (c.crew && c.monsterMax) assistXp(c.pTotal ?? 0, c.monsterMax);
       if (!c.crew || (c.pTotal ?? 0) > 0) {
         for (const d of m.drops) {
           if (d.chance === undefined || rand() < dropChance(s, d.chance)) {
@@ -1316,6 +1331,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     /** 怪倒下：自己打过它才有掉落；记下最后一击给画面用 */
     const kill = (dmg: number, crit: boolean, mine: boolean) => {
       const got: Record<string, number> = {};
+      if (c.crew) assistXp(c.pTotal ?? 0, c.monsterMax ?? 0);
       if ((c.pTotal ?? 0) > 0) {
         for (const d of m.drops) {
           if (d.chance === undefined || rand() < dropChance(s, d.chance)) {
