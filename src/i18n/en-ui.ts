@@ -1464,4 +1464,7 @@ export const EN_UI: Record<string, string> = {
   '{0} 叫你一起打 {1}': '{0} asks you to fight {1} together',
   '一起打': 'Join',
   '算了': 'No thanks',
+  '{0} 叫你一起打 {1}，你在副本里，出来后再去': "{0} called you to fight {1}. You're in a dungeon; go after you leave.",
+  '{0} 叫你一起打 {1}，正在赶过去': '{0} called you to fight {1}. Heading over.',
+  '已叫队友一起打，在线队友会自动赶过来': 'Called your teammates. Online teammates will head over automatically.',
 };

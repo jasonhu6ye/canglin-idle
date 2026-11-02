@@ -160,8 +160,7 @@ export function PartyFrames({ onPick }: { onPick: (playerId: string) => void }) 
   }, [followOn, tick, leader?.x, leader?.y, leader?.action, leader?.dg?.gate, store.state.dungeon?.gate.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!note) return; const t = setTimeout(() => setNote(''), 6000); return () => clearTimeout(t); }, [note]);
   const mates = party?.members.filter((m) => m.playerId !== me?.id) ?? [];
-  // 队友叫我一起打（11-02）：最近 2 分钟、他还在打那只怪，就弹出邀请
-  const [invite, setInvite] = useState<{ id: string; name: string; action: string; x: number; y: number } | null>(null);
+  // 队友叫我一起打（11-02，用户要求自动接受）：最近 2 分钟、他还在打那只怪，就自动赶过去
   useEffect(() => {
     for (const m of mates) {
       const p = online.presenceOf(m.playerId);
@@ -169,22 +168,19 @@ export function PartyFrames({ onPick }: { onPick: (playerId: string) => void }) 
       if (!p || !at || at <= (assistSeen.get(m.playerId) ?? 0)) continue;
       assistSeen.set(m.playerId, at);
       if (Date.now() - at > RALLY_FRESH || !p.action || ACTIONS[p.action]?.kind !== 'combat') continue;
-      setInvite({ id: m.playerId, name: m.name, action: p.action, x: p.x, y: p.y });
+      const node = nodeNear(p.action, p.x, p.y) ?? nodesOfAction(p.action)[0]?.id;
+      if (!node) { setNote(tl('找不到这只怪的位置')); continue; }
+      if (store.state.dungeon) { setNote(tl`${m.name} 叫你一起打 ${actionName(p.action)}，你在副本里，出来后再去`); continue; }
+      const cur = store.state.queue[0];
+      const here = walkPos(store.state);
+      if (!store.state.paused && cur?.action === p.action && Math.hypot(here.x - p.x, here.y - p.y) < 12) continue;
+      if (store.state.home?.inside) store.run('leaveHome');
+      store.run('startAt', p.action, node);
+      setNote(tl`${m.name} 叫你一起打 ${actionName(p.action)}，正在赶过去`);
     }
   });
   const mineAction = store.state.paused ? undefined : store.state.queue[0]?.action;
   const fighting = !!mineAction && ACTIONS[mineAction]?.kind === 'combat' && !store.state.dungeon;
-  const accept = () => {
-    if (!invite) return;
-    const p = online.presenceOf(invite.id);
-    const node = nodeNear(invite.action, p?.x ?? invite.x, p?.y ?? invite.y) ?? nodesOfAction(invite.action)[0]?.id;
-    setInvite(null);
-    if (!node) return setNote(tl('找不到这只怪的位置'));
-    if (store.state.dungeon) return setNote(tl('你在副本里，出来后再去'));
-    if (store.state.home?.inside) store.run('leaveHome');
-    store.run('startAt', invite.action, node);
-    setNote(tl`正在赶去和 ${invite.name} 一起打 ${actionName(invite.action)}`);
-  };
   if (!mates.length) return null;
   return (
     <div className="party-frames">
@@ -211,16 +207,7 @@ export function PartyFrames({ onPick }: { onPick: (playerId: string) => void }) 
       {!lead && party && <button className={`pill pf-rally ${followOn ? 'on' : ''}`} onClick={() => setFollow(!followOn)}>{followOn ? tl('跟随队长中（点击停止）') : tl('跟随队长')}</button>}
       {!lead && party && followOn && status && <div className="pf-status muted">{status}</div>}
       {lead && <button className="pill pf-rally" onClick={() => { sendRally(); setNote(tl('已发出召集，在线队友会自动寻路到你身边')); }}>{tl('召集队友')}</button>}
-      {fighting && <button className="pill pf-rally" onClick={() => { sendAssist(); setNote(tl('已邀请队友一起打，队友点「一起打」就会赶过来')); }}>{tl('叫队友一起打')}</button>}
-      {invite && (
-        <div className="chip pf-invite frame">
-          <span>{tl`${invite.name} 叫你一起打 ${actionName(invite.action)}`}</span>
-          <span className="pf-invite-btns">
-            <button className="primary" onClick={accept}>{tl('一起打')}</button>
-            <button onClick={() => setInvite(null)}>{tl('算了')}</button>
-          </span>
-        </div>
-      )}
+      {fighting && <button className="pill pf-rally" onClick={() => { sendAssist(); setNote(tl('已叫队友一起打，在线队友会自动赶过来')); }}>{tl('叫队友一起打')}</button>}
       {note && <div className="chip pf-note">{note}</div>}
     </div>
   );
