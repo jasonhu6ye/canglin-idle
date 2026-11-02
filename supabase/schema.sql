@@ -2052,3 +2052,77 @@ where g_exchanged < 0 or g_took < 0 or g_day > (now() at time zone 'utc')::date 
 -- ============ 服务器结算记可疑操作（11-02）============
 -- 结算程序（service_role）发现被拒的可疑操作时调用 ac_flag 记进 cheat_flags
 grant execute on function public.ac_flag(uuid, text, boolean, jsonb) to service_role;
+
+-- ============ 自动处罚（11-02）============
+-- 用户要求：抓到作弊直接回档，情节严重直接删档封号。
+-- 只处罚服务器结算时抓到、正常玩家不可能出现的（改走路速度 walk_fast、没组队伪造副本洞口 fake_gate）；
+-- 位置对不上、操作时间往前填这类可能是网络问题的只记录。
+-- 第 1、2 次：回档到 1 小时前的最近一份每日存档，离开的这段时间不补（没有存档就从头开始）；
+-- 30 天内第 3 次（wipe_strikes）：删档 + 封禁。处罚前的存档留在 ac_punish_log，误判时 GM 可以找回。
+create table if not exists public.ac_punish_log (
+  id bigint generated always as identity primary key,
+  player_id uuid not null references public.profiles(id) on delete cascade,
+  action text not null,
+  kind text not null,
+  data jsonb,
+  at timestamptz not null default now()
+);
+alter table public.ac_punish_log enable row level security;
+drop policy if exists "ac_punish_log 管理员看" on public.ac_punish_log;
+create policy "ac_punish_log 管理员看" on public.ac_punish_log for select using (public.is_gm());
+
+create or replace function public.ac_punish(p uuid, p_kind text) returns void
+language plpgsql security definer set search_path = public as $$
+declare strikes int; r record; ep int; cur jsonb; now_ms bigint := (extract(epoch from now()) * 1000)::bigint;
+begin
+  if p_kind not in ('walk_fast', 'fake_gate') or public.ac_conf('auto_punish', 1) <= 0 then return; end if;
+  if exists (select 1 from gm_admins a join profiles x on x.pid = a.pid where x.id = p) then return; end if;
+  select count(*) into strikes from cheat_flags
+    where player_id = p and severe and kind in ('walk_fast', 'fake_gate') and at > now() - interval '30 days';
+  select data into cur from saves where player_id = p;
+  perform set_config('ac.bypass', '1', true);
+  if strikes >= public.ac_conf('wipe_strikes', 3) then
+    insert into ac_punish_log (player_id, action, kind, data) values (p, 'wipe', p_kind, cur);
+    delete from saves where player_id = p;
+    delete from ranks where player_id = p;
+    update profiles set banned = true, ac_hidden = true, save_epoch = save_epoch + 1 where id = p;
+    insert into cheat_flags (player_id, kind, severe, detail) values (p, 'auto_wipe', true, jsonb_build_object('strikes', strikes, 'by', p_kind));
+  else
+    select ss.data, ss.rank into r from snapshot_saves ss join server_snapshots s on s.id = ss.snapshot_id
+      where ss.player_id = p and s.created_at < now() - interval '1 hour' order by s.id desc limit 1;
+    insert into ac_punish_log (player_id, action, kind, data) values (p, 'rollback', p_kind, cur);
+    update profiles set save_epoch = save_epoch + 1, ac_hidden = true where id = p returning save_epoch into ep;
+    if r.data is null then
+      delete from saves where player_id = p;
+      delete from ranks where player_id = p;
+    else
+      update saves set
+        data = (r.data - '_seq') || jsonb_build_object('_epoch', ep, '_device', 'rollback', 'lastTick', now_ms),
+        last_tick = now_ms, updated_at = now()
+        where player_id = p;
+      if r.rank is not null then
+        update ranks set total = (r.rank ->> 'total')::int, combat = (r.rank ->> 'combat')::int,
+          skills = coalesce(r.rank -> 'skills', '{}'), xp = coalesce(r.rank -> 'xp', '{}'), updated_at = now()
+          where player_id = p;
+      end if;
+    end if;
+    insert into cheat_flags (player_id, kind, severe, detail) values (p, 'auto_rollback', false, jsonb_build_object('strikes', strikes, 'by', p_kind, 'snapshot', r.data is not null));
+  end if;
+  perform set_config('ac.bypass', '', true);
+end $$;
+revoke execute on function public.ac_punish(uuid, text) from public, anon, authenticated;
+
+create or replace function public.ac_flag(p uuid, p_kind text, p_severe boolean, p_detail jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if exists (select 1 from cheat_flags where player_id = p and kind = p_kind and (severe or not p_severe) and at > now() - interval '10 minutes') then
+    return;
+  end if;
+  insert into cheat_flags (player_id, kind, severe, detail) values (p, p_kind, p_severe, p_detail);
+  if p_severe and public.ac_conf('auto_hide', 1) > 0 then
+    update profiles set ac_hidden = true where id = p;
+  end if;
+  if p_severe then perform public.ac_punish(p, p_kind); end if;
+end $$;
+revoke execute on function public.ac_flag(uuid, text, boolean, jsonb) from public, anon, authenticated;
+grant execute on function public.ac_flag(uuid, text, boolean, jsonb) to service_role;
