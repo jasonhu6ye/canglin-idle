@@ -5,7 +5,7 @@ import {
   depositLoot, dismissStop, markContrib, syncDungeon, eat, enqueue, enterDungeon, equip, finishRealmChest, fromBelt, leaveDungeon, leaveWork, openContainer,
   openDungeonChest, openGate, placeFoal, redeemCode, removeTask, resumeWork, salvage, sell, setLoc, setSettings, sortBank, startAt,
   newGame, startNow, startRealmChest, startWalk, summonPumpkin, teleport, toBag, toBank, toBelt, toggleMount, unequip, unlockWaystone, useGate,
-  useTownScroll, useWaystone, walkPos, moveSpeed, combatStats, playerAttackMs,
+  useTownScroll, useWaystone, walkPos, moveSpeed, combatStats, playerAttackMs, fieldMob,
 } from './sim';
 import { dungeonFloor } from './dungeon';
 import { flag, guard, maxSpeed } from './guard';
@@ -91,7 +91,14 @@ function coop(s: GameState, t: number, c: unknown): GameState {
   // 服务器：一起打的人数不能超过队伍里的其他人（冰原同打不用组队，最多 4 人）
   const tgt = target(s);
   const most = !G ? 4 : Math.min(4, Math.max(G.party.length - 1, !s.dungeon && tgt && SHARED.has(s.queue[0]?.action ?? '') ? 4 : 0));
-  setFieldCrew(Math.min(most, int(o.crew, 0, 4)));
+  const crewN = Math.min(most, int(o.crew, 0, 4));
+  setFieldCrew(crewN);
+  // 队友刚加入（11-02）：正在打的这只马上算一起打（以前要等下一只刷出来，队友到了十几秒都没伤害）
+  if (crewN > 0 && !s.dungeon && s.combat && !s.combat.crew && s.combat.respawnMs <= 0 && tgt) {
+    const max0 = s.combat.monsterMax ?? tgt.m.hp;
+    const max = fieldMob(tgt.m, crewN).hp;
+    s = { ...s, combat: { ...s.combat, crew: crewN, monsterMax: max, monsterHp: s.combat.monsterHp + (max - max0), pTotal: 0 } };
+  }
   setDgCrew(Math.min(most, int(o.dg, 0, 4)));
   const mates = (Array.isArray(o.mates) ? o.mates : []).slice(0, most).map((x) => int(x, 1, 5000));
   setAggroMates(mates);

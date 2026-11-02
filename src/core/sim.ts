@@ -1217,8 +1217,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       const step = Math.min(budget, c.respawnMs);
       c.respawnMs -= step;
       regen(s, step);
-      // 怪还没刷出来，队友这时打的是上一只，不算
-      if (c.respawnMs <= 0) takeMateHits(fieldKey(task.action));
+      // 怪还没刷出来时队友打的伤害（两边的怪死的时刻差一点）留着，算到刷出来的这一只上
       return step;
     }
     // 队友打的伤害（10-27 野外组队）：记到同一只怪上，队友打死的也算一起打死

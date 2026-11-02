@@ -172,6 +172,9 @@ const SHARED = new Set(NODES.filter((n) => n.timed && (n.timed.kind === 'elite' 
  * 可能差十几格（用户截图：冰原猛犸两人隔着半个屏幕各打各的）。不同刷怪点之间远得多，不会算错
  */
 export const FIELD_CREW = 30;
+/** 队友停手（等刷新、换下一只）多久之内仍算一起打 */
+const MATE_HOLD_MS = 8000;
+const mateFightAt = new Map<string, number>();
 export const sharedFight = (action: string | undefined) => !!action && SHARED.has(action);
 /** 最近一次收到的所有在线玩家（打冰原精英/首领时找一起打的人） */
 let lastAll: Presence[] = [];
@@ -210,9 +213,13 @@ export function updateAggro(s: GameState, x: number, y: number, fighting: boolea
   for (const m of fightMates(action, me.id)) {
     const p = online.presenceOf(m.id);
     if (!p || now - p.at > 60_000) continue;
+    // 野外：队友打死一只、等下一只刷新时不在出手，几秒内仍算一起打（11-02：以前这几秒算单人，
+    // 这时刷出来的那只整只都没有队友伤害，看起来队友莫名其妙断了伤害）
+    const near = !p.dg && p.action === action && Math.abs(p.x - x) + Math.abs(p.y - y) <= FIELD_CREW;
+    if (near && p.anim?.startsWith('fight-')) mateFightAt.set(m.id, now);
     const same = dg
       ? p.dg && p.dg.gate === dg.gate && p.dg.floor === dg.floor && p.dg.idx === dg.idx && p.dg.phase === 'fight'
-      : !p.dg && p.action === action && !!p.anim?.startsWith('fight-') && Math.abs(p.x - x) + Math.abs(p.y - y) <= FIELD_CREW;
+      : near && now - (mateFightAt.get(m.id) ?? 0) < MATE_HOLD_MS;
     if (same) out.push(tieBreak(threatOf(s.equipment), threatOf(p.equip ?? {}), me.id, m.id));
   }
   sendCoop(dg ? 0 : out.length, dgN, out);
@@ -268,7 +275,8 @@ export function takeFieldHits(all: Presence[]): FieldMateHit[] {
     const delta = same ? f.dmg - last.dmg : f.dmg;
     fieldSeen.set(p.playerId, { k: f.k, n: f.n, dmg: same ? Math.max(f.dmg, last.dmg) : f.dmg });
     // 自己这只还在刷新、或者是第一次看到这个队友（以前打的旧账）就不记
-    if (!last || delta <= 0 || !s.combat || s.combat.respawnMs > 0 || !s.combat.crew) continue;
+    // 自己这只在刷新时队友打的伤害不丢：记下来算到刷出来的下一只上（两边的怪死得前后差一点，伤害不会白打）
+    if (!last || delta <= 0 || !s.combat || !s.combat.crew) continue;
     // 不是队友的（冰原同打）：一次最多算怪物血量的 20%，防止改过的客户端一下把大家的首领打没
     const party = st.party?.members.some((q) => q.playerId === p.playerId);
     const cap = party ? Infinity : Math.max(1, (s.combat.monsterMax ?? s.combat.monsterHp) * 0.2);
