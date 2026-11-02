@@ -104,10 +104,11 @@ export interface UniLook { horn: string[]; rainbow: string[][]; hoof: string[]; 
 export interface Look { R: string[]; M: string[]; coat: Coat; saddle: boolean; foal?: boolean; uni?: UniLook }
 
 /** 一条腿：髋 → 膝/跗 → 蹄，后腿粗、前腿细一点；dim 是远侧变暗 */
-function horseLeg(d: Pen, L: Look, hx: number, hy: number, fx: number, fy: number, hind: boolean, dim: number) {
+function horseLeg(d: Pen, L: Look, hx: number, hy: number, fx: number, fy: number, hind: boolean, dim: number, straight = false) {
   const l1 = hind ? 9.5 : 8.5;
   const l2 = hind ? 9.5 : 9;
-  const [kx, ky] = ik(hx, hy, fx, fy, l1, l2, hind ? -1 : 1);
+  // 独角兽站着时腿是直的（用户 11-02）：关节放在髋和蹄的连线上
+  const [kx, ky] = straight ? [hx + (fx - hx) * 0.5, hy + (fy - 1.2 - hy) * 0.5] : ik(hx, hy, fx, fy, l1, l2, hind ? -1 : 1);
   seg(d, hx, hy, kx, ky, hind ? 3.4 : 2.8, 1.7, L.R, dim);
   seg(d, kx, ky, fx, fy - 1.2, 1.5, 1.2, L.R, dim);
   // 栗色马四只白袜子
@@ -293,9 +294,11 @@ function drawSide(back: Pen, front: Pen, L: Look, o: SidePose) {
   const G = HORSE_FEET;
   const foot = (h: [number, number], f: [number, number], hind: boolean): [number, number] =>
     [h[0] + f[0], f[1] === 0 && !o.rear ? G : hind ? G + f[1] : Math.min(G, (o.rear ? h[1] + 14 : G) + f[1])];
+  // 独角兽站着、吃草时踩在地上的腿画直的（用户 11-02）
+  const st = (f: [number, number]) => !!L.uni && o.wind === 0 && !o.rear && f[1] === 0;
   // 后层：远侧的腿
-  horseLeg(back, L, hipF[0], hipF[1], ...foot(hipF, o.feet[0], true), true, 1);
-  horseLeg(back, L, shF[0], shF[1], ...foot(shF, o.feet[2], false), false, 1);
+  horseLeg(back, L, hipF[0], hipF[1], ...foot(hipF, o.feet[0], true), true, 1, st(o.feet[0]));
+  horseLeg(back, L, shF[0], shF[1], ...foot(shF, o.feet[2], false), false, 1, st(o.feet[2]));
   // 尾巴：从屁股甩下来，跑起来往后飘
   const [tx, ty] = rot(15.5, by - 3);
   const sw = o.tail;
@@ -323,8 +326,8 @@ function drawSide(back: Pen, front: Pen, L: Look, o: SidePose) {
   // 金鬃马身上的光泽
   if (L.coat.shine) for (let k = 0; k < 5; k++) dot(front, mx - 8 + k * 4, my - 4.5 + (k % 2), '#fff8e0');
   // 近侧的腿
-  horseLeg(front, L, hipN[0], hipN[1], ...foot(hipN, o.feet[1], true), true, 0);
-  horseLeg(front, L, shN[0], shN[1], ...foot(shN, o.feet[3], false), false, 0);
+  horseLeg(front, L, hipN[0], hipN[1], ...foot(hipN, o.feet[1], true), true, 0, st(o.feet[1]));
+  horseLeg(front, L, shN[0], shN[1], ...foot(shN, o.feet[3], false), false, 0, st(o.feet[3]));
   // 脖子和头
   const [nx, ny] = rot(42, by - 4);
   const hx = nx + o.head[0] * Math.cos(o.pitch) - o.head[1] * Math.sin(o.pitch);
