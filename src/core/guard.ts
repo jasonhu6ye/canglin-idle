@@ -20,6 +20,8 @@ export interface Guard {
   mv?: { pts: { x: number; y: number; r: number; t: number }[]; t: number };
   /** 上次收队友伤害的时刻 */
   coopAt?: number;
+  /** 队友伤害额度（11-02 改成攒着用：一下暴击不会被半秒的额度截掉，最多攒 10 秒） */
+  coopBank?: number;
   /**
    * 上次 coop 指令定下的一起打人数（11-02）：下次结算开头接着用。以前每次结算开头清零，
    * 到这次第一条 coop 之前刷出来的怪就成了单人怪（没有 crew），整只怪看不到队友伤害

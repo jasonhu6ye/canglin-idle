@@ -99,6 +99,13 @@ function coop(s: GameState, t: number, c: unknown): GameState {
     const max = fieldMob(tgt.m, crewN).hp;
     s = { ...s, combat: { ...s.combat, crew: crewN, monsterMax: max, monsterHp: s.combat.monsterHp + (max - max0), pTotal: 0 } };
   }
+  // 队友走了（11-02）：正在打的这只血量跟着降回来，不用一个人磨一只加了血的怪
+  else if (!s.dungeon && s.combat?.crew && crewN < s.combat.crew && s.combat.respawnMs <= 0 && tgt) {
+    const max0 = s.combat.monsterMax ?? fieldMob(tgt.m, s.combat.crew).hp;
+    const max = fieldMob(tgt.m, crewN).hp;
+    const hp = Math.max(1, Math.round(s.combat.monsterHp * (max / max0)));
+    s = { ...s, combat: { ...s.combat, crew: crewN || undefined, monsterMax: crewN ? max : undefined, monsterHp: hp, pTotal: crewN ? s.combat.pTotal : undefined } };
+  }
   setDgCrew(Math.min(most, int(o.dg, 0, 4)));
   const mates = (Array.isArray(o.mates) ? o.mates : []).slice(0, most).map((x) => int(x, 1, 5000));
   setAggroMates(mates);
@@ -115,14 +122,17 @@ function coop(s: GameState, t: number, c: unknown): GameState {
     }
     const st = combatStats(s, tgt.m);
     const dps = (st.playerMaxHit * Math.max(1, st.critMult)) / Math.max(200, playerAttackMs(s));
-    let left = most * Math.max(dps * 8, tgt.m.hp * 0.05 / 1000) * since;
+    const rate = most * Math.max(dps * 8, tgt.m.hp * 0.05 / 1000);
+    // 额度攒着用（11-02）：以前每次只给这半秒的额度，队友一箭暴击就被截掉一截，两边怪物血量越差越多
+    let left = Math.min(rate * 10_000, (G.coopBank ?? rate * 2000) + rate * since);
     for (const h of hits) {
       if (str(h[0], 80) !== tgt.key || left <= 0) continue;
       const d = Math.min(left, num(h[1], 0, 1e9));
       left -= d;
       pushMateHit(tgt.key, d);
     }
-    if (left <= 0 && asked > 3 * most * Math.max(dps * 8, tgt.m.hp * 0.05 / 1000) * Math.max(since, 1000)) flag('fake_hits', false, { dmg: Math.round(asked) });
+    G.coopBank = Math.max(0, left);
+    if (left <= 0 && asked > 3 * rate * 10_000) flag('fake_hits', false, { dmg: Math.round(asked) });
     return { ...s };
   }
   const cap = Math.max(1, (s.combat?.monsterMax ?? s.combat?.monsterHp ?? 1000) * 0.5);

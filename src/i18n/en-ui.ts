@@ -1488,4 +1488,5 @@ export const EN_UI: Record<string, string> = {
   "日志新增 DPS 统计": "DPS meter in the log",
   "日志（按 L 或点左下角展开）多了「DPS」页：显示你每秒打出多少伤害、总伤害和占比；和队友一起打同一只怪时，队友的 DPS 也会列出来，颜色和他飘出来的伤害数字一样。": "The log (press L or open it at the bottom left) has a new DPS tab showing your damage per second, total damage and share. Teammates fighting the same monster are listed too, in the same color as their damage numbers.",
   "可以看「这一场」（隔 15 秒没人出手就算新的一场）或「最近 5 分钟」；正在打怪时还会显示你打这只怪的理论 DPS，方便比较装备。": "View this fight (a new fight starts after 15s without hits) or the last 5 minutes; while fighting it also shows your expected DPS against that monster for comparing gear.",
+  '修复：队友一箭暴击时伤害被截掉一截，两边怪物血量对不上、怪物血量突然「回血」；队友离开后，正在打的这只怪血量会降回一个人打的水平。': 'Fix: a teammate\'s big crit was partly cut off, so the two monster HP bars drifted apart and the monster seemed to "heal"; when a teammate leaves, the monster you are fighting drops back to solo HP.',
 };

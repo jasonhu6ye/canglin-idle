@@ -74,7 +74,7 @@ export function runSync(saved: unknown, cmds: unknown, now: number, ex: SyncExtr
   const keep = ((saved as { _g?: Partial<Guard> } | null)?._g ?? {}) as Partial<Guard>;
   const G: Guard = {
     me: ex.me ?? '', party: ex.party?.length ? ex.party : ex.me ? [ex.me] : [], gates: ex.mateGates ?? [], runs: ex.mateRuns ?? [],
-    mv: keep.mv && Array.isArray(keep.mv.pts) ? keep.mv : undefined, coopAt: Number(keep.coopAt) || undefined,
+    mv: keep.mv && Array.isArray(keep.mv.pts) ? keep.mv : undefined, coopAt: Number(keep.coopAt) || undefined, coopBank: Number(keep.coopBank) || undefined,
   };
   setGuard(G);
   // 上次结算末尾还在一起打（10 秒内）：接着按那时的人数算，等这次的 coop 指令再更新
@@ -95,7 +95,7 @@ export function runSync(saved: unknown, cmds: unknown, now: number, ex: SyncExtr
     // 可疑装备（11-02）：这次新记下的传说以上装备，按概率/来源/数量挑出来，交给管理员看
     const gear = p0 ? gearSuspects(out.state.prov, newEvents(out.state.prov, seq0)) : [];
     if (gear.length) out.gear = gear;
-    (out.state as GameState & { _g?: Partial<Guard> })._g = { ...(G.mv && { mv: G.mv }), ...(G.coopAt && { coopAt: G.coopAt }), ...(G.coop && { coop: G.coop }) };
+    (out.state as GameState & { _g?: Partial<Guard> })._g = { ...(G.mv && { mv: G.mv }), ...(G.coopAt && { coopAt: G.coopAt }), ...(G.coopBank && { coopBank: Math.round(G.coopBank) }), ...(G.coop && { coop: G.coop }) };
     return { ...out, flags: G.flags ?? [] };
   } finally {
     resetShared();
