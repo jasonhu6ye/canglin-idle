@@ -1122,6 +1122,10 @@ h2.dg-blue { color: #6ab4ff; }
 .mon-rows .mon-text small { overflow: hidden; text-overflow: ellipsis; }
 .mon-rows .mon-go { padding: 4px 8px; flex: 0 0 auto; }
 .mon-rows .rank-elite { color: #9ad0e0; }
+.mon-yield { color: var(--muted, #a89a80); }
+.mon-yield.kph .k, .mon-yield.xp .x, .mon-yield.coins .c { color: #e8b84a; font-weight: bold; }
+.mon-best { color: #7ad860; font-weight: bold; }
+.mon-filter .pill.rec { border-color: #8a6a30; }
 .mon-rows .rank-boss { color: #e8883a; }
 
 /* 手机：离线队友只占一行；地图矮（浏览器里玩）时左边浮层整体收紧，两摞放不下时左上那摞可滑动 */

@@ -730,6 +730,38 @@ export function combatEstimate(s: GameState, m: MonsterDef) {
   return { killMs, taken, rating, perHour, swing, dps: (avg / swing) * 1000 };
 }
 
+/**
+ * 打怪收益预估（11-02，怪物推荐用）：按现在的装备、等级、增益算每小时击杀、经验、收益。
+ * 经验：打出多少伤害就有多少战斗经验，防御、生命各再拿三分之一；收益：掉落期望 × 卖店价（金币按数量）。
+ * 自然回血 1 点/秒（GM 回血增益另算）；回不过来的部分要靠吃东西，记成每小时要补多少血。
+ */
+export function monsterYield(s: GameState, m: MonsterDef) {
+  const e = combatEstimate(s, m);
+  const ok = e.killMs !== Infinity;
+  const kph = ok ? e.perHour : 0;
+  const mult = 1 + boostPct(s, 'xp') + gmPct(s, 'xp_combat') + gearSum(s, 'xp') + partyXpPct();
+  const xp = kph * m.hp * mult;
+  let coins = 0;
+  for (const d of m.drops) {
+    const p = d.chance === undefined ? 1 : dropChance(s, d.chance);
+    coins += p * (d.item === 'coins' ? coinQty(s, d.item, d.qty) : d.qty * (ITEMS[d.item]?.value ?? 0));
+  }
+  const cycle = e.killMs + e.swing + (m.respawnMs ?? RESPAWN_MS);
+  const regenPerKill = (cycle / REGEN_MS) * (1 + gmPct(s, 'regen'));
+  const foodHp = ok ? Math.max(0, e.taken - regenPerKill) * kph : 0;
+  const hp = maxHp(s);
+  /** 一只打下来掉的血超过八成血量就算有阵亡风险，推荐里不放 */
+  const safe = ok && e.taken < hp * 0.8;
+  // 收益扣掉吃的东西：按最便宜的食物每点血多少钱算
+  return { ...e, kph, xp, xpTotal: xp * (5 / 3), coins: Math.max(0, coins * kph - foodHp * FOOD_COIN_PER_HP), foodHp, safe };
+}
+/** 最便宜的食物每回 1 点血值多少钱（卖店价） */
+const FOOD_COIN_PER_HP = (() => {
+  let best = Infinity;
+  for (const it of Object.values(ITEMS)) if (it.heals && it.heals > 0 && it.value > 0) best = Math.min(best, it.value / it.heals);
+  return best === Infinity ? 0 : best;
+})();
+
 /** 战斗日志最多留多少条 */
 export const LOG_CAP = 300;
 

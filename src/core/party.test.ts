@@ -55,3 +55,18 @@ describe('组队经验（11-02）', () => {
     expect(s.xp.melee).toBe(xp0);
   });
 });
+
+describe('打怪收益预估（11-02）', () => {
+  it('每小时击杀、经验、收益都算得出来；打不动的不安全', async () => {
+    const { monsterYield } = await import('./sim');
+    const { MONSTERS } = await import('./data');
+    const s = newGame(T0, 1);
+    const rabbit = monsterYield(s, MONSTERS.rabbit);
+    expect(rabbit.kph).toBeGreaterThan(50);
+    expect(rabbit.xp).toBeCloseTo(rabbit.kph * MONSTERS.rabbit.hp, 0);
+    expect(rabbit.coins).toBeGreaterThan(0);
+    expect(rabbit.safe).toBe(true);
+    const big = Object.values(MONSTERS).filter((m) => !m.world).sort((a, b) => b.level - a.level)[0];
+    expect(monsterYield(s, big).safe).toBe(false);
+  });
+});
