@@ -242,6 +242,31 @@ describe('改过的客户端乱传参数', () => {
     expect(keys(r3.state)).toBe(5);
     expect(r3.state.mail?.filter((m) => m.kind === 'gift').length).toBe(1);
   });
+
+  it('GM 邮件、兑换码奖励打标记，领取后记进 gmGot；系统礼物不记；老邮件补标记只补一次', () => {
+    const mails = [
+      { id: 'a', title: 'GM', body: '', items: [{ item: 'coins', qty: 1000 }, { item: 'dkey_g4', qty: 2 }] },
+      { id: 'b', title: 'code', body: '', items: [{ item: 'dkey_g4', qty: 1 }], code: true },
+    ];
+    const r1 = runSync(null, [], t0, { ...EX, mails }, 'dev');
+    expect(r1.state.mail?.filter((m) => m.gm).map((m) => m.gm).sort()).toEqual(['code', 'gm']);
+    expect(r1.state.mail?.find((m) => m.kind === 'gift')?.gm).toBeUndefined();
+    const r2 = runSync(r1.state, [{ n: 'claimMail', a: ['all'], t: t0 + 500, q: 1 }], t0 + 1000, EX, 'dev');
+    expect(r2.state.gmGot).toEqual({ coins: 1000, dkey_g4: 3 });
+    // 存档读写一遍还在，再同步不重复记
+    const r3 = runSync(JSON.parse(JSON.stringify(r2.state)), [], t0 + 2000, EX, 'dev');
+    expect(r3.state.gmGot).toEqual({ coins: 1000, dkey_g4: 3 });
+    // 标记上线前的老存档：已领的 custom 邮件补进账，没领的打上标记
+    const old = JSON.parse(JSON.stringify(r1.state)) as GameState;
+    delete old.gmMark;
+    old.mail = old.mail!.map((m) => ({ ...m, gm: undefined, claimed: m.title === 'GM' || undefined }));
+    const r4 = runSync(old, [], t0 + 1000, EX, 'dev');
+    expect(r4.state.gmGot).toEqual({ coins: 1000, dkey_g4: 2 });
+    // 老的兑换码奖励也是 custom 邮件，分不出来，记 gm（服务器 gm_grants 分得清）
+    expect(r4.state.mail?.find((m) => m.title === 'code')?.gm).toBe('gm');
+    const r5 = runSync(r4.state, [{ n: 'claimMail', a: ['all'], t: t0 + 1500, q: 1 }], t0 + 2000, EX, 'dev');
+    expect(r5.state.gmGot).toEqual({ coins: 1000, dkey_g4: 3 });
+  });
 });
 
 describe('开箱随机数（11-02）', () => {

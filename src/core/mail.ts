@@ -26,7 +26,7 @@ export const dayKey = (now: number) => {
 };
 
 /** 往存档里塞一封邮件（直接改 s） */
-export function sendMail(s: GameState, kind: MailKind, items: ItemStack[], at: number, extra: Partial<Pick<Mail, 'arg' | 'expires' | 'title' | 'body'>> = {}) {
+export function sendMail(s: GameState, kind: MailKind, items: ItemStack[], at: number, extra: Partial<Pick<Mail, 'arg' | 'expires' | 'title' | 'body' | 'gm'>> = {}) {
   s.mailSeq = (s.mailSeq ?? 0) + 1;
   s.mail = [{ id: s.mailSeq, kind, at, items: items.filter((i) => i.qty > 0), ...extra }, ...(s.mail ?? [])];
   // 太多了先删最旧的已领取邮件，再删最旧的
@@ -102,6 +102,7 @@ export function claimMail(prev: GameState, id: number | 'all', room: RoomFn): [G
       if (qty > n) s.bank[item] = (s.bank[item] ?? 0) + qty - n;
       s.seen[item] = 1;
     }
+    if (m.gm) addGmGot(s, m.items);
     m.claimed = true;
     m.read = true;
   }
@@ -122,10 +123,28 @@ export function clearMail(prev: GameState): GameState {
 
 export const unreadMail = (s: GameState) => (s.mail ?? []).filter((m) => !m.read || (!m.claimed && m.items.length > 0)).length;
 
+/** 记账：从带标记的邮件领到的东西（直接改 s） */
+function addGmGot(s: GameState, items: ItemStack[]) {
+  const g = { ...(s.gmGot ?? {}) };
+  for (const { item, qty } of items) if (ITEMS[item] && qty > 0) g[item] = (g[item] ?? 0) + qty;
+  s.gmGot = g;
+}
+
+/**
+ * 老邮件补标记（11-02，只做一次）：管理员邮件（custom）记 gm，兑换码奖励记 code；已经领过的附件补进 gmGot。
+ * 已经被玩家删掉的邮件这里补不回来，以服务器 gm_grants 表为准。
+ */
+export function markOldGmMail(s: GameState): GameState {
+  if (s.gmMark) return s;
+  const out: GameState = { ...s, gmMark: 1, mail: (s.mail ?? []).map((m) => (m.gm || (m.kind !== 'custom' && m.kind !== 'redeem') ? m : { ...m, gm: m.kind === 'custom' ? 'gm' : 'code' })) };
+  for (const m of out.mail!) if (m.gm && m.claimed && !s.mail!.find((x) => x.id === m.id)?.gm) addGmGot(out, m.items);
+  return out;
+}
+
 /** 读档：只留格式对的邮件、认识的物品 */
 export function migrateMail(raw: unknown): Mail[] {
   if (!Array.isArray(raw)) return [];
   return raw.filter((m): m is Mail => !!m && typeof m === 'object' && Number.isFinite(m.id) && typeof m.kind === 'string' && Number.isFinite(m.at) && Array.isArray(m.items))
-    .map((m) => ({ ...m, items: m.items.filter((i) => i && ITEMS[i.item] && Number.isFinite(i.qty) && i.qty > 0).map((i) => ({ item: i.item, qty: Math.floor(i.qty) })) }))
+    .map((m) => ({ ...m, gm: m.gm === 'gm' || m.gm === 'code' ? m.gm : undefined, items: m.items.filter((i) => i && ITEMS[i.item] && Number.isFinite(i.qty) && i.qty > 0).map((i) => ({ item: i.item, qty: Math.floor(i.qty) })) }))
     .slice(0, MAIL_CAP);
 }

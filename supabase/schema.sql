@@ -3087,3 +3087,44 @@ begin
     limit 5;
 end $$;
 grant execute on function public.gm_gear(text) to authenticated;
+
+-- ============ 内测发放记账（11-02）============
+-- 公测要回收内测期间 GM 邮件和兑换码发的东西：每封 gm_mail 发出 / 领取 / 没领就删掉都记进 gm_grants。
+-- gm_mail 的记录可以被删（GM 面板「删除 / 清空已收到」），这张表不跟着删。src: gm = 管理员发，code = 兑换码奖励。
+create table if not exists public.gm_grants (
+  mail_id uuid primary key,
+  target_pid bigint not null,
+  src text not null default 'gm',
+  title text not null default '',
+  items jsonb not null default '[]'::jsonb,
+  created_by uuid,
+  created_at timestamptz not null default now(),
+  claimed_at timestamptz,
+  revoked_at timestamptz
+);
+create index if not exists gm_grants_pid on public.gm_grants (target_pid);
+alter table public.gm_grants enable row level security;
+drop policy if exists "gm_grants 管理员看" on public.gm_grants;
+create policy "gm_grants 管理员看" on public.gm_grants for select using (public.is_gm());
+
+create or replace function public.gm_grants_log() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'DELETE' then
+    -- 没领就删 = 撤回，没发出去；领过的删记录不影响账
+    update gm_grants set revoked_at = now() where mail_id = old.id and claimed_at is null;
+    return old;
+  end if;
+  insert into gm_grants (mail_id, target_pid, src, title, items, created_by, created_at, claimed_at)
+    values (new.id, new.target_pid, case when new.created_by is null then 'code' else 'gm' end, new.title, new.items, new.created_by, new.created_at, new.claimed_at)
+    on conflict (mail_id) do update set claimed_at = coalesce(gm_grants.claimed_at, excluded.claimed_at);
+  return new;
+end $$;
+drop trigger if exists gm_grants_log on public.gm_mail;
+create trigger gm_grants_log after insert or update of claimed_at or delete on public.gm_mail
+  for each row execute function public.gm_grants_log();
+
+-- 补记现在还在的 gm_mail（已经删掉的找不回来，存档里的 gmGot 还记着）
+insert into public.gm_grants (mail_id, target_pid, src, title, items, created_by, created_at, claimed_at)
+  select id, target_pid, case when created_by is null then 'code' else 'gm' end, title, items, created_by, created_at, claimed_at from public.gm_mail
+  on conflict (mail_id) do nothing;

@@ -2,7 +2,7 @@ import type { GameState, GmBuff, ItemStack, SkillId } from '../core/types';
 import { advance, combatLevel, level, migrate, newGame, setSettings } from '../core/sim';
 import { setGmBuffs } from '../core/gm';
 import { setGuildLv } from '../core/guild';
-import { sendMail, stepMail } from '../core/mail';
+import { markOldGmMail, sendMail, stepMail } from '../core/mail';
 import { ITEMS } from '../core/data';
 import { applyCmd, saltRng, SECRET_RNG, type Cmd } from '../core/commands';
 import { clearMateHits, setAggroMates, setDgCrew, setFieldCrew } from '../core/aggro';
@@ -46,7 +46,7 @@ export interface SyncExtras {
   guildLv: number;
   guildTech?: unknown;
   /** 还没领的 GM 赠送邮件 */
-  mails: { id: string; title: string; body: string; items: ItemStack[] }[];
+  mails: { id: string; title: string; body: string; items: ItemStack[]; /** 兑换码换来的（不是管理员手发的） */ code?: boolean }[];
   /** 建角色时选的外观（新档用） */
   outfit?: string;
   /** 服务器回档版本 */
@@ -139,6 +139,7 @@ function syncInner(saved: unknown, cmds: unknown, now: number, ex: SyncExtras, d
       provSettleMats(s, src, mBefore, mTot);
     }
   };
+  s = markOldGmMail(s);
   s = setGmBuffs(s, ex.gmBuffs, s.lastTick);
   s = setGuildLv(s, ex.guildLv, ex.guildTech);
   // 每日礼物、全服赠礼、过期清理：由服务器发（玩家领邮件的指令要能找到这封）
@@ -172,7 +173,7 @@ function syncInner(saved: unknown, cmds: unknown, now: number, ex: SyncExtras, d
   if (ex.mails.length) {
     const next: GameState = JSON.parse(JSON.stringify(s));
     for (const m of ex.mails) {
-      sendMail(next, 'custom', m.items.filter((i) => ITEMS[i.item] && i.qty > 0), now, { title: m.title, body: m.body });
+      sendMail(next, 'custom', m.items.filter((i) => ITEMS[i.item] && i.qty > 0), now, { title: m.title, body: m.body, gm: m.code ? 'code' : 'gm' });
       mailIds.push(m.id);
     }
     s = next;

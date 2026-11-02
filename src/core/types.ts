@@ -139,6 +139,8 @@ export interface Mail {
   /** custom 邮件（管理员发的）自带标题和正文 */
   title?: string;
   body?: string;
+  /** 内测发放标记（11-02）：gm = 管理员发的，code = 兑换码奖励。领取后附件计入 GameState.gmGot */
+  gm?: 'gm' | 'code';
 }
 
 export interface ItemStack {
@@ -376,6 +378,10 @@ export interface GameState {
   mailKeys?: string[];
   /** 邮件编号计数 */
   mailSeq?: number;
+  /** 从带 gm 标记的邮件领到的物品累计（11-02 内测记账，物品 id → 数量） */
+  gmGot?: Record<string, number>;
+  /** 老邮件补标记做过了 */
+  gmMark?: 1;
   /** 畜牧站的栏位：每栏一匹小马崽，start 放进去的时间，ms 要长多久（放进去时按养殖等级算好） */
   ranch?: { pens: ({ start: number; ms: number } | null)[] };
   /** 永冬冰原的限时宝箱（11-01）：正在开的箱子，和每个箱子开过的轮次（每人每轮一次） */
