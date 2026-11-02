@@ -1,14 +1,14 @@
 import Phaser from 'phaser';
 import { NODES, WALK_TILES_PER_SEC } from '../core/data';
 import {
-  buildDef, canPlace, collectHome, homeCan, homePlotCells, produceReady, homePlots, HOME_PORTAL, HOME_SPAWN, homeSize, ISLAND, ISLAND_C, islandGround, leaveHome, placeBuild, removeAt, thingGrid,
-  canPet, homeOrders, homePets, petGift, petPet, PET_REP, PETS,
+  buildDef, canPlace, homeCan, homePlotCells, produceReady, homePlots, HOME_PORTAL, HOME_SPAWN, homeSize, ISLAND, islandGround, thingGrid,
+  canPet, homeOrders, homePets, petGift, PET_REP, PETS,
 } from '../core/home';
 import { dayKey } from '../core/mail';
 import { paintBang, paintHeart, paintPetSheet, PET_FRAMES, PET_SIZE } from './petArt';
 import { paintBeam, paintBee, paintButterfly, paintChicken, paintJumpFish, paintRipple, paintSmoke } from './lifeArt';
 import { CROP_DEFS, CROPS, ITEMS } from '../core/data';
-import { fieldOfPlot, pickSeed, plotGrowth, plotPhase, tendPlot } from '../core/farm';
+import { fieldOfPlot, pickSeed, plotGrowth, plotPhase } from '../core/farm';
 import { cropTex, glintTex, soilTex } from './farmArt';
 import type { HomeThing } from '../core/types';
 import { gameHour } from '../core/weather';
@@ -381,7 +381,7 @@ export class IslandScene extends Phaser.Scene {
       this.game.events.emit(HOME_CLICK, field);
       return;
     }
-    store.farm((g, t) => tendPlot(g, id, crop, t));
+    store.run('tendPlot', id, crop);
     if (store.state === st) { this.game.events.emit(HOME_CLICK, field); return; }
     this.growCells();
     if (ph === 'growing') this.game.events.emit(HOME_MSG, tl('浇水'));
@@ -491,7 +491,7 @@ export class IslandScene extends Phaser.Scene {
     this.painted.add(k(x, y));
     if (t.kind === 'demolish') {
       const before = store.state;
-      store.dispatch((g) => removeAt(g, x, y));
+      store.run('removeAt', x, y);
       if (store.state !== before) this.redraw(true);
       return;
     }
@@ -504,7 +504,7 @@ export class IslandScene extends Phaser.Scene {
       if (this.painted.size === 1) this.game.events.emit(HOME_MSG, why);
       return;
     }
-    store.dispatch((g) => placeBuild(g, t.id, x, y));
+    store.run('placeBuild', t.id, x, y);
     this.redraw(true);
   }
   private dragTool() {
@@ -588,13 +588,13 @@ export class IslandScene extends Phaser.Scene {
         return;
       }
       if (over.some((o) => o.getData('portal'))) {
-        store.dispatch(leaveHome);
+        store.run('leaveHome');
         return;
       }
       const spot = !this.tool && over.map((o) => o.getData('collect') as { x: number; y: number } | undefined).find(Boolean);
       if (spot) {
         let got: Record<string, number> = {};
-        store.dispatch((g) => { const r = collectHome(g, Date.now(), spot); got = r.got; return r.state; });
+        got = ((store.run('collectHome', spot) as { got?: Record<string, number> } | undefined)?.got) ?? {};
         if (Object.keys(got).length) {
           this.game.events.emit(HOME_MSG, Object.entries(got).map(([id, n]) => tl`收取 ${ITEMS[id]?.name ?? id} ×${n}`).join(tl('、')));
           this.growCells();
@@ -955,7 +955,7 @@ export class IslandScene extends Phaser.Scene {
     const now = Date.now();
     if (canPet(store.state, kind, now)) {
       const gift = petGift(kind, (store.state.home?.love?.[kind] ?? 0) + 1, dayKey(now));
-      store.dispatch((g) => petPet(g, kind, now));
+      store.run('petPet', kind);
       const what = gift && (gift.item === 'coins' ? tl`${gift.qty} 金币` : tl`${ITEMS[gift.item]?.name ?? gift.item} ×${gift.qty}`);
       this.game.events.emit(HOME_MSG, what ? tl`摸了摸${PETS[kind].name}，岛屿声望 +${PET_REP}。它叼来了${what}！` : tl`摸了摸${PETS[kind].name}，岛屿声望 +${PET_REP}`);
       if (gift) this.giftPop(p.spr.x, p.spr.y - PET_SIZE[kind].h - 4, gift.item);

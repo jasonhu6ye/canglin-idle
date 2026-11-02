@@ -1,5 +1,5 @@
 import { setPartySize } from '../core/party';
-import { fieldKey, pushMateHit, setAggroMates, setDgCrew, setFieldCrew, threatOf } from '../core/aggro';
+import { fieldKey, threatOf } from '../core/aggro';
 import type { GameState } from '../core/types';
 import { useEffect, useState } from 'react';
 import { worldResetAt } from './bots';
@@ -7,7 +7,7 @@ import { online, type DungeonPresence, type Presence, type ChatChannel, type Cha
 import { ACTIONS, ITEMS, NODES } from '../core/data';
 import { store } from '../store';
 import { setGmBuffs } from '../core/gm';
-import { sendMail } from '../core/mail';
+import { pushNow } from './sync';
 
 /**
  * 聊天和好友（10-25 用户要求：世界 / 公会 / 队伍 / 私聊，玩家数字 ID 加好友）。
@@ -104,17 +104,9 @@ export async function pullGm() {
     const list = await online.myGmBuffs();
     store.dispatch((s) => setGmBuffs(s, list));
   } catch { /* 连不上就下次再拉，存档里的照旧生效 */ }
-  // GM 赠送物品（10-26）：服务器上领取成功一次才放进邮箱，换设备、重复拉也不会多给
+  // GM 赠送物品（10-26）：11-02 起由服务器同步时放进邮箱（只放一次），这里看到有新的就马上同步一次
   try {
-    for (const m of await online.myGmMail()) {
-      if (!(await online.claimGmMail(m.id))) continue;
-      const items = m.items.filter((i) => ITEMS[i.item]);
-      store.dispatch((s) => {
-        const next: GameState = JSON.parse(JSON.stringify(s));
-        sendMail(next, 'custom', items, Date.now(), { title: m.title, body: m.body });
-        return next;
-      });
-    }
+    if ((await online.myGmMail()).length) void pushNow();
   } catch { /* 下次再拉 */ }
 }
 
@@ -143,25 +135,11 @@ export async function send(text: string) {
   await online.sendChat(st.channel, text, st.channel === 'private' ? st.to ?? undefined : undefined);
 }
 
-/** 成交了：先在服务器上登记领取（只成功一次），再从仓库扣掉给出去的、加上收到的 */
+/** 成交了：东西已经由服务器在双方存档里换好（11-02），这里登记一下、同步拿回最新存档 */
 async function claim(t: Trade) {
   if (!(await online.claimTrade(t.id))) return;
   t.claimed = true;
-  store.dispatch((g) => {
-    const bank = { ...g.bank };
-    const bag = { ...g.bag };
-    // 放出去的东西先从仓库扣，不够的从背包扣（10-26 交易也能放背包里的东西）
-    for (const [id, n] of Object.entries(t.mine)) {
-      if (!ITEMS[id]) continue;
-      const fromBank = Math.min(n, bank[id] ?? 0);
-      bank[id] = (bank[id] ?? 0) - fromBank;
-      bag[id] = Math.max(0, (bag[id] ?? 0) - (n - fromBank));
-    }
-    for (const [id, n] of Object.entries(t.theirs)) if (ITEMS[id]) bank[id] = (bank[id] ?? 0) + n;
-    for (const id of Object.keys(bank)) if (!bank[id]) delete bank[id];
-    for (const id of Object.keys(bag)) if (!bag[id]) delete bag[id];
-    return { ...g, bank, bag, seen: { ...g.seen, ...Object.fromEntries(Object.keys(t.theirs).filter((id) => ITEMS[id]).map((id) => [id, 1 as const])) } };
-  });
+  void pushNow();
   emit();
 }
 
@@ -206,15 +184,12 @@ export function updateAggro(s: GameState, x: number, y: number, fighting: boolea
   const inFight = dg ? dg.phase === 'fight' : fighting && !!action && ACTIONS[action]?.kind === 'combat';
   // 同一个洞口里在线的队友（10-26）：怪物血量按人数加厚
   const run = s.dungeon;
-  setDgCrew(me && run?.members ? run.members.filter((m) => {
+  const dgN = me && run?.members ? run.members.filter((m) => {
     if (m.id === me.id) return false;
     const p = online.presenceOf(m.id);
     return !!p && now - p.at < 30_000 && p.dg?.gate === run.gate.id;
-  }).length : 0);
-  if (!me || (!st.party && !sharedFight(action)) || !inFight) {
-    setFieldCrew(0);
-    return setAggroMates([]);
-  }
+  }).length : 0;
+  if (!me || (!st.party && !sharedFight(action)) || !inFight) return sendCoop(0, dgN, []);
   const out: number[] = [];
   for (const m of fightMates(action, me.id)) {
     const p = online.presenceOf(m.id);
@@ -224,8 +199,29 @@ export function updateAggro(s: GameState, x: number, y: number, fighting: boolea
       : !p.dg && p.action === action && !!p.anim?.startsWith('fight-') && Math.abs(p.x - x) + Math.abs(p.y - y) <= 10;
     if (same) out.push(threatOf(p.equip ?? {}));
   }
-  setAggroMates(out);
-  setFieldCrew(dg ? 0 : out.length);
+  sendCoop(dg ? 0 : out.length, dgN, out);
+}
+
+/**
+ * 组队同打的人数、嘲讽、队友伤害（11-02 服务器结算）：作为指令执行，服务器结算时也按同样的时刻算上。
+ * 有变化、有新伤害就发；一直在一起打的话每 4 秒补一条（服务器只在实时结算时算组队）
+ */
+let coopLast = '';
+let coopAt = 0;
+let coopHits: [string, number][] = [];
+export function coopHit(key: string, dmg: number) {
+  if (dmg > 0) coopHits.push([key, dmg]);
+}
+function sendCoop(crew: number, dg: number, mates: number[]) {
+  const key = JSON.stringify([crew, dg, mates]);
+  const now = Date.now();
+  const busy = crew > 0 || dg > 0 || mates.length > 0;
+  if (key === coopLast && !coopHits.length && !(busy && now - coopAt > 4000)) return;
+  coopLast = key;
+  coopAt = now;
+  const hits = coopHits;
+  coopHits = [];
+  store.run('coop', { crew, dg, mates, hits });
 }
 
 /** 每个队友上次报的野外伤害：哪个点、第几只、累计多少 */
@@ -261,7 +257,7 @@ export function takeFieldHits(all: Presence[]): FieldMateHit[] {
     const party = st.party?.members.some((q) => q.playerId === p.playerId);
     const cap = party ? Infinity : Math.max(1, (s.combat.monsterMax ?? s.combat.monsterHp) * 0.2);
     const dmg = Math.min(delta, cap);
-    pushMateHit(fieldKey(action), dmg);
+    coopHit(fieldKey(action), dmg);
     out.push({ id: p.playerId, name: m.name, i: m.i, dmg, crit: !!f.crit });
   }
   return out;

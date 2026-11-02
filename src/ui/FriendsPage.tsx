@@ -268,7 +268,7 @@ export function TradeView({ s, t, name }: { s: GameState; t: Trade; name: string
       <div className="go">
         {t.myOk
           ? <button disabled={act.busy} onClick={() => act.run(() => online.confirmTrade(t.id, false))}>{tl('取消确认')}</button>
-          : <button className="primary" disabled={act.busy || short.length > 0} onClick={() => act.run(async () => { if ((await online.confirmTrade(t.id, true)) === 'done') void pushNow(); })}>{tl('确认交易')}</button>}
+          : <button className="primary" disabled={act.busy || short.length > 0} onClick={() => act.run(async () => { await pushNow(); if ((await online.confirmTrade(t.id, true)) === 'done') void pushNow(); })}>{tl('确认交易')}</button>}
         <button disabled={act.busy} onClick={() => confirm(tl('取消这笔交易？')) && void act.run(() => online.cancelTrade(t.id))}>{tl('取消交易')}</button>
       </div>
       {act.err && <p className="err">{act.err}</p>}

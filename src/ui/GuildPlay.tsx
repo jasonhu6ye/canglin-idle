@@ -10,6 +10,7 @@ import {
 } from '../core/guild';
 import { online, type Guild, type GuildBankLog, type GuildDay, type GuildEvent, type GuildMember, type GuildRole, type GuildTask, type GuildVault } from '../net';
 import { store } from '../store';
+import { pushNow } from '../net/sync';
 import { Icon } from './icons';
 import { fmtNum } from './format';
 import { useSticky } from './sticky';
@@ -32,28 +33,13 @@ const own = (s: GameState, id: string) => (s.bank[id] ?? 0) + (s.bag[id] ?? 0);
 const ownList = (s: GameState) => sortItemIds([...new Set([...Object.keys(s.bank), ...Object.keys(s.bag)])]
   .filter((id) => id !== 'coins' && ITEMS[id] && own(s, id) > 0));
 
-/** 从自己仓库扣，不够的从背包扣（调用前先确认够） */
-function take(id: string, n: number) {
-  store.dispatch((g) => {
-    const bank = { ...g.bank }, bag = { ...g.bag };
-    const a = Math.min(n, bank[id] ?? 0);
-    bank[id] = (bank[id] ?? 0) - a;
-    bag[id] = Math.max(0, (bag[id] ?? 0) - (n - a));
-    if (!bank[id]) delete bank[id];
-    if (!bag[id]) delete bag[id];
-    return { ...g, bank, bag };
-  });
-}
-function give(id: string, n: number) {
-  if (n <= 0 || !ITEMS[id]) return;
-  store.dispatch((g) => ({ ...g, bank: { ...g.bank, [id]: (g.bank[id] ?? 0) + n }, seen: { ...g.seen, [id]: 1 } }));
-}
-/** 本地先扣、服务器收下多少算多少，剩下的退回；出错全退 */
-async function hand(id: string, n: number, send: () => Promise<number>) {
-  take(id, n);
-  let got = 0;
-  try { got = await send(); } finally { give(id, n - Math.max(0, Math.min(n, got))); }
-  return got;
+/**
+ * 动物品的公会操作（11-02 服务器结算）：东西由数据库直接从服务器存档里扣 / 加。
+ * 先和服务器同步一次（刚挖到的东西服务器上也要有），做完再同步一次拿回最新存档
+ */
+async function hand<T>(send: () => Promise<T>): Promise<T> {
+  await pushNow();
+  try { return await send(); } finally { await pushNow(); }
 }
 /** 问数量（只有 1 个就不问） */
 function ask(max: number) {
@@ -126,7 +112,7 @@ function Info({ s, guild, act, reload, day }: Ctx) {
     // 今天剩下的额度最多能换几个
     const cap = Math.min(own(s, id), Math.floor((left * VALUE_PER_CONTRIB) / Math.max(1, value)));
     const n = ask(cap);
-    if (n > 0 && exchangeGain(value, n) > 0) void act.run(async () => { await hand(id, n, () => online.exchangeItems(id, n)); await reload(); });
+    if (n > 0 && exchangeGain(value, n) > 0) void act.run(async () => { await hand(() => online.exchangeItems(id, n)); await reload(); });
   };
   const lv = guild.level;
   return (
@@ -176,7 +162,7 @@ function Tasks({ s, guild, act, reload }: Ctx) {
   const submit = (t: GuildTask) => {
     const n = Math.min(own(s, t.target), t.need - t.have);
     if (n <= 0) return;
-    void act.run(async () => { await hand(t.target, n, () => online.contribute(t.id, n)); await load(); await reload(); });
+    void act.run(async () => { await hand(() => online.contribute(t.id, n)); await load(); await reload(); });
   };
   const hours = Math.ceil((Date.parse(utcDay()) + 86_400_000 - Date.now()) / 3_600_000);
   return (
@@ -243,11 +229,11 @@ function Bank({ s, guild, members, me, role, act, reload, day }: Ctx) {
 
   const put = (id: string) => {
     const n = ask(own(s, id));
-    if (n > 0) void act.run(async () => { await hand(id, n, async () => { await online.guildDeposit(id, n, vault); return n; }); await load(); });
+    if (n > 0) void act.run(async () => { await hand(() => online.guildDeposit(id, n, vault)); await load(); });
   };
   const pull = (id: string, have: number) => {
     const n = ask(have);
-    if (n > 0) void act.run(async () => { give(id, await online.guildWithdraw(id, n, vault)); await load(); });
+    if (n > 0) void act.run(async () => { await hand(() => online.guildWithdraw(id, n, vault)); await load(); });
   };
   const tidy = () => items && void act.run(async () => { await online.sortGuildBank(vault, sortItemIds(items.map(([id]) => id))); await load(); });
   const openNew = () => {
@@ -382,8 +368,7 @@ function Shop({ s, guild, me, act, reload }: Ctx) {
     const max = Math.min(x.daily - (bought[x.item] ?? 0), Math.floor(avail / x.price));
     const n = ask(max);
     if (n > 0) void act.run(async () => {
-      const got = await online.buyGuildItem(x.item, n);
-      give(x.item, got);
+      const got = await hand(() => online.buyGuildItem(x.item, n));
       setBought((b) => ({ ...b, [x.item]: (b[x.item] ?? 0) + got }));
       await reload();
     });

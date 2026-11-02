@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ITEMS, type MapNode } from '../core/data';
 import { CHEST_OPEN_MS, chestTier, mmss, nextWindow, timedWindow } from '../core/realm';
-import { cancelRealmChest, finishRealmChest, REALM_CHEST_LOOT, realmChestState, startRealmChest } from '../core/sim';
+import { REALM_CHEST_LOOT, realmChestState } from '../core/sim';
 import type { GameState } from '../core/types';
 import { store } from '../store';
 import { tl } from '../i18n';
@@ -21,13 +21,13 @@ export function RealmChestSheet({ s, node, onClose }: { s: GameState; node: MapN
   // 开满 10 秒自动领；走开了就作废
   useEffect(() => {
     if (!op) return;
-    if (state !== 'ok') { store.dispatch(cancelRealmChest); return; }
+    if (state !== 'ok') { store.run('realmChestCancel'); return; }
     if (pct >= 1) {
-      store.dispatch((g) => finishRealmChest(g, Date.now()));
+      store.run('realmChestDone');
     }
   }, [op, pct, state]);
   // 关掉页面也算放弃
-  useEffect(() => () => store.dispatch(cancelRealmChest), []);
+  useEffect(() => () => { store.run('realmChestCancel'); }, []);
   const loot = REALM_CHEST_LOOT[tier];
   const nx = !win ? nextWindow(node, now) : null;
   return (
@@ -50,7 +50,7 @@ export function RealmChestSheet({ s, node, onClose }: { s: GameState; node: MapN
         <div className="go">
           {state === 'got' ? <span className="muted">{tl('这一轮已经开过了，奖励在仓库里。')}</span>
             : state === 'far' ? <button className="primary" onClick={() => { store.requestWalk(node.id); onClose(); }}>{tl`寻路去${node.name}`}</button>
-            : state === 'ok' ? <button className="primary" disabled={!!op} onClick={() => store.dispatch((g) => startRealmChest(g, node.id, Date.now()))}>{op ? tl`开箱中… ${mmss(CHEST_OPEN_MS - (now - op.at))}` : tl('开箱')}</button>
+            : state === 'ok' ? <button className="primary" disabled={!!op} onClick={() => store.run('realmChest', node.id)}>{op ? tl`开箱中… ${mmss(CHEST_OPEN_MS - (now - op.at))}` : tl('开箱')}</button>
             : null}
         </div>
       </div>

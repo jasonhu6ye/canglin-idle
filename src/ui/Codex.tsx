@@ -2,10 +2,10 @@ import { gearLine } from './format';
 import { qClass, qid, QUALITY_NAME } from '../core/quality';
 import { QualityTable } from './Quality';
 import { useSticky } from './sticky';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { ACTIONS, buffText, CROP_DEFS, fieldOfCrop, ITEMS, MONSTERS, NODES, nodeOfAction, nodesOfAction, SKILLS, TIERS, tierName } from '../core/data';
 import { etaText, nearestNode } from './eta';
-import { maxHp, POTION_AT, startAt, toolSkillNames } from '../core/sim';
+import { maxHp, POTION_AT, toolSkillNames } from '../core/sim';
 import type { GameState, ItemDef } from '../core/types';
 import { Icon } from './icons';
 import { Bestiary } from './Bestiary';
@@ -75,7 +75,7 @@ function sourcesOf(id: string) {
 function goSource(x: Src) {
   if (x.monster) store.track(x.monster);
   // 用户 10-26：以前只走过去打开页面，角色站着发呆；现在直接开工（会自己走过去）
-  else if (x.node && x.action) store.dispatch((s) => startAt(s, x.action!, x.node!));
+  else if (x.node && x.action) store.run('startAt', x.action!, x.node!);
   else if (x.node) store.requestWalk(x.node);
   else return;
   openItem(null);

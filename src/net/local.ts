@@ -1,6 +1,8 @@
 import type { GameState } from '../core/types';
 import type { AiPlayer, CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
-import { GUILD_MAX, levelSnapshot, SAVE_AHEAD_MS, SPEED_ERROR } from './api';
+import { GUILD_MAX, levelSnapshot, type SyncReply } from './api';
+import { runSync } from '../server/sync';
+import type { Cmd } from '../core/commands';
 import { tl } from '../i18n';
 import { ITEMS } from '../core/data';
 import { GUILD_SHOP, GUILD_TECH, checkinGain, techCap, techCost, EXCHANGE_DAY_MAX, VAULT_COST, VAULT_SLOTS, exchangeGain, guildLevelOf, guildMembersCap, guildSlots, utcDay, utcWeek, type TaskSpec } from '../core/guild';
@@ -78,12 +80,16 @@ export class LocalApi implements OnlineApi {
   async signOut() { this.db.session = false; this.flush(); }
   async rename(name: string) { this.need().name = name; this.flush(); }
 
-  async pushSave(s: GameState) {
-    this.need();
-    if (s.lastTick > Date.now() + SAVE_AHEAD_MS) throw new Error(SPEED_ERROR);
-    this.db.save = s;
-    this.db.snap = levelSnapshot(s);
+  /** 本机模拟服务器结算（测试用，和 Edge Function 跑同一份 runSync） */
+  async gameSync(cmds: Cmd[], device: string): Promise<SyncReply> {
+    const me = this.need();
+    const now = Date.now();
+    const r = runSync(this.db.save, cmds, now, { gmBuffs: [], guildLv: 0, mails: [], outfit: me.outfit }, device);
+    const state = { ...r.state, _device: device } as GameState;
+    this.db.save = state;
+    this.db.snap = levelSnapshot(state);
     this.flush();
+    return { state: JSON.parse(JSON.stringify(state)), ack: r.ack, now };
   }
   async pullSave() { return this.db.save; }
   async cloudHead() { return this.db.save ? { tick: this.db.save.lastTick } : null; }

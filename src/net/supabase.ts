@@ -1,7 +1,8 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js';
 import type { GameState, GmBuff } from '../core/types';
 import type { CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMail, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildDay, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
-import { levelSnapshot, SPEED_ERROR } from './api';
+import { type SyncReply } from './api';
+import type { Cmd } from '../core/commands';
 import type { TaskSpec } from '../core/guild';
 import { fastOf, readFast, slowKey, withMove, type Fast } from './presenceSync';
 import { tl } from '../i18n';
@@ -141,15 +142,14 @@ export class SupabaseApi implements OnlineApi {
     this.need().name = name;
   }
 
-  async pushSave(s: GameState, device?: string, epoch?: number) {
-    const id = this.need().id;
-    const snap = levelSnapshot(s);
-    const data = { ...s, ...(device ? { _device: device } : {}), ...(epoch ? { _epoch: epoch } : {}) };
-    // 服务器不收时间跑在前面的存档（触发器跳过写入，返回 0 行）
-    const rows = ok(await this.sb.from('saves').upsert({ player_id: id, data, last_tick: s.lastTick, updated_at: new Date().toISOString() }).select('player_id')) as Row[] | null;
-    if (!rows?.length) throw new Error(SPEED_ERROR);
-    this.touchSeen(id);
-    ok(await this.sb.from('ranks').upsert({ player_id: id, total: snap.total, combat: snap.combat, skills: snap.skills, xp: snap.xp, updated_at: new Date().toISOString() }));
+  async gameSync(cmds: Cmd[], device: string): Promise<SyncReply> {
+    this.need();
+    const { data, error } = await this.sb.functions.invoke('game', { body: { cmds, device } });
+    if (error) throw error;
+    const r = data as { state?: GameState; ack?: number; now?: number; error?: string };
+    if (!r?.state) throw new Error(r?.error ?? 'sync');
+    this.touchSeen(this.need().id);
+    return { state: r.state, ack: Number(r.ack) || 0, now: Number(r.now) || Date.now() };
   }
   async cloudHead() {
     const r = ok(await this.sb.from('saves').select('last_tick, device:data->>_device').eq('player_id', this.need().id).maybeSingle()) as Row | null;

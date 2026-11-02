@@ -1,0 +1,101 @@
+/*
+ * 服务器结算程序入口（Supabase Edge Function「game」，11-02）。
+ * GitHub Actions 用 esbuild 把这个文件连同 src/core 打包成 supabase/functions/game/index.js 再部署，
+ * 所以服务器上跑的结算代码永远和游戏同一版本。
+ *
+ * 流程：认出是谁（用玩家登录的令牌问 Supabase）→ 读服务器上的存档、GM 增益、公会、GM 邮件 →
+ * runSync 按服务器时间算 → server_commit 一次写进存档和排行榜（版本号对不上 = 同时有别的写入，重来）。
+ * 服务器用 service_role 写存档，玩家自己不能再写存档（见 schema.sql「服务器结算」）。
+ */
+import { rankOf, runSync, type SyncExtras } from './sync';
+import type { GmBuff, ItemStack } from '../core/types';
+
+declare const Deno: { env: { get(k: string): string | undefined }; serve(h: (r: Request) => Promise<Response>): void };
+
+const URL_ = Deno.env.get('SUPABASE_URL')!;
+const KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
+
+type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+async function rest(path: string, init: RequestInit = {}): Promise<any> { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const r = await fetch(`${URL_}/rest/v1/${path}`, {
+    ...init,
+    headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json', ...(init.headers ?? {}) },
+  });
+  const text = await r.text();
+  if (!r.ok) throw new Error(`${r.status} ${text.slice(0, 300)}`);
+  return text ? JSON.parse(text) : null;
+}
+
+async function whoAmI(req: Request): Promise<string | null> {
+  const auth = req.headers.get('Authorization') ?? '';
+  if (!auth.startsWith('Bearer ')) return null;
+  const r = await fetch(`${URL_}/auth/v1/user`, { headers: { apikey: KEY, Authorization: auth } });
+  if (!r.ok) return null;
+  const u = await r.json();
+  return typeof u?.id === 'string' ? u.id : null;
+}
+
+async function extras(uid: string, now: number): Promise<SyncExtras & { found: boolean }> {
+  const [p] = (await rest(`profiles?id=eq.${uid}&select=pid,outfit,guild_id,save_epoch`)) as Row[];
+  if (!p) return { found: false, gmBuffs: [], guildLv: 0, mails: [] };
+  const pid = Number(p.pid) || 0;
+  const since = new Date(now - 3600_000).toISOString();
+  const [buffs, guild, mails, party] = await Promise.all([
+    rest(`gm_buffs?select=id,target_pid,name,tag,kind,pct,starts_at,ends_at&ends_at=gt.${since}&or=(target_pid.is.null,target_pid.eq.${pid})&limit=50`) as Promise<Row[]>,
+    p.guild_id ? rest(`guilds?id=eq.${p.guild_id}&select=level,tech`) as Promise<Row[]> : Promise.resolve([] as Row[]),
+    pid ? rest(`gm_mail?select=id,title,body,items&target_pid=eq.${pid}&claimed_at=is.null&limit=20`) as Promise<Row[]> : Promise.resolve([] as Row[]),
+    rest(`party_members?player_id=eq.${uid}&select=party_id`) as Promise<Row[]>,
+  ]);
+  const partySize = party[0] ? ((await rest(`party_members?party_id=eq.${party[0].party_id}&select=player_id`)) as Row[]).length : 0;
+  return {
+    found: true,
+    gmBuffs: buffs.map((r): GmBuff => ({ id: r.id, name: r.name, tag: r.tag ?? '', kind: r.kind, pct: Number(r.pct), from: Date.parse(r.starts_at), to: Date.parse(r.ends_at), all: r.target_pid == null })),
+    guildLv: guild[0] ? Number(guild[0].level) || 1 : 0,
+    guildTech: guild[0]?.tech,
+    mails: mails.map((m) => ({
+      id: m.id, title: m.title ?? '', body: m.body ?? '',
+      items: (Array.isArray(m.items) ? m.items : []).filter((i: Row) => typeof i?.item === 'string' && Number(i.qty) > 0).map((i: Row): ItemStack => ({ item: i.item, qty: Math.floor(Number(i.qty)) })),
+    })),
+    outfit: p.outfit ?? undefined,
+    epoch: Number(p.save_epoch) || 0,
+    partySize,
+  };
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
+  try {
+    const uid = await whoAmI(req);
+    if (!uid) return json({ error: 'auth' }, 401);
+    const body = await req.json().catch(() => ({})) as { cmds?: unknown; device?: unknown };
+    const device = typeof body.device === 'string' ? body.device.slice(0, 32) : undefined;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const now = Date.now();
+      const [rows, ex] = await Promise.all([
+        rest(`saves?player_id=eq.${uid}&select=data,rev`) as Promise<Row[]>,
+        extras(uid, now),
+      ]);
+      if (!ex.found) return json({ error: 'profile' }, 404);
+      const row = rows[0];
+      const { state, applied, mailIds, ack } = runSync(row?.data ?? null, body.cmds, now, ex, device ?? '');
+      const data = device ? { ...state, _device: device } : state;
+      const rev = await rest('rpc/server_commit', {
+        method: 'POST',
+        body: JSON.stringify({
+          p_player: uid, p_rev: row ? Number(row.rev) : -1, p_data: data, p_tick: state.lastTick,
+          p_mail: mailIds, p_rank: rankOf(state),
+        }),
+      }) as number;
+      if (rev > 0) return json({ state: data, rev, now, applied, ack });
+    }
+    return json({ error: 'busy' }, 409);
+  } catch (e) {
+    return json({ error: String((e as Error)?.message ?? e).slice(0, 300) }, 500);
+  }
+});

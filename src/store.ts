@@ -1,9 +1,9 @@
-import { leaveHome } from './core/home';
 import { useSyncExternalStore } from 'react';
 import { nodeOfAction } from './core/data';
 import { advance, LOG_CAP, mergeSummary, migrate, moveSpeed, newGame, walkPos } from './core/sim';
 import { stepMail } from './core/mail';
 import { gameNow, saveSig } from './core/clock';
+import { applyCmd, type Cmd, type CmdArgs, type CmdName } from './core/commands';
 import type { CombatLogEntry, GameState, Summary } from './core/types';
 
 const SAVE_KEY = 'canglin-idle-save-v1';
@@ -13,6 +13,10 @@ const BACKUP_EVERY_MS = 10 * 60_000;
 /** 存档签名（11-01 防作弊）：存档被手动改过时对不上 */
 const SIG_KEY = 'canglin-idle-save-sig';
 const LOG_KEY = 'canglin-combat-log';
+/** 还没送到服务器的指令和指令序号（11-02 服务器结算）：刷新页面也不丢 */
+const PENDING_KEY = 'canglin-pending-cmds';
+const SEQ_KEY = 'canglin-cmd-seq';
+const readJson = <T,>(k: string, d: T): T => { try { return (JSON.parse(localStorage.getItem(k) ?? 'null') as T) ?? d; } catch { return d; } };
 const TICK_MS = 200;
 const SAVE_EVERY_MS = 5000;
 /** 离开超过这么久才弹「离线收获」 */
@@ -186,30 +190,66 @@ class Store {
     this.emit();
   }
 
-  /** 玩家操作：先结算到当前时刻再应用，避免丢进度 */
+  /**
+   * 只改本机、不发给服务器的变化（11-02）：服务器会自己从数据库算出同样的结果（GM 增益、公会等级、
+   * 交易、邮件、公会仓库存取等），这里先改是为了马上显示。玩家自己的操作都要用 run 发指令
+   */
   dispatch(fn: (s: GameState) => GameState) {
     if (this.inactive) return;
-    this.touched = true;
     const { state, summary } = advance(this.state, gameNow());
-    this.absorb(summary, true);
+    this.absorb(summary);
     this.state = fn(state);
     this.save();
     this.emit();
   }
 
-  /** 种田操作：先结算到现在，再种 / 浇 / 收，收获的东西也记进日志、弹提示 */
-  farm(fn: (s: GameState, now: number) => { state: GameState; summary: Summary }) {
+  /** 还没被服务器确认的指令（sync 发出去，服务器回复收到第几条后删掉） */
+  pending: Cmd[] = readJson<Cmd[]>(PENDING_KEY, []);
+  private seq = Number(readJson<number>(SEQ_KEY, 0)) || 0;
+
+  /**
+   * 换成服务器算好的存档（11-02）：服务器还没收到的指令在它上面重放一遍，再结算到现在。
+   * 诚实玩家本机和服务器算的一样，画面不会跳；本机被加速过的进度在这里被服务器的结果盖掉
+   */
+  adoptServer(server: GameState, ack: number) {
+    const next = migrate(server);
+    if (!next || this.inactive) return;
+    this.pending = this.pending.filter((c) => c.q > ack);
+    let s = next;
+    for (const c of this.pending) {
+      s = advance(s, c.t).state;
+      s = applyCmd(s, c.n, c.a, Math.max(c.t, s.lastTick)).state;
+    }
+    s = advance(s, gameNow()).state;
+    this.state = s;
+    this.save();
+    this.emit();
+  }
+  /**
+   * 玩家操作 = 指令：先结算到当前时刻再执行（不丢进度），记下来发给服务器（服务器按同样的顺序重算）。
+   * 返回指令给界面的东西（开箱拿到了什么等）
+   */
+  run<N extends CmdName>(n: N, ...a: CmdArgs<N>): unknown {
+    if (this.inactive) return undefined;
     this.touched = true;
     const now = gameNow();
     const { state, summary } = advance(this.state, now);
     this.absorb(summary, true);
-    const r = fn(state, now);
+    const r = applyCmd(state, n, a, now);
     this.state = r.state;
-    this.absorb(r.summary);
-    if (Object.keys(r.summary.items).length || r.summary.levelUps.length || r.summary.quests?.length) this.gainListeners.forEach((l) => l(r.summary));
+    if (r.state !== state) {
+      this.pending.push({ n, a: JSON.parse(JSON.stringify(a ?? [])) as unknown[], t: now, q: ++this.seq });
+      // 一直没登录（离线玩）就不会送出去，只留最近的
+      if (this.pending.length > 5000) this.pending.splice(0, this.pending.length - 5000);
+    }
+    if (r.summary) {
+      this.absorb(r.summary);
+      const g = r.summary;
+      if (Object.keys(g.items).length || g.levelUps.length || g.quests?.length) this.gainListeners.forEach((l) => l(g));
+    }
     this.save();
     this.emit();
-    return r;
+    return r.out;
   }
 
   /** 点了配方里缺的材料：要打开的那个配方，制作页打开时直接选中它（到了地方也一样） */
@@ -221,7 +261,7 @@ class Store {
   tracking: string | null = null;
   requestWalk(nodeId: string, track: string | null = null) {
     // 在家园岛屿上点了城里的地点：先出岛再走
-    if (this.state.home?.inside) this.dispatch(leaveHome);
+    if (this.state.home?.inside) this.run('leaveHome');
     this.pendingWalk = nodeId;
     this.tracking = track;
     this.emit();
@@ -247,7 +287,8 @@ class Store {
   }
 
   reset() {
-    this.state = newGame(gameNow());
+    // 联机时服务器也要清掉（指令），离线时只清本机
+    this.run('reset');
     this.combatLog = [];
     this.logDirty = true;
     this.offline = null;
@@ -262,6 +303,8 @@ class Store {
       const raw = JSON.stringify(this.state);
       localStorage.setItem(SAVE_KEY, raw);
       localStorage.setItem(SIG_KEY, saveSig(raw));
+      localStorage.setItem(PENDING_KEY, JSON.stringify(this.pending));
+      localStorage.setItem(SEQ_KEY, String(this.seq));
       if (Date.now() - this.lastBackup > BACKUP_EVERY_MS) {
         this.lastBackup = Date.now();
         localStorage.setItem(BACKUP_KEY, raw);

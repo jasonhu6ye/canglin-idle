@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { newGame } from '../core/sim';
 import { LocalApi } from './local';
 
 const mem = () => { const m = new Map<string, string>(); return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v) }; };
@@ -11,7 +10,7 @@ describe('LocalApi', () => {
     expect(await api.signUp('a@b.c', 'x')).toBeNull();
     expect(api.signedIn()).toBe(true);
     await api.createProfile('测试员', 'ranger');
-    await api.pushSave(newGame(0));
+    await api.gameSync([], 'dev');
     const [row] = await api.leaderboard('total');
     expect(row.name).toBe('测试员');
     expect(row.value).toBeGreaterThan(0);

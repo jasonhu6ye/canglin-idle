@@ -1316,4 +1316,11 @@ export const EN_TEXT: Record<string, string> = {
   "万圣节活动已经结束，祭坛现在只能兑换南瓜积分（南瓜灵驹、幽冥死神、棺材伯爵）。11 月 7 日祭坛从地图上移除，积分请在那之前用掉。": "The Halloween event is over. The altar now only trades Pumpkin Points (Jack-o'-Lantern Steed, Netherworld Reaper, Coffin Count). It leaves the map on Nov 7, so spend your points before then.",
   "「永冬之裔」限时活动正式开启：主界面的活动按钮点「寻路」直接去最近的永冬传送门。": "The Scions of Everwinter event is live: tap Go on the event button to head to the nearest Everwinter Portal.",
   '本机时间比服务器快，这段时间多算的进度不算，已按服务器时间读取云端存档。': "Your device clock is running ahead of the server, so the extra progress doesn't count. Your cloud save has been loaded using server time.",
+  // 服务器结算（11-02）
+  '存档改由服务器保存和结算': 'Saves are now kept and calculated by the server',
+  '游戏进度现在由服务器按服务器时间结算并保存：你的每个操作会发给服务器，服务器算好后同步回来，手机和电脑之间换着玩更稳。': 'Your progress is now calculated and saved by the server using server time. Each action you take is sent to the server, which works out the result and syncs it back, so switching between phone and computer is more reliable.',
+  '断网时照常可以玩，连上后会把这段时间的操作一起交给服务器。': 'You can keep playing while offline. When you reconnect, everything you did is sent to the server together.',
+  '登录后不能再导入存档码；登录前在本机玩的进度不能带进账号。': "Save codes can no longer be imported once you're signed in, and progress made on this device before signing in can't be brought into an account.",
+  '登录后存档由服务器保存，不能导入存档码。': "Once you're signed in, your save is kept by the server, so save codes can't be imported.",
+  '云存档：存档由服务器按服务器时间结算并保存，你的操作会自动发给服务器（大约每分钟同步一次），换设备登录同一个账号就接着玩。断网也能继续挂机，连上后会把这段时间的操作一起交给服务器。': 'Cloud save: your save is calculated and kept by the server using server time. Your actions are sent to the server automatically (about once a minute), so you can sign in on another device and carry on. You can keep idling offline, and everything you did is sent to the server when you reconnect.',
 };

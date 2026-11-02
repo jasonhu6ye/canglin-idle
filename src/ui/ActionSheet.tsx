@@ -10,7 +10,7 @@ import { MonsterDetail, MonsterIcon, TraitChips } from './Bestiary';
 import { useEffect, useRef, useState } from 'react';
 import { ACTIONS, nodeOfAction, nodesOfAction, ITEMS, MONSTERS, NODES, REGIONS, SEED_SHOP, seedLevel, seedPrice, SKILLS, tierName } from '../core/data';
 import {
-  actionDuration, atMarket, bestFood, buySeed, seedLocked, combatEstimate, combatStats, enqueue, level, MAX_QUEUE, moveSpeed, nearNode, setSettings, startNow, weaponStyle, xpPerHour,
+  actionDuration, atMarket, bestFood, seedLocked, combatEstimate, combatStats, level, MAX_QUEUE, moveSpeed, nearNode, xpPerHour,
 } from '../core/sim';
 import type { ActionDef, GameState, SkillAction, TaskMode } from '../core/types';
 import type { MapNode } from '../core/data';
@@ -264,7 +264,7 @@ function SeedShop({ s }: { s: GameState }) {
               <Icon item={id} size={26} />
               <span className="grow">{ITEMS[id].name}<small className="muted">{locked ? tl` 种植 ${seedLevel(id)} 级才能买` : tl` 单价 ${fmtNum(price)} · 仓库有 ${fmtNum(s.bank[id] ?? 0)}`}</small></span>
               {!locked && [1, 10].map((n) => (
-                <button key={n} disabled={!here || coins < price * n} onClick={() => store.dispatch((g) => buySeed(g, id, n))}>{tl`买 ${n}`}</button>
+                <button key={n} disabled={!here || coins < price * n} onClick={() => store.run('buySeed', id, n)}>{tl`买 ${n}`}</button>
               ))}
             </li>
           );
@@ -320,7 +320,7 @@ function TaskConfig({ s, action: selected, onDone, far, stay }: { s: GameState; 
     modeType === 'count' ? { type: 'count', count } : modeType === 'time' ? { type: 'time', ms: minutes * 60000 } : { type: 'infinite' };
   const go = (now: boolean) => {
     if (!selected) return;
-    store.dispatch((g) => (now ? startNow(g, selected, mode()) : enqueue(g, selected, mode())));
+    store.run(now ? 'startNow' : 'enqueue', selected, mode());
     if (!stay) return onDone();
     const name = ACTIONS[selected].name;
     setFlash((f) => ({ text: now ? tl`已开始：${name}` : tl`已加入队列：${name}`, n: (f?.n ?? 0) + 1 }));
@@ -364,7 +364,7 @@ function TaskConfig({ s, action: selected, onDone, far, stay }: { s: GameState; 
           <div className="opts">
             <span className="lbl">{tl('进食阈值')}</span>
             {THRESHOLDS.map((t) => (
-              <button key={t} className={s.settings.eatThreshold === t ? 'on' : ''} onClick={() => store.dispatch((g) => setSettings(g, { eatThreshold: t }))}>
+              <button key={t} className={s.settings.eatThreshold === t ? 'on' : ''} onClick={() => store.run('settings', { eatThreshold: t })}>
                 {t * 100}%
               </button>
             ))}
@@ -372,7 +372,7 @@ function TaskConfig({ s, action: selected, onDone, far, stay }: { s: GameState; 
           <div className="opts">
             <span className="lbl">{tl('带食物')}</span>
             {[0, 20, 50, 100, -1].map((n) => (
-              <button key={n} className={s.settings.carryFood === n ? 'on' : ''} onClick={() => store.dispatch((g) => setSettings(g, { carryFood: n }))}>
+              <button key={n} className={s.settings.carryFood === n ? 'on' : ''} onClick={() => store.run('settings', { carryFood: n })}>
                 {n < 0 ? tl('全部') : n === 0 ? tl('不带') : n}
               </button>
             ))}
@@ -380,7 +380,7 @@ function TaskConfig({ s, action: selected, onDone, far, stay }: { s: GameState; 
           <div className="opts">
             <span className="lbl">{tl('带药水')}</span>
             {[true, false].map((v) => (
-              <button key={String(v)} className={(s.settings.carryPotion !== false) === v ? 'on' : ''} onClick={() => store.dispatch((g) => setSettings(g, { carryPotion: v }))}>
+              <button key={String(v)} className={(s.settings.carryPotion !== false) === v ? 'on' : ''} onClick={() => store.run('settings', { carryPotion: v })}>
                 {v ? tl('带') : tl('不带')}
               </button>
             ))}

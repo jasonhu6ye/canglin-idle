@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ITEMS } from '../core/data';
-import { HW_DAILY_BOXES, claimMail, clearMail, readMail, unreadMail } from '../core/mail';
+import { HW_DAILY_BOXES, unreadMail } from '../core/mail';
 import { QUESTS, questText } from '../core/quests';
 import { bagRoomFor, bagSlots } from '../core/sim';
 import type { GameState, Mail } from '../core/types';
@@ -51,12 +51,7 @@ const when = (t: number) => {
 };
 
 function claim(id: number | 'all', from: string) {
-  let got: Record<string, number> = {};
-  store.dispatch((g) => {
-    const [next, r] = claimMail(g, id, (bag, item) => bagRoomFor(bag, item, bagSlots(g)));
-    got = r;
-    return next;
-  });
+  const got = (store.run('claimMail', id) ?? {}) as Record<string, number>;
   if (Object.keys(got).length) showLoot({ from, got });
 }
 
@@ -84,7 +79,7 @@ export function Mailbox({ s }: { s: GameState }) {
   const claimable = mail.filter((m) => !m.claimed && m.items.length);
   const pick = (m: Mail) => {
     setSel(sel === m.id ? null : m.id);
-    if (!m.read) store.dispatch((g) => readMail(g, m.id));
+    if (!m.read) store.run('readMail', m.id);
   };
   return (
     <div className="item-popup" onClick={() => setOpen(false)}>
@@ -92,7 +87,7 @@ export function Mailbox({ s }: { s: GameState }) {
         <h2 className="gold">{tlc('mail', '邮箱')} <small className="muted">{tl`${mail.length} 封`}</small></h2>
         <div className="mail-actions">
           <button className="primary" disabled={!claimable.length} onClick={() => claim('all', tlc('mail', '邮箱'))}>{tl`一键领取（${claimable.length}）`}</button>
-          <button className="pill" disabled={!mail.some((m) => m.claimed || (!m.items.length && m.read))} onClick={() => store.dispatch(clearMail)}>{tl('删除已领取')}</button>
+          <button className="pill" disabled={!mail.some((m) => m.claimed || (!m.items.length && m.read))} onClick={() => store.run('clearMail')}>{tl('删除已领取')}</button>
         </div>
         {!mail.length && <p className="muted">{tl('邮箱是空的。游戏送的奖励（新手任务、兑换码、活动礼物）都会发到这里。')}</p>}
         <div className="mail-list">

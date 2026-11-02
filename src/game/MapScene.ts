@@ -1,12 +1,12 @@
 import { leaveHome } from '../core/home';
 import Phaser from 'phaser';
 import { ACTIONS, CROP_DEFS, CROPS, cropsOfField, FARM_PLOTS, PLOT_BY_ID, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, inTownArea, keyOf, DANGER, dangerLevel, nodeOfAction, nodesOfAction, planRoute, standOf, STONE_JUMP_MS, WAYSTONES, REALM_GATES, hopsOf, jumpNode, travelMs, WALK_TILES_PER_SEC, type MapNode, type Route } from '../core/data';
-import { unlockWaystone, useWaystone, useGate, atGate, WAYSTONE_REACH, actionDuration, combatLevel, combatStats, MONSTER_MOVES, isBankId, leaveWork, maxHp, moveSpeed, playerAttackMs, resumeWork, setLoc, startWalk, teleport as teleportState, walkPos } from '../core/sim';
-import { pickSeed, plotGrowth, plotPhase, tendPlot } from '../core/farm';
+import { atGate, WAYSTONE_REACH, combatLevel, combatStats, MONSTER_MOVES, isBankId, maxHp, moveSpeed, playerAttackMs, walkPos } from '../core/sim';
+import { pickSeed, plotGrowth, plotPhase } from '../core/farm';
 import { paintWaystone } from './waystoneArt';
 import { GATE_SIZE, paintGatePortal } from './dungeonArt';
 import { allGates, onSharedGates } from '../core/gateShare';
-import { gateOpenBlock, openGate } from '../core/sim';
+import { gateOpenBlock } from '../core/sim';
 import type { DungeonGate } from '../core/types';
 import { paintPortal, paintPortalSwirl, PORTAL_H } from './homeArt';
 import { animsOf, monsterFrameSize, paintMonsterSheet, type MonAnim } from './monsterArt';
@@ -214,7 +214,7 @@ export class MapScene extends Phaser.Scene {
     // 地图改版后旧存档的位置可能落在水里或新盖的房子里：挪到最近能站的格子
     const saved = store.state.walk ? walkPos(store.state) : store.state.loc ?? SPAWN;
     const start = nearestWalkable(saved);
-    if (!store.state.walk && (start.x !== saved.x || start.y !== saved.y)) store.dispatch((g) => setLoc(g, start.x, start.y));
+    if (!store.state.walk && (start.x !== saved.x || start.y !== saved.y)) store.run('setLoc', start.x, start.y);
     this.player = this.add.container(start.x * T + T / 2, start.y * T + T / 2);
     const ring = this.add.ellipse(0, 6, 14, 6).setStrokeStyle(1, 0xe8b84a).setFillStyle(0xe8b84a, 0.25);
     this.playerBody = this.add.sprite(0, 7, 'hero').setOrigin(0.5, (HERO_FEET + HERO_PAD.t) / FRAME_H);
@@ -301,7 +301,7 @@ export class MapScene extends Phaser.Scene {
       if (this.scene.isActive() && !this.toIsland) return fn(...a);
       // 在副本里：寻路、传送都不管（要离开先点「离开副本」）
       if (store.state.dungeon) return;
-      if (store.state.home?.inside) store.dispatch(leaveHome);
+      if (store.state.home?.inside) store.run('leaveHome');
       this.events.once('wake', () => fn(...a));
     };
     const onStone = awake((id: string) => this.stoneJump(id));
@@ -332,7 +332,7 @@ export class MapScene extends Phaser.Scene {
       const n = NODES.find((x) => x.id === id);
       if (!n) return;
       // 寻路去的就是当前工作的地点：等于继续工作
-      if (n === nodeForAction(this.currentAction) && store.state.paused) return store.dispatch(resumeWork);
+      if (n === nodeForAction(this.currentAction) && store.state.paused) { store.run('resumeWork'); return; }
       const old = this.walker;
       const dest = standTile(n);
       // 走到建筑、资源点、石碑旁边：自动打开它的页面（用户 10-23）
@@ -725,7 +725,7 @@ export class MapScene extends Phaser.Scene {
         }
       }
       const before = store.state;
-      store.farm((g, t) => tendPlot(g, id, crop, t));
+      store.run('tendPlot', id, crop);
       this.showPlotInfo(id, 3000);
       if (store.state === before) return;
       const ph = plotPhase(p, now);
@@ -1182,12 +1182,7 @@ export class MapScene extends Phaser.Scene {
       this.game.events.emit(GATE_OPENED, null);
       return;
     }
-    let gate: DungeonGate | null = null;
-    store.dispatch((g) => {
-      const [next, made] = openGate(g, key, spot!);
-      gate = made;
-      return next;
-    });
+    const gate = (store.run('openGate', key, spot) ?? null) as DungeonGate | null;
     this.syncGates();
     if (gate) {
       const g = gate as DungeonGate;
@@ -1202,12 +1197,7 @@ export class MapScene extends Phaser.Scene {
     const me = this.playerTile();
     const on = store.state.waystones ?? [];
     if (!WAYSTONES.some((n) => !on.includes(n.id) && Math.hypot(n.x - me.x, n.y + 1 - me.y) <= WAYSTONE_REACH)) return;
-    let got: string[] = [];
-    store.dispatch((g) => {
-      const r = unlockWaystone(g, me);
-      got = r.got;
-      return r.state;
-    });
+    const got = ((store.run('unlockWaystone', me) as { got?: string[] } | undefined)?.got) ?? [];
     this.stonesUnlocked(got);
   }
 
@@ -1226,7 +1216,7 @@ export class MapScene extends Phaser.Scene {
     const dest = WAYSTONES.find((n) => n.id === id);
     if (!dest || this.mountBusy) return;
     const before = store.state.loc;
-    store.dispatch((g) => useWaystone(g, id));
+    store.run('useWaystone', id);
     const st = store.state;
     const to = standTile(dest);
     if (st.loc.x !== to.x || st.loc.y !== to.y || (before.x === to.x && before.y === to.y)) return;
@@ -1798,7 +1788,7 @@ export class MapScene extends Phaser.Scene {
     this.walker = undefined;
     this.clearRoute();
     this.stopWorking();
-    store.dispatch((g) => teleportState(g, nodeId));
+    store.run('teleport', nodeId);
     const s = standTile(n);
     this.player.setPosition(s.x * T + T / 2, s.y * T + T / 2).setDepth(s.y * T + T / 2 + 1000);
     this.cameras.main.centerOn(this.player.x, this.player.y);
@@ -1807,7 +1797,7 @@ export class MapScene extends Phaser.Scene {
     this.tweens.add({ targets: flash, scale: 1.6, alpha: 0, duration: 600, onComplete: () => flash.destroy() });
     this.manual = nodeForAction(this.currentAction) !== n;
     // 传送到别处等于离开了工作地点；传回工作地点就接着干
-    store.dispatch((g) => (this.manual ? leaveWork(g) : resumeWork(g)));
+    store.run(this.manual ? 'leaveWork' : 'resumeWork');
     if (!this.manual) this.startWorking();
   }
 
@@ -1819,11 +1809,11 @@ export class MapScene extends Phaser.Scene {
     if (!path) return;
     this.manual = true;
     this.stopWorking();
-    store.dispatch(leaveWork);
+    store.run('leaveWork');
     // 记进存档：关掉游戏也会在后台走完
     const from = this.playerTile();
     const ms = (pathLength(from, path) / (WALK_TILES_PER_SEC * speedMultiplier)) * 1000;
-    store.dispatch((g) => startWalk(g, from, { x: tx, y: ty }, ms));
+    store.run('walk', from, { x: tx, y: ty }, ms);
     if (!this.following) this.recenterCameraOnly();
     this.followWalk(path, { x: tx, y: ty });
   }
@@ -1833,7 +1823,7 @@ export class MapScene extends Phaser.Scene {
     this.arrive = undefined;
     this.walkPath(path, () => {
       this.clearRoute();
-      store.dispatch((g) => setLoc(g, to.x, to.y));
+      store.run('setLoc', to.x, to.y);
       const then = this.arrive;
       this.arrive = undefined;
       then?.();
@@ -2030,7 +2020,7 @@ export class MapScene extends Phaser.Scene {
     const a = standTile(A);
     const jump = () => {
       const p = this.playerTile();
-      store.dispatch((g) => setLoc(leaveWork(g), p.x, p.y));
+      store.run('leaveAndSetLoc', p.x, p.y);
       const go = () => this.time.delayedCall(500, () => this.viaHops(rest, then));
       if (A.realmGate) void this.gateJump(to, true).then((ok) => ok && go());
       else {
@@ -2120,7 +2110,7 @@ export class MapScene extends Phaser.Scene {
     const dest = REALM_GATES.find((n) => n.id === to);
     if (!dest || this.mountBusy) return false;
     const p = this.playerTile();
-    store.dispatch((g) => setLoc(leaveWork(g), p.x, p.y));
+    store.run('leaveAndSetLoc', p.x, p.y);
     const from = atGate(store.state);
     if (!from || from === dest) return false;
     if (manual && dest.realmGate === 'camp' && from.realmGate !== 'camp') {
@@ -2128,7 +2118,7 @@ export class MapScene extends Phaser.Scene {
       await playRealmIntro({ from: from.realmGate === 'duskhaven' ? 'duskhaven' : 'canglin', lang: isEn ? 'en' : 'zh', outfit: store.state.settings?.skin });
     }
     const before = store.state.loc;
-    store.dispatch((g) => useGate(g, to));
+    store.run('useGate', to);
     const st = store.state;
     if (st.loc.x === before.x && st.loc.y === before.y) return false;
     this.walker = undefined;
