@@ -1,7 +1,7 @@
 import type { GameState, GmBuff, ItemStack, SkillId } from '../core/types';
 import type { Cmd } from '../core/commands';
 
-export interface SyncReply { state: GameState; ack: number; now: number }
+export interface SyncReply { state: GameState; ack: number; now: number; /** 开箱这类指令服务器算出来的结果 */ results?: { q: number; out: unknown }[] }
 import { combatLevel, level } from '../core/sim';
 
 /**
@@ -207,8 +207,8 @@ export interface OnlineApi {
   /** 读出上次的登录状态；之后 me() 才准。连不上服务器时抛错 */
   ready(): Promise<Profile | null>;
   /** 登录/注册后返回角色；账号还没建角色时是 null */
-  signIn(email: string, password: string): Promise<Profile | null>;
-  signUp(email: string, password: string): Promise<Profile | null>;
+  signIn(email: string, password: string, captcha?: string): Promise<Profile | null>;
+  signUp(email: string, password: string, captcha?: string): Promise<Profile | null>;
   /** 新账号建角色：起名、选外观 */
   createProfile(name: string, outfit: string): Promise<Profile>;
   signOut(): Promise<void>;
@@ -327,6 +327,15 @@ export interface OnlineApi {
   gmMailList(): Promise<GmMailRow[]>;
   gmMailSend(m: GmMailInput): Promise<void>;
   gmMailDelete(id: string): Promise<void>;
+  /** 兑换码（11-02）：玩家输码领奖励（服务器上查），管理员建 / 删 */
+  redeemCode(code: string): Promise<{ ok: boolean; msg: string }>;
+  gmCodeList(): Promise<RedeemCodeRow[]>;
+  gmCodeSave(c: RedeemCodeRow): Promise<void>;
+  gmCodeDelete(code: string): Promise<void>;
+  /** 管理员：每日经济报表（now = 从上次记录到现在） */
+  gmEconomy(): Promise<{ now: EconRow; days: EconRow[] }>;
+  /** 聊天敏感词表 */
+  chatWords(): Promise<string[]>;
 
   /** AI 玩家（10-31）：所有人都能读名单，管理员能加、改名、删 */
   aiList(): Promise<AiPlayer[]>;
@@ -387,6 +396,11 @@ export interface AiPlayer { id: string; name: string; seed: number; at: number }
 
 export interface GmMail { id: string; title: string; body: string; items: ItemStack[]; at: number }
 export interface GmMailRow extends GmMail { targetPid: number; targetName?: string; claimedAt: number | null }
+/** 每日经济报表（11-02） */
+export interface EconTop { pid: number; name: string; xp: number; coins: number; value: number }
+export interface EconRow { day?: string; players: number; new_players: number; coins: number; item_value: number; xp: number; gm_coins: number; trades: number; trade_value: number; redeems: number; top: EconTop[] | null }
+/** 服务器上的兑换码（GM 面板建） */
+export interface RedeemCodeRow { code: string; title: string; body: string; items: ItemStack[]; maxUses: number; uses: number; expiresAt: number | null }
 export interface GmMailInput { targetPid: number; title: string; body: string; items: ItemStack[] }
 
 /** 管理员面板里的一行：多了给谁（null = 全服） */

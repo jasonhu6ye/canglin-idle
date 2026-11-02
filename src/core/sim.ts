@@ -419,29 +419,49 @@ export function toggleMount(prev: GameState, on = !prev.mounted): GameState {
   return s;
 }
 
-/** 兑换码（测试服）：每个存档每个码只能领一次，东西放进背包，满了放仓库 */
+/**
+ * 兑换码的代号（11-02）：网页代码里只放代号，不放兑换码原文，打开代码也看不出是什么码。
+ * 新的兑换码在 GM 面板「兑换码」页建，存在服务器上（可以设过期时间、总次数）。
+ */
+export function codeHash(str: string) {
+  let h1 = 0xdeadbeef ^ 7, h2 = 0x41c6ce57 ^ 7;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return 'h' + (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+/** 领过这个码没有（以前的存档记的是原文，也认） */
+export const hasCode = (s: GameState, h: string) => !!s.redeemed?.some((r) => r === h || codeHash(r) === h);
+/** 测试服坐骑码 */
 const CODES: Record<string, { item: string; qty: number }[]> = {
-  中国人能飞: [{ item: 'mount_danmark', qty: 1 }],
+  h2c3fezdb8t7: [{ item: 'mount_danmark', qty: 1 }],
 };
-/** 解锁衣橱外观的兑换码（外观本身在 game/hero.ts 的 OUTFITS，用 code 字段对上） */
+/** 解锁衣橱外观的码（外观本身在 game/hero.ts 的 OUTFITS，用 code 字段对上） */
+export const SKIN_CODE = 'hk55f6ii1h3';
 const SKIN_CODES: Record<string, string> = {
-  为爱发电: tl('衣橱新外观：南瓜提灯人、幽蓝南瓜、白发魔骑、红黑小丑、骸骨术士'),
+  [SKIN_CODE]: tl('衣橱新外观：南瓜提灯人、幽蓝南瓜、白发魔骑、红黑小丑、骸骨术士'),
 };
+/** 是不是写在游戏里的码（不是的话去服务器上查） */
+export const builtinCode = (raw: string) => { const h = codeHash(raw.trim()); return !!(CODES[h] || SKIN_CODES[h]); };
 export function redeemCode(prev: GameState, raw: string): { state: GameState; msg: string; ok: boolean } {
-  const code = raw.trim();
+  const code = codeHash(raw.trim());
   if (SKIN_CODES[code]) {
-    if (prev.redeemed?.includes(code)) return { state: prev, msg: tl('这个兑换码已经领过了'), ok: false };
+    if (hasCode(prev, code)) return { state: prev, msg: tl('这个兑换码已经领过了'), ok: false };
     const s = clone(prev);
     s.redeemed = [...(s.redeemed ?? []), code];
     return { state: s, msg: tl`兑换成功：解锁${SKIN_CODES[code]}，去「更多 → 衣橱」换上`, ok: true };
   }
   const gifts = CODES[code];
   if (!gifts) return { state: prev, msg: tl('兑换码无效'), ok: false };
-  if (prev.redeemed?.includes(code)) return { state: prev, msg: tl('这个兑换码已经领过了'), ok: false };
+  if (hasCode(prev, code)) return { state: prev, msg: tl('这个兑换码已经领过了'), ok: false };
   const s = clone(prev);
   s.redeemed = [...(s.redeemed ?? []), code];
   // 奖励发到邮箱（用户 10-25）
-  sendMail(s, 'redeem', gifts.map((g) => ({ ...g })), s.lastTick, { arg: code });
+  sendMail(s, 'redeem', gifts.map((g) => ({ ...g })), s.lastTick, { arg: raw.trim().slice(0, 32) });
   return { state: s, msg: tl`兑换成功：${gifts.map((g) => `${ITEMS[g.item].name}${g.qty > 1 ? ` ×${g.qty}` : ''}`).join(tl('、'))} 已发到邮箱`, ok: true };
 }
 

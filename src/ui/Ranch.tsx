@@ -57,8 +57,7 @@ export function RanchSheet({ s, node, onClose }: { s: GameState; node: MapNode; 
   const pens = Array.from({ length: RANCH_PENS }, (_, i) => s.ranch?.pens[i] ?? null);
   const place = (i: number) => store.run('placeFoal', i);
   const collect = (i: number) => {
-    const apt = Number(store.run('collectHorse', i) ?? 0);
-    if (apt) setReveal(apt);
+    void store.runServer('collectHorse', i).then((r) => { const apt = Number(r ?? 0); if (apt) setReveal(apt); });
   };
   return (
     <div className="sheet ranch-sheet">

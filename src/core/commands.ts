@@ -345,6 +345,18 @@ type Rest<F> = F extends (s: GameState, t: number, ...a: infer A) => unknown ? A
 export type CmdArgs<N extends CmdName> = Rest<(typeof COMMANDS)[N]>;
 
 /** 执行一条指令；名字不认识、参数乱传导致出错，都当这条没执行 */
+/**
+ * 开箱、副本宝箱、领小马、限时宝箱（11-02）：服务器结算时先把随机数和只有服务器知道的密钥混一下，
+ * 本机就算看得到存档里的随机数，也算不出开出来什么（没法挑时机开）。结果以服务器回复为准（store.runServer）。
+ */
+export const SECRET_RNG = new Set<string>(['openContainer', 'dungeonChest', 'collectHorse', 'realmChestDone']);
+export function saltRng(rng: number, salt: string, q: number) {
+  let h = (rng ^ Math.imul(q | 0, 0x9e3779b1)) | 0;
+  for (let i = 0; i < salt.length; i++) h = Math.imul(h ^ salt.charCodeAt(i), 0x01000193);
+  h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16;
+  return h | 0;
+}
+
 export function applyCmd(s: GameState, n: string, a: unknown[], t: number): CmdResult {
   const f = own(COMMANDS, n) ? (COMMANDS as Record<string, Fn>)[n] : undefined;
   if (!f || !Array.isArray(a)) {

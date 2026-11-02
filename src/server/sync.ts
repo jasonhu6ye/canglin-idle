@@ -4,7 +4,7 @@ import { setGmBuffs } from '../core/gm';
 import { setGuildLv } from '../core/guild';
 import { sendMail, stepMail } from '../core/mail';
 import { ITEMS } from '../core/data';
-import { applyCmd, type Cmd } from '../core/commands';
+import { applyCmd, saltRng, SECRET_RNG, type Cmd } from '../core/commands';
 import { clearMateHits, setAggroMates, setDgCrew, setFieldCrew } from '../core/aggro';
 import { setPartySize } from '../core/party';
 import { flag, setGuard, type Flag, type Guard, type MateRun } from '../core/guard';
@@ -55,11 +55,13 @@ export interface SyncExtras {
   /** 队友存档里开着的洞口、各洞口打到哪了（核对跟队友进副本、队友进度用） */
   mateGates?: DungeonGate[];
   mateRuns?: MateRun[];
+  /** 只有服务器知道的密钥：开箱这类指令的随机数和它混一下，本机算不出结果 */
+  salt?: string;
   /** 被 GM 封禁：进度冻结（不执行指令、不结算，时间直接跳到现在，解封后也补不回来） */
   frozen?: boolean;
 }
 
-export interface SyncOut { state: GameState; applied: number; mailIds: string[]; /** 这台设备的指令收到了第几条 */ ack: number; /** 可疑操作 */ flags?: Flag[] }
+export interface SyncOut { state: GameState; applied: number; mailIds: string[]; /** 这台设备的指令收到了第几条 */ ack: number; /** 可疑操作 */ flags?: Flag[]; /** 开箱这类指令服务器算出来的结果（按指令序号） */ results?: { q: number; out: unknown }[] }
 
 export function runSync(saved: unknown, cmds: unknown, now: number, ex: SyncExtras, device = '', seed?: number): SyncOut {
   resetShared(ex.partySize ?? 0);
@@ -101,6 +103,7 @@ function syncInner(saved: unknown, cmds: unknown, now: number, ex: SyncExtras, d
   // 每日礼物、全服赠礼、过期清理：由服务器发（玩家领邮件的指令要能找到这封）
   s = stepMail(s, now);
   let applied = 0;
+  const results: { q: number; out: unknown }[] = [];
   const seqs = { ...((saved as { _seq?: Record<string, number> } | null)?._seq ?? {}) };
   let ack = Number(seqs[device]) || 0;
   const list = Array.isArray(cmds) ? (cmds as Cmd[]).slice(0, MAX_CMDS) : [];
@@ -113,7 +116,11 @@ function syncInner(saved: unknown, cmds: unknown, now: number, ex: SyncExtras, d
     const t = Math.min(now, Math.max(s.lastTick, now - BACKDATE_MS, Number(c.t) || 0));
     if ((Number(c.t) || 0) < now - BACKDATE_MS - 60_000 && Number(c.t) >= s.lastTick) flag('backdate', false, { n: String(c.n).slice(0, 40), ago: Math.round((now - Number(c.t)) / 60_000) });
     s = advance(s, t).state;
-    s = applyCmd(s, c.n, Array.isArray(c.a) ? c.a : [], t).state;
+    const secret = ex.salt && SECRET_RNG.has(c.n);
+    if (secret) s = { ...s, rng: saltRng(s.rng, ex.salt!, q) };
+    const r = applyCmd(s, c.n, Array.isArray(c.a) ? c.a : [], t);
+    s = r.state;
+    if (secret && results.length < 50) results.push({ q, out: r.out ?? null });
     applied++;
   }
   s = advance(s, now).state;
@@ -134,7 +141,7 @@ function syncInner(saved: unknown, cmds: unknown, now: number, ex: SyncExtras, d
     // 只记最近用过的几台设备
     out._seq = Object.fromEntries(Object.entries(seqs).slice(-8));
   }
-  return { state: out, applied, mailIds, ack };
+  return { state: out, applied, mailIds, ack, results };
 }
 
 /** 排行榜用的等级快照 */

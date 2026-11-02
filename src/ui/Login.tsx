@@ -5,6 +5,8 @@ import { adoptLocal, createCharacter, playOffline, retry, signIn, signUp, useOnl
 import { HeroPreview } from './Wardrobe';
 import { tl } from '../i18n';
 import { LangSwitch } from './LangSwitch';
+import { Captcha } from './Captcha';
+import { CAPTCHA_KEY } from '../net';
 
 /** 进游戏前的账号页（10-25 用户要求）：登录 / 注册 → 建角色 → 读云存档 */
 const ERRS: [RegExp, string][] = [
@@ -14,6 +16,7 @@ const ERRS: [RegExp, string][] = [
   [/profiles_name_key|duplicate key/i, tl('这个名字已经有人用了，换一个吧')],
   [/valid email|invalid format/i, tl('邮箱格式不对')],
   [/rate limit/i, tl('操作太频繁，请稍等一会儿')],
+  [/captcha/i, tl('人机验证没通过，请重新验证后再试')],
 ];
 /** 服务器报错里带时间、数字的几句（11-02） */
 const DYN: [RegExp, (m: RegExpMatchArray) => string][] = [
@@ -75,10 +78,15 @@ function AuthForm() {
   const [pw, setPw] = useState('');
   const [pw2, setPw2] = useState('');
   const { busy, err, setErr, run } = useAct();
+  const [token, setToken] = useState('');
+  const [nonce, setNonce] = useState(0);
   const submit = () => {
     if (pw.length < 6) return setErr(tl('密码至少 6 位'));
     if (mode === 'up' && pw !== pw2) return setErr(tl('两次输入的密码不一样'));
-    void run(() => (mode === 'in' ? signIn(email.trim(), pw) : signUp(email.trim(), pw)));
+    if (CAPTCHA_KEY && !token) return setErr(tl('请先完成下面的人机验证'));
+    // 验证令牌只能用一次：每次提交后重新验证
+    void run(() => (mode === 'in' ? signIn(email.trim(), pw, token || undefined) : signUp(email.trim(), pw, token || undefined)))
+      .finally(() => { if (CAPTCHA_KEY) setNonce((n) => n + 1); });
   };
   return (
     <form onSubmit={(e) => { e.preventDefault(); submit(); }}>
@@ -89,6 +97,7 @@ function AuthForm() {
       <input type="email" placeholder={tl("邮箱")} autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
       <input type="password" placeholder={tl("密码（至少 6 位）")} autoComplete={mode === 'in' ? 'current-password' : 'new-password'} value={pw} onChange={(e) => setPw(e.target.value)} required />
       {mode === 'up' && <input type="password" placeholder={tl("再输一次密码")} autoComplete="new-password" value={pw2} onChange={(e) => setPw2(e.target.value)} required />}
+      <Captcha onToken={setToken} nonce={nonce} />
       <button className="primary" disabled={busy}>{busy ? tl('请稍候…') : mode === 'in' ? tl('登录') : tl('注册')}</button>
       {err && <p className="err">{err}</p>}
       <p className="muted small">{tl('存档保存在云端，换手机或电脑登录同一个账号就能接着玩。')}</p>

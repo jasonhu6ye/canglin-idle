@@ -95,6 +95,7 @@ async function doSync(): Promise<boolean> {
     calibrate(r.now, sentAt, Date.now());
     ls.set(SYNCED_KEY, String(r.state.lastTick));
     store.adoptServer(r.state, r.ack);
+    store.settle(r.results ?? [], r.ack);
     return true;
   } catch {
     // 连不上：过一会儿就重试，不用等满一分钟（指令留着，下次一起发）
@@ -170,8 +171,8 @@ async function refreshAc() {
 const wrap = async (f: () => Promise<unknown>) => {
   try { await f(); } catch (e) { if (/fetch|network|load failed/i.test(String(e))) set('error'); throw e; }
 };
-export const signIn = (email: string, pw: string) => wrap(async () => { await online.signIn(email, pw); await afterAuth(); });
-export const signUp = (email: string, pw: string) => wrap(async () => { await online.signUp(email, pw); await afterAuth(); });
+export const signIn = (email: string, pw: string, captcha?: string) => wrap(async () => { await online.signIn(email, pw, captcha); await afterAuth(); });
+export const signUp = (email: string, pw: string, captcha?: string) => wrap(async () => { await online.signUp(email, pw, captcha); await afterAuth(); });
 export const createCharacter = (name: string, outfit: string) => wrap(async () => { await online.createProfile(name, outfit); await afterAuth(); });
 /** 本机登录前的进度：带进这个账号，或者从头开始 */
 export function adoptLocal(_keep: boolean) {
@@ -216,6 +217,8 @@ export function startSync() {
     if (n === 'coop' || soon) return;
     soon = setTimeout(() => { soon = undefined; void pushNow(); }, 3000);
   };
+  // 开箱这类等服务器结果的：马上同步（正在同步的那次可能没带上这条，就再来一次）
+  store.flush = () => { void pushNow().then(() => (store.waitingFor() ? pushNow() : false)); };
   watchSpeed();
   // 每 5 分钟对一次时间，顺便看看自己的状态
   setInterval(() => { if (phase === 'play') { void syncClock(); void refreshAc(); } }, 5 * 60_000);

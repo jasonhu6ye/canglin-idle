@@ -240,6 +240,33 @@ class Store {
    * 玩家操作 = 指令：先结算到当前时刻再执行（不丢进度），记下来发给服务器（服务器按同样的顺序重算）。
    * 返回指令给界面的东西（开箱拿到了什么等）
    */
+  /** 等服务器结果的指令：序号 → 回调 */
+  private waiting = new Map<number, (out: unknown) => void>();
+  /** 马上同步一次（net/sync 设） */
+  flush: () => void = () => {};
+  /**
+   * 开箱这类结果要以服务器为准的指令（11-02，见 commands SECRET_RNG）：本机先执行（扣掉箱子），
+   * 马上同步，等服务器算出来的结果；没联网 / 8 秒没回复就用本机的结果
+   */
+  runServer<N extends CmdName>(n: N, ...a: CmdArgs<N>): Promise<unknown> {
+    const before = this.seq;
+    const local = this.run(n, ...a);
+    if (this.seq === before || !this.serverMail) return Promise.resolve(local);
+    const q = this.seq;
+    return new Promise((res) => {
+      const done = (out: unknown) => { clearTimeout(timer); this.waiting.delete(q); res(out); };
+      const timer = setTimeout(() => done(local), 8000);
+      this.waiting.set(q, done);
+      this.flush();
+    });
+  }
+  waitingFor() { return this.waiting.size > 0; }
+  /** 服务器回复里带的结果交给等着的界面 */
+  settle(results: { q: number; out: unknown }[], ack: number) {
+    for (const r of results) this.waiting.get(r.q)?.(r.out);
+    // 服务器已经收到、却没给结果的（比如没开成），按没有结果算
+    for (const [q, f] of [...this.waiting]) if (q <= ack) f(null);
+  }
   run<N extends CmdName>(n: N, ...a: CmdArgs<N>): unknown {
     if (this.inactive) return undefined;
     this.touched = true;
