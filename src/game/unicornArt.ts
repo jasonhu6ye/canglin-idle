@@ -1,5 +1,5 @@
 import { mix, Pix } from './pix';
-import { COATS, drawHorseLook, HORSE_ANIMS, HORSE_FEET, HORSE_H, HORSE_W, horseSaddle, lastHornTip, ramp, type Look, type UniLook } from './horseArt';
+import { COATS, drawHorseLook, HORSE_ANIMS, HORSE_FEET, HORSE_H, HORSE_W, horseSaddle, lastEyes, lastHornTip, ramp, type Look, type UniLook } from './horseArt';
 
 /*
  * 粉色独角兽坐骑「晨曦独角兽」（用户 11-02）：用坐骑马的骨架和动作（四拍跑步、待机、吃草、嘶鸣），
@@ -35,12 +35,12 @@ const LOOK: Look = {
 
 export const unicornSaddle = horseSaddle;
 
-/** 每帧角尖的位置（画精灵表时记下来） */
-const tips = new Map<string, [number, number]>();
+/** 每帧角尖和眼睛的位置（画精灵表时记下来）：第一个是角尖，后面是眼睛 */
+const tips = new Map<string, [number, number][]>();
 /** 一帧（后层、前层） */
 export function unicornFrame(key: string, i: number, n: number): [Pix, Pix] {
   const r = drawHorseLook(LOOK, key, i, n);
-  if (lastHornTip) tips.set(`${key}-${i}`, lastHornTip);
+  if (lastHornTip) tips.set(`${key}-${i}`, [lastHornTip, ...lastEyes]);
   return r;
 }
 
@@ -85,11 +85,10 @@ export function unicornMountIconUrl() {
   return icon;
 }
 
-/** 这一帧角尖的位置（相对脚底中心，侧面按朝右算）：角尖光点特效用 */
+/** 这一帧的特效点（相对脚底中心，侧面按朝右算）：第一个是角尖，后面是睁着的眼睛；背面为空 */
 export function unicornHornTip(frameName: string): [number, number][] {
   const m = /^unicorn-(.+)-(\d+)-[bf]$/.exec(frameName);
-  const tip = m && tips.get(`${m[1]}-${m[2]}`);
-  return tip ? [tip] : [];
+  return (m && tips.get(`${m[1]}-${m[2]}`)) ?? [];
 }
 
 export const UNI_BODY = BODY;

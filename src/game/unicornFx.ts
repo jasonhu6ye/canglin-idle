@@ -6,6 +6,7 @@ import type { PkState } from './pumpkinFx';
  * - 脚下一圈淡粉的柔光，一明一暗；
  * - 跑起来身后一路洒星光（白、粉、薰衣草、淡蓝的小四角星），偶尔飘出几瓣花；
  * - 角尖一团金白的光晕，不停往上飘细小的光尘，隔几秒亮一下；
+ * - 眼睛一团紫水晶色的光（用户 11-02：眼睛也要光效，不是彩虹），跑起来往后拉出紫光尾迹；
  * - 跑起来特效拉满（用户 11-02）：身后拖一条五色彩虹光带（每帧留一段，渐渐变淡下沉），蹄下溅彩虹星火，
  *   地面光环按彩虹色循环，角尖光尘也变成彩虹色；
  * - 召唤、收起时炸开一圈星光和花瓣。
@@ -18,6 +19,8 @@ const STAR = ['un-star-w', 'un-star-p', 'un-star-l', 'un-star-b'];
 const MOTE = 'un-mote';
 const PETAL = ['un-petal-0', 'un-petal-1'];
 const RIBBON = 'un-ribbon';
+const EYE = 'un-eye';
+const EYE_C = 0xb070ff;
 const SPARK = 'un-spark';
 /** 彩虹五色（和鬃毛一致）：粉、紫、蓝、薄荷、奶黄 */
 const RAINBOW = [0xff6ac0, 0xc08cff, 0x7ecbff, 0x9af0dc, 0xfff0a0];
@@ -37,6 +40,7 @@ function ensureTex(scene: Phaser.Scene) {
   };
   radial(GLOW, [[0, 'rgba(255,200,235,0.85)'], [0.45, 'rgba(255,150,210,0.35)'], [1, 'rgba(240,120,200,0)']]);
   radial(HORN, [[0, 'rgba(255,250,220,1)'], [0.3, 'rgba(255,220,130,0.6)'], [1, 'rgba(255,200,100,0)']]);
+  radial(EYE, [[0, 'rgba(240,220,255,1)'], [0.3, 'rgba(180,120,255,0.7)'], [1, 'rgba(140,70,255,0)']]);
   const px = (key: string, w: number, h: number, rows: string[], pal: Record<string, string>) => {
     const c = document.createElement('canvas');
     c.width = w;
@@ -65,6 +69,8 @@ function ensureTex(scene: Phaser.Scene) {
 export class UnicornFx {
   private glow?: Phaser.GameObjects.Image;
   private hornGlow?: Phaser.GameObjects.Image;
+  private eyeGlow: Phaser.GameObjects.Image[] = [];
+  private nextEye = 0;
   private nextStar = 0;
   private nextMote = 0;
   private nextPetal = 0;
@@ -81,8 +87,10 @@ export class UnicornFx {
     if (!o) {
       this.glow?.setVisible(false);
       this.hornGlow?.setVisible(false);
+      for (const g of this.eyeGlow) g.setVisible(false);
       return;
     }
+    this.stepEyes(time, o);
     if (!this.glow) this.glow = this.scene.add.image(0, 0, GLOW).setBlendMode(Phaser.BlendModes.ADD);
     const pulse = 0.42 + Math.sin(time / 230) * 0.1 + Math.sin(time / 71) * 0.04;
     // 跑起来光环按彩虹色循环（两种相邻色混着闪），站着是粉色
@@ -152,6 +160,29 @@ export class UnicornFx {
     }
   }
 
+  /** 眼睛：紫水晶色光晕一呼一吸，跑起来眼里往后飘紫色光点拉成两道光尾 */
+  private stepEyes(time: number, o: PkState) {
+    const eyes = (o.eyes ?? []).slice(1);
+    while (this.eyeGlow.length < 2) this.eyeGlow.push(this.scene.add.image(0, 0, EYE).setBlendMode(Phaser.BlendModes.ADD).setVisible(false));
+    const flash = (time % 2800) < 220 ? 1 - (time % 2800) / 220 : 0;
+    this.eyeGlow.forEach((g, k) => {
+      const e = eyes[k];
+      if (!e) return g.setVisible(false);
+      const a = 0.7 + Math.sin(time / 110 + k * 2) * 0.12 + flash * 0.3;
+      g.setVisible(true).setPosition(e[0], e[1]).setDepth(o.depth + 2).setAlpha(Math.min(1, a)).setScale(0.13 + flash * 0.08, 0.11 + flash * 0.06);
+    });
+    if (!eyes.length || time < this.nextEye) return;
+    this.nextEye = time + (o.moving ? 40 : 160) * (o.lite ? 2 : 1);
+    for (const [x, y] of eyes) {
+      const p = this.scene.add.image(x + (Math.random() - 0.5) * 2, y, MOTE).setDepth(o.depth + 3).setBlendMode(Phaser.BlendModes.ADD).setTint(EYE_C).setScale(o.moving ? 1.2 : 0.8);
+      const back = o.moving ? -o.dir * (10 + Math.random() * 10) : (Math.random() - 0.5) * 3;
+      this.scene.tweens.add({
+        targets: p, x: p.x + back, y: p.y - (o.moving ? 1 + Math.random() * 2 : 4 + Math.random() * 4), alpha: 0, scaleX: o.moving ? 2 : 0.4, scaleY: 0.5,
+        duration: o.moving ? 240 + Math.random() * 120 : 450 + Math.random() * 200, ease: 'Quad.easeOut', onComplete: () => p.destroy(),
+      });
+    }
+  }
+
   /** 角尖：金白光晕一呼一吸，往上冒光尘，隔几秒亮一下 */
   private stepHorn(time: number, o: PkState) {
     const tip = o.eyes?.[0];
@@ -202,6 +233,8 @@ export class UnicornFx {
   }
 
   destroy() {
+    for (const g of this.eyeGlow) g.destroy();
+    this.eyeGlow = [];
     this.glow?.destroy();
     this.hornGlow?.destroy();
     this.glow = this.hornGlow = undefined;

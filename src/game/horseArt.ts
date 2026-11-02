@@ -119,6 +119,9 @@ function horseLeg(d: Pen, L: Look, hx: number, hy: number, fx: number, fy: numbe
 /** 独角兽的角：从额头斜着往上前伸，金色带螺旋纹，尖上一点亮光 */
 /** 最近画的那一帧角尖在帧里的位置（相对脚底中心，侧面按朝右算）；背面画的角不算（被骑手挡着） */
 export let lastHornTip: [number, number] | null = null;
+/** 最近画的那一帧睁着的眼睛位置（同上），眼睛光效用；闭眼、背面为空 */
+export let lastEyes: [number, number][] = [];
+const noteEye = (x: number, y: number) => lastEyes.push([Math.round(x - HORSE_W / 2), Math.round(y - HORSE_FEET)]);
 function horn(d: Pen, U: UniLook, x: number, y: number, ang: number, len: number, dim = 0) {
   const ex = x + Math.cos(ang) * len;
   const ey = y + Math.sin(ang) * len;
@@ -345,7 +348,7 @@ function drawSide(back: Pen, front: Pen, L: Look, o: SidePose) {
   // 眼睛、耳朵
   if (L.uni) {
     // 独角兽：紫晶色的大眼睛带睫毛
-    if (!o.blink) { dot(front, hx + 1.2, hy - 0.6, L.uni.eye); dot(front, hx + 1.2, hy - 1.4, '#ffffff'); dot(front, hx + 2.2, hy - 1.6, R[0]); dot(front, hx + 1.2, hy + 0.4, mix(L.uni.eye, '#000000', 0.5)); }
+    if (!o.blink) { noteEye(hx + 1.2, hy - 0.6); dot(front, hx + 1.2, hy - 0.6, L.uni.eye); dot(front, hx + 1.2, hy - 1.4, '#ffffff'); dot(front, hx + 2.2, hy - 1.6, R[0]); dot(front, hx + 1.2, hy + 0.4, mix(L.uni.eye, '#000000', 0.5)); }
     else { dot(front, hx + 1.2, hy - 0.4, R[0]); dot(front, hx + 2.2, hy - 0.6, R[0]); }
   } else if (!o.blink) { dot(front, hx + 1.2, hy - 0.6, '#0a0608'); dot(front, hx + 1.2, hy - 1.4, '#ffffff'); }
   else dot(front, hx + 1.2, hy - 0.4, R[0]);
@@ -436,7 +439,7 @@ function drawFront(back: Pen, front: Pen, L: Look, t: number, run: boolean, i: n
   const blink = !run && i === 20;
   for (const s of [-1, 1]) {
     dot(front, 32 + s * 3, 11 + hb, blink ? R[0] : L.uni ? L.uni.eye : '#0a0608');
-    if (L.uni && !blink) dot(front, 32 + s * 3, 10 + hb, '#ffffff');
+    if (L.uni && !blink) { noteEye(32 + s * 3, 11 + hb); dot(front, 32 + s * 3, 10 + hb, '#ffffff'); }
     seg(front, 32 + s * 2.4, 8.5 + hb, 32 + s * 3.6, 4.5 + hb, 1.1, 0.4, R);
   }
   if (L.uni) {
@@ -537,6 +540,7 @@ export function drawHorseLook(L: Look, key: string, i: number, n: number): [Pix,
   const F = { p: front, k: 1, ox: 0, oy: 0 };
   const t = i / n;
   lastHornTip = null;
+  lastEyes = [];
   if (key === 'run-side') drawSide(B, F, L, gallop(t));
   else if (key === 'idle-side') drawSide(B, F, L, standing(t, i));
   else if (key === 'sit') drawSide(B, F, L, grazing(t, i));
