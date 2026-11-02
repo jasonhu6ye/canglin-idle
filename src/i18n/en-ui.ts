@@ -1471,4 +1471,10 @@ export const EN_UI: Record<string, string> = {
   "永冬冰原的限时宝箱开箱进度条到一半会自动重置、打不开，现在修好了。": "Timed chests in the Everwinter realm no longer reset halfway through opening.",
   "每个宝箱每一轮每人只能开一次，开完拿到奖励后宝箱会从你的地图上消失，下一轮刷新再出现。": "Each chest can be opened once per spawn per player; after you loot it, it disappears from your map until the next spawn.",
   '和 {0} 个队友一起打这只（怪物血量 +{1}%，伤害一起算）': 'Fighting with {0} teammate(s) (monster HP +{1}%, damage shared)',
+  '嘲讽：组队打同一个目标时（野外一起打同一种怪，或副本里同一个怪），怪物的普通攻击只打一个人：嘲讽值最高的那个，一样高时固定其中一个人。精英、首领的大招照样打全体。每人基础嘲讽 100，板甲一整套 +138，双手大盾 +150，想当坦克就穿板甲拿大盾。': 'Threat: when a party fights the same target (the same monster in the field, or the same monster in a dungeon), the monster\'s normal attacks hit only one person: whoever has the highest threat, and if tied, always the same one of them. Elite and boss specials still hit everyone. Base threat is 100; a full plate set adds 138 and a two-handed greatshield adds 150. Want to tank? Wear plate and carry a greatshield.',
+  '组队一起打：叫队友、伤害、仇恨': 'Party fights: calls, damage and threat',
+  '打怪时队伍栏下面多了「叫队友一起打」：在线的队友会自动赶过来打同一只怪。': 'While fighting, a new "Call teammates to fight" button under the party frames brings online teammates over to fight the same monster automatically.',
+  '同一个刷怪点上一起打的队友会站到怪旁边，头顶显示血条，伤害数字用队友的颜色飘出来；战斗卡片上会写「和几个队友一起打这只」。': 'Teammates fighting at the same spot stand beside your monster with HP bars over their heads, and their damage pops up in their colour. The combat card shows how many teammates share the monster.',
+  '组队打同一只怪时，怪物的普通攻击只打一个人：嘲讽最高的那个（一样高时固定其中一个人），不再随机打到别人。精英、首领的大招照样打全体。': 'When a party fights one monster, its normal attacks now hit only one person: the one with the highest threat (if tied, always the same one). Elite and boss specials still hit everyone.',
+  '修复：点「进入副本」没反应；跟随队长、叫队友时队友来回乱跑。': 'Fixed: "Enter dungeon" did nothing; teammates ran back and forth when following or answering a call.',
 };

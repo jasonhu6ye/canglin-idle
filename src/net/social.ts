@@ -1,5 +1,5 @@
 import { onlinePartySize, setPartySize } from '../core/party';
-import { fieldKey, threatOf } from '../core/aggro';
+import { fieldKey, threatOf, tieBreak } from '../core/aggro';
 import type { GameState } from '../core/types';
 import { useEffect, useState } from 'react';
 import { worldResetAt } from './bots';
@@ -213,7 +213,7 @@ export function updateAggro(s: GameState, x: number, y: number, fighting: boolea
     const same = dg
       ? p.dg && p.dg.gate === dg.gate && p.dg.floor === dg.floor && p.dg.idx === dg.idx && p.dg.phase === 'fight'
       : !p.dg && p.action === action && !!p.anim?.startsWith('fight-') && Math.abs(p.x - x) + Math.abs(p.y - y) <= FIELD_CREW;
-    if (same) out.push(threatOf(p.equip ?? {}));
+    if (same) out.push(tieBreak(threatOf(s.equipment), threatOf(p.equip ?? {}), me.id, m.id));
   }
   sendCoop(dg ? 0 : out.length, dgN, out);
 }
