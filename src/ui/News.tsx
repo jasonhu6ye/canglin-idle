@@ -8,6 +8,13 @@ import { tl } from '../i18n';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-11-02-x', date: tl('11 月 2 日'), title: tl('交易规则调整'),
+    lines: [
+      tl('系统赠送的物品（奖励邮件、兑换码发的）只能自己用，不能交易，也不能存进公会仓库；自己采集、制作、打怪得到的不受影响。'),
+      tl('每人每天最多成交 30 笔交易。'),
+    ],
+  },
+  {
     id: '2026-11-02-w', date: tl('11 月 2 日'), title: tl('传说、神话装备更稀有了'),
     lines: [
       tl('材料可以一直采，所以传说和神话装备的出货率调低了：T1 传说 1% → 0.2%（约 500 件出一件），神话 0.3% → 0.02%（约 5000 件出一件）。'),

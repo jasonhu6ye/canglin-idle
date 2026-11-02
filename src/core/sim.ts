@@ -231,6 +231,9 @@ export function migrate(raw: unknown): GameState | null {
     mail: migrateMail(s.mail),
     mailKeys: arr<string>(s.mailKeys).filter((k) => typeof k === 'string'),
     mailSeq: Math.max(0, num(s.mailSeq, 0), ...migrateMail(s.mail).map((m) => m.id)),
+    gmGot: keep(s.gmGot),
+    gmLeft: keep(s.gmLeft),
+    ...(s.gmMark === 1 ? { gmMark: 1 as const } : {}),
     home: homeIn,
     gates: arr<DungeonGate>(s.gates).filter((g) => obj(g) && (g.kind === 'green' || g.kind === 'blue') && TIERS[g.tier] && Number.isFinite(g.expires) && Number.isFinite(g.seed) && g.floors >= 1 && g.floors <= 7),
     gatesUsed: arr<string>(s.gatesUsed).filter((id) => typeof id === 'string').slice(-50),
@@ -468,7 +471,7 @@ export function redeemCode(prev: GameState, raw: string): { state: GameState; ms
   const s = clone(prev);
   s.redeemed = [...(s.redeemed ?? []), code];
   // 奖励发到邮箱（用户 10-25）
-  sendMail(s, 'redeem', gifts.map((g) => ({ ...g })), s.lastTick, { arg: raw.trim().slice(0, 32) });
+  sendMail(s, 'redeem', gifts.map((g) => ({ ...g })), s.lastTick, { arg: raw.trim().slice(0, 32), gm: 'code' });
   return { state: s, msg: tl`兑换成功：${gifts.map((g) => `${ITEMS[g.item].name}${g.qty > 1 ? ` ×${g.qty}` : ''}`).join(tl('、'))} 已发到邮箱`, ok: true };
 }
 

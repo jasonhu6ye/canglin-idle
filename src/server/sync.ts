@@ -2,14 +2,15 @@ import type { GameState, GmBuff, ItemStack, SkillId } from '../core/types';
 import { advance, combatLevel, level, migrate, newGame, setSettings } from '../core/sim';
 import { setGmBuffs } from '../core/gm';
 import { setGuildLv } from '../core/guild';
-import { sendMail, stepMail } from '../core/mail';
+import { clampGmLeft, markOldGmMail, sendMail, stepMail } from '../core/mail';
+import { allHeld } from '../core/beta';
 import { ITEMS } from '../core/data';
 import { applyCmd, saltRng, SECRET_RNG, type Cmd } from '../core/commands';
 import { clearMateHits, setAggroMates, setDgCrew, setFieldCrew } from '../core/aggro';
 import { setPartySize } from '../core/party';
 import { flag, setGuard, type Flag, type Guard, type MateRun } from '../core/guard';
 import type { DungeonGate } from '../core/types';
-import { gearHeld, gearSuspects, setMaker, trimMarks, matTotals, matsHeld, newEvents, newProv, provSettle, provSettleMats, provTotals, type GearSuspect } from '../core/prov';
+import { gearHeld, gearSuspects, provDiff, provFlat, migrateProv, type GotRow, setMaker, trimMarks, matTotals, matsHeld, newEvents, newProv, provSettle, provSettleMats, provTotals, type GearSuspect } from '../core/prov';
 
 /** 上次结算末尾的一起打人数，隔多久之内下次接着用 */
 const COOP_KEEP_MS = 10_000;
@@ -46,7 +47,7 @@ export interface SyncExtras {
   guildLv: number;
   guildTech?: unknown;
   /** 还没领的 GM 赠送邮件 */
-  mails: { id: string; title: string; body: string; items: ItemStack[] }[];
+  mails: { id: string; title: string; body: string; items: ItemStack[]; /** 兑换码换来的（不是管理员手发的） */ code?: boolean }[];
   /** 建角色时选的外观（新档用） */
   outfit?: string;
   /** 服务器回档版本 */
@@ -67,7 +68,7 @@ export interface SyncExtras {
   frozen?: boolean;
 }
 
-export interface SyncOut { state: GameState; applied: number; mailIds: string[]; /** 这台设备的指令收到了第几条 */ ack: number; /** 可疑操作 */ flags?: Flag[]; /** 可疑装备 */ gear?: GearSuspect[]; /** 开箱这类指令服务器算出来的结果（按指令序号） */ results?: { q: number; out: unknown }[] }
+export interface SyncOut { state: GameState; applied: number; mailIds: string[]; /** 这台设备的指令收到了第几条 */ ack: number; /** 可疑操作 */ flags?: Flag[]; /** 可疑装备 */ gear?: GearSuspect[]; /** 这次新得到的东西：来源、物品、数量（服务器按天记进 item_log） */ got?: GotRow[]; /** 开箱这类指令服务器算出来的结果（按指令序号） */ results?: { q: number; out: unknown }[] }
 
 export function runSync(saved: unknown, cmds: unknown, now: number, ex: SyncExtras, device = '', seed?: number): SyncOut {
   resetShared(ex.partySize ?? 0);
@@ -91,7 +92,11 @@ export function runSync(saved: unknown, cmds: unknown, now: number, ex: SyncExtr
   try {
     const p0 = (saved as { prov?: { seq?: number; ev?: unknown[] } } | null)?.prov;
     const seq0 = Number(p0?.seq ?? (Array.isArray(p0?.ev) ? p0!.ev!.length : 0)) || 0;
+    const flat0 = provFlat(migrateProv(p0));
     const out = syncInner(saved, cmds, now, ex, device, seed);
+    // 物品来源记账（11-02）：这次结算多出来的，按来源分好交给服务器存
+    const got = provDiff(flat0, provFlat(out.state.prov));
+    if (got.length) out.got = got;
     // 可疑装备（11-02）：这次新记下的传说以上装备，按概率/来源/数量挑出来，交给管理员看
     const gear = p0 ? gearSuspects(out.state.prov, newEvents(out.state.prov, seq0)) : [];
     if (gear.length) out.gear = gear;
@@ -123,8 +128,12 @@ function syncInner(saved: unknown, cmds: unknown, now: number, ex: SyncExtras, d
   // 装备来源（11-02）：第一次记的时候身上已有的算「记录前」；上次结算后多出来的是交易/公会仓库这类外面来的
   if (!s.prov) s = { ...s, prov: newProv(s, s.lastTick) };
   else {
-    provSettle(s, 'outside', s.prov.held, provTotals(s.prov), s.lastTick);
-    if (s.prov.matHeld) provSettleMats(s, 'outside', s.prov.matHeld, matTotals(s.prov));
+    // 金币开始记来源前的老记录：上次的金币数不知道，按现在的算，免得整个余额被当成外面来的
+    if (!s.prov.coinV) {
+      s = { ...s, prov: { ...s.prov, coinV: 1, ...(s.prov.matHeld && { matHeld: { ...s.prov.matHeld, coins: s.bank.coins ?? 0 } }) } };
+    }
+    provSettle(s, 'outside', s.prov!.held, provTotals(s.prov!), s.lastTick);
+    if (s.prov!.matHeld) provSettleMats(s, 'outside', s.prov!.matHeld, matTotals(s.prov!));
   }
   /** 一步（一段结算或一条指令）前后对比，多出来又没被制作/掉落记到的装备记到 src 名下 */
   const step = (src: string, t: number, f: (x: GameState) => GameState) => {
@@ -139,6 +148,7 @@ function syncInner(saved: unknown, cmds: unknown, now: number, ex: SyncExtras, d
       provSettleMats(s, src, mBefore, mTot);
     }
   };
+  s = markOldGmMail(s);
   s = setGmBuffs(s, ex.gmBuffs, s.lastTick);
   s = setGuildLv(s, ex.guildLv, ex.guildTech);
   // 每日礼物、全服赠礼、过期清理：由服务器发（玩家领邮件的指令要能找到这封）
@@ -172,13 +182,14 @@ function syncInner(saved: unknown, cmds: unknown, now: number, ex: SyncExtras, d
   if (ex.mails.length) {
     const next: GameState = JSON.parse(JSON.stringify(s));
     for (const m of ex.mails) {
-      sendMail(next, 'custom', m.items.filter((i) => ITEMS[i.item] && i.qty > 0), now, { title: m.title, body: m.body });
+      sendMail(next, 'custom', m.items.filter((i) => ITEMS[i.item] && i.qty > 0), now, { title: m.title, body: m.body, gm: m.code ? 'code' : 'gm' });
       mailIds.push(m.id);
     }
     s = next;
   }
   const out = s as GameState & { _epoch?: number; _seq?: Record<string, number> };
   trimMarks(out);
+  clampGmLeft(out, allHeld(out));
   if (out.prov) {
     out.prov.held = gearHeld(out);
     out.prov.matHeld = matsHeld(out);

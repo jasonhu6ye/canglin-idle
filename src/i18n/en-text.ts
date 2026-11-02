@@ -1352,4 +1352,7 @@ export const EN_TEXT: Record<string, string> = {
   "限定坐骑 · 自带动态特效": "Limited mount · animated effects",
   "这只坐骑还没开放获取途径，先看看效果": "This mount cannot be obtained yet; here is a preview",
   "坐骑马在城镇畜牧站养大，装在角色页的坐骑栏。": "Horses are raised at the town ranch and equipped in the mount slot on the Character page.",
+  "交易规则调整": "Trade rule changes",
+  "系统赠送的物品（奖励邮件、兑换码发的）只能自己用，不能交易，也不能存进公会仓库；自己采集、制作、打怪得到的不受影响。": "Items given by the system (reward mail, codes) are for your own use: they can't be traded or put in the guild vault. Things you gather, craft or loot are unaffected.",
+  "每人每天最多成交 30 笔交易。": "Up to 30 completed trades per day.",
 };

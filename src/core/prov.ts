@@ -37,6 +37,8 @@ export interface Prov {
   ev: ProvEv[];
   /** 一共记过几件（ev 只留最近的，用这个找出这次结算新记的） */
   seq?: number;
+  /** 金币也记来源了（11-02 之后）；没有这个标记的老记录，matHeld 里没算金币 */
+  coinV?: 1;
 }
 
 /** 这个品质以上逐件记（用户 11-02：只记传说、神话） */
@@ -57,7 +59,7 @@ export function gearHeld(s: GameState): Record<string, number> {
 
 export function newProv(s: GameState, now: number): Prov {
   const held = gearHeld(s);
-  return { since: now, base: { ...held }, held, craft: {}, drop: {}, other: {}, pend: {}, mats: {}, ev: [] };
+  return { since: now, base: { ...held }, held, craft: {}, drop: {}, other: {}, pend: {}, mats: {}, ev: [], coinV: 1 };
 }
 
 const rec = (o: unknown): Record<string, number> =>
@@ -93,7 +95,7 @@ export function migrateProv(raw: unknown): Prov | undefined {
       ...(e.cost && { cost: rec(e.cost) }), ...(Number.isFinite(e.p) && { p: e.p }),
     }))
     .slice(-PROV_EV_CAP);
-  return { since: p.since!, base: rec(p.base), held: rec(p.held), ...(p.matHeld && { matHeld: rec(p.matHeld) }), craft, drop, other: recOf(p.other), pend, mats: recOf(p.mats), ev, ...(Number.isInteger(p.seq) && p.seq! >= ev.length && { seq: p.seq }) };
+  return { since: p.since!, base: rec(p.base), held: rec(p.held), ...(p.matHeld && { matHeld: rec(p.matHeld) }), craft, drop, other: recOf(p.other), pend, mats: recOf(p.mats), ev, ...(Number.isInteger(p.seq) && p.seq! >= ev.length && { seq: p.seq }), ...(p.coinV === 1 && { coinV: 1 as const }) };
 }
 
 const pushEv = (p: Prov, e: ProvEv) => {
@@ -190,8 +192,8 @@ export function provSettle(s: GameState, src: string, before: Record<string, num
   }
 }
 
-/** 材料：除了装备和金币，仓库 + 背包 + 食物/药水栏 */
-const isMat = (id: string) => id !== 'coins' && !!ITEMS[id] && !isGear(id);
+/** 材料：除了装备都算（11-02 起金币也记来源），仓库 + 背包 + 食物/药水栏 */
+const isMat = (id: string) => !!ITEMS[id] && !isGear(id);
 export function matsHeld(s: GameState): Record<string, number> {
   const out: Record<string, number> = {};
   const add = (id: string, n: number) => { if (n > 0 && isMat(id)) out[id] = (out[id] ?? 0) + n; };
@@ -213,6 +215,47 @@ export function matTotals(p: Prov): Record<string, number> {
   const out: Record<string, number> = {};
   for (const [id, r] of Object.entries(p.mats)) out[id] = Object.values(r).reduce((a, b) => a + b, 0);
   return out;
+}
+
+/**
+ * 直接知道来源的一笔（比如领邮件按邮件种类记 mail:gm / mail:quest）：装备记进 other（传说以上逐件记），其他记进 mats。
+ * 记过的这一步结束时 provSettle / provSettleMats 不会再记一遍
+ */
+export function provGot(s: GameState, id: string, qty: number, src: string, t: number) {
+  const p = s.prov;
+  if (!p || qty <= 0 || !ITEMS[id]) return;
+  if (!isGear(id)) { provMat(s, id, qty, src); return; }
+  const o = (p.other[src] ??= {});
+  o[id] = (o[id] ?? 0) + qty;
+  if (qualityOf(id) >= PROV_EV_Q) for (let k = 0; k < Math.min(qty, 5); k++) pushEv(p, { t, id, src });
+}
+
+/**
+ * 所有来源的累计，摊平成「来源|物品 → 数量」（11-02 用户要求每个活跃玩家每样东西怎么来的都留记录）：
+ * 结算前后一减就是这次新得到的，服务器按天存进 item_log 表（存档回档、改档也不会丢）
+ */
+export function provFlat(p: Prov | undefined): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!p) return out;
+  const add = (src: string, r: Record<string, number>) => { for (const [id, n] of Object.entries(r)) if (n > 0) out[`${src}|${id}`] = (out[`${src}|${id}`] ?? 0) + n; };
+  for (const [a, c] of Object.entries(p.craft)) add(`craft:${a}`, c.out);
+  for (const [m, d] of Object.entries(p.drop)) add(`drop:${m}`, d.out);
+  for (const [src, r] of Object.entries(p.other)) add(src, r);
+  for (const [id, r] of Object.entries(p.mats)) for (const [src, n] of Object.entries(r)) if (n > 0) out[`${src}|${id}`] = (out[`${src}|${id}`] ?? 0) + n;
+  return out;
+}
+
+export interface GotRow { src: string; item: string; n: number }
+/** 两次累计之差（只要多出来的） */
+export function provDiff(before: Record<string, number>, after: Record<string, number>, cap = 400): GotRow[] {
+  const rows: GotRow[] = [];
+  for (const [k, n] of Object.entries(after)) {
+    const d = n - (before[k] ?? 0);
+    if (d <= 0) continue;
+    const i = k.lastIndexOf('|');
+    rows.push({ src: k.slice(0, i), item: k.slice(i + 1), n: d });
+  }
+  return rows.sort((a, b) => b.n - a.n).slice(0, cap);
 }
 
 /** 服务器结算一步之后：多出来、又没被 sim 记到的材料记到 src 名下（开箱、买的、邮件、交易……） */
@@ -255,8 +298,9 @@ export function gearSuspects(p: Prov | undefined, fresh: ProvEv[]): GearSuspect[
       const chance = 1 - Math.pow(1 - e.p, e.n);
       if (chance < LUCK_MIN) { out.push({ ...base, reason: 'luck', detail: { ...detail, chance } }); continue; }
     }
-    const hour = p.ev.filter((x) => x.t <= e.t && x.t > e.t - 3600_000 && x.src !== 'cmd:claimMail').length;
-    if (hour > BURST_N && e.src !== 'cmd:claimMail') out.push({ ...base, reason: 'burst', detail: { ...detail, hour } });
+    const mail = (src: string) => src === 'cmd:claimMail' || src.startsWith('mail:');
+    const hour = p.ev.filter((x) => x.t <= e.t && x.t > e.t - 3600_000 && !mail(x.src)).length;
+    if (hour > BURST_N && !mail(e.src)) out.push({ ...base, reason: 'burst', detail: { ...detail, hour } });
   }
   return out;
 }

@@ -51,7 +51,7 @@ async function extras(uid: string, now: number): Promise<SyncExtras & { found: b
   const [buffs, guild, mails, party] = await Promise.all([
     rest(`gm_buffs?select=id,target_pid,name,tag,kind,pct,starts_at,ends_at&ends_at=gt.${since}&or=(target_pid.is.null,target_pid.eq.${pid})&limit=50`) as Promise<Row[]>,
     p.guild_id ? rest(`guilds?id=eq.${p.guild_id}&select=level,tech`) as Promise<Row[]> : Promise.resolve([] as Row[]),
-    pid ? rest(`gm_mail?select=id,title,body,items&target_pid=eq.${pid}&claimed_at=is.null&limit=20`) as Promise<Row[]> : Promise.resolve([] as Row[]),
+    pid ? rest(`gm_mail?select=id,title,body,items,created_by&target_pid=eq.${pid}&claimed_at=is.null&limit=20`) as Promise<Row[]> : Promise.resolve([] as Row[]),
     rest(`party_members?player_id=eq.${uid}&select=party_id`) as Promise<Row[]>,
   ]);
   const members = party[0] ? ((await rest(`party_members?party_id=eq.${party[0].party_id}&select=player_id`)) as Row[]).map((r) => String(r.player_id)) : [];
@@ -80,7 +80,7 @@ async function extras(uid: string, now: number): Promise<SyncExtras & { found: b
     guildLv: guild[0] ? Number(guild[0].level) || 1 : 0,
     guildTech: guild[0]?.tech,
     mails: mails.map((m) => ({
-      id: m.id, title: m.title ?? '', body: m.body ?? '',
+      id: m.id, title: m.title ?? '', body: m.body ?? '', code: m.created_by == null,
       items: (Array.isArray(m.items) ? m.items : []).filter((i: Row) => typeof i?.item === 'string' && Number(i.qty) > 0).map((i: Row): ItemStack => ({ item: i.item, qty: Math.floor(Number(i.qty)) })),
     })),
     outfit: p.outfit ?? undefined,
@@ -120,7 +120,7 @@ Deno.serve(async (req) => {
       ]);
       if (!ex.found) return json({ error: 'profile' }, 404);
       const row = rows[0];
-      const { state, applied, mailIds, ack, flags, results, gear } = runSync(row?.data ?? null, body.cmds, now, ex, device ?? '');
+      const { state, applied, mailIds, ack, flags, results, gear, got } = runSync(row?.data ?? null, body.cmds, now, ex, device ?? '');
       const data: Row = device ? { ...state, _device: device } : { ...state };
       // 记下用过的设备和网络（变了或者半小时一次），给多开检测用
       const net = await netKey(req).catch(() => '');
@@ -143,6 +143,8 @@ Deno.serve(async (req) => {
         await Promise.all((gear ?? []).slice(0, 10).map((g) => rest('rpc/gear_flag', {
           method: 'POST', body: JSON.stringify({ p: uid, p_item: g.item, p_src: g.src, p_reason: g.reason, p_at: g.t, p_detail: g.detail }),
         }).catch(() => {})));
+        // 物品来源（11-02）：这次新得到的东西按北京时间的天、来源累计进 item_log
+        if (got?.length) await rest('rpc/item_log_add', { method: 'POST', body: JSON.stringify({ p: uid, p_rows: got }) }).catch(() => {});
         if (seen) await rest('rpc/ac_seen', { method: 'POST', body: JSON.stringify({ p: uid, p_ip: net, p_dev: device ?? '' }) }).catch(() => {});
         return json({ state: data, rev, now, applied, ack, results });
       }

@@ -1,5 +1,6 @@
 import { ITEMS } from './data';
 import { HW_BOX, HW_END, hwOpen } from './halloween';
+import { provGot } from './prov';
 import type { GameState, ItemStack, Mail, MailKind } from './types';
 
 /*
@@ -26,7 +27,7 @@ export const dayKey = (now: number) => {
 };
 
 /** 往存档里塞一封邮件（直接改 s） */
-export function sendMail(s: GameState, kind: MailKind, items: ItemStack[], at: number, extra: Partial<Pick<Mail, 'arg' | 'expires' | 'title' | 'body'>> = {}) {
+export function sendMail(s: GameState, kind: MailKind, items: ItemStack[], at: number, extra: Partial<Pick<Mail, 'arg' | 'expires' | 'title' | 'body' | 'gm'>> = {}) {
   s.mailSeq = (s.mailSeq ?? 0) + 1;
   s.mail = [{ id: s.mailSeq, kind, at, items: items.filter((i) => i.qty > 0), ...extra }, ...(s.mail ?? [])];
   // 太多了先删最旧的已领取邮件，再删最旧的
@@ -93,15 +94,19 @@ export function claimMail(prev: GameState, id: number | 'all', room: RoomFn): [G
   const s: GameState = JSON.parse(JSON.stringify(prev));
   for (const m of s.mail!) {
     if (!targets.some((t) => t.id === m.id)) continue;
+    // 来源按邮件种类记（mail:gm 管理员 / mail:code 兑换码 / mail:quest 新手任务 / mail:gift 全服赠礼 / mail:hw_daily 活动礼物）
+    const src = `mail:${m.gm ?? m.kind}`;
     for (const { item, qty } of m.items) {
       if (!ITEMS[item] || qty <= 0) continue;
       got[item] = (got[item] ?? 0) + qty;
+      provGot(s, item, qty, src, s.lastTick);
       if (item === 'coins') { s.bank.coins = (s.bank.coins ?? 0) + qty; continue; }
       const n = Math.min(qty, room(s.bag, item));
       if (n > 0) s.bag[item] = (s.bag[item] ?? 0) + n;
       if (qty > n) s.bank[item] = (s.bank[item] ?? 0) + qty - n;
       s.seen[item] = 1;
     }
+    if (m.gm) addGmGot(s, m.items);
     m.claimed = true;
     m.read = true;
   }
@@ -122,10 +127,41 @@ export function clearMail(prev: GameState): GameState {
 
 export const unreadMail = (s: GameState) => (s.mail ?? []).filter((m) => !m.read || (!m.claimed && m.items.length > 0)).length;
 
+/** 记账：从带标记的邮件领到的东西（直接改 s） */
+function addGmGot(s: GameState, items: ItemStack[]) {
+  const g = { ...(s.gmGot ?? {}) };
+  const left = { ...(s.gmLeft ?? {}) };
+  for (const { item, qty } of items) if (ITEMS[item] && qty > 0) {
+    g[item] = (g[item] ?? 0) + qty;
+    left[item] = (left[item] ?? 0) + qty;
+  }
+  s.gmGot = g;
+  s.gmLeft = left;
+}
+
+/** 结算末：GM 发的还剩多少不能超过身上实际有的（held = 仓库 + 背包 + 穿着 + 食物栏） */
+export function clampGmLeft(s: GameState, held: Record<string, number>) {
+  if (!s.gmLeft) return;
+  const out: Record<string, number> = {};
+  for (const [id, n] of Object.entries(s.gmLeft)) { const v = Math.min(n, held[id] ?? 0); if (v > 0) out[id] = v; }
+  s.gmLeft = out;
+}
+
+/**
+ * 老邮件补标记（11-02，只做一次）：管理员邮件（custom）记 gm，兑换码奖励记 code；已经领过的附件补进 gmGot。
+ * 已经被玩家删掉的邮件这里补不回来，以服务器 gm_grants 表为准。
+ */
+export function markOldGmMail(s: GameState): GameState {
+  if (s.gmMark) return s;
+  const out: GameState = { ...s, gmMark: 1, mail: (s.mail ?? []).map((m) => (m.gm || (m.kind !== 'custom' && m.kind !== 'redeem') ? m : { ...m, gm: m.kind === 'custom' ? 'gm' : 'code' })) };
+  for (const m of out.mail!) if (m.gm && m.claimed && !s.mail!.find((x) => x.id === m.id)?.gm) addGmGot(out, m.items);
+  return out;
+}
+
 /** 读档：只留格式对的邮件、认识的物品 */
 export function migrateMail(raw: unknown): Mail[] {
   if (!Array.isArray(raw)) return [];
   return raw.filter((m): m is Mail => !!m && typeof m === 'object' && Number.isFinite(m.id) && typeof m.kind === 'string' && Number.isFinite(m.at) && Array.isArray(m.items))
-    .map((m) => ({ ...m, items: m.items.filter((i) => i && ITEMS[i.item] && Number.isFinite(i.qty) && i.qty > 0).map((i) => ({ item: i.item, qty: Math.floor(i.qty) })) }))
+    .map((m) => ({ ...m, gm: m.gm === 'gm' || m.gm === 'code' ? m.gm : undefined, items: m.items.filter((i) => i && ITEMS[i.item] && Number.isFinite(i.qty) && i.qty > 0).map((i) => ({ item: i.item, qty: Math.floor(i.qty) })) }))
     .slice(0, MAIL_CAP);
 }

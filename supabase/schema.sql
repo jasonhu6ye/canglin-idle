@@ -3087,3 +3087,256 @@ begin
     limit 5;
 end $$;
 grant execute on function public.gm_gear(text) to authenticated;
+
+-- ============ 内测发放记账（11-02）============
+-- 公测要回收内测期间 GM 邮件和兑换码发的东西：每封 gm_mail 发出 / 领取 / 没领就删掉都记进 gm_grants。
+-- gm_mail 的记录可以被删（GM 面板「删除 / 清空已收到」），这张表不跟着删。src: gm = 管理员发，code = 兑换码奖励。
+create table if not exists public.gm_grants (
+  mail_id uuid primary key,
+  target_pid bigint not null,
+  src text not null default 'gm',
+  title text not null default '',
+  items jsonb not null default '[]'::jsonb,
+  created_by uuid,
+  created_at timestamptz not null default now(),
+  claimed_at timestamptz,
+  revoked_at timestamptz
+);
+create index if not exists gm_grants_pid on public.gm_grants (target_pid);
+alter table public.gm_grants enable row level security;
+drop policy if exists "gm_grants 管理员看" on public.gm_grants;
+create policy "gm_grants 管理员看" on public.gm_grants for select using (public.is_gm());
+
+create or replace function public.gm_grants_log() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'DELETE' then
+    -- 没领就删 = 撤回，没发出去；领过的删记录不影响账
+    update gm_grants set revoked_at = now() where mail_id = old.id and claimed_at is null;
+    return old;
+  end if;
+  insert into gm_grants (mail_id, target_pid, src, title, items, created_by, created_at, claimed_at)
+    values (new.id, new.target_pid, case when new.created_by is null then 'code' else 'gm' end, new.title, new.items, new.created_by, new.created_at, new.claimed_at)
+    on conflict (mail_id) do update set claimed_at = coalesce(gm_grants.claimed_at, excluded.claimed_at);
+  return new;
+end $$;
+drop trigger if exists gm_grants_log on public.gm_mail;
+create trigger gm_grants_log after insert or update of claimed_at or delete on public.gm_mail
+  for each row execute function public.gm_grants_log();
+
+-- 补记现在还在的 gm_mail（已经删掉的找不回来，存档里的 gmGot 还记着）
+insert into public.gm_grants (mail_id, target_pid, src, title, items, created_by, created_at, claimed_at)
+  select id, target_pid, case when created_by is null then 'code' else 'gm' end, title, items, created_by, created_at, claimed_at from public.gm_mail
+  on conflict (mail_id) do nothing;
+
+-- ============ 物品来源记账（11-02）============
+-- 每个活跃玩家每天从哪得到了什么、多少（服务器结算时算出来，北京时间按天累计）。存档回档、GM 改档都不影响这张表。
+-- src：craft:配方 / skill:动作 / drop:怪 / cmd:指令 / mail:gm|code|quest|gift|hw_daily / outside（交易、公会仓库、GM 改档）/ auto
+create table if not exists public.item_log (
+  player_id uuid not null references public.profiles(id) on delete cascade,
+  day date not null,
+  src text not null,
+  item text not null,
+  qty bigint not null default 0,
+  updated_at timestamptz not null default now(),
+  primary key (player_id, day, src, item)
+);
+create index if not exists item_log_item on public.item_log (item, day);
+alter table public.item_log enable row level security;
+-- 不开策略：只能通过下面的函数读写
+
+create or replace function public.item_log_add(p uuid, p_rows jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+declare d date := (now() at time zone 'Asia/Shanghai')::date;
+begin
+  insert into item_log (player_id, day, src, item, qty)
+    select p, d, left(r ->> 'src', 80), left(r ->> 'item', 80), sum(floor((r ->> 'n')::numeric))::bigint
+    from jsonb_array_elements(coalesce(p_rows, '[]'::jsonb)) r
+    where coalesce(r ->> 'src', '') <> '' and coalesce(r ->> 'item', '') <> '' and (r ->> 'n')::numeric > 0
+    group by 3, 4
+  on conflict (player_id, day, src, item) do update set qty = item_log.qty + excluded.qty, updated_at = now();
+end $$;
+revoke execute on function public.item_log_add(uuid, jsonb) from public, anon, authenticated;
+grant execute on function public.item_log_add(uuid, jsonb) to service_role;
+
+-- 管理员：查一个玩家（UID 或名字）最近 p_days 天的来源，可只看某个物品
+create or replace function public.gm_item_log(p_who text, p_days int default 30, p_item text default null)
+returns table (pid bigint, name text, day date, src text, item text, qty bigint)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  return query
+    select x.pid, x.name, l.day, l.src, l.item, l.qty
+    from item_log l join profiles x on x.id = l.player_id
+    where (x.pid::text = trim(p_who) or lower(x.name) = lower(trim(p_who)))
+      and l.day >= (now() at time zone 'Asia/Shanghai')::date - greatest(coalesce(p_days, 30), 1)
+      and (coalesce(p_item, '') = '' or l.item = p_item)
+    order by l.day desc, l.qty desc
+    limit 2000;
+end $$;
+grant execute on function public.gm_item_log(text, int, text) to authenticated;
+
+-- ============ 公测审查（11-02）============
+-- GM 面板「装备来源」查玩家时多带：技能经验、gmGot、服务器记的 GM 发放合计、邮箱、未处理的可疑装备，网页上算每样东西能不能带进公测。
+drop function if exists public.gm_gear(text);
+create or replace function public.gm_gear(p_who text)
+returns table (player_id uuid, pid bigint, name text, prov jsonb, bank jsonb, bag jsonb, equipment jsonb, belt jsonb, last_tick bigint, marks jsonb,
+  xp jsonb, gm_got jsonb, mail jsonb, grants jsonb, flagged jsonb, sent jsonb)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  return query
+    select p.id, p.pid, p.name, s.data->'prov', s.data->'bank', s.data->'bag', s.data->'equipment', s.data->'belt', s.last_tick, s.data->'marks',
+      s.data->'xp', s.data->'gmGot', s.data->'mail',
+      (select coalesce(jsonb_object_agg(t.item, t.qty), '{}'::jsonb) from (
+        select it ->> 'item' as item, sum((it ->> 'qty')::numeric) as qty
+        from gm_grants g, jsonb_array_elements(g.items) it
+        where g.target_pid = p.pid and g.claimed_at is not null and g.revoked_at is null
+        group by 1) t),
+      (select coalesce(jsonb_agg(distinct f.item), '[]'::jsonb) from gear_flags f where f.player_id = p.id and f.status = 'open'),
+      -- 转出去的东西（防偷跑：GM 发的东西转给小号）：成交的交易里自己给出的，存进公会仓库的
+      (select coalesce(jsonb_agg(z), '[]'::jsonb) from (
+        select jsonb_build_object('to', o.name || '#' || o.pid, 'items', case when t.a = p.id then t.a_items else t.b_items end) z
+        from trades t join profiles o on o.id = case when t.a = p.id then t.b else t.a end
+        where (t.a = p.id or t.b = p.id) and t.status = 'done'
+        union all
+        select jsonb_build_object('to', '公会仓库', 'items', jsonb_object_agg(l.item, l.qty))
+        from guild_bank_log l where l.player_id = p.id and l.qty > 0
+        having count(*) > 0
+        limit 300) q)
+    from profiles p join saves s on s.player_id = p.id
+    where p.pid::text = trim(p_who) or lower(p.name) like '%' || lower(trim(p_who)) || '%'
+    order by (p.pid::text = trim(p_who)) desc, p.last_seen desc nulls last
+    limit 5;
+end $$;
+grant execute on function public.gm_gear(text) to authenticated;
+
+-- ============ 交易把关加严（11-02）============
+-- 1. GM 发的东西不能交易、不能存公会仓库（存档 gmLeft = 还剩在身上的 GM 物品；能动的 = 仓库 + 背包 - gmLeft）
+-- 2. 同设备 / 同网络的关联账号照旧由 ac_link_check 管（same_dev_trade / same_ip_trade）
+-- 3. 每天最多成交 trade_day_count 笔（默认 30，0 = 不限）
+-- 4. 一边倒的交易（一方给的价值 ≥ trade_gift_value，另一方给的不到 trade_gift_ratio%）记一条可疑记录 trade_gift，不拦
+-- 每天收到的价值上限照旧用 trade_day_value（默认 0 = 不限）
+
+-- 交易里一堆东西值多少（金币按 1 算）
+create or replace function public.ac_trade_value(o jsonb) returns numeric
+language sql stable security definer set search_path = public as $$
+  select public.ac_value(coalesce(o, '{}'::jsonb) - 'coins') + coalesce((o ->> 'coins')::numeric, 0)
+$$;
+revoke execute on function public.ac_trade_value(jsonb) from public, anon, authenticated;
+
+-- 这样东西能拿出来交易 / 存公会仓库的数量（扣掉 GM 发的）
+create or replace function public.ac_free_qty(p uuid, p_item text) returns bigint
+language sql stable security definer set search_path = public as $$
+  select greatest(0,
+    coalesce((d -> 'bank' ->> p_item)::bigint, 0)
+    + case when p_item = 'coins' then 0 else coalesce((d -> 'bag' ->> p_item)::bigint, 0) end
+    - coalesce((d -> 'gmLeft' ->> p_item)::bigint, 0))
+  from (select data d from saves where player_id = p) s
+$$;
+revoke execute on function public.ac_free_qty(uuid, text) from public, anon, authenticated;
+
+create or replace function public.ac_check_bound(p uuid, p_items jsonb) returns void
+language plpgsql stable security definer set search_path = public as $$
+declare k text; v jsonb;
+begin
+  if exists (select 1 from gm_admins a join profiles x on x.pid = a.pid where x.id = p) then return; end if;
+  for k, v in select * from jsonb_each(coalesce(p_items, '{}'::jsonb)) loop
+    if coalesce(public.ac_free_qty(p, k), 0) < (v #>> '{}')::bigint then
+      raise exception '系统赠送的物品不能交易或存进公会仓库（%）', k;
+    end if;
+  end loop;
+end $$;
+revoke execute on function public.ac_check_bound(uuid, jsonb) from public, anon, authenticated;
+
+create or replace function public.confirm_trade(p_trade uuid, p_ok boolean) returns text
+language plpgsql security definer set search_path = public as $$
+declare mk jsonb; t trades; k text; v jsonb; cap numeric; other uuid; va numeric; vb numeric; free boolean; n int;
+begin
+  select * into t from trades where id = p_trade for update;
+  if t.id is null or auth.uid() not in (t.a, t.b) then raise exception '交易不存在'; end if;
+  if t.status <> 'open' then raise exception '交易已经结束'; end if;
+  other := case when auth.uid() = t.a then t.b else t.a end;
+  if p_ok then perform public.ac_trade_check(other); end if;
+  if auth.uid() = t.a then t.a_ok := p_ok; else t.b_ok := p_ok; end if;
+  if t.a_ok and t.b_ok then
+    if t.a_items = '{}'::jsonb and t.b_items = '{}'::jsonb then raise exception '双方都没放东西'; end if;
+    -- GM、白名单不受下面这些限制
+    free := public.is_gm() or exists (select 1 from gm_admins g join profiles x on x.pid = g.pid where x.id in (t.a, t.b))
+      or (select bool_and(ac_exempt) from profiles where id in (t.a, t.b));
+    perform public.ac_check_bound(t.a, t.a_items);
+    perform public.ac_check_bound(t.b, t.b_items);
+    if not free then
+      n := public.ac_conf('trade_day_count', 30);
+      if n > 0 and ((select count(*) from trades x where x.status = 'done' and t.a in (x.a, x.b)
+            and x.updated_at >= ((now() at time zone 'Asia/Shanghai')::date::timestamp at time zone 'Asia/Shanghai')) >= n
+          or (select count(*) from trades x where x.status = 'done' and t.b in (x.a, x.b)
+            and x.updated_at >= ((now() at time zone 'Asia/Shanghai')::date::timestamp at time zone 'Asia/Shanghai')) >= n) then
+        raise exception '今天的交易次数已经用完（每天 % 笔），明天再来', n;
+      end if;
+      cap := public.ac_conf('trade_day_value', 0);
+      if cap > 0 then
+        if public.ac_trade_got_today(t.a) + public.ac_value(t.b_items) > cap
+          or public.ac_trade_got_today(t.b) + public.ac_value(t.a_items) > cap then
+          raise exception '超过每天交易能收到的价值上限（%金币），明天再来', cap;
+        end if;
+      end if;
+    end if;
+    t.status := 'done';
+  end if;
+  update trades set a_ok = t.a_ok, b_ok = t.b_ok, status = t.status, updated_at = now() where id = p_trade;
+  if t.status = 'done' then
+    -- 成交：在数据库里把双方的东西换过来（不够就报错，整笔撤回、交易保持未成交）。
+    -- 放在改状态之后，交易检查触发器看到的还是换之前的存档
+    for k, v in select * from jsonb_each(t.a_items) loop
+      mk := public.save_take_marks(t.a, k, (v #>> '{}')::bigint);
+      perform save_take(t.a, k, (v #>> '{}')::bigint);
+      perform save_give(t.b, k, (v #>> '{}')::bigint);
+      perform public.save_give_marks(t.b, k, mk);
+    end loop;
+    for k, v in select * from jsonb_each(t.b_items) loop
+      mk := public.save_take_marks(t.b, k, (v #>> '{}')::bigint);
+      perform save_take(t.b, k, (v #>> '{}')::bigint);
+      perform save_give(t.a, k, (v #>> '{}')::bigint);
+      perform public.save_give_marks(t.a, k, mk);
+    end loop;
+    -- 一边倒：记下来给 GM 看（送朋友东西也会这样，所以不拦）
+    va := public.ac_trade_value(t.a_items);
+    vb := public.ac_trade_value(t.b_items);
+    if greatest(va, vb) >= public.ac_conf('trade_gift_value', 20000)
+      and least(va, vb) * 100 < greatest(va, vb) * public.ac_conf('trade_gift_ratio', 30) then
+      perform public.ac_flag(case when va >= vb then t.b else t.a end, 'trade_gift', false,
+        jsonb_build_object('trade', t.id, 'from', (select pid from profiles where id = case when va >= vb then t.a else t.b end), 'got', greatest(va, vb), 'gave', least(va, vb),
+          'same_ip', exists (select 1 from ac_links l1 join ac_links l2 on l2.kind = 'ip' and l2.v = l1.v and l2.player_id = t.b where l1.player_id = t.a and l1.kind = 'ip')));
+    end if;
+  end if;
+  return t.status;
+end $$;
+
+-- 存公会仓库：GM 发的东西不能存
+create or replace function public.guild_deposit(p_item text, p_qty int, p_vault int default 0) returns void
+language plpgsql security definer set search_path = public as $$
+declare mk jsonb; g uuid; lv int; nm text; cap int;
+begin
+  if p_qty <= 0 or p_qty > 1000000 then raise exception '数量不对'; end if;
+  if p_item = 'coins' then raise exception '金币不能存进公会仓库'; end if;
+  if not exists (select 1 from item_values where id = p_item) then raise exception '这个东西不能存'; end if;
+  select guild_id into g from guild_members where player_id = auth.uid();
+  if g is null then raise exception '还没加入公会'; end if;
+  if not can_vault(g, p_vault, auth.uid()) then raise exception '没有这个仓库的权限'; end if;
+  perform public.ac_check_bound(auth.uid(), jsonb_build_object(p_item, p_qty));
+  select level into lv from guilds where id = g for update;
+  cap := case when p_vault = 0 then guild_slots(lv) else 30 end;
+  if not exists (select 1 from guild_bank where guild_id = g and vault = p_vault and item = p_item)
+    and (select count(*) from guild_bank where guild_id = g and vault = p_vault) >= cap then
+    raise exception '公会仓库满了';
+  end if;
+  mk := public.save_take_marks(auth.uid(), p_item, p_qty);
+  perform save_take(auth.uid(), p_item, p_qty);
+  insert into guild_bank (guild_id, vault, item, qty, pos, marks)
+    values (g, p_vault, p_item, p_qty, (select coalesce(max(pos), 0) + 1 from guild_bank where guild_id = g and vault = p_vault), mk)
+    on conflict (guild_id, vault, item) do update set qty = guild_bank.qty + excluded.qty, marks = guild_bank.marks || excluded.marks;
+  select name into nm from profiles where id = auth.uid();
+  insert into guild_bank_log (guild_id, vault, player_id, name, item, qty) values (g, p_vault, auth.uid(), coalesce(nm, ''), p_item, p_qty);
+  delete from guild_bank_log where guild_id = g and at < now() - interval '30 days';
+end $$;
