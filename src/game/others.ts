@@ -18,6 +18,7 @@ const FONT = 'system-ui, sans-serif';
 const VIEW_TILES = 80;
 /** 自己的位置多久发一次（没变化时） */
 const KEEPALIVE_MS = 15_000;
+const FIGHT_KEEPALIVE_MS = 2000;
 
 /** 别的在线玩家（看附近有没有人，决定发位置发多勤） */
 let everyone: Presence[] = [];
@@ -69,12 +70,13 @@ export function publishSelf(st: GameState, x: number, y: number, work?: { anim: 
   const fd = !dg && action && c?.crew && work?.anim.startsWith('fight-') ? { k: action, n: c.copy ?? 0, dmg: c.pTotal ?? 0, crit: c.pCrit || undefined, hp: Math.max(0, Math.round(c.monsterHp)), rs: c.respawnMs > 0 || undefined } : undefined;
   // 血量按 5% 一档比较，打怪时不用每下都发
   const key = JSON.stringify([st.settings.skin, action, mounted, st.equipment, snap.total, snap.combat, Math.round((hp / max) * 20), rallyTime(), assistTime(), work?.anim, work?.flip, (st.gates ?? []).map((g) => g.id).join(),
-    dg && [dg.gate, dg.floor, dg.idx, dg.phase, dg.kills, dg.anim, dg.flip, dg.dmg], fd && [fd.n, fd.dmg, fd.rs]]);
+    dg && [dg.gate, dg.floor, dg.idx, dg.phase, dg.kills, dg.anim, dg.flip, dg.dmg], fd && [fd.n, fd.dmg, fd.rs, fd.hp]]);
   const px = dg ? dg.x / T : x;
   const py = dg ? dg.y / T : y;
   const moved = Math.abs(px - sent.x) + Math.abs(py - sent.y) >= step && now - sent.at >= gap;
   // 打怪、换装备这类变化马上发（副本里队友要立刻看到伤害），只是走路才按节奏
-  if (!moved && key === sent.key && now - sent.at < KEEPALIVE_MS) return;
+  // 一起打怪时每 2 秒补发一次（11-02：网络丢了「怪死了」那一条，队友那边的怪要等下一只刷出来才跟着倒）
+  if (!moved && key === sent.key && now - sent.at < (fd ? FIGHT_KEEPALIVE_MS : KEEPALIVE_MS)) return;
   sent = { x: px, y: py, key, at: now };
   online.publishPresence({ x, y, outfit: st.settings.skin, action, mounted, equip: { ...st.equipment }, total: snap.total, combat: snap.combat, hp, maxHp: max, rally: rallyTime() || undefined, assist: assistTime() || undefined, anim: work?.anim, flip: work?.flip, gates: st.gates?.length ? st.gates : undefined,
     dg: dg ? { ...dg, x: Math.round(dg.x), y: Math.round(dg.y) } : undefined, fd });

@@ -309,9 +309,9 @@ function syncFieldHp(action: string, all: Presence[]) {
     const pr = pairs.get(m.playerId);
     const alive = c.respawnMs <= 0 && !f.rs;
     if (alive && (!pr || pr.mine !== mine || pr.theirs !== f.n)) {
-      // 新配对：两边都刚刷出来、或者一个新的接上另一个
-      if (!pr || pr.mine !== mine || f.n === pr.theirs + 1) pairs.set(m.playerId, { mine, theirs: f.n });
-      continue;
+      // 新配对：自己这只是新刷的（或者还没配过）。自己这只没变、他那边已经换了下一只 = 配对的那只被他打死了，
+      // 只是「怪死了」那条消息丢了或者晚到（11-02 网络延迟测试：以前会直接改配到他的下一只，自己这只一直不倒）
+      if (!pr || pr.mine !== mine) { pairs.set(m.playerId, { mine, theirs: f.n }); continue; }
     }
     if (!pr || pr.mine !== mine || c.respawnMs > 0) continue;
     if (f.n === pr.theirs && !f.rs) gap = Math.max(gap, c.monsterHp - f.hp);
