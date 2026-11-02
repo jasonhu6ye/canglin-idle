@@ -633,7 +633,7 @@ item('mount_danmark', 'Chinese can fly', 'gear', 0, {
 // 白龙坐骑「守护者的曙光」（用户 11-02 给的参考图）：画法在 game/dragonArt.ts，获取方式暂无
 export const DRAGON_MOUNT = 'mount_dragon';
 item(DRAGON_MOUNT, tl('守护者的曙光'), 'gear', 0, {
-  desc: tl('珍珠白的巨龙，披着镶蓝水晶的金色符文甲，头顶一冠金角，眼睛、焰鬃、翼尖和尾尖都燃着蓝焰，脚下一圈圣光。骑乘时移动速度 +200%。获取方式暂未开放。'),
+  desc: tl('珍珠白的长身巨龙，头顶一对金色长角，脖背一道金脊，佩着轻薄的金饰和蓝晶；背上升起一大团白金蓝的圣焰当翅膀，尾巴整条拖着圣焰，眼睛燃着蓝光。骑乘时移动速度 +200%。获取方式暂未开放。'),
   equip: { slot: 'mount', skill: 'hitpoints', level: 1, attack: 0, strength: 0, defence: 0, move: 2 },
 });
 // 南瓜坐骑（用户 10-27）：万圣节南瓜积分兑换，见 halloween.ts

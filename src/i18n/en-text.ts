@@ -1325,10 +1325,10 @@ export const EN_TEXT: Record<string, string> = {
   '云存档：存档由服务器按服务器时间结算并保存，你的操作会自动发给服务器（大约每分钟同步一次），换设备登录同一个账号就接着玩。断网也能继续挂机，连上后会把这段时间的操作一起交给服务器。': 'Cloud save: your save is calculated and kept by the server using server time. Your actions are sent to the server automatically (about once a minute), so you can sign in on another device and carry on. You can keep idling offline, and everything you did is sent to the server when you reconnect.',
   // 守护者的曙光（11-02）
   '守护者的曙光': "Guardian's Dawn",
-  '珍珠白的巨龙，披着镶蓝水晶的金色符文甲，头顶一冠金角，眼睛、焰鬃、翼尖和尾尖都燃着蓝焰，脚下一圈圣光。骑乘时移动速度 +200%。获取方式暂未开放。': 'A pearl-white dragon in gold rune armor set with blue crystals, crowned with golden horns. Its eyes, mane, wingtips and tail burn with blue flame, and holy light pools at its feet. +200% movement speed while riding. Not yet obtainable.',
+  '珍珠白的长身巨龙，头顶一对金色长角，脖背一道金脊，佩着轻薄的金饰和蓝晶；背上升起一大团白金蓝的圣焰当翅膀，尾巴整条拖着圣焰，眼睛燃着蓝光。骑乘时移动速度 +200%。获取方式暂未开放。': 'A long pearl-white dragon with a pair of golden antler-like horns, a gold ridge down its neck and back, and light gold ornaments set with blue crystals. A great plume of white-gold-blue sacred fire rises from its back like wings, its whole tail trails the same fire, and its eyes burn blue. +200% move speed while riding. Not obtainable yet.',
   '「更多」页的衣橱有「坐骑」栏，能看限定坐骑的动态效果和获取方式：巨狼「Chinese can fly」靠兑换码，南瓜灵驹靠祭坛积分，白龙「守护者的曙光」暂未开放获取。': "The Wardrobe (More tab) has a Mounts section showing each limited mount in motion and how to get it: the wolf Chinese can fly needs a redeem code, the Jack-o'-Lantern Steed costs altar points, and the dragon Guardian's Dawn is not yet obtainable.",
   '新坐骑预览：守护者的曙光': "New mount preview: Guardian's Dawn",
-  '一条披着金色符文甲、燃着蓝焰的珍珠白巨龙，骑乘时移动速度 +200%，脚下圣光、身后蓝焰尾迹。': 'A pearl-white dragon in gold rune armor wreathed in blue flame: +200% movement speed, holy light underfoot and a trail of blue fire.',
+  '一条金角金脊的珍珠白长身巨龙，背上和尾巴燃着白金蓝的圣焰，骑乘时移动速度 +200%，脚下圣光、身后火焰尾迹。': 'A long pearl-white dragon with golden horns and ridge, white-gold-blue sacred fire burning on its back and tail. +200% move speed while riding, with a holy glow underfoot and a trail of fire behind.',
   '衣橱新增「坐骑」栏，能看到它和其他限定坐骑的动态效果。这只坐骑的获取方式暂未开放，敬请期待。': 'The Wardrobe now has a Mounts section where you can watch it and the other limited mounts in motion. How to get it is not yet open. Stay tuned.',
   '已拥有': 'Owned',
   '🔒 祭坛积分兑换': '🔒 Altar points',
