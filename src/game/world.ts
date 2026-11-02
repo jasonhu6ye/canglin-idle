@@ -1878,6 +1878,8 @@ function navCompOf(p: Pt): number {
 
 /** 走路比直线多出来的部分（细路径拐弯、绕树绕石头），按实际寻路结果校准 */
 export const NAV_WIGGLE = 1.03;
+/** 这么近（格）的路程用细格子算准确长度，不用块图估 */
+const NEAR_EXACT = 96;
 export type NavHit = { d: number; i: number };
 const navCache: { key: string; f: (p: Pt) => NavHit }[] = [];
 
@@ -1921,20 +1923,32 @@ export function navField(seeds: Pt[]): (p: Pt) => NavHit {
       }
     }
   }
+  const memo = new Map<number, NavHit>();
   const f = (p: Pt): NavHit => {
-    // 离某个起点很近、同一块里：直接算直线
-    let near = -1;
-    let nd = Infinity;
+    const mk = Math.round(p.y) * MAP_W + Math.round(p.x);
+    const m = memo.get(mk);
+    if (m) return m;
     const pc = navCompOf(p);
+    let best: NavHit = { d: Infinity, i: -1 };
+    if (pc >= 0 && dist[pc] < Infinity) {
+      const far = (dist[pc] + Math.hypot(navX[pc] - p.x, navY[pc] - p.y)) * NAV_WIGGLE;
+      const straight = Math.hypot(seeds[from[pc]].x - p.x, seeds[from[pc]].y - p.y) * NAV_WIGGLE;
+      best = { d: Math.max(far, straight), i: from[pc] };
+    }
+    // 离起点不远（几块之内）：块图从块中心绕，短路程会多估一倍（11-02 查出营地石碑到传送门估 58 格，实际 25 格）。
+    // 这种近路直接用细格子 A* 算真实长度
     seeds.forEach((s, i) => {
-      const d = Math.hypot(s.x - p.x, s.y - p.y);
-      if ((pc >= 0 && pc === sc[i]) || d < 24) if (d < nd) { nd = d; near = i; }
+      const d0 = Math.hypot(s.x - p.x, s.y - p.y);
+      if (d0 * NAV_WIGGLE >= best.d || d0 > NEAR_EXACT) return;
+      const path = d0 < 1 ? [] : astar({ x: Math.round(s.x), y: Math.round(s.y) }, { x: Math.round(p.x), y: Math.round(p.y) }, 40_000, undefined, 1);
+      if (!path) return;
+      let L = 0;
+      let q: Pt = s;
+      for (const r of path) { L += Math.hypot(r.x - q.x, r.y - q.y); q = r; }
+      if (L < best.d) best = { d: L, i };
     });
-    if (pc < 0 || dist[pc] === Infinity) return near >= 0 ? { d: nd * NAV_WIGGLE, i: near } : { d: Infinity, i: -1 };
-    const far = (dist[pc] + Math.hypot(navX[pc] - p.x, navY[pc] - p.y)) * NAV_WIGGLE;
-    const straight = Math.hypot(seeds[from[pc]].x - p.x, seeds[from[pc]].y - p.y) * NAV_WIGGLE;
-    const d = Math.max(far, straight);
-    return near >= 0 && nd * NAV_WIGGLE <= d ? { d: nd * NAV_WIGGLE, i: near } : { d, i: from[pc] };
+    memo.set(mk, best);
+    return best;
   };
   navCache.unshift({ key, f });
   if (navCache.length > 8) navCache.pop();

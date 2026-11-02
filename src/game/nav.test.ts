@@ -42,6 +42,19 @@ describe('寻路估时', () => {
     }
   }, 300000);
 
+  it('近路估时按真实路线（11-02：营地石碑到传送门以前估 58 格，实际 25 格）', async () => {
+    const { jumpNode } = await import('../core/data');
+    for (const [f, t] of [['stone_realm_camp', 'realm_gate_camp'], ['stone_town2', 'realm_gate_dusk'], ['ranch', 'realm_gate_canglin']]) {
+      const a = standTile((NODES.find((n) => n.id === f) ?? jumpNode(f))!);
+      const b = standTile(jumpNode(t)!);
+      const p = findPath(a, b);
+      expect(p, `${f} → ${t}`).not.toBeNull();
+      const k = navField([a])(b).d / len(a, p!);
+      expect(k, `${f} → ${t}`).toBeGreaterThan(0.9);
+      expect(k, `${f} → ${t}`).toBeLessThan(1.1);
+    }
+  });
+
   it('估时不比直线短；石碑路线一定比直接走快', () => {
     const all = WAYSTONES.map((w) => w.id);
     for (let i = 0; i < WAYSTONES.length; i += 3) {

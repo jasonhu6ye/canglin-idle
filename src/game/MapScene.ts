@@ -152,6 +152,25 @@ function pathLength(from: { x: number; y: number }, path: { x: number; y: number
   return len;
 }
 
+/**
+ * 从 from 沿真实路线走到 to，走了 frac（0-1）时在哪一格。
+ * 切回页面时按存档剩余时间摆人用（以前按直线插值，隔着河、海会摆到水里，跨传送门的路线会摆到大海上）
+ */
+function pointAlong(from: { x: number; y: number }, to: { x: number; y: number }, frac: number) {
+  if (frac <= 0) return { x: from.x, y: from.y };
+  const path = findPath(from, to);
+  if (!path?.length) return frac >= 1 ? { x: to.x, y: to.y } : { x: from.x, y: from.y };
+  let left = pathLength(from, path) * Math.min(1, frac);
+  let prev = from;
+  for (const p of path) {
+    const d = Math.hypot(p.x - prev.x, p.y - prev.y);
+    if (d >= left) return d > 0 ? { x: Math.round(prev.x + ((p.x - prev.x) * left) / d), y: Math.round(prev.y + ((p.y - prev.y) * left) / d) } : p;
+    left -= d;
+    prev = p;
+  }
+  return path[path.length - 1];
+}
+
 type Particle = { img: Phaser.GameObjects.Image; vx: number; vy: number; life: number; max: number; kind: Ambient };
 type Ambient = 'snow' | 'ember' | 'firefly' | 'spore' | 'mote' | 'dust' | 'leaf';
 const AMBIENT: Partial<Record<RegionId, Ambient>> = {
@@ -1947,15 +1966,11 @@ export class MapScene extends Phaser.Scene {
       const bank = isBankId(st.travel.to) ? NODES.find((n) => n.id === st.travel!.to) : undefined;
       const node = bank ?? nodeForAction(task.action);
       if (node) {
-        // 存档只记剩余时间，按比例估一个路上的位置
-        const to = standTile(node);
+        // 存档只记剩余时间，按比例估一个路上的位置（沿真实路线）；走石碑、传送门的路线由 goViaHops 摆到当前那一段上
         const k = st.travel.total ? 1 - st.travel.ms / st.travel.total : 1;
-        const via = st.travel.via && WAYSTONES.find((n) => n.id === st.travel!.via![1]);
-        // 走石碑的路线：传过去以前从起点算，传过去以后从第二座石碑算
-        const from = via && st.travel.total - st.travel.ms >= travelMs(st.loc, standOf(WAYSTONES.find((n) => n.id === st.travel!.via![0])!), moveSpeed(st)) + STONE_JUMP_MS ? standTile(via) : st.loc;
-        place(via ? from : { x: st.loc.x + (to.x - st.loc.x) * k, y: st.loc.y + (to.y - st.loc.y) * k });
+        if (!hopsOf(st.travel).length) place(pointAlong(st.loc, standTile(node), k));
       }
-      this.goToTask(bank);
+      this.goToTask(bank, true);
     } else {
       const a = ACTIONS[task.action];
       const node = nodeForAction(task.action);
@@ -1968,7 +1983,8 @@ export class MapScene extends Phaser.Scene {
   }
 
   /** 自动寻路去任务地点：走路时间和存档里的一致，到了才开始干活 */
-  private goToTask(target?: MapNode) {
+  /** snap：刚切回页面，人还没摆好，按存档进度摆到路线上 */
+  private goToTask(target?: MapNode, snap = false) {
     const node = target ?? nodeForAction(this.currentAction);
     if (!node) return;
     const toBank = !!target;
@@ -1989,7 +2005,7 @@ export class MapScene extends Phaser.Scene {
     const hops = st.travel?.to === node.id ? hopsOf(st.travel) : [];
     if (hops.length) {
       if (toBank) this.float(supply ? tl('回仓库拿食物') : tl('背包满了，回仓库'), '#e8b84a');
-      this.goViaHops(hops, dest, done);
+      this.goViaHops(hops, dest, done, snap);
       return;
     }
     const path = findPath(this.playerTile(), dest) ?? [dest];
@@ -2042,7 +2058,7 @@ export class MapScene extends Phaser.Scene {
    * 自动寻路经过石碑/传送门：依次走到 A、传到 B，最后走到 dest；
    * 快慢按存档里剩下的时间来，和离线结算一致；已经过了的几段直接跳过（人放到那次传送的终点）
    */
-  private goViaHops(hops: [string, string][], dest: { x: number; y: number }, done: () => void) {
+  private goViaHops(hops: [string, string][], dest: { x: number; y: number }, done: () => void, snap = false) {
     const tr = store.state.travel;
     if (!tr) return;
     const speed = moveSpeed(store.state);
@@ -2061,8 +2077,13 @@ export class MapScene extends Phaser.Scene {
       elapsed -= legs[k].walk + legs[k].jump;
       k++;
     }
-    if (k > 0) {
-      const b = standTile(legs[k - 1].B);
+    if (k > 0 || snap) {
+      // 切回页面：摆到当前这一段走了多少的位置；正在走的画面不动，只在已经传送过去时搬到那边
+      const start = k > 0 ? standTile(legs[k - 1].B) : store.state.loc;
+      const end = k < legs.length ? standTile(legs[k].A) : dest;
+      const legMs = k < legs.length ? legs[k].walk : travelMs(at, dest, speed);
+      const frac = legMs > 0 ? Math.min(1, elapsed / legMs) : 1;
+      const b = snap ? nearestWalkable(pointAlong(start, end, frac)) : start;
       this.player.setPosition(b.x * T + T / 2, b.y * T + T / 2).setDepth(b.y * T + T / 2 + 1000);
       this.cameras.main.centerOn(this.player.x, this.player.y);
       this.recenterCameraOnly();
@@ -2076,6 +2097,12 @@ export class MapScene extends Phaser.Scene {
     const step = (i: number, skip: number) => {
       if (i >= legs.length) return last();
       const { A, B, walk } = legs[i];
+      // 已经在传送那几秒里了（走完了这段路）：直接传过去
+      if (skip >= walk) {
+        this.jumpFx(B, !!A.realmGate);
+        this.time.delayedCall(300, () => step(i + 1, 0));
+        return;
+      }
       const path = findPath(this.playerTile(), standTile(A)) ?? [standTile(A)];
       this.drawRoute(path);
       this.float(A.realmGate ? tl`去${A.name}` : tl`顺路去${A.name}传送`, '#8ae8ff');
