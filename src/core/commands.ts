@@ -213,7 +213,7 @@ function cleanGate(x: unknown): DungeonGate | null {
   if ((o.kind !== 'green' && o.kind !== 'blue') || typeof o.id !== 'string') return null;
   return {
     id: str(o.id, 40), kind: o.kind, tier: int(o.tier, 1, 99), x: int(o.x, -10000, 100000), y: int(o.y, -10000, 100000),
-    at: num(o.at, 0), expires: num(o.expires, 0), seed: int(o.seed, 0, 2 ** 31), floors: int(o.floors, 1, 20),
+    at: num(o.at, 0, 1e15), expires: num(o.expires, 0, 1e15), seed: int(o.seed, 0, 2 ** 31), floors: int(o.floors, 1, 20),
   };
 }
 /**

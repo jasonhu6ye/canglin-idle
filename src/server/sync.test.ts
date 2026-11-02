@@ -144,6 +144,24 @@ describe('改过的客户端乱传参数', () => {
     expect(sync([{ gate: 'real1', floor: 1, idx: 0, phase: 'walk' }]).dungeon?.floor).toBe(1);
   });
 
+  it('自己开的蓝洞：本机和服务器都能进（洞口时间戳不能被截断）', () => {
+    const g = standOf(NODES.find((n) => n.id === 'starter_grove')!);
+    const base = { ...newGame(t0, 5), loc: g, bag: { dkey_b4: 1 } };
+    const team = { members: [{ id: 'me', name: 'a' }, { id: 'mate', name: 'b' }], me: 'me' };
+    const o = applyCmd(advance(base, t0 + 1000).state, 'openGate', ['dkey_b4', { x: g.x + 3, y: g.y }], t0 + 1000);
+    const gate = o.out as { x: number; y: number };
+    const w = applyCmd(advance(o.state, t0 + 2000).state, 'walk', [g, { x: gate.x, y: gate.y }, 2000], t0 + 2000);
+    const e = applyCmd(advance(w.state, t0 + 6000).state, 'enterDungeon', [JSON.parse(JSON.stringify(gate)), 2, team], t0 + 6000);
+    expect(e.state.dungeon).toBeTruthy();
+    const cmds: Cmd[] = [
+      { n: 'openGate', a: ['dkey_b4', { x: g.x + 3, y: g.y }], t: t0 + 1000, q: 1 },
+      { n: 'walk', a: [g, { x: gate.x, y: gate.y }, 2000], t: t0 + 2000, q: 2 },
+      { n: 'enterDungeon', a: [JSON.parse(JSON.stringify(gate)), 2, team], t: t0 + 6000, q: 3 },
+    ];
+    const r = runSync(JSON.parse(JSON.stringify(base)), cmds, t0 + 7000, { ...EX, me: 'me', party: ['me', 'mate'], partySize: 2 }, 'dev');
+    expect(r.state.dungeon?.gate.kind).toBe('blue');
+  });
+
   it('没组队时报的队友伤害不算', () => {
     const grove = standOf(NODES.find((n) => n.id === 'starter_grove')!);
     const base = { ...newGame(t0, 5), loc: grove };
