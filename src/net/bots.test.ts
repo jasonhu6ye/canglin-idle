@@ -29,6 +29,9 @@ describe('AI 玩家', () => {
       expect(p.pid).toBeGreaterThanOrEqual(20000000);
       expect(p.pid).toBeLessThan(100000000);
       expect(p.joined).toBeLessThan(b.at);
+      // 强化台还没开放（11-02）：AI 的强化一律 1 级，过一年也一样
+      expect(p.levels.enhancing).toBe(1);
+      expect(botProfile(b, T0 + 365 * 86_400_000).levels.enhancing).toBe(1);
     }
   });
   it('一天里位置都在地图上，会干活、走路，也会在城里挂机', () => {

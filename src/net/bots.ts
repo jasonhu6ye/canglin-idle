@@ -149,7 +149,8 @@ export function botProfile(b: AiPlayer, t = Date.now()): BotProfile {
   const style = pick(ATTACK, rnd(s, 3)) as Style;
   const w = {} as Record<SkillId, number>;
   for (const k of SKILL_IDS) w[k] = rnd(s, 10, k.length, k.charCodeAt(0), k.charCodeAt(2)) ** 2;
-  w.enhancing *= 0.2;
+  // 强化台还没开放（用户 11-02）：真人练不了强化，AI 也一律 1 级
+  w.enhancing = 0;
   w.husbandry *= 0.3;
   for (const a of ATTACK) w[a] = a === style ? 1.2 + rnd(s, 4) : w[a] * 0.15;
   w.defence = 0.5 + rnd(s, 5) * 0.7;
@@ -160,6 +161,7 @@ export function botProfile(b: AiPlayer, t = Date.now()): BotProfile {
   levels.hitpoints = Math.max(10, Math.round((levels[style] + levels.defence) / 2 + 3));
   const xp = {} as Record<SkillId, number>;
   for (const k of SKILL_IDS) xp[k] = XP_TABLE[levels[k]] + Math.floor(rnd(s, 20, k.charCodeAt(1)) * (XP_TABLE[levels[k] + 1] - XP_TABLE[levels[k]]));
+  xp.enhancing = 0;
   const total = SKILL_IDS.reduce((a, k) => a + levels[k], 0);
   const combat = Math.max(1, Math.floor((Math.max(levels.melee, levels.ranged, levels.magic) * 1.3 + levels.defence + levels.hitpoints) / 3.3));
   const equip: Partial<Record<EquipSlot, string>> = {};
