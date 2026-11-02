@@ -982,4 +982,8 @@ export const EN_CORE: Record<string, string> = {
   "永霜巨人之巢": "Everfrost Giant's Lair",
   "雪堡男爵的城堡": "Snowkeep Baron's Castle",
   "传说石碑·永冬营地": "Legendary Waystone: Everwinter Camp",
+  "T8 永霜之心": "T8 Frostheart",
+  "永冬冰原深处凝成的一颗冰心，握久了手会结霜。打造永霜之弓、永霜盾要用。只在永冬冰原打首领、开限时宝箱有概率得到。": "A heart of ice from deep in the Icefield; it frosts your hand. Used for the Everfrost Bow and Shield. Drops only from Icefield bosses and timed chests.",
+  "永霜盾": "Everfrost Shield",
+  "永霜之弓": "Everfrost Bow",
 };

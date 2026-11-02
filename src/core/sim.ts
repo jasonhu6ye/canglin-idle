@@ -4,7 +4,7 @@ import { GUILD_MAX_LV, cleanTech, guildPct, utcDay } from './guild';
 import { APT_MAX, APT_MIN, FOAL, growMs, HORSE_XP, horseItem, RANCH, RANCH_PENS } from './ranch';
 import { baseOf, qid, QUALITY_VALUE, rollQuality } from './quality';
 import { HW_MOUNT, HW_MOUNT_COST, HW_POINT, HW_SKINS, HW_TIERS, hwFight, hwHasSkin, hwOpen, hwShopOpen, hwTierOf, hwWait } from './halloween';
-import { OLD_JEWELS, BAR_VALUE, inTownArea, KEY_SHOP, keyOf, OLD_ENH, SCROLL_TOWN, SHARD_PER_STONE, TIERS, ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAIN_SIZE, MID_BOX, nodeActive, REALM_GATES, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, MAT_DAILY, MAT_PRICE, MAT_SHOP, SCROLL_DAILY, SCROLL_PRICE, SEED_SHOP, seedLevel, seedPrice, SKILLS, SPAWN_TILE, standOf, TOWN_CENTER, fastest, planRoute, travelMs, type MapNode } from './data';
+import { OLD_JEWELS, BAR_VALUE, inTownArea, KEY_SHOP, keyOf, OLD_ENH, SCROLL_TOWN, SHARD_PER_STONE, TIERS, ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAIN_SIZE, MID_BOX, nodeActive, REALM_GATES, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, MAT_DAILY, MAT_PRICE, MAT_SHOP, SCROLL_DAILY, SCROLL_PRICE, SEED_SHOP, seedLevel, seedPrice, SKILLS, SPAWN_TILE, FROSTHEART_CHEST, standOf, TOWN_CENTER, fastest, planRoute, travelMs, type MapNode } from './data';
 import { nextRandom } from './rng';
 import { buffMob, coopMates, COOP_DEF, COOP_DMG, dungeonFloor, GATE_AFTER_CLEAR, GATE_CD, GATE_MAX, GATE_MS, GATE_REACH, legMs, rollChest, rollChestQuality, rollFloors, teamChest, teamChestQuality, type TeamMember } from './dungeon';
 import { partySize } from './party';
@@ -218,6 +218,8 @@ export function migrate(raw: unknown): GameState | null {
     halloween: migrateHw(s.halloween),
     ranch: migrateRanch(s.ranch),
     realmChest: migrateRealmChest(s.realmChest),
+    // 永霜盾的寒冰护体（11-02）：服务器每次同步都会读档，要带上，最多 7 秒
+    ...(Number.isFinite(s.frostGuard) && s.frostGuard! > 0 ? { frostGuard: Math.min(FROST.guardMs, s.frostGuard!) } : {}),
     redeemed: arr<string>(s.redeemed).filter((c) => typeof c === 'string'),
     mail: migrateMail(s.mail),
     mailKeys: arr<string>(s.mailKeys).filter((k) => typeof k === 'string'),
@@ -342,6 +344,18 @@ export function chainChance(s: GameState) {
   const w = s.equipment.weapon ? ITEMS[s.equipment.weapon]?.equip : undefined;
   return w?.chain ? w.chain + gearSum(s, 'proc') : 0;
 }
+/** 永霜之弓（11-02）：打中时冻结敌人的概率，提灯一样加触发概率；不是这把弓就是 0 */
+export function frostChance(s: GameState) {
+  const w = s.equipment.weapon ? ITEMS[s.equipment.weapon]?.equip : undefined;
+  return w?.frost ? w.frost + gearSum(s, 'proc') : 0;
+}
+/** 永霜盾（11-02）：挨打时冻结敌人、得到寒冰护体的概率 */
+export function guardChance(s: GameState) {
+  const w = s.equipment.weapon ? ITEMS[s.equipment.weapon]?.equip : undefined;
+  return w?.guard ? w.guard + gearSum(s, 'proc') : 0;
+}
+/** 冻结敌人多久、永霜之弓那一下的伤害倍率、寒冰护体的防御加成和持续时间 */
+export const FROST = { freezeMs: 1000, mult: 1.5, defPct: 0.5, guardMs: 7000 } as const;
 function leechHeal(s: GameState, dmg: number, rand: () => number) {
   const ls = gearSum(s, 'leech');
   if (!ls || s.hp <= 0) return 0;
@@ -634,7 +648,7 @@ export function combatStats(s: GameState, m: MonsterDef) {
     reduce: 1 - (1 - perks.reduce) * (1 - COOP_DEF * mates),
     playerHit: hitChance((lvl + 8) * (b.attack + 64) * (1 + boostPct(s, 'atk')), (m.defence + 8) * 64) * (has('evasive') ? 0.8 : 1),
     playerMaxHit: Math.max(1, Math.round((((lvl + 8) * (strength + 64)) / 64) * dmgMult * (1 + boostPct(s, 'str')) * (1 + gearSum(s, 'dmgPct')) * (1 + COOP_DMG * mates))),
-    monsterHit: m.maxHit > 0 ? hitChance((m.attack + 8) * 64, (level(s, 'defence') + 8) * (b.defence + 64) * (1 + boostPct(s, 'def')) * (1 + gearSum(s, 'defPct'))) : 0,
+    monsterHit: m.maxHit > 0 ? hitChance((m.attack + 8) * 64, (level(s, 'defence') + 8) * (b.defence + 64) * (1 + boostPct(s, 'def')) * (1 + gearSum(s, 'defPct')) * ((s.frostGuard ?? 0) > 0 ? 1 + FROST.defPct : 1)) : 0,
     monsterMaxHit: m.maxHit * MONSTER_DAMAGE_SCALE,
   };
 }
@@ -649,7 +663,8 @@ export const regenPct = (m: MonsterDef) => (m.world ? 0.003 : m.rank === 'boss' 
 export function combatEstimate(s: GameState, m: MonsterDef) {
   const st = combatStats(s, m);
   const swing = playerAttackMs(s);
-  let avg = st.playerHit * ((1 + st.playerMaxHit) / 2) * (1 + st.crit * (st.critMult - 1)) * (1 + chainChance(s));
+  const fc = frostChance(s);
+  let avg = st.playerHit * ((1 + st.playerMaxHit) / 2) * (1 + st.crit * (st.critMult - 1)) * (1 + chainChance(s)) * (1 + fc * (FROST.mult - 1));
   const rage = m.traits.includes('berserk') ? 1.25 : 1;
   const venom = m.traits.includes('venom') ? Math.ceil(m.level / 8) : 0;
   const mv = moveOf(m);
@@ -657,14 +672,28 @@ export function combatEstimate(s: GameState, m: MonsterDef) {
   // 组队时普通攻击只有一部分打到自己，大招照样打全体
   const mates = aggroMates();
   const share = mates.length ? (mv ? (mv.mult + (mv.every - 1) * targetChance(threatOf(s.equipment), mates)) / (mv.mult + mv.every - 1) : targetChance(threatOf(s.equipment), mates)) : 1;
-  const mAvg = st.monsterMaxHit > 0 ? share * move * (m.rank === 'boss' ? 1.1 : 1) * st.monsterHit * (1 - st.dodge) * (((1 + st.monsterMaxHit * rage) / 2) * (1 - st.reduce) + venom) : 0;
+  // 永霜盾：被打中时触发，寒冰护体期间（约 7 秒）防御 +50%，按覆盖率把命中率混合起来
+  const gc = guardChance(s);
+  let mHit = st.monsterHit;
+  let guardFreeze = 0;
+  if (gc && st.monsterMaxHit > 0) {
+    const hitG = combatStats({ ...s, frostGuard: FROST.guardMs }, m).monsterHit;
+    // 这一下之前 7 秒内（约 guardMs / 出手间隔 下）有一下触发过，护体就还在
+    const q = gc * st.monsterHit * (1 - st.dodge);
+    const u = 1 - Math.pow(1 - q, FROST.guardMs / m.attackMs);
+    mHit = st.monsterHit * (1 - u) + hitG * u;
+    guardFreeze = gc * mHit * (1 - st.dodge);
+  }
+  const mAvg = st.monsterMaxHit > 0 ? share * move * (m.rank === 'boss' ? 1.1 : 1) * mHit * (1 - st.dodge) * (((1 + st.monsterMaxHit * rage) / 2) * (1 - st.reduce) + venom) : 0;
+  // 冻结：每次冻住敌人晚出手 1 秒，等于怪物出手间隔变长
+  const mMs = m.attackMs + FROST.freezeMs * (guardFreeze + fc * st.playerHit * (m.attackMs / swing));
   // 怪物的再生和吸血抵掉一部分输出；抵光了就打不死
-  const heal = ((m.traits.includes('regen') ? Math.ceil(m.hp * regenPct(m)) : 0) + (m.traits.includes('lifesteal') ? mAvg / 2 : 0)) / m.attackMs;
+  const heal = ((m.traits.includes('regen') ? Math.ceil(m.hp * regenPct(m)) : 0) + (m.traits.includes('lifesteal') ? mAvg / 2 : 0)) / mMs;
   const dps = avg / swing - heal;
   const killMs = dps > 1e-6 ? m.hp / dps : Infinity;
   // 灯笼吸血抵掉一部分掉血
   const leech = gearSum(s, 'leech') * avg / swing;
-  const taken = killMs === Infinity ? Infinity : Math.max(0, mAvg / m.attackMs - leech) * killMs;
+  const taken = killMs === Infinity ? Infinity : Math.max(0, mAvg / mMs - leech) * killMs;
   const hp = maxHp(s);
   const ratio = taken / hp;
   const rating = killMs === Infinity ? tl('打不动') : ratio < 0.2 ? tl('轻松') : ratio < 0.5 ? tl('适中') : ratio < 1 ? tl('危险') : tl('很难');
@@ -709,6 +738,23 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     c.monsterHp -= d;
     c.pDmg2 = d;
     return d;
+  };
+
+  /** 永霜之弓：打中时按概率冻住敌人 1 秒（它下一下晚出），这一下伤害 ×1.5 */
+  const frostHit = (c: NonNullable<GameState['combat']>) => {
+    const ch = frostChance(s);
+    if (!ch || rand() >= ch) return false;
+    c.monsterTimerMs += FROST.freezeMs;
+    c.pFrost = true;
+    return true;
+  };
+  /** 永霜盾：被打中时按概率冻住敌人 1 秒，自己得到 7 秒寒冰护体（防御 +50%，再触发就重新计时） */
+  const frostGuardHit = (c: NonNullable<GameState['combat']>) => {
+    const ch = guardChance(s);
+    if (!ch || rand() >= ch) return;
+    c.monsterTimerMs += FROST.freezeMs;
+    s.frostGuard = FROST.guardMs;
+    c.mFrost = true;
   };
 
   /** 采集、制作、打怪的产出进背包；万一放不下，多出来的才进仓库 */
@@ -1055,7 +1101,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       if (m.event && s.halloween) s.halloween = { ...s.halloween, summoned: undefined };
       const crew = crewNow();
       const hp = fieldMob(m0, crew).hp;
-      s.combat = { monsterHp: hp, monsterMax: crew ? hp : undefined, crew: crew || undefined, copy: (c.copy ?? 0) + 1, playerTimerMs: playerAttackMs(s), monsterTimerMs: m.attackMs, respawnMs: m.respawnMs ?? RESPAWN_MS, pSwings: c.pSwings, pDmg: c.pDmg, mSwings: c.mSwings, pCrit: c.pCrit };
+      s.combat = { monsterHp: hp, monsterMax: crew ? hp : undefined, crew: crew || undefined, copy: (c.copy ?? 0) + 1, playerTimerMs: playerAttackMs(s), monsterTimerMs: m.attackMs, respawnMs: m.respawnMs ?? RESPAWN_MS, pSwings: c.pSwings, pDmg: c.pDmg, mSwings: c.mSwings, pCrit: c.pCrit, pDmg2: c.pDmg2, pFrost: c.pFrost };
     };
     if (c.respawnMs > 0) {
       const step = Math.min(budget, c.respawnMs);
@@ -1088,9 +1134,11 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       c.pCrit = false;
       c.pLeech = undefined;
       c.pDmg2 = undefined;
+      c.pFrost = undefined;
       if (rand() < st.playerHit) {
         let raw = 1 + Math.floor(rand() * st.playerMaxHit);
         if (rand() < st.crit) { raw *= st.critMult; c.pCrit = true; }
+        if (frostHit(c)) raw *= FROST.mult;
         let dmg = Math.max(1, Math.min(c.monsterHp, Math.round(raw)));
         c.monsterHp -= dmg;
         c.pDmg = dmg;
@@ -1125,6 +1173,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       if (has('regen')) c.monsterHp = Math.min(m.hp, c.monsterHp + Math.ceil(m.hp * regenPct(m)));
       c.mSwings = (c.mSwings ?? 0) + 1;
       c.mDmg = -1;
+      c.mFrost = undefined;
       // 组队打同一个目标：普通攻击按嘲讽挑一个人，没挑中自己就是去打队友了（-2）；大招打全体
       if (!big && aimsAtMate(s, rand)) c.mDmg = -2;
       else if (st.monsterMaxHit > 0 && rand() < st.monsterHit && rand() >= st.dodge) {
@@ -1136,6 +1185,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         // 永霜吐息：被冻住，下一刀晚出
         if (alt && wm?.freezeMs) c.playerTimerMs += wm.freezeMs;
         c.mDmg = dmg;
+        frostGuardHit(c);
         hurt(dmg);
       }
     }
@@ -1251,9 +1301,11 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       c.pCrit = false;
       c.pLeech = undefined;
       c.pDmg2 = undefined;
+      c.pFrost = undefined;
       if (rand() < st.playerHit) {
         let raw = 1 + Math.floor(rand() * st.playerMaxHit);
         if (rand() < st.crit) { raw *= st.critMult; c.pCrit = true; }
+        if (frostHit(c)) raw *= FROST.mult;
         let dmg = Math.max(1, Math.min(c.monsterHp, Math.round(raw)));
         c.monsterHp -= dmg;
         c.pDmg = dmg;
@@ -1282,6 +1334,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       if (has('regen')) c.monsterHp = Math.min(m.hp, c.monsterHp + Math.ceil(m.hp * regenPct(m)));
       c.mSwings = (c.mSwings ?? 0) + 1;
       c.mDmg = -1;
+      c.mFrost = undefined;
       // 组队打同一个目标：普通攻击按嘲讽挑一个人，没挑中自己就是去打队友了（-2）；大招打全体
       if (!big && aimsAtMate(s, rand)) c.mDmg = -2;
       else if (st.monsterMaxHit > 0 && rand() < st.monsterHit && rand() >= st.dodge) {
@@ -1290,6 +1343,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         if (has('venom')) dmg += Math.ceil(m.level / 8);
         if (has('lifesteal')) c.monsterHp = Math.min(m.hp, c.monsterHp + Math.ceil(dmg / 2));
         c.mDmg = dmg;
+        frostGuardHit(c);
         hurt(dmg);
       }
     }
@@ -1408,6 +1462,10 @@ function regen(s: GameState, ms: number) {
       b.ms -= ms;
       if (b.ms <= 0) delete s.buffs[k];
     }
+  }
+  if (s.frostGuard) {
+    s.frostGuard -= ms;
+    if (s.frostGuard <= 0) delete s.frostGuard;
   }
   s.regenMs += ms;
   const ticks = Math.floor(s.regenMs / REGEN_MS);
@@ -1893,10 +1951,17 @@ export function finishRealmChest(prev: GameState, now: number): GameState {
   const w = timedWindow(n, now)!;
   // 开箱开始时那一轮必须和现在是同一轮（跨轮的不算）
   if (op.at < w.start) return cancelRealmChest(prev);
-  const loot = REALM_CHEST_LOOT[chestTier(n.id, w.round)];
+  const tier = chestTier(n.id, w.round);
+  const loot = REALM_CHEST_LOOT[tier];
   const s = clone(prev);
   s.bank.coins = (s.bank.coins ?? 0) + loot.coins;
   for (const [item, q] of loot.items) if (ITEMS[item]) s.bank[item] = (s.bank[item] ?? 0) + q;
+  // 永霜之心（用户 11-02）：按箱子档次有概率多开出一颗
+  for (const id of ['frostheart_7', 'frostheart_8']) {
+    const [r, next] = nextRandom(s.rng);
+    s.rng = next;
+    if (r < FROSTHEART_CHEST[tier]) s.bank[id] = (s.bank[id] ?? 0) + 1;
+  }
   // 只留还在这一轮里的记录，存档不会越来越大
   const got: Record<string, number> = {};
   for (const [k, r] of Object.entries(s.realmChest?.got ?? {})) {

@@ -22,6 +22,7 @@ import { pumpkinEyes } from './pumpkinArt';
 import { FIGHT, FIGHT_RANGE, fightWeapon, FRAME_H, FRAME_W, HERO_ANIMS, HERO_FEET, HERO_PAD, NPC_ANIMS, NPC_OUTFITS, outfitOf, paintHeroSheet, type HeroDir } from './hero';
 import type { MonsterDef, RegionId, Summary } from '../core/types';
 import { store } from '../store';
+import { frostBurst } from './frostFx';
 import { Ambience, D_FLOAT, D_GLOW, D_LABEL, D_PARTICLE, D_SMOKE } from './ambience';
 import { paintArrow, paintBolt, paintHit, paintSlash } from './fxArt';
 import { cropTex, glintTex, soilTex } from './farmArt';
@@ -2385,12 +2386,27 @@ export class MapScene extends Phaser.Scene {
         const S = monsterFrameSize(m);
         this.popText(foe.x + 11, foe.y - S * 0.55 - 7, tl`连斩 ${d2}`, '#8af0f8', 9);
       });
+      // 永霜之弓（11-02）：冻住敌人 1 秒，冰壳 + 冰蓝色「冻结」
+      if (c.pFrost) this.time.delayedCall(hitIn + 40, () => {
+        if (this.foe !== foe || !foe.active) return;
+        const S = monsterFrameSize(m) * foe.scaleY;
+        frostBurst(this, foe, S, D_FLOAT - 4);
+        this.popText(foe.x - 10, foe.y - S * 0.7 - 4, tl('冻结'), '#9fe6ff', 9);
+      });
       // 灯笼吸血：打中后主角头顶飘一个血红色的回血数字
       const leech = c.pLeech ?? 0;
       if (leech > 0) this.time.delayedCall(hitIn + 260, () => this.float(`+${leech}`, '#6ee86a'));
     }
     const big = this.foeSeen.m > prev.m && (c.mArt === 'world' || c.mArt === 'world2');
     if (this.foeSeen.m > prev.m) this.monsterSwingFx(c.mDmg ?? -1, c.mArt, foe, m);
+    // 永霜盾（11-02）：挨打时冻住敌人，自己得到寒冰护体
+    if (this.foeSeen.m > prev.m && c.mFrost) this.time.delayedCall(180, () => {
+      if (this.foe !== foe || !foe.active) return;
+      const S = monsterFrameSize(m) * foe.scaleY;
+      frostBurst(this, foe, S, D_FLOAT - 4);
+      this.popText(foe.x - 10, foe.y - S * 0.7 - 4, tl('冻结'), '#9fe6ff', 9);
+      this.float(tl('寒冰护体'), '#9fe6ff');
+    });
     if (c.respawnMs > 0 && prev.respawn <= 0) {
       this.playMon(foe, m, 'death');
       this.deathPuff(foe);
@@ -2400,7 +2416,7 @@ export class MapScene extends Phaser.Scene {
       this.tweens.add({ targets: foe, alpha: 1, duration: 300 });
     } else if (c.respawnMs <= 0) {
       if (big) this.playMon(foe, m, c.mArt === 'world2' ? 'skill2' : 'skill', true);
-      else if (c.monsterTimerMs > prev.timer + 200) {
+      else if (this.foeSeen.m > prev.m) {
         this.playMon(foe, m, 'attack', true);
         if (c.mDmg !== -2) this.lunge(foe);
       }
@@ -2473,7 +2489,7 @@ export class MapScene extends Phaser.Scene {
           if (!crit) this.cameras.main.shake(70, 0.0018);
         },
       });
-    } else if (['shortbow', 'longbow', 'crossbow', 'warbow'].includes(key)) {
+    } else if (['shortbow', 'longbow', 'frostbow', 'crossbow', 'warbow'].includes(key)) {
       // 单手战弓（10-26）：箭飞得更快，后面拖一道残影
       const fast = key === 'warbow';
       const ang = Math.atan2(ty - from.y, tx - from.x);

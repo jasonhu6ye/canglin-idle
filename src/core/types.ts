@@ -113,6 +113,10 @@ export interface ItemDef {
     chain?: number;
     /** 提灯（10-31）：武器特殊效果触发概率提升 */
     proc?: number;
+    /** 永霜之弓（11-02）：打中时冻住敌人 1 秒、这一下 150% 伤害的概率 */
+    frost?: number;
+    /** 永霜盾（11-02）：挨打时冻住敌人 1 秒、自己防御 +50% 7 秒的概率 */
+    guard?: number;
   };
 }
 
@@ -251,6 +255,10 @@ export interface CombatState {
   pLeech?: number;
   /** 幽魂链刃的第二刀伤害（这一下没触发就没有） */
   pDmg2?: number;
+  /** 永霜之弓这一下触发了冻结（飘字用） */
+  pFrost?: boolean;
+  /** 永霜盾：怪物这一下打中后触发了冻结和寒冰护体（飘字用） */
+  mFrost?: boolean;
   /** 副本（10-26）：自己对这只怪一共打了多少伤害（发给队友）、怪的血量上限和开打时洞里有几个队友 */
   pTotal?: number;
   monsterMax?: number;
@@ -364,6 +372,8 @@ export interface GameState {
   /** 畜牧站的栏位：每栏一匹小马崽，start 放进去的时间，ms 要长多久（放进去时按养殖等级算好） */
   ranch?: { pens: ({ start: number; ms: number } | null)[] };
   /** 永冬冰原的限时宝箱（11-01）：正在开的箱子，和每个箱子开过的轮次（每人每轮一次） */
+  /** 永霜盾的寒冰护体还剩多少毫秒（防御 +50%） */
+  frostGuard?: number;
   realmChest?: { opening?: { id: string; at: number }; got?: Record<string, number> };
   /** 万圣节活动：当前召唤出来的是第几档南瓜王（打赢就清掉）、上次召唤的时间 */
   halloween?: { summoned?: number; last?: number; mount?: boolean; /** 已兑换死神皮肤（老字段） */ skin?: boolean; /** 已兑换的万圣节外观 id */ skins?: string[] };

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ITEMS, type MapNode } from '../core/data';
+import { FROSTHEART_CHEST, ITEMS, type MapNode } from '../core/data';
 import { CHEST_OPEN_MS, chestTier, mmss, nextWindow, timedWindow } from '../core/realm';
 import { REALM_CHEST_LOOT, realmChestState } from '../core/sim';
 import type { GameState } from '../core/types';
@@ -42,6 +42,7 @@ export function RealmChestSheet({ s, node, onClose }: { s: GameState; node: MapN
           <>
             <p><b style={{ color: TIER_COLOR[tier] }}>{TIER_NAME[tier]}</b>{tl('：站在旁边开 10 秒，每人每轮能开一次，东西直接进仓库。')}</p>
             <p className="muted">{tl`里面有：${loot.coins} 金币、${loot.items.map(([id, q]) => `${ITEMS[id]?.name ?? id}×${q}`).join(tl('、'))}`}</p>
+            <p className="muted">{tl`还有 ${Math.round(FROSTHEART_CHEST[tier] * 100)}% 概率开出一颗永霜之心（打造永霜之弓、永霜盾的材料）。`}</p>
           </>
         ) : (
           <p>{nx ? tl`宝箱已经消失了，${mmss(nx.start - now)} 后这里会再刷一个。` : tl('宝箱已经消失了。')}</p>

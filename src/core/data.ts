@@ -302,6 +302,9 @@ ENH_STONE_NAMES.forEach((name, i) => {
  * 特殊装备材料（用户 10-31）：幽魂精魄做幽魂链刃，冥火灯芯做提灯。只有 T7、T8，
  * 只能从 T7 以上的副本宝箱里低概率开出来（dungeon.ts rollChest）。
  */
+/** 永霜之心的掉率：永冬首领每次击杀、限时宝箱（绿/蓝/金）每次开启 */
+export const FROSTHEART_BOSS = 0.15;
+export const FROSTHEART_CHEST = { green: 0.04, blue: 0.1, gold: 0.25 } as const;
 export const SPECIAL_MATS = { wraith: tl('幽魂精魄'), wick: tl('冥火灯芯') } as const;
 for (const i of [6, 7]) {
   item(`wraith_${i + 1}`, tl`T${i + 1} 幽魂精魄`, 'material', BAR_VALUE[i] * 6, {
@@ -309,6 +312,12 @@ for (const i of [6, 7]) {
   });
   item(`wick_${i + 1}`, tl`T${i + 1} 冥火灯芯`, 'material', BAR_VALUE[i] * 6, {
     tier: i, desc: tl('一截烧不尽的冥火灯芯，点着时火苗是青色的。打造提灯要用。只能从 T7 以上的副本宝箱里低概率开出。'),
+  });
+}
+/** 永霜之心（用户 11-02）：做永霜之弓、永霜盾，只有 T7、T8，只在永冬冰原打首领、开限时宝箱有概率得到 */
+for (const i of [6, 7]) {
+  item(`frostheart_${i + 1}`, tl`T${i + 1} 永霜之心`, 'material', BAR_VALUE[i] * 6, {
+    tier: i, desc: tl('永冬冰原深处凝成的一颗冰心，握久了手会结霜。打造永霜之弓、永霜盾要用。只在永冬冰原打首领、开限时宝箱有概率得到。'),
   });
 }
 /** 洞察之瞳（用户 10-26）：洞察者背包的特殊材料，只能开副本宝箱得到（宝箱越好越容易出，也会开出比钥匙低阶的） */
@@ -377,7 +386,7 @@ item(SCROLL_TOWN, tl('回城卷轴'), 'misc', 200, {
  * mat 是材料：bar 精炼锭、plank 加工木材、leather 皮革、cloth 布料。
  * plus 是在本阶解锁等级上再加几级才能做。
  */
-type Mat = 'bar' | 'plank' | 'leather' | 'cloth' | 'resin' | 'wraith' | 'wick';
+type Mat = 'bar' | 'plank' | 'leather' | 'cloth' | 'resin' | 'wraith' | 'wick' | 'frostheart';
 export interface EquipType {
   key: string;
   name: string;
@@ -398,7 +407,9 @@ export interface EquipType {
     /** 幽魂链刃（10-31）：每次打中有这个概率再砍一刀（两段伤害） */
     chain?: number;
     /** 提灯（10-31）：固定暴击率、武器特殊效果触发概率提升（不随品质变） */
-    crit?: number; proc?: number };
+    crit?: number; proc?: number;
+    /** 永霜之弓、永霜盾（11-02）：特效触发概率（固定，不随品质变） */
+    frost?: number; guard?: number };
   group: string;
   /** 特殊装备（10-31）：只有这一阶及以上的版本（6 = T7），不会在野外、福袋、副本宝箱里直接掉 */
   minTier?: number;
@@ -462,6 +473,10 @@ export const EQUIP_TYPES: EquipType[] = [
   // 内测版本主推的最强近战（用户 10-31）：配灯笼约剑的 110%，配提灯约 118%，材料要副本宝箱里的幽魂精魄
   { ...W('chainblade', tl('幽魂链刃'), 'melee', 'smithing', [['bar', 3], ['leather', 1], ['wraith', 2]], 8, 1.05, 0.9, 2300, 'melee', -4), minTier: 6,
     stats: { attack: 1.05, strength: 0.9, strFlat: -4, attackMs: 2300, style: 'melee', chain: 0.17 } },
+  // 永霜盾（用户 11-02，特殊装备，只有 T7/T8）：双手，底子比双手大盾略好；挨打时 17% 冻住敌人 1 秒，自己防御 +50% 持续 7 秒。
+  // 材料永霜之心只在永冬冰原的首领和限时宝箱里出
+  { ...W('frostshield', tl('永霜盾'), 'melee', 'smithing', [['bar', 4], ['plank', 1], ['frostheart', 2]], 8, 0.6, 0.65, 2800, 'melee'), minTier: 6,
+    stats: { attack: 0.6, strength: 0.65, defence: 1.65, attackMs: 2800, style: 'melee', twoHanded: true, threat: 160, guard: 0.17 } },
   // 双手大盾（用户 10-25）：攻击低、防御很高，双手持握，装上就不能用副手
   { ...W('greatshield', tl('双手大盾'), 'melee', 'smithing', [['bar', 4], ['plank', 1]], 5, 0.55, 0.6, 2800, 'melee'), stats: { attack: 0.55, strength: 0.6, defence: 1.5, attackMs: 2800, style: 'melee', twoHanded: true, threat: 150 } },
   // ---- 远程：皮革 + 加工木材 ----
@@ -472,6 +487,10 @@ export const EQUIP_TYPES: EquipType[] = [
   W('warbow', tl('单手战弓'), 'ranged', 'fletching', [['plank', 2], ['leather', 1]], 2, 0.95, 0.95, 2000, 'ranged', -7),
   // 十字弩（用户 10-26）：最重的远程，出手最慢、单发伤害最高、命中准，双手持握不能用副手；带金属件
   W('arbalest', tl('十字弩'), 'ranged', 'fletching', [['plank', 2], ['bar', 2], ['leather', 1]], 7, 1.2, 2.9, 4200, 'ranged', 40, true),
+  // 永霜之弓（用户 11-02，特殊装备，只有 T7/T8）：双手长弓，打中时 12% 冻住敌人 1 秒、这一下 150% 伤害。
+  // 双手用不了副手，底子比长弓厚一些，整体和幽魂链刃差不多（balance.test）
+  { ...W('frostbow', tl('永霜之弓'), 'ranged', 'fletching', [['plank', 3], ['leather', 1], ['frostheart', 2]], 8, 1.25, 2.1, 3000, 'ranged', 0, true), minTier: 6,
+    stats: { attack: 1.25, strength: 2.1, strFlat: 0, attackMs: 3000, style: 'ranged', twoHanded: true, frost: 0.12 } },
   // 魔法：加工木材 + 布料
   W('staff', tl('法杖'), 'magic', 'crafting', [['plank', 2], ['cloth', 1]], 4, 1.0, 1.1, 2400, 'magic'),
   // 护甲：头、身、脚、手
@@ -503,7 +522,7 @@ export const EQUIP_TYPES: EquipType[] = [
 ];
 const TOOL_SLOTS: EquipSlot[] = ['axe', 'pickaxe', 'sickle', 'knife', 'rod', 'hoe', 'hammer', 'needle', 'pan'];
 const matItem = (m: Mat, i: number) => (m === 'bar' ? `${TIERS[i].id}_bar` : `${m}_${i + 1}`);
-const matCost = (m: Mat, i: number) => (m === 'bar' ? BAR_VALUE[i] : m === 'wraith' || m === 'wick' ? BAR_VALUE[i] * 6 : RES_VALUE[i] * 3);
+const matCost = (m: Mat, i: number) => (m === 'bar' ? BAR_VALUE[i] : m === 'wraith' || m === 'wick' || m === 'frostheart' ? BAR_VALUE[i] * 6 : RES_VALUE[i] * 3);
 /** 普通装备（野外、福袋、副本宝箱会掉的那些），不含只有高阶才有的特殊装备 */
 export const COMMON_EQUIP = () => EQUIP_TYPES.filter((e) => e.minTier === undefined);
 
@@ -521,7 +540,7 @@ TIERS.forEach((t, i) => {
         attack: Math.round(p * (st.attack ?? 0)), strength: st.strength ? Math.max(1, Math.round(p * st.strength + (st.strFlat ?? 0))) : 0, defence: Math.round(p * (st.defence ?? 0)),
         style: st.style, speed: st.speed ? TOOL_SPEED[i] : undefined, attackMs: st.attackMs,
         ...(st.haste ? { haste: TORCH_HASTE[i] } : {}), ...(st.twoHanded ? { twoHanded: true } : {}), ...(st.leech ? { leech: st.leech } : {}), ...(st.threat ? { threat: st.threat } : {}),
-        ...(st.chain ? { chain: st.chain } : {}), ...(st.crit ? { crit: st.crit } : {}), ...(st.proc ? { proc: st.proc } : {}),
+        ...(st.chain ? { chain: st.chain } : {}), ...(st.frost ? { frost: st.frost } : {}), ...(st.guard ? { guard: st.guard } : {}), ...(st.crit ? { crit: st.crit } : {}), ...(st.proc ? { proc: st.proc } : {}),
         ...(st.armor ? { armor: st.armor, defPct: pct3(ARMOR_PCT[i] * st.defPct!), dmgPct: pct3(ARMOR_PCT[i] * st.dmgPct!) } : {}),
         ...(st.hastePct ? { haste: pct3(ARMOR_PCT[i] * st.hastePct) } : {}),
         ...(st.dodgePct ? { dodge: pct3(ARMOR_PCT[i] * st.dodgePct) } : {}),
@@ -767,6 +786,9 @@ for (const it of itemList.filter((x) => x.equip && !x.equip.move && x.equip.slot
         ...(e.hp ? { hp: Math.round(e.hp * QUALITY_STAT[q]) } : {}),
         // 幽魂链刃（用户 10-31：材料难拿、高品质难做，品质高的要明显更强）：连斩概率随品质涨，普通 17% → 神话 34%
         ...(e.chain ? { chain: Math.round(e.chain * CHAIN_QUALITY[q] * 100) / 100 } : {}),
+        // 永霜之弓、永霜盾（11-02 平衡）：和链刃一样，触发概率随品质涨（弓 12% → 神话 24%，盾 17% → 神话 34%），高品质才追得上同品质的十字弩
+        ...(e.frost ? { frost: Math.round(e.frost * CHAIN_QUALITY[q] * 100) / 100 } : {}),
+        ...(e.guard ? { guard: Math.round(e.guard * CHAIN_QUALITY[q] * 100) / 100 } : {}),
         ...Object.fromEntries((['xp', 'luck', 'crit', 'dodge', 'work', 'defPct', 'dmgPct'] as const).filter((k) => e[k] && !(k === 'crit' && e.slot === 'offhand')).map((k) => [k, Math.round(e[k]! * QUALITY_SPEED[q] * 1000) / 1000])),
       },
     };
@@ -853,6 +875,8 @@ function speciesDrops(sp: Species, idx: number): Drop[] {
   // 福袋、宝箱、首领宝藏、首领专属战利品和战旗（用户 10-23）
   if (sp.rank === 'normal') add(`luckybag_${n}`, 1, 0.004);
   if (sp.rank === 'elite') { add(`luckybag_${n}`, 1, 0.12); add(`chest_${n}`, 1, 0.04); }
+  // 永冬首领（用户 11-02）：有概率掉永霜之心
+  if (sp.winter) { add('frostheart_7', 1, FROSTHEART_BOSS); add('frostheart_8', 1, FROSTHEART_BOSS); }
   // 世界首领：必掉宝库，战利品和战旗比普通首领好拿（传说装备用户 10-24 说先不出，留到以后）
   if (sp.world) {
     add(`worldchest_${sp.id}`, 1);

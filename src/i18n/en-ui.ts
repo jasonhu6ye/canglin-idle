@@ -1229,4 +1229,11 @@ export const EN_UI: Record<string, string> = {
   "，已封禁": ", banned",
   "同一台设备上的账号之间不能交易或转东西": "Accounts on the same device can't trade or pass items to each other",
   "同一个网络下的账号之间不能交易或转东西": "Accounts on the same network can't trade or pass items to each other",
+  "寒冰护体": "Frost Guard",
+  "还有 {0}% 概率开出一颗永霜之心（打造永霜之弓、永霜盾的材料）。": "{0}% chance of a Frostheart (for the Everfrost Bow and Shield).",
+  "冻结 {0}%（打中时冻住敌人 1 秒，这一下 150% 伤害）": "Freeze {0}% (on hit: freeze 1s, 150% damage)",
+  "寒冰护体 {0}%（挨打时冻住敌人 1 秒，防御 +50% 持续 7 秒）": "Frost Guard {0}% (when hit: freeze 1s, +50% defence for 7s)",
+  "永霜之弓：打中时冻住敌人 1 秒，这一下 150% 伤害": "Everfrost Bow: on hit, freeze 1s and deal 150%",
+  "生效中，还剩 {0} 秒": "Active, {0}s left",
+  "永霜盾：挨打时冻住敌人 1 秒，防御 +50% 持续 7 秒": "Everfrost Shield: when hit, freeze 1s, +50% defence for 7s",
 };
