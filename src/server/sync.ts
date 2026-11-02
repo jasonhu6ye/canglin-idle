@@ -2,7 +2,8 @@ import type { GameState, GmBuff, ItemStack, SkillId } from '../core/types';
 import { advance, combatLevel, level, migrate, newGame, setSettings } from '../core/sim';
 import { setGmBuffs } from '../core/gm';
 import { setGuildLv } from '../core/guild';
-import { markOldGmMail, sendMail, stepMail } from '../core/mail';
+import { clampGmLeft, markOldGmMail, sendMail, stepMail } from '../core/mail';
+import { allHeld } from '../core/beta';
 import { ITEMS } from '../core/data';
 import { applyCmd, saltRng, SECRET_RNG, type Cmd } from '../core/commands';
 import { clearMateHits, setAggroMates, setDgCrew, setFieldCrew } from '../core/aggro';
@@ -188,6 +189,7 @@ function syncInner(saved: unknown, cmds: unknown, now: number, ex: SyncExtras, d
   }
   const out = s as GameState & { _epoch?: number; _seq?: Record<string, number> };
   trimMarks(out);
+  clampGmLeft(out, allHeld(out));
   if (out.prov) {
     out.prov.held = gearHeld(out);
     out.prov.matHeld = matsHeld(out);

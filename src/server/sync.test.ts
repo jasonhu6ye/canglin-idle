@@ -280,6 +280,18 @@ describe('改过的客户端乱传参数', () => {
     expect(r3.got?.some((g) => g.src.startsWith('mail:'))).toBeFalsy();
   });
 
+  it('交易把关：gmLeft 记 GM 发的还剩多少，用掉了往下压', () => {
+    const mails = [{ id: 'a', title: 'GM', body: '', items: [{ item: 'coins', qty: 1000 }] }];
+    const r1 = runSync(null, [], t0, { ...EX, mails }, 'dev');
+    const r2 = runSync(r1.state, [{ n: 'claimMail', a: ['all'], t: t0 + 500, q: 1 }], t0 + 1000, EX, 'dev');
+    expect(r2.state.gmLeft?.coins).toBe(1000);
+    const spent = JSON.parse(JSON.stringify(r2.state));
+    spent.bank.coins = 300;
+    const r3 = runSync(spent, [], t0 + 1500, EX, 'dev');
+    expect(r3.state.gmLeft?.coins).toBe(300);
+    expect(r3.state.gmGot?.coins).toBe(1000);
+  });
+
   it('金币开始记来源前的老记录：现有余额不算外面来的', () => {
     const r1 = runSync(null, [], t0, EX, 'dev');
     const old = JSON.parse(JSON.stringify(r1.state));

@@ -130,8 +130,21 @@ export const unreadMail = (s: GameState) => (s.mail ?? []).filter((m) => !m.read
 /** 记账：从带标记的邮件领到的东西（直接改 s） */
 function addGmGot(s: GameState, items: ItemStack[]) {
   const g = { ...(s.gmGot ?? {}) };
-  for (const { item, qty } of items) if (ITEMS[item] && qty > 0) g[item] = (g[item] ?? 0) + qty;
+  const left = { ...(s.gmLeft ?? {}) };
+  for (const { item, qty } of items) if (ITEMS[item] && qty > 0) {
+    g[item] = (g[item] ?? 0) + qty;
+    left[item] = (left[item] ?? 0) + qty;
+  }
   s.gmGot = g;
+  s.gmLeft = left;
+}
+
+/** 结算末：GM 发的还剩多少不能超过身上实际有的（held = 仓库 + 背包 + 穿着 + 食物栏） */
+export function clampGmLeft(s: GameState, held: Record<string, number>) {
+  if (!s.gmLeft) return;
+  const out: Record<string, number> = {};
+  for (const [id, n] of Object.entries(s.gmLeft)) { const v = Math.min(n, held[id] ?? 0); if (v > 0) out[id] = v; }
+  s.gmLeft = out;
 }
 
 /**
