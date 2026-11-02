@@ -91,6 +91,8 @@ const CROWD: [number, number][] = [[0, 0], [-6, -10], [-6, 10], [-14, 0], [-14, 
  * 近战的在怪的两侧（右边那个朝左打），[横向 × 贴身距离, 纵向像素]；远程的在自己身后错开，[往后退, 纵向]。
  * 自己永远在怪的左边，所以自己是近战就不占左边正中，自己是远程就不占远程正中。
  */
+/** 一起打的人停手多久之内还站在怪旁边（等刷新、换下一只的空档） */
+const CREW_HOLD_MS = 5000;
 const MELEE_SPOTS: [number, number][] = [[1, 0], [-0.85, -11], [0.85, 11], [-0.85, 11], [0.85, -11], [1.5, -6], [1.5, 6]];
 const RANGED_SPOTS: [number, number][] = [[0, -12], [0, 12], [-10, -22], [-10, 22], [-18, 0]];
 const meleeRange = (w?: FightWeapon) => (w ? FIGHT_RANGE[w] ?? 0 : 0) < 0.75;
@@ -141,6 +143,9 @@ export class OtherPlayers {
   /** 大地图上自己正在打的怪（地图场景每帧设），一起打它的人围着它站 */
   fight?: FightAnchor;
   private swingAt = new Map<string, number>();
+  /** 上次看到在一起打的时刻、上次自己在打的那只（两只怪之间短暂空档不散开） */
+  private crewAt = new Map<string, number>();
+  private lastFight?: { f: FightAnchor; at: number };
   /** place：这个人画在哪（像素，脚底），不画就返回 null。默认是大地图：按格子摆，在副本里的人不画 */
   constructor(private scene: Phaser.Scene, private place?: (p: Presence) => { x: number; y: number; anim?: string; flip?: boolean } | null) {
     this.off = online.onPresence((all) => { this.latest = all; });
@@ -182,10 +187,17 @@ export class OtherPlayers {
   /** 和自己打同一只怪的人各站哪（按 id 排序，各家算出来的顺序一样） */
   private fightSpots(near: { x: number; y: number }) {
     const out = new Map<string, { x: number; y: number; flip: boolean }>();
-    const f = this.fight;
+    const now = this.scene.time.now;
+    // 两只怪之间（自己或队友在等刷新、走向下一只）不马上散开（11-02：以前队友在怪旁边和自己的格子之间来回跑）
+    if (this.fight) this.lastFight = { f: this.fight, at: now };
+    const f = this.fight ?? (this.lastFight && now - this.lastFight.at < CREW_HOLD_MS ? this.lastFight.f : undefined);
     if (!f) return out;
     const crew = this.latest
-      .filter((p) => !p.dg && p.action === f.action && p.anim?.startsWith('fight-') && Math.abs(p.x - near.x) + Math.abs(p.y - near.y) <= 10)
+      .filter((p) => {
+        if (p.dg || p.action !== f.action || Math.abs(p.x - near.x) + Math.abs(p.y - near.y) > 10) return false;
+        if (p.anim?.startsWith('fight-')) { this.crewAt.set(p.playerId, now); return true; }
+        return now - (this.crewAt.get(p.playerId) ?? -1e9) < CREW_HOLD_MS;
+      })
       .sort((a, b) => (a.playerId < b.playerId ? -1 : 1));
     const meMelee = meleeRange(f.weapon);
     const melee = meMelee ? MELEE_SPOTS : [[-1, 0] as [number, number], ...MELEE_SPOTS];
