@@ -135,6 +135,9 @@ export interface FieldHit {
   n: number;
   dmg: number;
   crit?: boolean;
+  /** 他这只怪现在的血量、是不是在等刷新（11-02：两边的怪血量对齐，一起死） */
+  hp?: number;
+  rs?: boolean;
 }
 
 export interface DungeonPresence {

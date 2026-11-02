@@ -69,10 +69,10 @@ export function publishSelf(st: GameState, x: number, y: number, work?: { anim: 
   const hp = Math.max(0, Math.round(st.hp));
   // 野外组队打同一只怪：带上自己对这一只累计打了多少（队友那边记到同一只怪上）
   const c = st.combat;
-  const fd = !dg && action && c?.crew && work?.anim.startsWith('fight-') ? { k: action, n: c.copy ?? 0, dmg: c.pTotal ?? 0, crit: c.pCrit || undefined } : undefined;
+  const fd = !dg && action && c?.crew && work?.anim.startsWith('fight-') ? { k: action, n: c.copy ?? 0, dmg: c.pTotal ?? 0, crit: c.pCrit || undefined, hp: Math.max(0, Math.round(c.monsterHp)), rs: c.respawnMs > 0 || undefined } : undefined;
   // 血量按 5% 一档比较，打怪时不用每下都发
   const key = JSON.stringify([st.settings.skin, action, mounted, st.equipment, snap.total, snap.combat, Math.round((hp / max) * 20), rallyTime(), assistTime(), work?.anim, work?.flip, (st.gates ?? []).map((g) => g.id).join(),
-    dg && [dg.gate, dg.floor, dg.idx, dg.phase, dg.kills, dg.anim, dg.flip, dg.dmg], fd && [fd.n, fd.dmg]]);
+    dg && [dg.gate, dg.floor, dg.idx, dg.phase, dg.kills, dg.anim, dg.flip, dg.dmg], fd && [fd.n, fd.dmg, fd.rs]]);
   const px = dg ? dg.x / T : x;
   const py = dg ? dg.y / T : y;
   const moved = Math.abs(px - sent.x) + Math.abs(py - sent.y) >= step && now - sent.at >= gap;

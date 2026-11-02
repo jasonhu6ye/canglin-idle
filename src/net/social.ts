@@ -284,5 +284,42 @@ export function takeFieldHits(all: Presence[]): FieldMateHit[] {
     coopHit(fieldKey(action), dmg);
     out.push({ id: p.playerId, name: m.name, i: m.i, dmg, crit: !!f.crit });
   }
+  syncFieldHp(action, all);
   return out;
+}
+
+/**
+ * 两边的怪对齐（11-02 用户「我们应该是打同一只怪」）：各自的游戏里各有一只，伤害互相记，但开打时刻、
+ * 网络延迟会让血量差一截、一前一后死。这里把「同一只」配对（两边都活着时看到的那一对），
+ * 配对的那只队友那边血更少就跟到他的血量；他那边打死了，自己这只也一起倒下。差的血量作为队友伤害记账（服务器照样限量）。
+ */
+const pairs = new Map<string, { mine: number; theirs: number }>();
+let syncAt = 0;
+function syncFieldHp(action: string, all: Presence[]) {
+  const me = online.me();
+  const c = store.state.combat;
+  // 上一次补的差还没执行（随 coop 指令半秒发一次）就先不算，免得重复补
+  if (!me || !c || !c.crew || !st.party || Date.now() - syncAt < 700) return;
+  const mine = c.copy ?? 0;
+  let gap = 0;
+  for (const m of st.party.members) {
+    if (m.playerId === me.id) continue;
+    const f = all.find((q) => q.playerId === m.playerId)?.fd;
+    if (!f || f.k !== action || f.hp == null) { pairs.delete(m.playerId); continue; }
+    const pr = pairs.get(m.playerId);
+    const alive = c.respawnMs <= 0 && !f.rs;
+    if (alive && (!pr || pr.mine !== mine || pr.theirs !== f.n)) {
+      // 新配对：两边都刚刷出来、或者一个新的接上另一个
+      if (!pr || pr.mine !== mine || f.n === pr.theirs + 1) pairs.set(m.playerId, { mine, theirs: f.n });
+      continue;
+    }
+    if (!pr || pr.mine !== mine || c.respawnMs > 0) continue;
+    if (f.n === pr.theirs && !f.rs) gap = Math.max(gap, c.monsterHp - f.hp);
+    // 他把配对的那只打死了（已经在等下一只）：自己这只也一起倒
+    else if (f.n > pr.theirs || f.rs) gap = Math.max(gap, c.monsterHp);
+  }
+  // 这次刚收到、还没执行的队友伤害先扣掉
+  const key = fieldKey(action);
+  gap -= coopHits.reduce((n, h) => n + (h[0] === key ? h[1] : 0), 0);
+  if (gap >= 1) { coopHit(key, Math.ceil(gap)); syncAt = Date.now(); }
 }
