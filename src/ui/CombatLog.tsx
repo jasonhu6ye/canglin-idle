@@ -1,4 +1,8 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { clearDps, dpsReport, ME, onDps } from './dpsMeter';
+import { MATE_COLORS } from '../game/others';
+import { combatEstimate } from '../core/sim';
+import { online } from '../net';
 import { ACTIONS, CROP_DEFS, ITEMS, MONSTERS, SKILLS } from '../core/data';
 import type { CombatLogEntry, SkillId } from '../core/types';
 import { store, useGame } from '../store';
@@ -29,8 +33,8 @@ const clock = (t: number) => {
   return `${today ? '' : `${d.getMonth() + 1}/${d.getDate()} `}${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 };
 
-type View = 'all' | 'fight' | 'work' | 'stats';
-const VIEWS: [View, string][] = [['all', tl('全部')], ['fight', tl('战斗')], ['work', tl('采集制作')], ['stats', tl('统计')]];
+type View = 'all' | 'fight' | 'work' | 'stats' | 'dps';
+const VIEWS: [View, string][] = [['all', tl('全部')], ['fight', tl('战斗')], ['work', tl('采集制作')], ['stats', tl('统计')], ['dps', 'DPS']];
 type StatTab = 'xp' | 'items' | 'kills' | 'work';
 const STAT_TABS: [StatTab, string][] = [['xp', tl('经验')], ['items', tl('物品')], ['kills', tl('击杀')], ['work', tl('采集制作')]];
 const isFight = (e: CombatLogEntry) => e.kind === 'kill' || e.kind === 'death';
@@ -58,7 +62,10 @@ export function CombatLog({ onClose }: { onClose: () => void }) {
 
   let body: ReactNode;
   let pages: number;
-  if (view === 'stats') {
+  if (view === 'dps') {
+    pages = 1;
+    body = <DpsView />;
+  } else if (view === 'stats') {
     const rows = statRows(all, stat);
     pages = Math.max(1, Math.ceil(rows.length / PAGE));
     const p = Math.min(page, pages - 1);
@@ -220,5 +227,54 @@ function Entry({ e }: { e: CombatLogEntry }) {
       <span className="with-icon log-what"><MonsterIcon m={m} size={14} />{tl(' 击败 ')}<b className={m.rank !== 'normal' ? 'gold' : ''}>{rank}{m.name}</b></span>
       <Gains e={e} />
     </li>
+  );
+}
+
+/**
+ * DPS 页（用户 11-02）：自己和一起打的队友这一场 / 最近 5 分钟的伤害、每秒伤害、占比。
+ * 数字和地图上飘的伤害一致（场景飘字时记的），只在本机记，刷新页面清零。
+ */
+function DpsView() {
+  const [mode, setMode] = useState<'fight' | '5m'>('fight');
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const off = onDps(() => tick((n) => n + 1));
+    const t = setInterval(() => tick((n) => n + 1), 1000);
+    return () => { off(); clearInterval(t); };
+  }, []);
+  const r = dpsReport(mode);
+  const s = store.state;
+  const a = s.paused ? undefined : ACTIONS[s.queue[0]?.action ?? ''];
+  const m = a?.kind === 'combat' ? MONSTERS[a.monster] : undefined;
+  const est = m ? combatEstimate(s, m) : undefined;
+  const me = online.me()?.name;
+  const top = r.rows[0]?.dmg ?? 0;
+  const secs = Math.round(r.ms / 1000);
+  return (
+    <>
+      <div className="log-subtabs">
+        <button className={mode === 'fight' ? 'on' : ''} onClick={() => setMode('fight')}>{tl('这一场')}</button>
+        <button className={mode === '5m' ? 'on' : ''} onClick={() => setMode('5m')}>{tl('最近 5 分钟')}</button>
+      </div>
+      <ul className="log-list dps-list">
+        {r.rows.length === 0 && <li className="muted">{tl('还没有伤害记录，去打怪吧！和队友一起打同一只怪时，队友的 DPS 也会列在这里。')}</li>}
+        {r.rows.map((x) => {
+          const color = x.who === ME ? '#e8b84a' : MATE_COLORS[x.i % MATE_COLORS.length];
+          return (
+            <li key={x.who} className="dps-row">
+              <span className="dps-bar" style={{ width: `${top ? (x.dmg / top) * 100 : 0}%`, background: color }} />
+              <span className="dps-name" style={{ color }}>{x.who === ME ? (me ? tl`${me}（我）` : tl('我')) : x.name}</span>
+              <b>{fmtNum(Math.round(x.dps))}</b>
+              <small className="muted">{tl`共 ${fmtNum(x.dmg)} · ${Math.round(x.share * 100)}%`}</small>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="log-foot muted">
+        {r.rows.length > 0 && tl`${secs} 秒 · 全队 ${fmtNum(Math.round((r.total * 1000) / Math.max(1, r.ms)))} DPS`}
+        {est && Number.isFinite(est.dps) && <>{r.rows.length > 0 && ' · '}{tl`你打${m!.name}的理论 DPS ${fmtNum(Math.round(est.dps))}`}</>}
+        {r.rows.length > 0 && <> <button className="link" onClick={() => clearDps()}>{tl('清零')}</button></>}
+      </p>
+    </>
   );
 }

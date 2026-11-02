@@ -23,6 +23,7 @@ import { pumpkinEyes } from './pumpkinArt';
 import { FIGHT, FIGHT_RANGE, fightWeapon, FRAME_H, FRAME_W, HERO_ANIMS, HERO_FEET, HERO_PAD, NPC_ANIMS, NPC_OUTFITS, outfitOf, paintHeroSheet, type HeroDir } from './hero';
 import type { MonsterDef, RegionId, Summary } from '../core/types';
 import { store } from '../store';
+import { ME, recordHit } from '../ui/dpsMeter';
 import { frostBurst } from './frostFx';
 import { Ambience, D_FLOAT, D_GLOW, D_LABEL, D_PARTICLE, D_SMOKE } from './ambience';
 import { paintArrow, paintBolt, paintHit, paintSlash } from './fxArt';
@@ -2416,6 +2417,8 @@ export class MapScene extends Phaser.Scene {
     if (this.foeSeen.p > prev.p) {
       const dmg = c.pDmg ?? -1;
       const crit = !!c.pCrit;
+      // 伤害统计（11-02）：和飘出来的数字一样，连斩那一刀也算上
+      recordHit(ME, '', 0, Math.max(0, dmg) + (c.pDmg2 ?? 0));
       const hitIn = this.playerStrike();
       this.time.delayedCall(hitIn, () => this.foe === foe && this.playerSwingFx(foe, m, dmg, crit));
       // 幽魂链刃连斩（10-31）：第二刀晚一点，青色数字
@@ -2838,6 +2841,7 @@ export class MapScene extends Phaser.Scene {
 
   /** 野外组队：队友打中了我也在打的怪，队友出手、怪闪一下、用队友的颜色飘数字 */
   private mateHit(h: FieldMateHit) {
+    recordHit(h.id, h.name, h.i, h.dmg);
     const foe = this.foe;
     if (!foe?.active) return;
     const hitIn = Math.max(0, this.others.swing(h.id));
