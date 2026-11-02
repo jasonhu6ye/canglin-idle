@@ -124,7 +124,10 @@ function migrateRanch(raw: unknown): GameState['ranch'] {
 function migrateRealmChest(raw: unknown): GameState['realmChest'] {
   const r = obj<NonNullable<GameState['realmChest']>>(raw);
   const got = Object.fromEntries(Object.entries(obj<Record<string, number>>(r?.got) ?? {}).filter(([id, n]) => typeof id === 'string' && Number.isInteger(n)));
-  return Object.keys(got).length ? { got } : undefined;
+  // 正在开的箱子也要留着：服务器每次同步都会重新读档，以前读丢了，开到一半就被重置（11-02）
+  const op = obj<{ id: string; at: number }>(r?.opening);
+  const opening = op && typeof op.id === 'string' && Number.isFinite(op.at) ? { id: op.id, at: op.at } : undefined;
+  return Object.keys(got).length || opening ? { got, ...(opening && { opening }) } : undefined;
 }
 
 export function migrate(raw: unknown): GameState | null {

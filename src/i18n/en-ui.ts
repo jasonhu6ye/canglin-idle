@@ -1467,4 +1467,6 @@ export const EN_UI: Record<string, string> = {
   '{0} 叫你一起打 {1}，你在副本里，出来后再去': "{0} called you to fight {1}. You're in a dungeon; go after you leave.",
   '{0} 叫你一起打 {1}，正在赶过去': '{0} called you to fight {1}. Heading over.',
   '已叫队友一起打，在线队友会自动赶过来': 'Called your teammates. Online teammates will head over automatically.',
+  "修复：冰原宝箱开到一半被重置": "Fix: Frost chests resetting halfway",
+  "永冬冰原的限时宝箱开箱进度条到一半会自动重置、打不开，现在修好了。": "Timed chests in the Everwinter realm no longer reset halfway through opening.",
 };

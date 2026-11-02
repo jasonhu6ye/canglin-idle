@@ -8,6 +8,10 @@ import { tl } from '../i18n';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-11-02-t', date: tl('11 月 2 日'), title: tl('修复：冰原宝箱开到一半被重置'),
+    lines: [tl('永冬冰原的限时宝箱开箱进度条到一半会自动重置、打不开，现在修好了。')],
+  },
+  {
     id: '2026-11-02-s', date: tl('11 月 2 日'), title: tl('怪物推荐'),
     lines: [
       tl('地点页「怪物」分页可以按「经验/时」「收益/时」「击杀/时」排序：按你现在的装备、战斗等级和增益预估每只怪的效率，挑最适合你的去打。'),
