@@ -672,6 +672,12 @@ item('mount_danmark', 'Chinese can fly', 'gear', 0, {
   desc: tl('黑毛银鬃的巨狼，红眼，身上有旧伤疤。骑乘时移动速度 +160%。在「更多」页输入兑换码获得。'),
   equip: { slot: 'mount', skill: 'hitpoints', level: 1, attack: 0, strength: 0, defence: 0, move: 1.6 },
 });
+// 粉色独角兽坐骑（用户 11-02）：画法在 game/unicornArt.ts，获取方式暂无
+export const UNICORN_MOUNT = 'mount_unicorn';
+item(UNICORN_MOUNT, tl('晨曦独角兽'), 'gear', 0, {
+  desc: tl('樱粉色的独角兽，额前一支金色螺旋角，彩虹般的长鬃长尾随风飘动，四蹄金亮，眼睛是紫水晶色；走过的地方洒下一路星光。骑乘时移动速度 +210%。获取方式暂未开放。'),
+  equip: { slot: 'mount', skill: 'hitpoints', level: 1, attack: 0, strength: 0, defence: 0, move: 2.1 },
+});
 // 南瓜坐骑（用户 10-27）：万圣节南瓜积分兑换，见 halloween.ts
 item(HW_MOUNT, tl('南瓜灵驹'), 'gear', 0, {
   desc: tl('万圣节限定坐骑。没有腿的巨型南瓜灯，靠底下一团幽紫鬼火托着悬浮，肚子里的火光从刻出来的眼睛和嘴里透出来，飞起来一路拖着鬼火、洒下火星。骑乘时移动速度 +200%。用南瓜积分兑换。'),

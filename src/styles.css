@@ -387,10 +387,12 @@ html[lang=en] .wm-region { letter-spacing: 0.5px; font-size: 11px; }
 /* 衣橱 */
 .pix { image-rendering: pixelated; }
 .wardrobe-stage { display: flex; gap: 14px; align-items: center; padding: 12px; margin: 8px 0; }
+.wardrobe-stage.mount { flex-wrap: wrap; justify-content: center; } .wardrobe-stage.mount > div { flex: 1 1 160px; }
 .wardrobe-stage p { margin: 4px 0 10px; font-size: 12px; }
 .wardrobe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
 .wardrobe-grid .slot { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; font-size: 12px; }
 .wardrobe-grid .slot.on { box-shadow: 0 0 0 2px var(--gold); }
+.wardrobe-sub { margin: 18px 0 4px; font-size: 15px; }
 .far-bank { margin: 6px 0; } .far-bank span { flex: 2; font-size: 12px; }
 .sheet p.pad { padding: 10px 12px; }
 .sheet-body { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
