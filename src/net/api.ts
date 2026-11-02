@@ -365,6 +365,9 @@ export interface OnlineApi {
   /** 管理员：服务器存档（快照）和回档；pid 为空 = 全服回档，返回回档了几个人 */
   gmSnapshots(): Promise<Snapshot[]>;
   gmSnapshotCreate(label: string): Promise<void>;
+  /** GM 查 / 改玩家技能经验（11-02） */
+  gmGetSkills(pid: number): Promise<{ name: string; xp: Record<string, number> }>;
+  gmSetSkills(pid: number, xp: Record<string, number>): Promise<number>;
   gmSnapshotDelete(id: number): Promise<void>;
   gmRollback(id: number, pid?: number): Promise<number>;
   /** 管理员：真人玩家，新注册的在前；人数统计 */

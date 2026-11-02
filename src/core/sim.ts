@@ -1,5 +1,5 @@
 import { partyXpPct } from './party';
-import { cleanGm, gmPct, setGmClock } from './gm';
+import { cleanGm, GM_CAP, gmPct, setGmClock } from './gm';
 import { GUILD_MAX_LV, cleanTech, guildPct, utcDay } from './guild';
 import { APT_MAX, APT_MIN, FOAL, growMs, HORSE_XP, horseItem, RANCH, RANCH_PENS } from './ranch';
 import { baseOf, qid, QUALITY_VALUE, qualityOdds, qualityOf, rollQuality } from './quality';
@@ -360,7 +360,7 @@ export function guardChance(s: GameState) {
 /** 冻结敌人多久、永霜之弓那一下的伤害倍率、寒冰护体的防御加成和持续时间 */
 export const FROST = { freezeMs: 1000, mult: 1.5, defPct: 0.5, guardMs: 7000 } as const;
 function leechHeal(s: GameState, dmg: number, rand: () => number) {
-  const ls = gearSum(s, 'leech');
+  const ls = gearSum(s, 'leech') + gmPct(s, 'leech');
   if (!ls || s.hp <= 0) return 0;
   const x = dmg * ls;
   const heal = Math.floor(x) + (rand() < x - Math.floor(x) ? 1 : 0);
@@ -403,7 +403,7 @@ export const toolSkillNames = (slot: EquipSlot) => (Object.keys(TOOL_FOR) as Ski
 /** 移动速度（格/秒）：骑着坐骑时按坐骑加成 */
 export function moveSpeed(s: GameState): number {
   const m = s.mounted ? ITEMS[s.equipment.mount ?? '']?.equip?.move ?? 0 : 0;
-  return WALK_TILES_PER_SEC * (1 + m);
+  return WALK_TILES_PER_SEC * (1 + m) * (1 + gmPct(s, 'move'));
 }
 
 /** 上下坐骑：正在走的路按新速度换算剩下的时间 */
@@ -566,7 +566,7 @@ export function rainBonus(s: GameState, a: SkillAction, t = Date.now()) {
 
 /** 玩家攻击间隔：看武器，匕首快、长枪和弩慢 */
 /** 攻速加成（火把，用户 10-25） */
-export const playerHaste = (s: GameState) => gearSum(s, 'haste');
+export const playerHaste = (s: GameState) => gearSum(s, 'haste') + gmPct(s, 'haste');
 export const playerAttackMs = (s: GameState) => Math.round((ITEMS[s.equipment.weapon ?? '']?.equip?.attackMs ?? PLAYER_ATTACK_MS) / (1 + playerHaste(s)));
 
 const healOf = (id: string) => ITEMS[id]?.heals ?? 0;
@@ -649,7 +649,10 @@ export function armorPerks(s: GameState) {
     const e = id && slot !== 'weapon' && slot !== 'offhand' ? ITEMS[id]?.equip : undefined;
     if (e?.armor) n[e.armor]++;
   }
-  return { reduce: n.plate * 0.03, dodge: 0.03 + n.leather * 0.02 + gearSum(s, 'dodge'), crit: n.cloth * 0.02 + gearSum(s, 'crit') };
+  const reduce = n.plate * 0.03, dodge = 0.03 + n.leather * 0.02 + gearSum(s, 'dodge');
+  // GM 增益（11-02）：闪避、减伤加的是百分点，加上以后最多到 75%（本来就更高的不往下压）
+  const capped = (base: number, add: number) => (add > 0 ? Math.max(base, Math.min(GM_CAP, base + add)) : base);
+  return { reduce: capped(reduce, gmPct(s, 'reduce')), dodge: capped(dodge, gmPct(s, 'dodge')), crit: n.cloth * 0.02 + gearSum(s, 'crit') + gmPct(s, 'crit') };
 }
 
 export function combatStats(s: GameState, m: MonsterDef) {
@@ -666,7 +669,7 @@ export function combatStats(s: GameState, m: MonsterDef) {
   return {
     style,
     crit: 0.05 + perks.crit,
-    critMult: 1.5,
+    critMult: 1.5 + gmPct(s, 'critdmg'),
     dodge: perks.dodge,
     reduce: 1 - (1 - perks.reduce) * (1 - COOP_DEF * mates),
     playerHit: hitChance((lvl + 8) * (b.attack + 64) * (1 + boostPct(s, 'atk')), (m.defence + 8) * 64) * (has('evasive') ? 0.8 : 1),
@@ -715,7 +718,7 @@ export function combatEstimate(s: GameState, m: MonsterDef) {
   const dps = avg / swing - heal;
   const killMs = dps > 1e-6 ? m.hp / dps : Infinity;
   // 灯笼吸血抵掉一部分掉血
-  const leech = gearSum(s, 'leech') * avg / swing;
+  const leech = (gearSum(s, 'leech') + gmPct(s, 'leech')) * avg / swing;
   const taken = killMs === Infinity ? Infinity : Math.max(0, mAvg / mMs - leech) * killMs;
   const hp = maxHp(s);
   const ratio = taken / hp;
@@ -902,7 +905,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   };
 
   const addXp = (skill: SkillId, amount: number) => {
-    amount = sageXp(s, Math.round(amount * (1 + boostPct(s, 'xp') + gearSum(s, 'xp') + partyXpPct())), amount);
+    amount = sageXp(s, Math.round(amount * (1 + boostPct(s, 'xp') + gmPct(s, `xp_${SKILLS[skill].group}`) + gearSum(s, 'xp') + partyXpPct())), amount);
     if (tally) tally.xp[skill] = (tally.xp[skill] ?? 0) + amount;
     // 打怪的经验记在这只怪头上，打死时一起写进战斗日志
     if (s.combat && amount > 0) {
@@ -1067,7 +1070,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
               useItem(fm!, 1);
               fineUsed[fm!] = (fineUsed[fm!] ?? 0) + 1;
             }
-            addLoot(qid(o.item, rollQuality(it.tier, rand(), fine)), 1);
+            addLoot(qid(o.item, rollQuality(it.tier, rand(), fine, gmPct(s, 'quality'))), 1);
           }
           else addLoot(o.item, o.qty);
         }
@@ -1528,7 +1531,7 @@ function regen(s: GameState, ms: number) {
     s.frostGuard -= ms;
     if (s.frostGuard <= 0) delete s.frostGuard;
   }
-  s.regenMs += ms;
+  s.regenMs += ms * (1 + gmPct(s, 'regen'));
   const ticks = Math.floor(s.regenMs / REGEN_MS);
   s.regenMs -= ticks * REGEN_MS;
   s.hp = Math.min(maxHp(s), s.hp + ticks);

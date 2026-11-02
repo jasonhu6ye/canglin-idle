@@ -453,6 +453,8 @@ export class LocalApi implements OnlineApi {
   async gmTrades(): Promise<GmTrade[]> { return []; }
   async gmSnapshots(): Promise<Snapshot[]> { return []; }
   async gmSnapshotCreate() { /* 本地不做 */ }
+  async gmGetSkills(): Promise<{ name: string; xp: Record<string, number> }> { throw new Error(tl('本地模式不能改别人的存档')); }
+  async gmSetSkills(): Promise<number> { throw new Error(tl('本地模式不能改别人的存档')); }
   async gmSnapshotDelete() { /* 本地不做 */ }
   async gmRollback() { return 0; }
   async gmPlayers(): Promise<GmPlayer[]> { return []; }

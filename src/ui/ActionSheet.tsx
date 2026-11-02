@@ -1,4 +1,5 @@
 import { QualityOdds } from './Quality';
+import { gmPct } from '../core/gm';
 import { RealmGateSheet } from './RealmGateSheet';
 import { RealmChestSheet } from './RealmChestSheet';
 import { AltarSheet } from './Halloween';
@@ -227,7 +228,7 @@ function Recipe({ s, a }: { s: GameState; a: SkillAction }) {
         const on = ticked && !!fm && have(fm) > 0;
         return (
           <span key={`q${st.item}`} className="q-fine">
-            <QualityOdds item={st.item} fine={on} />
+            <QualityOdds item={st.item} fine={on} gm={gmPct(store.state, 'quality')} />
             {fm && (
               <label className="fine-toggle">
                 <input type="checkbox" checked={ticked} onChange={(e) => { const next = { ...s.settings.fineCraft }; if (e.target.checked) next[a.id] = true; else delete next[a.id]; store.run('settings', { fineCraft: next }); }} />

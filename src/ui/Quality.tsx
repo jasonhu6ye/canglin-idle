@@ -10,10 +10,10 @@ import { Icon } from './icons';
 const pct = (p: number) => (p >= 10 ? p.toFixed(1) : p >= 1 ? p.toFixed(1) : p.toFixed(2)).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
 
 /** 制作页：做这件装备每个品质的概率 */
-export function QualityOdds({ item, fine = false }: { item: string; fine?: boolean }) {
+export function QualityOdds({ item, fine = false, gm = 0 }: { item: string; fine?: boolean; gm?: number }) {
   const it = ITEMS[item];
   if (!it?.equip || it.equip.move) return null;
-  const odds = qualityOdds(it.tier, fine);
+  const odds = qualityOdds(it.tier, fine, gm);
   return (
     <span className="q-odds">
       <small className="muted">{fine ? tl('品质概率（加精炼石）：') : tl('品质概率：')}</small>
