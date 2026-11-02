@@ -80,10 +80,11 @@ function AuthForm() {
   const { busy, err, setErr, run } = useAct();
   const [token, setToken] = useState('');
   const [nonce, setNonce] = useState(0);
+  const [capFail, setCapFail] = useState(false);
   const submit = () => {
     if (pw.length < 6) return setErr(tl('密码至少 6 位'));
     if (mode === 'up' && pw !== pw2) return setErr(tl('两次输入的密码不一样'));
-    if (CAPTCHA_KEY && !token) return setErr(tl('请先完成下面的人机验证'));
+    if (CAPTCHA_KEY && !token && !capFail) return setErr(tl('请先完成下面的人机验证'));
     // 验证令牌只能用一次：每次提交后重新验证
     void run(() => (mode === 'in' ? signIn(email.trim(), pw, token || undefined) : signUp(email.trim(), pw, token || undefined)))
       .finally(() => { if (CAPTCHA_KEY) setNonce((n) => n + 1); });
@@ -97,7 +98,7 @@ function AuthForm() {
       <input type="email" placeholder={tl("邮箱")} autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
       <input type="password" placeholder={tl("密码（至少 6 位）")} autoComplete={mode === 'in' ? 'current-password' : 'new-password'} value={pw} onChange={(e) => setPw(e.target.value)} required />
       {mode === 'up' && <input type="password" placeholder={tl("再输一次密码")} autoComplete="new-password" value={pw2} onChange={(e) => setPw2(e.target.value)} required />}
-      <Captcha onToken={setToken} nonce={nonce} />
+      <Captcha onToken={setToken} nonce={nonce} onFail={() => setCapFail(true)} />
       <button className="primary" disabled={busy}>{busy ? tl('请稍候…') : mode === 'in' ? tl('登录') : tl('注册')}</button>
       {err && <p className="err">{err}</p>}
       <p className="muted small">{tl('存档保存在云端，换手机或电脑登录同一个账号就能接着玩。')}</p>

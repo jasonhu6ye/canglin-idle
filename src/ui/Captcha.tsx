@@ -25,7 +25,8 @@ function load() {
 }
 
 /** 通过验证后 onToken(令牌)；令牌只能用一次，用过以后 nonce 变一下就会重新验证 */
-export function Captcha({ onToken, nonce }: { onToken: (t: string) => void; nonce: number }) {
+/** 验证框加载不出来（网络连不上 Cloudflare）时 onFail：先不拦着登录，由服务器决定要不要验证 */
+export function Captcha({ onToken, nonce, onFail }: { onToken: (t: string) => void; nonce: number; onFail?: () => void }) {
   const box = useRef<HTMLDivElement>(null);
   const id = useRef<string | null>(null);
   const cb = useRef(onToken);
@@ -43,7 +44,7 @@ export function Captcha({ onToken, nonce }: { onToken: (t: string) => void; nonc
         'expired-callback': () => cb.current(''),
         'error-callback': () => cb.current(''),
       });
-    }, () => {});
+    }, () => { if (!dead) onFail?.(); });
     return () => {
       dead = true;
       if (id.current && window.turnstile) window.turnstile.remove(id.current);
