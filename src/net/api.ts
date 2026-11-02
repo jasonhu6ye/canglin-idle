@@ -1,5 +1,6 @@
 import type { GameState, GmBuff, ItemStack, SkillId } from '../core/types';
 import type { Cmd } from '../core/commands';
+import type { Prov, ProvEv } from '../core/prov';
 
 export interface SyncReply { state: GameState; ack: number; now: number; /** 开箱这类指令服务器算出来的结果 */ results?: { q: number; out: unknown }[] }
 import { combatLevel, level } from '../core/sim';
@@ -369,7 +370,14 @@ export interface OnlineApi {
   /** 管理员：真人玩家，新注册的在前；人数统计 */
   gmPlayers(who?: string): Promise<GmPlayer[]>;
   gmPlayerCount(): Promise<{ total: number; today: number; week: number }>;
+  /** 管理员：装备来源（11-02）：某个玩家的记录（数字 ID 或名字），全服最近得到的传说以上装备 */
+  gmGear(who: string): Promise<GearProvRow[]>;
+  gmGearRecent(): Promise<GearEvRow[]>;
 }
+
+/** 管理员看的装备来源：prov 见 core/prov.ts（没记过是 null），held 是身上的装备，mats 是身上的材料 */
+export interface GearProvRow { playerId: string; pid: number; name: string; prov: Prov | null; held: Record<string, number>; lastTick: number }
+export interface GearEvRow { pid: number; name: string; ev: ProvEv }
 
 export interface GmPlayer {
   id: string; pid: number; name: string; joined: number; lastSeen: number;

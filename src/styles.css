@@ -1226,4 +1226,9 @@ button.chat-who { cursor: pointer; text-decoration: underline dotted; text-under
 .gm-ac-flags { margin: 4px 0; padding-left: 14px; font-size: 12px; } .gm-ac-flags li { margin: 2px 0; }
 .gm-form.gm-ac-form label > span:first-child { flex: 0 0 auto; max-width: 55%; } .gm-form.gm-ac-form label > input { min-width: 0; }
 .gm-trade-side { margin-top: 2px; line-height: 1.4; }
+.gm-src { list-style: none; margin: 0 0 2px; padding: 0 0 0 12px; display: flex; flex-direction: column; gap: 1px; }
+.gm-src-sub { padding-left: 10px; }
+.gm-cost { display: flex; flex-direction: column; gap: 2px; padding-left: 4px; border-left: 2px solid rgba(255,255,255,0.12); }
+.gm-stat { display: flex; flex-direction: column; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.gm-list .link { cursor: pointer; text-decoration: underline; }
 .gm-count { margin: 4px 0 8px; font-weight: bold; } .gm-players li > small { display: block; }

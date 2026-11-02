@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { GM_KINDS, GM_KIND_NAME, GM_PCT_MAX } from '../core/gm';
 import type { GmKind } from '../core/types';
-import { online, type AiPlayer, type CheatRow, type AltRow, type RedeemCodeRow, type EconRow, type GmPlayer, type GmTrade, type Snapshot, type GmInput, type GmMailRow, type GmRow } from '../net';
+import { online, type GearEvRow, type GearProvRow, type AiPlayer, type CheatRow, type AltRow, type RedeemCodeRow, type EconRow, type GmPlayer, type GmTrade, type Snapshot, type GmInput, type GmMailRow, type GmRow } from '../net';
 import { aiPlayers, botDoing, botsMuted, setBotsMuted, botName, botOnline, botPresence, botProfile, habitOf, refreshBots, zoneOf } from '../net/bots';
-import { actionName } from './format';
+import { actionName, fmtDuration } from './format';
+import { PROV_EV_Q, type Prov, type ProvEv } from '../core/prov';
 import { emitToGame } from './GameCanvas';
-import { ITEMS } from '../core/data';
+import { ACTIONS, ITEMS, MONSTERS } from '../core/data';
 import type { ItemStack } from '../core/types';
 import { fmtNum } from './format';
 import { Icon } from './icons';
@@ -45,7 +46,7 @@ const left = (ms: number) => {
 };
 
 export function GmPanel({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<'buff' | 'mail' | 'gear' | 'code' | 'econ' | 'ai' | 'players' | 'ac' | 'trade' | 'snap'>('buff');
+  const [tab, setTab] = useState<'buff' | 'mail' | 'gear' | 'code' | 'econ' | 'ai' | 'players' | 'ac' | 'trade' | 'snap' | 'src'>('buff');
   return (
     <div className="page guild gm-panel">
       <div className="sheet-head">
@@ -64,8 +65,9 @@ export function GmPanel({ onClose }: { onClose: () => void }) {
         <button className={`pill ${tab === 'econ' ? 'on' : ''}`} onClick={() => setTab('econ')}>{tl('经济')}</button>
         <button className={`pill ${tab === 'trade' ? 'on' : ''}`} onClick={() => setTab('trade')}>{tl('交易记录')}</button>
         <button className={`pill ${tab === 'snap' ? 'on' : ''}`} onClick={() => setTab('snap')}>{tl('服务器存档')}</button>
+        <button className={`pill ${tab === 'src' ? 'on' : ''}`} onClick={() => setTab('src')}>{tl('装备来源')}</button>
       </div>
-      {tab === 'buff' ? <BuffTab /> : tab === 'ai' ? <AiTab onClose={onClose} /> : tab === 'ac' ? <AcTab /> : tab === 'players' ? <PlayersTab /> : tab === 'trade' ? <TradeTab /> : tab === 'econ' ? <EconTab /> : tab === 'snap' ? <SnapTab /> : <MailTab key={tab} gear={tab === 'gear'} code={tab === 'code'} />}
+      {tab === 'buff' ? <BuffTab /> : tab === 'ai' ? <AiTab onClose={onClose} /> : tab === 'ac' ? <AcTab /> : tab === 'players' ? <PlayersTab /> : tab === 'trade' ? <TradeTab /> : tab === 'econ' ? <EconTab /> : tab === 'snap' ? <SnapTab /> : tab === 'src' ? <GearSrcTab /> : <MailTab key={tab} gear={tab === 'gear'} code={tab === 'code'} />}
     </div>
   );
 }
@@ -911,6 +913,184 @@ function PlayersTab() {
             </li>
           ))}
         </ul>
+      )}
+    </>
+  );
+}
+
+/*
+ * 装备来源（11-02）：服务器结算时记下的装备来历（core/prov.ts）。
+ * 全服最近得到的传说、神话装备；查某个玩家：每件怎么来的（做了几次、干了多久、花了哪些材料、材料从哪来、概率），
+ * 身上的传说以上装备和记录对不上的标「来源不明」。
+ */
+const CMD_SRC: Record<string, string> = {
+  buyGoods: tl('商人购买'), buyKey: tl('商人购买'), buySeed: tl('商人购买'), claimMail: tl('领邮件'), openContainer: tl('开箱子 / 福袋'),
+  realmChestDone: tl('冰原宝箱'), realmChest: tl('冰原宝箱'), harvestAll: tl('收菜'), tendPlot: tl('收菜'), collectHome: tl('家园收取'),
+  deliverOrder: tl('家园订单'), repReward: tl('家园声望奖励'), salvage: tl('分解'), redeem: tl('兑换码'), combineShards: tl('合成碎片'),
+  collectHorse: tl('畜牧'), unequip: tl('卸下装备'), hwSummon: tl('万圣节'), hwSkin: tl('万圣节'), hwMount: tl('万圣节'),
+};
+const CHEST_Q = [tl('绿'), tl('蓝'), tl('紫'), tl('金')];
+function srcName(src: string): string {
+  const [k, a = '', b = '', c = '0'] = src.split(':');
+  if (k === 'craft' || k === 'skill') return actionName(a);
+  if (k === 'drop') return tl`打${MONSTERS[a]?.name ?? a}`;
+  if (k === 'outside') return tl('交易 / 公会仓库 / GM 改档');
+  if (k === 'auto') return tl('离线结算中自动得到');
+  if (k === 'cmd' && a === 'dungeonChest' && b) {
+    const kind = b.startsWith('blue') ? tl('蓝洞') : tl('绿洞');
+    return tl`副本宝箱（${kind} T${b.replace(/\D/g, '')}，${CHEST_Q[Number(c)] ?? ''}箱）`;
+  }
+  if (k === 'cmd') return CMD_SRC[a] ?? a;
+  return src;
+}
+const pctText = (p: number) => `${p * 100 >= 10 ? (p * 100).toFixed(1) : p * 100 >= 1 ? (p * 100).toFixed(2) : (p * 100).toPrecision(2)}%`;
+const qName = (id: string) => <b style={{ color: QUALITY_COLOR[qualityOf(id)] }}>{ITEMS[id]?.name ?? id}</b>;
+
+/** 某种材料的来源占比（最多 4 个），depth 层内对「做出来的材料」再展开它用的材料 */
+function MatSrc({ prov, item, depth }: { prov: Prov; item: string; depth: number }) {
+  const r = prov.mats[item];
+  const all = r ? Object.values(r).reduce((a, b) => a + b, 0) : 0;
+  if (!r || !all) return <small className="warn"> {tl('（没有获得记录，可能是记录开始前就有的）')}</small>;
+  const top = Object.entries(r).sort((a, b) => b[1] - a[1]).slice(0, 4);
+  return (
+    <ul className="gm-src">
+      {top.map(([src, n]) => {
+        const act = src.startsWith('skill:') ? ACTIONS[src.slice(6)] : undefined;
+        const sub = depth > 0 && act && 'inputs' in act && act.inputs?.length ? act.inputs : null;
+        return (
+          <li key={src}>
+            <small className={src === 'outside' ? 'warn' : ''}>{tl`${srcName(src)} ${pctText(n / all)}（${fmtNum(n)}）`}</small>
+            {sub && sub.map((i) => <div key={i.item} className="gm-src-sub"><small className="muted">{tl`↳ ${itemLabel(i.item)}：`}</small><MatSrc prov={prov} item={i.item} depth={depth - 1} /></div>)}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** 一件传说以上装备的来历 */
+function EvLine({ ev, prov }: { ev: ProvEv; prov?: Prov }) {
+  const kind = ev.src.split(':')[0];
+  const lucky = ev.p && ev.n ? 1 - Math.pow(1 - ev.p, ev.n) : undefined;
+  return (
+    <>
+      <div>{qName(ev.id)} <small className="muted">{new Date(ev.t).toLocaleString()}</small></div>
+      <small className={kind === 'outside' ? 'warn' : ''}>
+        {kind === 'craft' ? tl('制作：') : kind === 'drop' ? tl('掉落：') : tl('来源：')}{srcName(ev.src)}
+        {kind === 'outside' && tl('（不是自己做的或打的，去「交易记录」核对）')}
+      </small>
+      {kind === 'craft' && ev.n !== undefined && (
+        <small>{tl`距上一件传说以上做了 ${fmtNum(ev.n)} 次，纯制作 ${fmtDuration(ev.ms ?? 0)}`}{ev.p !== undefined && tl`，这个品质每次 ${pctText(ev.p)}`}</small>
+      )}
+      {kind === 'drop' && ev.n !== undefined && (
+        <small>{tl`距上一件传说以上打了 ${fmtNum(ev.n)} 只，战斗约 ${fmtDuration(ev.ms ?? 0)}`}{ev.p !== undefined && tl`，掉落概率每只 ${pctText(ev.p)}`}</small>
+      )}
+      {lucky !== undefined && <small className={lucky < 0.005 ? 'warn' : 'muted'}>{tl`这么多次内出一件的概率 ${pctText(lucky)}`}{lucky < 0.005 && tl('（运气极好，留意）')}</small>}
+      {ev.cost && Object.keys(ev.cost).length > 0 && (
+        <div className="gm-cost">
+          <small>{tl('用掉的材料：')}</small>
+          {Object.entries(ev.cost).map(([id, n]) => (
+            <div key={id}><small><b>{itemLabel(id)} × {fmtNum(n)}</b>{prov ? tl('，来源：') : ''}</small>{prov && <MatSrc prov={prov} item={id} depth={1} />}</div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+const qCount = (out: Record<string, number>) => {
+  const q = [0, 0, 0, 0, 0, 0];
+  for (const [id, n] of Object.entries(out)) q[qualityOf(id)] += n;
+  return q.map((n, i) => (n && i >= 2 ? <span key={i} style={{ color: QUALITY_COLOR[i] }}> {QUALITY_NAME[i]} {fmtNum(n)}</span> : null));
+};
+
+function GearPlayer({ r }: { r: GearProvRow }) {
+  const p = r.prov;
+  const hi = Object.entries(r.held).filter(([id]) => qualityOf(id) >= PROV_EV_Q);
+  if (!p) return (
+    <li className="frame"><div><b>{r.name}</b> <small className="muted">#{r.pid}</small></div><small className="muted">{tl('还没有来源记录（这个玩家上线后由服务器开始记）')}</small></li>
+  );
+  const got = (id: string) => (p.base[id] ?? 0) + Object.values(p.craft).reduce((a, c) => a + (c.out[id] ?? 0), 0)
+    + Object.values(p.drop).reduce((a, d) => a + (d.out[id] ?? 0), 0) + Object.values(p.other).reduce((a, o) => a + (o[id] ?? 0), 0);
+  const crafts = Object.entries(p.craft).filter(([, c]) => Object.keys(c.out).length).sort((a, b) => b[1].n - a[1].n).slice(0, 15);
+  const drops = Object.entries(p.drop).filter(([, d]) => Object.keys(d.out).length).sort((a, b) => b[1].k - a[1].k).slice(0, 15);
+  return (
+    <li className="frame">
+      <div><b>{r.name}</b> <small className="muted">#{r.pid} · {tl`从 ${new Date(p.since).toLocaleString()} 开始记录`}</small></div>
+      <b>{tl('身上的传说以上装备')}</b>
+      {!hi.length ? <small className="muted">{tl('没有')}</small> : hi.map(([id, n]) => {
+        const lost = n - got(id);
+        return (
+          <small key={id}>{qName(id)} × {n}
+            {(p.base[id] ?? 0) > 0 && <span className="muted"> {tl`（记录开始前就有 ${p.base[id]}）`}</span>}
+            {lost > 0 && <b className="warn"> {tl`来源不明 ${lost} 件`}</b>}
+          </small>
+        );
+      })}
+      <b>{tl('传说以上装备的来历')} <small className="muted">{tl('最近的在前')}</small></b>
+      {!p.ev.length ? <small className="muted">{tl('还没有')}</small> : (
+        <ul className="gm-list">{[...p.ev].reverse().map((e, i) => <li key={i} className="frame"><EvLine ev={e} prov={p} /></li>)}</ul>
+      )}
+      <details>
+        <summary>{tl('制作统计')}</summary>
+        {crafts.map(([a, c]) => (
+          <div key={a} className="gm-stat">
+            <small><b>{actionName(a)}</b> {tl`做了 ${fmtNum(c.n)} 次`}{c.fail ? tl`（失败 ${c.fail}）` : ''} · {fmtDuration(c.ms ?? 0)}{qCount(c.out)}</small>
+            <small className="muted">{tl('用掉：')}{Object.entries(c.in).map(([id, n]) => `${itemLabel(id)} × ${fmtNum(n)}`).join(tl('、')) || '—'}</small>
+          </div>
+        ))}
+      </details>
+      <details>
+        <summary>{tl('掉落统计')}</summary>
+        {drops.map(([m, d]) => (
+          <div key={m} className="gm-stat"><small><b>{MONSTERS[m]?.name ?? m}</b> {tl`打了 ${fmtNum(d.k)} 只`} · {fmtDuration(d.ms ?? 0)}{qCount(d.out)}</small></div>
+        ))}
+      </details>
+      {Object.keys(p.other).length > 0 && (
+        <details>
+          <summary>{tl('其他来源的装备')}</summary>
+          {Object.entries(p.other).map(([src, o]) => <div key={src}><small className={src === 'outside' ? 'warn' : ''}><b>{srcName(src)}</b>{tl`：${itemsText(o)}`}</small></div>)}
+        </details>
+      )}
+    </li>
+  );
+}
+
+function GearSrcTab() {
+  const [who, setWho] = useState('');
+  const [recent, setRecent] = useState<GearEvRow[] | null>(null);
+  const [rows, setRows] = useState<GearProvRow[] | null>(null);
+  const [err, setErr] = useState('');
+  useEffect(() => {
+    online.gmGearRecent().then(setRecent).catch((e) => { setErr((e as Error).message); setRecent([]); });
+  }, []);
+  const search = async () => {
+    if (!who.trim()) return setRows(null);
+    setRows([]); setErr('');
+    try { setRows(await online.gmGear(who)); } catch (e) { setErr((e as Error).message); }
+  };
+  return (
+    <>
+      <h3>{tl('装备来源')} <small className="muted">{tl('服务器结算时记下的：传说、神话装备逐件记来历')}</small></h3>
+      <div className="gm-form frame">
+        <label><span>{tl('玩家')}</span><input value={who} placeholder={tl('数字 ID 或名字')} onChange={(e) => setWho(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void search()} /></label>
+        <div className="gm-actions"><button className="primary" onClick={() => void search()}>{tl('查询')}</button>{rows && <button onClick={() => { setRows(null); setWho(''); }}>{tl('返回全服')}</button>}</div>
+        {err && <p className="warn">{err}</p>}
+      </div>
+      {rows ? (!rows.length ? <p className="muted">{tl('没找到这个玩家')}</p> : <ul className="gm-list">{rows.map((r) => <GearPlayer key={r.playerId} r={r} />)}</ul>) : (
+        <>
+          <h4>{tl('全服最近得到的传说、神话装备')}</h4>
+          {recent == null ? <p className="muted">{tl('读取中…')}</p> : !recent.length ? <p className="muted">{tl('还没有')}</p> : (
+            <ul className="gm-list">
+              {recent.map((r, i) => (
+                <li key={i} className="frame">
+                  <div><b className="link" onClick={() => { setWho(String(r.pid)); void online.gmGear(String(r.pid)).then(setRows); }}>{r.name}</b> <small className="muted">#{r.pid}</small></div>
+                  <EvLine ev={r.ev} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
     </>
   );

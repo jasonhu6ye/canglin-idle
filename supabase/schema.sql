@@ -2760,3 +2760,35 @@ begin
 end $$;
 drop trigger if exists ac_filter_chat on public.chat;
 create trigger ac_filter_chat before insert on public.chat for each row execute function public.ac_filter_chat();
+
+-- ============ 装备来源查询（11-02） ============
+-- 服务器结算时在存档里记装备来源（data.prov，见 src/core/prov.ts）。GM 只读查询，不改任何表。
+-- 某个玩家（数字 ID 或名字）的来源记录和身上的东西
+create or replace function public.gm_gear(p_who text)
+returns table (player_id uuid, pid bigint, name text, prov jsonb, bank jsonb, bag jsonb, equipment jsonb, belt jsonb, last_tick bigint)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  return query
+    select p.id, p.pid, p.name, s.data->'prov', s.data->'bank', s.data->'bag', s.data->'equipment', s.data->'belt', s.last_tick
+    from profiles p join saves s on s.player_id = p.id
+    where p.pid::text = trim(p_who) or lower(p.name) like '%' || lower(trim(p_who)) || '%'
+    order by (p.pid::text = trim(p_who)) desc, p.last_seen desc nulls last
+    limit 5;
+end $$;
+grant execute on function public.gm_gear(text) to authenticated;
+
+-- 全服最近得到的传说、神话装备（每件一行，最近的在前）
+create or replace function public.gm_gear_recent(p_limit int default 200)
+returns table (pid bigint, name text, ev jsonb)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  return query
+    select p.pid, p.name, e
+    from saves s join profiles p on p.id = s.player_id
+      cross join lateral jsonb_array_elements(case when jsonb_typeof(s.data->'prov'->'ev') = 'array' then s.data->'prov'->'ev' else '[]'::jsonb end) e
+    order by (e->>'t')::numeric desc
+    limit least(greatest(p_limit, 1), 500);
+end $$;
+grant execute on function public.gm_gear_recent(int) to authenticated;

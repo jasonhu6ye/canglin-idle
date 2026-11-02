@@ -2,7 +2,7 @@ import { partyXpPct } from './party';
 import { cleanGm, gmPct, setGmClock } from './gm';
 import { GUILD_MAX_LV, cleanTech, guildPct, utcDay } from './guild';
 import { APT_MAX, APT_MIN, FOAL, growMs, HORSE_XP, horseItem, RANCH, RANCH_PENS } from './ranch';
-import { baseOf, qid, QUALITY_VALUE, rollQuality } from './quality';
+import { baseOf, qid, QUALITY_VALUE, qualityOdds, qualityOf, rollQuality } from './quality';
 import { HW_MOUNT, HW_MOUNT_COST, HW_POINT, HW_SKINS, HW_TIERS, hwFight, hwHasSkin, hwOpen, hwShopOpen, hwTierOf, hwWait } from './halloween';
 import { OLD_JEWELS, BAR_VALUE, inTownArea, KEY_SHOP, keyOf, OLD_ENH, SCROLL_TOWN, SHARD_PER_STONE, TIERS, ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAIN_SIZE, MID_BOX, nodeActive, REALM_GATES, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, MAT_DAILY, MAT_PRICE, MAT_SHOP, SCROLL_DAILY, SCROLL_PRICE, SEED_SHOP, seedLevel, seedPrice, SKILLS, SPAWN_TILE, FROSTHEART_CHEST, FROSTCRAFT_CHEST, fineMatOf, standOf, TOWN_CENTER, fastest, planRoute, travelMs, type MapNode } from './data';
 import { nextRandom } from './rng';
@@ -11,6 +11,7 @@ import { partySize } from './party';
 import { CHEST_OPEN_MS, chestTier, inRealm, timedWindow, type ChestTier } from './realm';
 import { aggroMates, dgCrew, fieldCrew, fieldKey, stopKey, takeMateHits, targetChance, threatOf } from './aggro';
 import { stepQuests } from './quests';
+import { isGear, migrateProv, provCraft, provDrop, provMat } from './prov';
 import { migrateMail, sendMail } from './mail';
 import { stepAutoFarm, stepRain } from './farm';
 import { homeCan, homeCellIds, homeChest, homePct, migrateHome } from './home';
@@ -218,6 +219,8 @@ export function migrate(raw: unknown): GameState | null {
     halloween: migrateHw(s.halloween),
     ranch: migrateRanch(s.ranch),
     realmChest: migrateRealmChest(s.realmChest),
+    // 装备来源记录（11-02，服务器结算时记）
+    prov: migrateProv(s.prov),
     // 永霜盾的寒冰护体（11-02）：服务器每次同步都会读档，要带上，最多 7 秒
     ...(Number.isFinite(s.frostGuard) && s.frostGuard! > 0 ? { frostGuard: Math.min(FROST.guardMs, s.frostGuard!) } : {}),
     redeemed: arr<string>(s.redeemed).filter((c) => typeof c === 'string'),
@@ -786,7 +789,10 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     s.seen[item] = 1;
     sum.items[item] = (sum.items[item] ?? 0) + qty;
     if (tally) tally.items[item] = (tally.items[item] ?? 0) + qty;
+    if (lootSrc && s.prov) provMat(s, item, qty, lootSrc);
   };
+  /** 材料来源（11-02）：正在干的活 / 正在打的怪 */
+  let lootSrc: string | null = null;
   /** 正在记日志的这一次动作拿到了什么 */
   let tally: { items: Record<string, number>; xp: Partial<Record<SkillId, number>> } | null = null;
 
@@ -1035,11 +1041,15 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       s.progressMs = 0;
       const bonus = levelBonus(s, a);
       const gatherer = SKILLS[a.skill].group === 'gather';
-      if (!(a.inputs && !gatherer && rand() < bonus)) a.inputs?.forEach((i) => useItem(i.item, i.qty));
+      const saved = !!a.inputs && !gatherer && rand() < bonus;
+      if (!saved) a.inputs?.forEach((i) => useItem(i.item, i.qty));
       const failChance = a.fail
         ? Math.max(0, a.fail.chance * (a.fail.noFailLevel - level(s, a.skill)) / (a.fail.noFailLevel - a.level))
         : 0;
       tally = { items: {}, xp: {} };
+      lootSrc = `skill:${a.id}`;
+      /** 这次用掉的精炼石（装备来源记录用） */
+      const fineUsed: Record<string, number> = {};
       const failed = !!a.fail && rand() < failChance;
       if (failed) {
         if (a.fail!.item) addLoot(a.fail!.item, 1);
@@ -1053,7 +1063,10 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
             // 精炼石（11-02）：打开了「加精炼石」又有同阶的，每做一件用掉一颗，优秀、史诗概率 ×2.5
             const fm = s.settings.fineCraft?.[a.id] ? fineMatOf(o.item) : undefined;
             const fine = !!fm && haveItem(fm) >= 1;
-            if (fine) useItem(fm!, 1);
+            if (fine) {
+              useItem(fm!, 1);
+              fineUsed[fm!] = (fineUsed[fm!] ?? 0) + 1;
+            }
             addLoot(qid(o.item, rollQuality(it.tier, rand(), fine)), 1);
           }
           else addLoot(o.item, o.qty);
@@ -1061,8 +1074,18 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         if (gatherer && rand() < bonus + gmPct(s, 'yield')) a.outputs.forEach((o) => o.chance === undefined && addLoot(o.item, o.qty));
         addXp(a.skill, a.xp);
       }
+      // 装备来源（11-02）：做装备的配方、用到装备的配方记下材料和产出
+      if (s.prov && (a.outputs.some((o) => isGear(o.item)) || a.inputs?.some((i) => isGear(i.item))))
+        provCraft(s, a.id, { ...(saved ? {} : Object.fromEntries((a.inputs ?? []).map((i) => [i.item, i.qty]))), ...fineUsed }, tally.items, failed, now - dt, duration, (id) => {
+          const o = a.outputs.find((x) => x.item === baseOf(id));
+          const it = o && ITEMS[o.item];
+          if (!o || !it) return undefined;
+          const pq = it.equip && !it.equip.move && it.equip.slot !== 'pack' ? qualityOdds(it.tier, Object.keys(fineUsed).length > 0)[qualityOf(id)] / 100 : 1;
+          return (o.chance === undefined ? 1 : dropChance(s, o.chance)) * pq;
+        });
       log({ t: now - dt, kind: failed ? 'fail' : 'skill', action: a.id, xp: tally.xp, items: tally.items });
       tally = null;
+      lootSrc = null;
       task.done++;
     }
     return step;
@@ -1112,11 +1135,17 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         for (const d of m.drops) {
           if (d.chance === undefined || rand() < dropChance(s, d.chance)) {
             const q = coinQty(s, d.item, d.qty);
+            lootSrc = `drop:${m.id}`;
             addLoot(d.item, q);
+            lootSrc = null;
             got[d.item] = (got[d.item] ?? 0) + q;
           }
         }
       }
+      if (m.drops.some((d) => isGear(d.item))) provDrop(s, m.id, got, now - dt, (id) => {
+        const d = m.drops.find((x) => x.item === id);
+        return d ? (d.chance === undefined ? 1 : dropChance(s, d.chance)) : undefined;
+      });
       log({ t: now - dt, kind: 'kill', monster: m.id, xp: c.gain ?? {}, items: got });
       sum.kills[m.id] = (sum.kills[m.id] ?? 0) + 1;
       s.stats.kills++;
@@ -1288,12 +1317,18 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         for (const d of m.drops) {
           if (d.chance === undefined || rand() < dropChance(s, d.chance)) {
             const q = coinQty(s, d.item, d.qty);
+            lootSrc = `drop:${m.id}`;
             addLoot(d.item, q);
+            lootSrc = null;
             got[d.item] = (got[d.item] ?? 0) + q;
             run.got = { ...run.got, [d.item]: (run.got?.[d.item] ?? 0) + q };
           }
         }
       }
+      if (m.drops.some((d) => isGear(d.item))) provDrop(s, m.id, got, now - dt, (id) => {
+        const d = m.drops.find((x) => x.item === id);
+        return d ? (d.chance === undefined ? 1 : dropChance(s, d.chance)) : undefined;
+      });
       log({ t: now - dt, kind: 'kill', monster: m.id, xp: c.gain ?? {}, items: got });
       sum.kills[m.id] = (sum.kills[m.id] ?? 0) + 1;
       s.stats.kills++;

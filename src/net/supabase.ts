@@ -1,12 +1,13 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js';
 import type { GameState, GmBuff } from '../core/types';
-import type { EconRow, RedeemCodeRow, AltRow, CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMail, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildDay, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
+import type { EconRow, RedeemCodeRow, AltRow, GearEvRow, GearProvRow, CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMail, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildDay, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { type SyncReply } from './api';
 import type { Cmd } from '../core/commands';
 import type { TaskSpec } from '../core/guild';
 import { fastOf, readFast, slowKey, withMove, type Fast } from './presenceSync';
 import { tl } from '../i18n';
 import { gameNow } from '../core/clock';
+import { gearHeld, migrateProv } from '../core/prov';
 
 /** Supabase 实现（10-25 用户选定）。表和权限见 supabase/schema.sql */
 
@@ -649,6 +650,20 @@ export class SupabaseApi implements OnlineApi {
       total: r.total == null ? null : Number(r.total), combat: r.combat == null ? null : Number(r.combat), guildTag: r.guild_tag ?? null,
       hidden: !!r.hidden, banned: !!r.banned, flags: Number(r.flags ?? 0),
     }));
+  }
+  async gmGear(who: string) {
+    const rows = ok(await this.sb.rpc('gm_gear', { p_who: who.trim() })) as Row[];
+    return rows.map((r): GearProvRow => ({
+      playerId: r.player_id, pid: Number(r.pid), name: r.name, prov: migrateProv(r.prov) ?? null, lastTick: Number(r.last_tick),
+      held: gearHeld({ bank: r.bank ?? {}, bag: r.bag ?? {}, equipment: r.equipment ?? {} } as GameState),
+    }));
+  }
+  async gmGearRecent() {
+    const rows = ok(await this.sb.rpc('gm_gear_recent', { p_limit: 300 })) as Row[];
+    return rows.map((r): GearEvRow | null => {
+      const p = migrateProv({ since: 0, ev: [r.ev] });
+      return p?.ev[0] ? { pid: Number(r.pid), name: r.name, ev: p.ev[0] } : null;
+    }).filter((x): x is GearEvRow => !!x);
   }
   async gmPlayerCount() {
     const r = (ok(await this.sb.rpc('gm_player_count')) as Row[])[0] ?? {};

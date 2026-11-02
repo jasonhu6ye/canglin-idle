@@ -230,3 +230,32 @@ describe('开箱随机数（11-02）', () => {
     expect(d.results).toEqual([]);
   });
 });
+
+describe('装备来源记录', () => {
+  it('制作记下次数、材料和产出；结算之间多出来的记成外面来的', () => {
+    const smithy = standOf(NODES.find((n) => n.id === 'smithy')!);
+    const base = newGame(t0, 7);
+    base.loc = { ...smithy };
+    base.bank = { wood_bar: 30, wood_sword: 2 };
+    let r = runSync(JSON.parse(JSON.stringify(base)), [{ n: 'startNow', a: ['smith_wood_dagger', { type: 'infinite' }], t: t0 + 100, q: 1 }], t0 + 10 * 60_000, EX, 'dev');
+    const p = r.state.prov!;
+    expect(p.base.wood_sword).toBe(2 + (base.equipment.weapon === 'wood_sword' ? 1 : 0));
+    const c = p.craft.smith_wood_dagger;
+    expect(c.n).toBeGreaterThan(0);
+    expect(c.in.wood_bar).toBeLessThanOrEqual(c.n);
+    const made = Object.entries(r.state.bank).filter(([id]) => id.startsWith('wood_dagger')).reduce((a, [, n]) => a + n, 0)
+      + Object.entries(r.state.bag).filter(([id]) => id.startsWith('wood_dagger')).reduce((a, [, n]) => a + n, 0);
+    expect(Object.values(c.out).reduce((a, b) => a + b, 0)).toBe(made);
+    expect(p.other).toEqual({});
+    expect(c.ms).toBeGreaterThan(0);
+    expect(p.pend['craft:smith_wood_dagger'].n).toBeGreaterThan(0);
+    // 两次结算之间存档里多了一件（交易、公会仓库）
+    const mid = JSON.parse(JSON.stringify(r.state));
+    mid.bank['wood_sword@q5'] = 1;
+    r = runSync(mid, [], t0 + 11 * 60_000, EX, 'dev');
+    expect(r.state.prov!.other.outside).toEqual({ 'wood_sword@q5': 1 });
+    expect(r.state.prov!.ev[r.state.prov!.ev.length - 1]).toMatchObject({ id: 'wood_sword@q5', src: 'outside' });
+    // 读档后还在
+    expect(runSync(JSON.parse(JSON.stringify(r.state)), [], t0 + 12 * 60_000, EX, 'dev').state.prov!.other.outside).toEqual({ 'wood_sword@q5': 1 });
+  });
+});

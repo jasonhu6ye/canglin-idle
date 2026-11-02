@@ -377,6 +377,8 @@ export interface GameState {
   /** 永冬冰原的限时宝箱（11-01）：正在开的箱子，和每个箱子开过的轮次（每人每轮一次） */
   /** 永霜盾的寒冰护体还剩多少毫秒（防御 +50%） */
   frostGuard?: number;
+  /** 装备来源记录（11-02，服务器结算时记，见 core/prov.ts） */
+  prov?: import('./prov').Prov;
   realmChest?: { opening?: { id: string; at: number }; got?: Record<string, number> };
   /** 万圣节活动：当前召唤出来的是第几档南瓜王（打赢就清掉）、上次召唤的时间 */
   halloween?: { summoned?: number; last?: number; mount?: boolean; /** 已兑换死神皮肤（老字段） */ skin?: boolean; /** 已兑换的万圣节外观 id */ skins?: string[] };

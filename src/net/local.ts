@@ -1,5 +1,5 @@
 import type { GameState } from '../core/types';
-import type { AiPlayer, AltRow, EconRow, RedeemCodeRow, CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
+import type { AiPlayer, AltRow, GearEvRow, GearProvRow, EconRow, RedeemCodeRow, CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { GUILD_MAX, levelSnapshot, type SyncReply } from './api';
 import { runSync } from '../server/sync';
 import type { Cmd } from '../core/commands';
@@ -456,5 +456,7 @@ export class LocalApi implements OnlineApi {
   async gmSnapshotDelete() { /* 本地不做 */ }
   async gmRollback() { return 0; }
   async gmPlayers(): Promise<GmPlayer[]> { return []; }
+  async gmGear(): Promise<GearProvRow[]> { return []; }
+  async gmGearRecent(): Promise<GearEvRow[]> { return []; }
   async gmPlayerCount() { return { total: 0, today: 0, week: 0 }; }
 }
