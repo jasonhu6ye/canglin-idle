@@ -163,7 +163,7 @@ const items = (x: unknown) => {
   return out;
 };
 /** 设置：只能改这些（外观另外检查有没有解锁，在 setSettings 里） */
-const SETTING_KEYS = ['eatThreshold', 'carryFood', 'carryPotion', 'farmSeed', 'farmFert', 'autoFarm', 'skin'] as const;
+const SETTING_KEYS = ['eatThreshold', 'carryFood', 'carryPotion', 'farmSeed', 'farmFert', 'autoFarm', 'skin', 'fineCraft'] as const;
 const settings = (x: unknown) => {
   const p = (x ?? {}) as Record<string, unknown>;
   const out: Record<string, unknown> = {};

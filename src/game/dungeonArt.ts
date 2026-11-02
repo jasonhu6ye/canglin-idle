@@ -248,6 +248,35 @@ export function sageEyeIconUrl(tier: number): string {
   return done(k, p);
 }
 
+// ---- 精炼石（11-02）：一块斜放的长条磨刀石，一面磨得发亮，旁边一颗金色十字星；永霜精炼石是冰蓝色 ----
+
+const FROST_PAL = ['#1e3a5a', '#3a78b0', '#8fd0f0', '#e8fbff'];
+export function fineStoneIconUrl(tier: number, frost: boolean): string {
+  const k = `fine${frost ? 'f' : ''}${tier}`;
+  const hit = cache.get(k);
+  if (hit) return hit;
+  const p = new Pix(20, 20);
+  const pal = frost ? FROST_PAL : STONE[tier].pal;
+  const glow = frost ? '#ffffff' : STONE[tier].glow;
+  // 斜着的长条石：左下到右上
+  for (let i = 0; i < 13; i++) {
+    const x = 3 + i, y = 15 - i * 0.75;
+    for (let w = -2; w <= 2; w++) {
+      const yy = Math.round(y + w);
+      p.set(x, yy, w === -2 ? pal[3] : w === -1 ? pal[2] : w === 2 ? pal[0] : pal[1]);
+    }
+  }
+  // 磨亮的那一道
+  for (let i = 1; i < 12; i++) p.set(3 + i, Math.round(15 - i * 0.75 - 1), mix(pal[3], '#ffffff', 0.4));
+  // 金色（冰蓝）十字星
+  const star = frost ? '#cff4ff' : '#ffe680';
+  for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [2, 0], [-2, 0], [0, 2], [0, -2]]) p.set(15 + dx, 4 + dy, dx === 0 && dy === 0 ? '#ffffff' : star);
+  p.set(4, 5, glow);
+  if (tier >= 6) { p.set(6, 3, star); p.set(17, 12, star); }
+  if (frost) for (const [x, y] of [[5, 17], [9, 16], [14, 13]]) p.set(x, y, '#ffffff');
+  return done(k, p);
+}
+
 // ---- 回城卷轴 ----
 
 export function scrollIconUrl(): string {
@@ -286,6 +315,8 @@ export function dungeonIconUrl(id: string, tier?: number): string | null {
   if (id.startsWith('enhstone_')) return enhStoneIconUrl(tier, false);
   if (id.startsWith('enhshard_')) return enhStoneIconUrl(tier, true);
   if (id.startsWith('sageeye_')) return sageEyeIconUrl(tier);
+  if (id.startsWith('finecraft_')) return fineStoneIconUrl(tier, false);
+  if (id.startsWith('frostcraft_')) return fineStoneIconUrl(tier, true);
   return null;
 }
 

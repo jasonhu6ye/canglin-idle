@@ -4,7 +4,7 @@ import { GUILD_MAX_LV, cleanTech, guildPct, utcDay } from './guild';
 import { APT_MAX, APT_MIN, FOAL, growMs, HORSE_XP, horseItem, RANCH, RANCH_PENS } from './ranch';
 import { baseOf, qid, QUALITY_VALUE, rollQuality } from './quality';
 import { HW_MOUNT, HW_MOUNT_COST, HW_POINT, HW_SKINS, HW_TIERS, hwFight, hwHasSkin, hwOpen, hwShopOpen, hwTierOf, hwWait } from './halloween';
-import { OLD_JEWELS, BAR_VALUE, inTownArea, KEY_SHOP, keyOf, OLD_ENH, SCROLL_TOWN, SHARD_PER_STONE, TIERS, ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAIN_SIZE, MID_BOX, nodeActive, REALM_GATES, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, MAT_DAILY, MAT_PRICE, MAT_SHOP, SCROLL_DAILY, SCROLL_PRICE, SEED_SHOP, seedLevel, seedPrice, SKILLS, SPAWN_TILE, FROSTHEART_CHEST, standOf, TOWN_CENTER, fastest, planRoute, travelMs, type MapNode } from './data';
+import { OLD_JEWELS, BAR_VALUE, inTownArea, KEY_SHOP, keyOf, OLD_ENH, SCROLL_TOWN, SHARD_PER_STONE, TIERS, ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAIN_SIZE, MID_BOX, nodeActive, REALM_GATES, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, MAT_DAILY, MAT_PRICE, MAT_SHOP, SCROLL_DAILY, SCROLL_PRICE, SEED_SHOP, seedLevel, seedPrice, SKILLS, SPAWN_TILE, FROSTHEART_CHEST, FROSTCRAFT_CHEST, fineMatOf, standOf, TOWN_CENTER, fastest, planRoute, travelMs, type MapNode } from './data';
 import { nextRandom } from './rng';
 import { buffMob, coopMates, COOP_DEF, COOP_DMG, dungeonFloor, GATE_AFTER_CLEAR, GATE_CD, GATE_MAX, GATE_MS, GATE_REACH, legMs, rollChest, rollChestQuality, rollFloors, teamChest, teamChestQuality, type TeamMember } from './dungeon';
 import { partySize } from './party';
@@ -1049,7 +1049,13 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
           if (o.chance !== undefined && rand() >= dropChance(s, o.chance)) continue;
           // 做出来的装备、工具随机品质（用户 10-25）
           const it = ITEMS[o.item];
-          if (it?.equip && !it.equip.move && it.equip.slot !== 'pack') for (let k = 0; k < o.qty; k++) addLoot(qid(o.item, rollQuality(it.tier, rand())), 1);
+          if (it?.equip && !it.equip.move && it.equip.slot !== 'pack') for (let k = 0; k < o.qty; k++) {
+            // 精炼石（11-02）：打开了「加精炼石」又有同阶的，每做一件用掉一颗，优秀、史诗概率 ×2.5
+            const fm = s.settings.fineCraft ? fineMatOf(o.item) : undefined;
+            const fine = !!fm && haveItem(fm) >= 1;
+            if (fine) useItem(fm!, 1);
+            addLoot(qid(o.item, rollQuality(it.tier, rand(), fine)), 1);
+          }
           else addLoot(o.item, o.qty);
         }
         if (gatherer && rand() < bonus + gmPct(s, 'yield')) a.outputs.forEach((o) => o.chance === undefined && addLoot(o.item, o.qty));
@@ -1977,10 +1983,10 @@ export function finishRealmChest(prev: GameState, now: number): GameState {
   s.bank.coins = (s.bank.coins ?? 0) + loot.coins;
   for (const [item, q] of loot.items) if (ITEMS[item]) s.bank[item] = (s.bank[item] ?? 0) + q;
   // 永霜之心（用户 11-02）：按箱子档次有概率多开出一颗
-  for (const id of ['frostheart_7', 'frostheart_8']) {
+  for (const [id, p] of [['frostheart_7', FROSTHEART_CHEST[tier]], ['frostheart_8', FROSTHEART_CHEST[tier]], ['frostcraft_7', FROSTCRAFT_CHEST[tier]], ['frostcraft_8', FROSTCRAFT_CHEST[tier]]] as const) {
     const [r, next] = nextRandom(s.rng);
     s.rng = next;
-    if (r < FROSTHEART_CHEST[tier]) s.bank[id] = (s.bank[id] ?? 0) + 1;
+    if (r < p) s.bank[id] = (s.bank[id] ?? 0) + 1;
   }
   // 只留还在这一轮里的记录，存档不会越来越大
   const got: Record<string, number> = {};

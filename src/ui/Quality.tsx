@@ -10,13 +10,13 @@ import { Icon } from './icons';
 const pct = (p: number) => (p >= 10 ? p.toFixed(1) : p >= 1 ? p.toFixed(1) : p.toFixed(2)).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
 
 /** 制作页：做这件装备每个品质的概率 */
-export function QualityOdds({ item }: { item: string }) {
+export function QualityOdds({ item, fine = false }: { item: string; fine?: boolean }) {
   const it = ITEMS[item];
   if (!it?.equip || it.equip.move) return null;
-  const odds = qualityOdds(it.tier);
+  const odds = qualityOdds(it.tier, fine);
   return (
     <span className="q-odds">
-      <small className="muted">{tl('品质概率：')}</small>
+      <small className="muted">{fine ? tl('品质概率（加精炼石）：') : tl('品质概率：')}</small>
       {odds.map((p, q) => <small key={q} className={`q-chip ${qClass(q)}`}>{QUALITY_NAME[q]} {pct(p)}%</small>)}
     </span>
   );
