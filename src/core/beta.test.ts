@@ -14,7 +14,7 @@ describe('公测审查（11-02）', () => {
     s.prov.mats.dkey_g4 = { 'mail:gm': 2, outside: 1, 'drop:wolf': 10 };
     s.prov.mats.coins = { 'cmd:sell': 100 };
     s.bank = { dkey_g4: 5, coins: 500, [hiGear]: 1 };
-    const lines = betaAudit({ ...s, prov: s.prov, gmGot: { coins: 300 }, grants: { coins: 350 }, mail: [] });
+    const lines = betaAudit({ ...s, prov: s.prov, gmGot: { coins: 300, dkey_g4: 2 }, grants: { coins: 350 }, mail: [] });
     const of = (id: string) => lines.find((l) => l.item === id)!;
     expect(of('dkey_g4')).toMatchObject({ held: 5, recall: 2, review: 1, keep: 2 });
     expect(of('coins')).toMatchObject({ recall: 350, review: 0, keep: 150 });

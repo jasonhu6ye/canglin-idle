@@ -392,7 +392,7 @@ export const EN_ONLINE: Record<string, string> = {
   "GM 邮件": "GM mail",
   "兑换码邮件": "Code reward mail",
   "全服赠礼": "Server-wide gift",
-  "GM 邮件 / 兑换码发的": "From GM mail / codes",
+  "GM 邮件发的": "From GM mail",
   "交易、公会仓库或改档来的": "From trades, guild vault or save edits",
   "有未处理的可疑标记": "Has an open suspicious flag",
   "记录开始前就有的传说以上装备，查不到来历": "Legendary+ gear held before tracking began; origin unknown",

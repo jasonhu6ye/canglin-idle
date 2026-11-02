@@ -7,7 +7,7 @@ import type { Mail, SkillId } from './types';
 /*
  * 公测审查（11-02 用户要求）：内测账号不删档进公测，自动判断每个玩家身上的东西哪些能带过去。
  * 只做标记给 GM 看，不动存档。
- * - recall 回收：GM 邮件、兑换码发的（gmGot 和服务器 gm_grants 取大的）
+ * - recall 回收：GM 手发的邮件（gmGot 和服务器 gm_grants 取大的）。用户 11-02：兑换码奖励不算，保留
  * - review 待人工看：交易 / 公会仓库 / GM 改档来的（outside）；有未处理可疑标记的传说以上装备；
  *   记录开始前就有、查不到来历的传说以上装备；查不到来历、以他现在的等级也做不出来、又不是怪物掉落的装备
  * - keep 保留：自己采集、制作、打怪、系统奖励（新手任务、全服赠礼、活动礼物）得到的，和记录开始前就有的普通东西
@@ -58,7 +58,7 @@ export function allHeld(x: Pick<BetaInput, 'bank' | 'bag' | 'equipment' | 'belt'
 /** 来源分三类：自己的、外面来的、GM 发的 */
 function kindOfSrc(src: string): 'own' | 'outside' | 'gm' {
   if (src === 'outside') return 'outside';
-  if (src === 'mail:gm' || src === 'mail:code' || src === 'mail:custom' || src === 'mail:redeem') return 'gm';
+  if (src === 'mail:gm' || src === 'mail:custom') return 'gm';
   return 'own';
 }
 
@@ -76,7 +76,7 @@ export function betaAudit(x: BetaInput): BetaLine[] {
   const held = allHeld(x);
   // 还在邮箱里没领的 GM 邮件：公测时直接删，不算身上的
   const pending: Record<string, number> = {};
-  for (const m of x.mail ?? []) if (!m.claimed && (m.gm || m.kind === 'custom')) for (const i of m.items) pending[i.item] = (pending[i.item] ?? 0) + i.qty;
+  for (const m of x.mail ?? []) if (!m.claimed && (m.gm === 'gm' || (!m.gm && m.kind === 'custom'))) for (const i of m.items) pending[i.item] = (pending[i.item] ?? 0) + i.qty;
   // 每种东西各类来源一共记了多少
   const by: Record<string, { own: number; outside: number; gm: number }> = {};
   const add = (id: string, src: string, n: number) => { const r = (by[id] ??= { own: 0, outside: 0, gm: 0 }); r[kindOfSrc(src)] += n; };
@@ -95,7 +95,8 @@ export function betaAudit(x: BetaInput): BetaLine[] {
     const n = held[id] ?? 0;
     const r = by[id] ?? { own: 0, outside: 0, gm: 0 };
     const why: string[] = [];
-    const gm = Math.max(r.gm, x.gmGot?.[id] ?? 0, (x.grants?.[id] ?? 0) - (pending[id] ?? 0));
+    // 以存档 gmGot 和服务器 gm_grants 为准（来源记录里的 mail:gm 在分出兑换码之前可能多记）
+    const gm = Math.max(x.gmGot?.[id] ?? 0, (x.grants?.[id] ?? 0) - (pending[id] ?? 0));
     const recall = Math.min(n, gm);
     if (recall) why.push('gm');
     let rest = n - recall;

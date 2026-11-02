@@ -1126,7 +1126,7 @@ const qCount = (out: Record<string, number>) => {
  * 回收 = GM 邮件 / 兑换码发的；待人工看 = 交易 / 公会仓库 / 改档来的、有可疑标记、查不到来历的高品质或做不出来的装备；其余保留
  */
 const BETA_WHY: Record<string, string> = {
-  gm: tl('GM 邮件 / 兑换码发的'), outside: tl('交易、公会仓库或改档来的'), flag: tl('有未处理的可疑标记'),
+  gm: tl('GM 邮件发的'), outside: tl('交易、公会仓库或改档来的'), flag: tl('有未处理的可疑标记'),
   old_hi: tl('记录开始前就有的传说以上装备，查不到来历'), no_way: tl('查不到来历，以他现在的等级做不出来，也没有怪物掉'), old: tl('部分是记录开始前就有的'),
   used: tl('GM 发的已经不在身上（卖掉 / 用掉 / 做成别的）'), sent: tl('GM 发的已经不在身上，同种东西转给过别人'),
 };

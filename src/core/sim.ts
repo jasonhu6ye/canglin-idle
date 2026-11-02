@@ -233,7 +233,7 @@ export function migrate(raw: unknown): GameState | null {
     mailSeq: Math.max(0, num(s.mailSeq, 0), ...migrateMail(s.mail).map((m) => m.id)),
     gmGot: keep(s.gmGot),
     gmLeft: keep(s.gmLeft),
-    ...(s.gmMark === 1 ? { gmMark: 1 as const } : {}),
+    ...(s.gmMark === 1 || s.gmMark === 2 ? { gmMark: s.gmMark } : {}),
     home: homeIn,
     gates: arr<DungeonGate>(s.gates).filter((g) => obj(g) && (g.kind === 'green' || g.kind === 'blue') && TIERS[g.tier] && Number.isFinite(g.expires) && Number.isFinite(g.seed) && g.floors >= 1 && g.floors <= 7),
     gatesUsed: arr<string>(s.gatesUsed).filter((id) => typeof id === 'string').slice(-50),
