@@ -1,4 +1,5 @@
 import { leaveHome } from '../core/home';
+import { gameNow } from '../core/clock';
 import Phaser from 'phaser';
 import { ACTIONS, CROP_DEFS, CROPS, cropsOfField, FARM_PLOTS, PLOT_BY_ID, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, inTownArea, keyOf, DANGER, dangerLevel, nodeOfAction, nodesOfAction, planRoute, standOf, STONE_JUMP_MS, WAYSTONES, REALM_GATES, hopsOf, jumpNode, travelMs, WALK_TILES_PER_SEC, type MapNode, type Route } from '../core/data';
 import { atGate, WAYSTONE_REACH, combatLevel, combatStats, MONSTER_MOVES, isBankId, maxHp, moveSpeed, playerAttackMs, walkPos } from '../core/sim';
@@ -1434,7 +1435,7 @@ export class MapScene extends Phaser.Scene {
     const img = this.add.image(cx, cy + T / 2, 'chest').setOrigin(0.5, 1).setScale(1.6).setDepth(cy + T / 2 + 1000);
     const glow = this.add.image(cx, cy - 4, 'glow').setBlendMode(Phaser.BlendModes.ADD).setDepth(cy + T / 2 + 1001).setAlpha(0.5);
     const paint = () => {
-      const w = timedWindow(n, Date.now());
+      const w = timedWindow(n, gameNow());
       const tint = tierTint[chestTier(n.id, w?.round ?? 0)];
       glow.setTint(tint);
     };
@@ -1540,7 +1541,7 @@ export class MapScene extends Phaser.Scene {
       for (let k = 0; k < count; k++) made.push(this.addMonWanderer(m, ox + k * 3, oy + (k ? 2 : 0), m.rank === 'boss' ? 2 : 4));
     });
     if (n.timed) {
-      const on = this.timedOn.get(n.id) ?? !!timedWindow(n, Date.now());
+      const on = this.timedOn.get(n.id) ?? !!timedWindow(n, gameNow());
       for (const o of made) (o as unknown as Phaser.GameObjects.Components.Visible).setVisible(on);
       this.timedViz.get(n.id)?.push(...made);
     }
@@ -1552,7 +1553,8 @@ export class MapScene extends Phaser.Scene {
   private timedClock = new Map<string, Phaser.GameObjects.Text>();
   private timedNode?: Map<string, MapNode>;
   private syncTimed() {
-    const now = Date.now();
+    // 和存档结算用同一个钟（本机时间不准时以服务器为准），不然怪已经刷出来了画面上还藏着
+    const now = gameNow();
     const view = this.cameras.main.worldView;
     for (const [id, objs] of this.timedViz) {
       const n = (this.timedNode ??= new Map(NODES.filter((x) => x.timed).map((x) => [x.id, x]))).get(id)!;
@@ -2372,6 +2374,9 @@ export class MapScene extends Phaser.Scene {
       const top = b.spr.y - (S - 3 * b.spr.scaleY) + 6;
       // 首领的血条和名字压在所有东西上面，远处也看得清
       const depth = b.label ? D_LABEL - 1 : b.spr.depth + 1;
+      // 怪藏起来了（限时点没刷出来）血条也一起藏，不然只看到一根血条（11-02）
+      const vis = b.spr.visible;
+      b.bg.setVisible(vis); b.fill.setVisible(vis); b.trail.setVisible(vis); b.label?.setVisible(vis);
       b.bg.setPosition(b.spr.x, top).setDepth(depth).setAlpha(b.spr.alpha);
       const ratio = b.live && c ? (c.respawnMs > 0 ? 0 : Math.max(0, c.monsterHp / (c.monsterMax ?? b.m.hp))) : 1;
       b.fill.setPosition(b.spr.x - b.w / 2, top - 1).setDepth(depth).setAlpha(b.spr.alpha).setScale(ratio, 1);
@@ -2383,8 +2388,9 @@ export class MapScene extends Phaser.Scene {
         shadow.setPosition(b.spr.x, b.spr.y).setDepth(b.spr.depth - 2).setAlpha(0.35 * b.spr.alpha);
         ring.setPosition(b.spr.x, b.spr.y).setDepth(b.spr.depth - 1);
         glow.setPosition(b.spr.x, b.spr.y - S * 0.3).setDepth(D_GLOW);
-        ring.setVisible(b.spr.alpha > 0.1);
-        glow.setVisible(b.spr.alpha > 0.1);
+        ring.setVisible(vis && b.spr.alpha > 0.1);
+        glow.setVisible(vis && b.spr.alpha > 0.1);
+        shadow.setVisible(vis);
       }
       return true;
     });
