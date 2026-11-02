@@ -322,17 +322,17 @@ for (const i of [6, 7]) {
   });
 }
 /**
- * 精工石（用户 11-02）：制作装备时加一颗，优秀、史诗的概率 ×2.5（传说、神话不变，quality.ts FINE_MULT）。
- * 普通装备和幽魂链刃、提灯用「精工石」，T1-T8，只从副本宝箱开出（宝箱几阶就出几阶）；
- * 永霜之弓、永霜盾用「永霜精工石」，T7/T8，只在永冬冰原打首领、开限时宝箱得到。
+ * 精炼石（用户 11-02）：制作装备时加一颗，优秀、史诗的概率 ×2.5（传说、神话不变，quality.ts FINE_MULT）。
+ * 普通装备和幽魂链刃、提灯用「精炼石」，T1-T8，只从副本宝箱开出（宝箱几阶就出几阶）；
+ * 永霜之弓、永霜盾用「永霜精炼石」，T7/T8，只在永冬冰原打首领、开限时宝箱得到。
  */
-TIERS.forEach((_, i) => item(`finecraft_${i + 1}`, tl`T${i + 1} 精工石`, 'material', BAR_VALUE[i] * 3, {
+TIERS.forEach((_, i) => item(`finecraft_${i + 1}`, tl`T${i + 1} 精炼石`, 'material', BAR_VALUE[i] * 3, {
   tier: i, desc: tl('打磨得极细的工匠石。制作同阶装备时加一颗，做出优秀、史诗品质的概率提高到 2.5 倍（传说、神话不变）。只能从副本宝箱里开出，宝箱几阶就出几阶。'),
 }));
-for (const i of [6, 7]) item(`frostcraft_${i + 1}`, tl`T${i + 1} 永霜精工石`, 'material', BAR_VALUE[i] * 3, {
+for (const i of [6, 7]) item(`frostcraft_${i + 1}`, tl`T${i + 1} 永霜精炼石`, 'material', BAR_VALUE[i] * 3, {
   tier: i, desc: tl('冰原寒气里淬过的工匠石。制作同阶永霜之弓、永霜盾时加一颗，做出优秀、史诗品质的概率提高到 2.5 倍（传说、神话不变）。只在永冬冰原打首领、开限时宝箱有概率得到。'),
 });
-/** 做这件装备（产物 id，不带品质）能加哪种精工石；不能加就是 undefined */
+/** 做这件装备（产物 id，不带品质）能加哪种精炼石；不能加就是 undefined */
 export function fineMatOf(item: string): string | undefined {
   const it = ITEMS[item];
   if (!it?.equip || it.equip.move || it.equip.slot === 'pack' || it.tier === undefined) return undefined;
@@ -340,7 +340,7 @@ export function fineMatOf(item: string): string | undefined {
   if (key === 'frostbow' || key === 'frostshield') return `frostcraft_${it.tier + 1}`;
   return `finecraft_${it.tier + 1}`;
 }
-/** 永霜精工石的掉率：永冬首领每次击杀每阶、限时宝箱每阶 */
+/** 永霜精炼石的掉率：永冬首领每次击杀每阶、限时宝箱每阶 */
 export const FROSTCRAFT_BOSS = 0.2;
 export const FROSTCRAFT_CHEST = { green: 0.06, blue: 0.12, gold: 0.25 } as const;
 /** 洞察之瞳（用户 10-26）：洞察者背包的特殊材料，只能开副本宝箱得到（宝箱越好越容易出，也会开出比钥匙低阶的） */

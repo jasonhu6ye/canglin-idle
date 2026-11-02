@@ -8,7 +8,7 @@ import { XP_TABLE } from './xp';
 
 const T0 = 1_700_000_000_000;
 
-describe('精工石（11-02）', () => {
+describe('精炼石（11-02）', () => {
   it('只提高优秀、史诗，传说、神话不变，加起来还是 100%', () => {
     for (let t = 0; t < 8; t++) {
       const a = qualityOdds(t), b = qualityOdds(t, true);
@@ -22,7 +22,7 @@ describe('精工石（11-02）', () => {
     }
   });
 
-  it('每件装备对应同阶的精工石，永霜武器用永霜精工石', () => {
+  it('每件装备对应同阶的精炼石，永霜武器用永霜精炼石', () => {
     const t1 = TIERS[0].id, t8 = TIERS[7].id;
     expect(fineMatOf(`${t1}_sword`)).toBe('finecraft_1');
     expect(fineMatOf(`${t8}_chainblade`)).toBe('finecraft_8');
@@ -32,7 +32,7 @@ describe('精工石（11-02）', () => {
     for (let i = 1; i <= 8; i++) expect(ITEMS[`finecraft_${i}`]).toBeDefined();
   });
 
-  it('副本宝箱开出同阶精工石，箱子越好越多', () => {
+  it('副本宝箱开出同阶精炼石，箱子越好越多', () => {
     for (const tier of [0, 4, 7]) {
       const got = [0, 3].map((q) => {
         let r = 12345, n = 0;
@@ -46,7 +46,7 @@ describe('精工石（11-02）', () => {
     }
   });
 
-  it('永冬首领掉永霜精工石', () => {
+  it('永冬首领掉永霜精炼石', () => {
     for (const id of ['wb_everfrost_giant', 'wb_snow_baron']) for (const m of ['frostcraft_7', 'frostcraft_8']) expect(MONSTERS[id].drops.some((d) => d.item === m)).toBe(true);
   });
 

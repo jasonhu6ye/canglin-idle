@@ -221,7 +221,7 @@ function Recipe({ s, a }: { s: GameState; a: SkillAction }) {
       {a.inputs && <b className="rc-arrow">→</b>}
       {a.outputs.map((st) => cell(st, false))}
       {a.outputs.map((st) => {
-        // 精工石（11-02）：打开开关、背包或仓库里有同阶的，每做一件自动加一颗
+        // 精炼石（11-02）：打开开关、背包或仓库里有同阶的，每做一件自动加一颗
         const fm = fineMatOf(st.item);
         const on = !!s.settings.fineCraft && !!fm && have(fm) > 0;
         return (

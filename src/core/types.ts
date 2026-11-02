@@ -302,7 +302,7 @@ export interface Settings {
   farmSeed?: Record<string, string>;
   /** 种田：哪些田开了自动补种（熟了自动收、再种同一种，离线也照样） */
   autoFarm?: Record<string, boolean>;
-  /** 精工石（11-02）：制作装备时自动加一颗同阶精工石（有的话），提高优秀、史诗概率 */
+  /** 精炼石（11-02）：制作装备时自动加一颗同阶精炼石（有的话），提高优秀、史诗概率 */
   fineCraft?: boolean;
   /** 种田：每块田种下时施哪种肥料（fert_basic / fert_rich），不选就不施 */
   farmFert?: Record<string, string>;

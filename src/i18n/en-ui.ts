@@ -1281,5 +1281,5 @@ export const EN_UI: Record<string, string> = {
   "输错太多次了，一小时后再试": "Too many wrong codes. Try again in an hour",
   "加{0}（每件一颗，有 {1} 颗）": "Add {0} (1 per item, have {1})",
   " 没有了，按普通概率做": " none left, normal odds",
-  "品质概率（加精工石）：": "Quality odds (with stone): ",
+  "品质概率（加精炼石）：": "Quality odds (with stone): ",
 };

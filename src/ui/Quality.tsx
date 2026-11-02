@@ -16,7 +16,7 @@ export function QualityOdds({ item, fine = false }: { item: string; fine?: boole
   const odds = qualityOdds(it.tier, fine);
   return (
     <span className="q-odds">
-      <small className="muted">{fine ? tl('品质概率（加精工石）：') : tl('品质概率：')}</small>
+      <small className="muted">{fine ? tl('品质概率（加精炼石）：') : tl('品质概率：')}</small>
       {odds.map((p, q) => <small key={q} className={`q-chip ${qClass(q)}`}>{QUALITY_NAME[q]} {pct(p)}%</small>)}
     </span>
   );
