@@ -38,15 +38,19 @@ function canJoin(s: GameState, action: string) {
   const a = ACTIONS[action];
   return a?.kind === 'skill' && !a.inputs?.length && a.skill !== 'farming' && level(s, a.skill) >= a.level;
 }
-/** 离队长最近的那个地点（同一个动作可能有好几处，要去队长那一处） */
-function nodeNear(action: string, x: number, y: number) {
+/**
+ * 离队长最近的那个地点（同一个动作可能有好几处，要去队长那一处）。
+ * 打怪时人会追着怪跑出刷怪点一段距离，所以打怪放宽到 40 格（11-02：以前 12 格找不到就乱跑）
+ */
+const NEAR_COMBAT = 40;
+function nodeNear(action: string, x: number, y: number, max = ACTIONS[action]?.kind === 'combat' ? NEAR_COMBAT : 12) {
   let best: string | undefined;
   let d = Infinity;
   for (const n of nodesOfAction(action)) {
     const e = Math.abs(n.x - x) + Math.abs(n.y - y);
     if (e < d) { d = e; best = n.id; }
   }
-  return d <= 12 ? best : undefined;
+  return d <= max ? best : undefined;
 }
 
 /**
@@ -168,7 +172,7 @@ export function PartyFrames({ onPick }: { onPick: (playerId: string) => void }) 
       if (!p || !at || at <= (assistSeen.get(m.playerId) ?? 0)) continue;
       assistSeen.set(m.playerId, at);
       if (Date.now() - at > RALLY_FRESH || !p.action || ACTIONS[p.action]?.kind !== 'combat') continue;
-      const node = nodeNear(p.action, p.x, p.y) ?? nodesOfAction(p.action)[0]?.id;
+      const node = nodeNear(p.action, p.x, p.y);
       if (!node) { setNote(tl('找不到这只怪的位置')); continue; }
       if (store.state.dungeon) { setNote(tl`${m.name} 叫你一起打 ${actionName(p.action)}，你在副本里，出来后再去`); continue; }
       const cur = store.state.queue[0];
