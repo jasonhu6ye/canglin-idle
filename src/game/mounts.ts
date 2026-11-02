@@ -6,7 +6,7 @@ import { DRAGON_MOUNT } from '../core/data';
 import type { Pix } from './pix';
 import { paintPumpkinSheet, pumpkinFrame, pumpkinSaddle, PK_ANIMS } from './pumpkinArt';
 import { paintWolfSheet, wolfFrame, wolfSaddle, WOLF_ANIMS, WOLF_FEET, WOLF_H, WOLF_W } from './wolfArt';
-import { dragonEyes, dragonFrame, dragonSaddle, DR_ANIMS, DR_FEET, DR_H, DR_W, paintDragonSheet } from './dragonArt';
+import { dragonEyes, dragonFrame, dragonSaddle, DR_ANIMS, DR_FEET, DR_H, DR_W, HEAD_OFF, paintDragonSheet } from './dragonArt';
 import { pumpkinEyes } from './pumpkinArt';
 import { PumpkinFx, type PkState } from './pumpkinFx';
 import { DragonFx } from './dragonFx';
@@ -54,7 +54,9 @@ export function seatOf(kind: string, dir: 'side' | 'down' | 'up') {
   const up = kind === 'wolf' ? 0 : kind === 'pumpkin' ? PK_SEAT : kind === 'dragon' ? DR_SEAT : 5;
   // 南瓜正面、背面：屁股压进南瓜顶，跨开的小腿藏到南瓜前层后面，看着是坐在上面（用户 10-30）
   const sink = kind === 'pumpkin' ? 6 : 0;
-  return dir === 'side' ? { x: -3, y: -16 - up } : dir === 'down' ? { x: 0, y: -19 - up + sink } : { x: 0, y: -17 - up + sink };
+  // 龙的脖子又粗又高：正面时头往左偏，骑手坐在右边（HEAD_OFF）
+  const dx = kind === 'dragon' ? HEAD_OFF + 1 : 0;
+  return dir === 'side' ? { x: -3, y: -16 - up } : dir === 'down' ? { x: dx, y: -19 - up + sink } : { x: 0, y: -17 - up + sink };
 }
 
 /** 跑动时背随着步子起伏：按坐骑前层当前帧算 */
