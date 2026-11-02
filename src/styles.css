@@ -923,6 +923,9 @@ html[lang="en"] .login-box h1 { letter-spacing: 2px; }
 .pf-hp { font-size: 10px; color: var(--muted); line-height: 1; }
 .pf-rally { align-self: flex-start; font-size: 12px; }
 .pf-note { font-size: 12px; max-width: 240px; }
+.pf-invite { display: flex; flex-direction: column; gap: 6px; font-size: 12px; max-width: 240px; padding: 6px 8px; }
+.pf-invite-btns { display: flex; gap: 6px; }
+.pf-invite-btns button { font-size: 12px; padding: 3px 10px; min-height: 26px; }
 .pf-status { font-size: 11px; max-width: 240px; padding: 2px 8px; background: rgba(0, 0, 0, 0.45); border-radius: 6px; text-shadow: 0 1px 0 #000; }
 .party-ops { display: inline-flex; gap: 4px; margin-left: 6px; }
 /* 开工提示：页面不关，按钮上方闪一下（10-25） */

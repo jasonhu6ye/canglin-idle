@@ -128,6 +128,10 @@ let rallyAt = 0;
 /** 队长召集：跟着位置一起发出去，队友收到后自动寻路过来 */
 export function sendRally() { rallyAt = Date.now(); emit(); }
 export const rallyTime = () => rallyAt;
+let assistAt = 0;
+/** 叫队友一起打（用户 11-02）：自己在打怪时发出，队友收到弹窗，点「一起打」就去打同一只 */
+export function sendAssist() { assistAt = Date.now(); emit(); }
+export const assistTime = () => assistAt;
 
 export function closeChat() { st.open = false; emit(); }
 

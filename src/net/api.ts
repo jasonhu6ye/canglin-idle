@@ -115,6 +115,8 @@ export interface Presence {
   flip?: boolean;
   /** 队长发起召集的时间（毫秒），队友看到就寻路过来 */
   rally?: number;
+  /** 叫队友一起打的时间（毫秒）：队友收到弹窗，点了就去打同一只（action 就是要打的怪） */
+  assist?: number;
   /** 开着的副本洞口（10-25），队友可以进同一个 */
   gates?: import('../core/types').DungeonGate[];
   /** 在副本里（10-25 同步）：哪个洞口、第几层、进度、在副本里的像素位置和动作 */

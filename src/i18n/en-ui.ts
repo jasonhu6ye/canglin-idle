@@ -1455,4 +1455,13 @@ export const EN_UI: Record<string, string> = {
   "地点页「怪物」分页可以按「经验/时」「收益/时」「击杀/时」排序：按你现在的装备、战斗等级和增益预估每只怪的效率，挑最适合你的去打。": "The Monsters tab on the Places page can sort by XP/h, Coins/h and Kills/h, estimated from your current gear, combat levels and buffs, so you can pick the best target.",
   "每只怪都写出每小时能打几只、拿多少经验和金币（掉落按卖店价算）、要不要吃东西；三项各自最好的会标出来。": "Each monster shows kills, XP and coins per hour (drops at shop price) and whether you need food; the best in each category is highlighted.",
   "一只打下来要掉八成血以上的有阵亡风险，不放进推荐。": "Monsters that cost over 80% of your HP per kill are risky and left out of recommendations.",
+  // party assist invite (11-02)
+  '找不到这只怪的位置': "Can't find where that monster is",
+  '你在副本里，出来后再去': "You're in a dungeon. Go after you leave.",
+  '正在赶去和 {0} 一起打 {1}': 'Heading over to fight {1} with {0}',
+  '已邀请队友一起打，队友点「一起打」就会赶过来': 'Invite sent. Teammates who tap "Join" will come over.',
+  '叫队友一起打': 'Call teammates to fight',
+  '{0} 叫你一起打 {1}': '{0} asks you to fight {1} together',
+  '一起打': 'Join',
+  '算了': 'No thanks',
 };

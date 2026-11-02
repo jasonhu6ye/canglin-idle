@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { levelSnapshot, online, type DungeonPresence, type Presence } from '../net';
 import { setBotViewer } from '../net/bots';
 import { moveCadence } from '../net/presenceSync';
-import { rallyTime, takeFieldHits, updateAggro, type FieldMateHit } from '../net/social';
+import { assistTime, rallyTime, takeFieldHits, updateAggro, type FieldMateHit } from '../net/social';
 import { maxHp } from '../core/sim';
 import type { GameState } from '../core/types';
 import { FIGHT, FIGHT_RANGE, FRAME_H, FRAME_W, HERO_ANIMS, type FightWeapon, HERO_FEET, HERO_PAD, outfitOf, paintHeroSheet } from './hero';
@@ -71,7 +71,7 @@ export function publishSelf(st: GameState, x: number, y: number, work?: { anim: 
   const c = st.combat;
   const fd = !dg && action && c?.crew && work?.anim.startsWith('fight-') ? { k: action, n: c.copy ?? 0, dmg: c.pTotal ?? 0, crit: c.pCrit || undefined } : undefined;
   // 血量按 5% 一档比较，打怪时不用每下都发
-  const key = JSON.stringify([st.settings.skin, action, mounted, st.equipment, snap.total, snap.combat, Math.round((hp / max) * 20), rallyTime(), work?.anim, work?.flip, (st.gates ?? []).map((g) => g.id).join(),
+  const key = JSON.stringify([st.settings.skin, action, mounted, st.equipment, snap.total, snap.combat, Math.round((hp / max) * 20), rallyTime(), assistTime(), work?.anim, work?.flip, (st.gates ?? []).map((g) => g.id).join(),
     dg && [dg.gate, dg.floor, dg.idx, dg.phase, dg.kills, dg.anim, dg.flip, dg.dmg], fd && [fd.n, fd.dmg]]);
   const px = dg ? dg.x / T : x;
   const py = dg ? dg.y / T : y;
@@ -79,7 +79,7 @@ export function publishSelf(st: GameState, x: number, y: number, work?: { anim: 
   // 打怪、换装备这类变化马上发（副本里队友要立刻看到伤害），只是走路才按节奏
   if (!moved && key === sent.key && now - sent.at < KEEPALIVE_MS) return;
   sent = { x: px, y: py, key, at: now };
-  online.publishPresence({ x, y, outfit: st.settings.skin, action, mounted, equip: { ...st.equipment }, total: snap.total, combat: snap.combat, hp, maxHp: max, rally: rallyTime() || undefined, anim: work?.anim, flip: work?.flip, gates: st.gates?.length ? st.gates : undefined,
+  online.publishPresence({ x, y, outfit: st.settings.skin, action, mounted, equip: { ...st.equipment }, total: snap.total, combat: snap.combat, hp, maxHp: max, rally: rallyTime() || undefined, assist: assistTime() || undefined, anim: work?.anim, flip: work?.flip, gates: st.gates?.length ? st.gates : undefined,
     dg: dg ? { ...dg, x: Math.round(dg.x), y: Math.round(dg.y) } : undefined, fd });
 }
 
