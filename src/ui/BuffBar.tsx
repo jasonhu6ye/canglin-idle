@@ -18,7 +18,7 @@ const PAL: Record<string, string> = {
   s: '#c8ccd4', S: '#7a808a', n: '#8a5a30', N: '#5a3a1e', y: '#fff07a', p: '#c070ff', P: '#7030b0', e: '#7ad860', E: '#3a8a30',
 };
 // 9×9 像素画
-const ART: Record<IconKey, string[]> = {
+const BASE_ART = {
   atk: ['.......sw', '......ssk', '.....ssk.', '....ssk..', '.n.ssk...', '..nsk....', '..Nn.....', '.N..n....', 'N........'],
   str: ['...rrr...', '..rrRrr..', '.rryrRrr.', '.ryyyrRr.', 'rryyyyrRr', 'rryyyyrrr', '.rryyyrr.', '..rrrrr..', '...RRR...'],
   def: ['.sssssss.', 'sswwbbbSs', 'swwbbbbBs', 'swbbbbbBs', 'sbbbbbbBs', '.sbbbbBs.', '.sbbbBBs.', '..sbBBs..', '...sss...'],
@@ -32,7 +32,20 @@ const ART: Record<IconKey, string[]> = {
   yield: ['.ee......', 'eEEe.....', 'eEEe.y...', '.ee..y...', '...yyyyy.', '.....y...', '.....y.ee', '.....eEEe', '......ee.'],
   hp: ['.rr...rr.', 'rwrr.rrRr', 'rwrrrrrRr', 'rrrrrrrRr', '.rrrrrRr.', '..rrrRr..', '...rRr...', '....r....', '.........'],
   mount: ['.S.....S.', 'SsS...SsS', 'SssSSSssS', 'SskssskS.', 'SsssssssS', '.SsrwrsS.', '..SsssS..', '...SSS...', '.........'],
+  // GM 新增益（11-02）
+  crit: ['.....yy..', '....yyk..', '...yyk...', '..yyyyyy.', '.kkkyyk..', '...yyk...', '..yyk....', '.yyk.....', '.yk......'],
+  critdmg: ['r...r...r', '.r..y..r.', '..ryyyr..', '.ryywyyr.', 'ryywwwyyr', '.ryywyyr.', '..ryyyr..', '.r..y..r.', 'r...r...r'],
+  dodge: ['......ww.', '....wwbb.', '..wwbb...', '.wbb..ww.', '.....wbb.', '...wwbb..', '.wwbb....', 'wbb..ww..', '....wbb..'],
+  haste: ['.........', 'g...g....', 'gg..gg...', 'gyg.gyg..', 'gyyggyyg.', 'gyg.gyg..', 'gg..gg...', 'g...g....', '.........'],
+  leech: ['....r....', '...rRr...', '..rrwRr..', '.rrwrrRr.', '.rrrrrRr.', 'rrrrrrrRr', '.rrrrrRr.', '.wk.k.w..', '..w...w..'],
+  reduce: ['SSSSSSSSS', 'SsswsssSS', 'SswssssSS', 'SsskkksSS', 'SssssssSS', '.SsssssS.', '.SSsssSS.', '..SSsSS..', '...SSS...'],
+  regen: ['.rr...rr.', 'rrrr.rrrr', 'rrrrwrrrr', 'rrrrwrrrr', '.rwwwwwr.', '..rrwrr..', '...rwr...', '....r....', '.........'],
+  move: ['..NNN....', '..NnN....', '..NnN....', '..NnN....', '..NnnN...', '.NnnnnNN.', 'NnnnnnnnN', 'NNNNNNNNN', '.........'],
+  quality: ['.........', '..ppppp..', '.pwwpppp.', 'ppwppppPp', '.pppppPp.', '..pppPp..', '...pPp...', '....p....', '.........'],
 };
+const tint = (rows: string[], c: string) => rows.map((r) => r.replace(/y/g, c));
+// 分类经验：经验星换颜色（战斗红、采集绿、制作蓝）
+const ART: Record<IconKey, string[]> = { ...BASE_ART, xp_combat: tint(BASE_ART.xp, 'r'), xp_gather: tint(BASE_ART.xp, 'e'), xp_produce: tint(BASE_ART.xp, 'b') };
 const urls: Partial<Record<IconKey, string>> = {};
 function iconUrl(k: IconKey) {
   if (urls[k]) return urls[k]!;
@@ -48,7 +61,8 @@ function iconUrl(k: IconKey) {
   return (urls[k] = c.toDataURL());
 }
 
-const BORDER: Record<IconKey, string> = { drop: '#c070ff', coins: '#e8b84a', yield: '#7ad860', hp: '#e0503a', atk: '#c5cad2', str: '#e0503a', def: '#6ac0ff', speed: '#e8b84a', xp: '#fff07a', rain: '#6ac0ff', mount: '#c070ff', horse: '#c070ff', party: '#7ad860' };
+const BORDER: Record<IconKey, string> = { drop: '#c070ff', coins: '#e8b84a', yield: '#7ad860', hp: '#e0503a', atk: '#c5cad2', str: '#e0503a', def: '#6ac0ff', speed: '#e8b84a', xp: '#fff07a', rain: '#6ac0ff', mount: '#c070ff', horse: '#c070ff', party: '#7ad860',
+  xp_combat: '#e0503a', xp_gather: '#7ad860', xp_produce: '#6ac0ff', crit: '#fff07a', critdmg: '#e0503a', dodge: '#6ac0ff', haste: '#e8b84a', leech: '#e0503a', reduce: '#c5cad2', regen: '#e0503a', move: '#8a5a30', quality: '#c070ff' };
 
 interface Buff { key: string; icon: IconKey; name: string; value: string; time?: string; desc: string; dim?: boolean }
 
@@ -71,7 +85,7 @@ function buffsOf(s: GameState, region: RegionId, now: number): Buff[] {
   }
   if (partySize() > 0) {
     const n = partySize();
-    out.push({ key: 'party', icon: 'party', name: tl('组队经验'), value: `+${Math.round(partyXpPct() * 100)}%`, desc: tl`组队中（${n} 人）：所有技能经验 +${Math.round(partyXpPct() * 100)}%。每个队员 +${PARTY_XP_PER * 100}%，5 人满队 +${PARTY_MAX * PARTY_XP_PER * 100}%` });
+    out.push({ key: 'party', icon: 'party', name: tl('组队经验'), value: `+${Math.round(partyXpPct() * 100)}%`, desc: tl`组队中（在线 ${n} 人）：所有技能经验 +${Math.round(partyXpPct() * 100)}%。每个在线队员 +${PARTY_XP_PER * 100}%，5 人满队 +${PARTY_MAX * PARTY_XP_PER * 100}%，离线的队友不算` });
   }
   if (s.mounted && s.equipment.mount) {
     const mv = ITEMS[s.equipment.mount]?.equip?.move ?? 0;

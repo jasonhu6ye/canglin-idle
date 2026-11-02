@@ -577,7 +577,8 @@ create table if not exists public.gm_buffs (
   target_pid bigint,
   name text not null check (char_length(name) between 1 and 20),
   tag text not null default '' check (char_length(tag) <= 4),
-  kind text not null check (kind in ('xp', 'drop', 'coins', 'yield', 'speed', 'atk', 'str', 'def', 'hp')),
+  kind text not null check (kind in ('xp', 'drop', 'coins', 'yield', 'speed', 'atk', 'str', 'def', 'hp',
+    'xp_combat', 'xp_gather', 'xp_produce', 'crit', 'critdmg', 'dodge', 'haste', 'leech', 'reduce', 'regen', 'move', 'quality')),
   pct numeric not null check (pct > 0 and pct <= 1000),
   starts_at timestamptz not null default now(),
   ends_at timestamptz not null,
@@ -2760,3 +2761,329 @@ begin
 end $$;
 drop trigger if exists ac_filter_chat on public.chat;
 create trigger ac_filter_chat before insert on public.chat for each row execute function public.ac_filter_chat();
+
+-- ============ 装备来源查询（11-02） =====
+-- 服务器结算时在存档里记装备来源（data.prov，见 src/core/prov.ts）。GM 只读查询，不改任何表。
+-- 某个玩家（数字 ID 或名字）的来源记录和身上的东西
+create or replace function public.gm_gear(p_who text)
+returns table (player_id uuid, pid bigint, name text, prov jsonb, bank jsonb, bag jsonb, equipment jsonb, belt jsonb, last_tick bigint)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  return query
+    select p.id, p.pid, p.name, s.data->'prov', s.data->'bank', s.data->'bag', s.data->'equipment', s.data->'belt', s.last_tick
+    from profiles p join saves s on s.player_id = p.id
+    where p.pid::text = trim(p_who) or lower(p.name) like '%' || lower(trim(p_who)) || '%'
+    order by (p.pid::text = trim(p_who)) desc, p.last_seen desc nulls last
+    limit 5;
+end $$;
+grant execute on function public.gm_gear(text) to authenticated;
+
+-- 全服最近得到的传说、神话装备（每件一行，最近的在前）
+create or replace function public.gm_gear_recent(p_limit int default 200)
+returns table (pid bigint, name text, ev jsonb)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  return query
+    select p.pid, p.name, e
+    from saves s join profiles p on p.id = s.player_id
+      cross join lateral jsonb_array_elements(case when jsonb_typeof(s.data->'prov'->'ev') = 'array' then s.data->'prov'->'ev' else '[]'::jsonb end) e
+    order by (e->>'t')::numeric desc
+    limit least(greatest(p_limit, 1), 500);
+end $$;
+grant execute on function public.gm_gear_recent(int) to authenticated;
+=======
+-- ============ GM 改技能等级 + 更多增益类型（11-02）============
+-- 增益类型多了 12 种
+alter table public.gm_buffs drop constraint if exists gm_buffs_kind_check;
+alter table public.gm_buffs add constraint gm_buffs_kind_check check (kind in (
+  'xp', 'drop', 'coins', 'yield', 'speed', 'atk', 'str', 'def', 'hp',
+  'xp_combat', 'xp_gather', 'xp_produce', 'crit', 'critdmg', 'dodge', 'haste', 'leech', 'reduce', 'regen', 'move', 'quality'
+));
+
+-- 查一个玩家的各技能经验（GM 面板「技能」页）
+create or replace function public.gm_get_skills(p_pid bigint) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare p profiles; d jsonb;
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  select * into p from profiles where pid = p_pid;
+  if p.id is null then raise exception '找不到这个 UID'; end if;
+  select data into d from saves where player_id = p.id;
+  if d is null then raise exception '这个玩家还没有存档'; end if;
+  return jsonb_build_object('name', p.name, 'xp', coalesce(d -> 'xp', '{}'::jsonb));
+end $$;
+revoke execute on function public.gm_get_skills(bigint) from public, anon;
+grant execute on function public.gm_get_skills(bigint) to authenticated;
+
+-- 改技能经验：p_xp = {"mining": 12345, ...}，只认已知技能，经验 0 到 1e15
+-- 改完存档 rev 会自动 +1，玩家下次同步就用新的等级（正在结算的那次会重试）
+create or replace function public.gm_set_skills(p_pid bigint, p_xp jsonb) returns int
+language plpgsql security definer set search_path = public as $$
+declare p profiles; d jsonb; k text; v jsonb; n int := 0;
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  if jsonb_typeof(p_xp) <> 'object' then raise exception '格式不对'; end if;
+  select * into p from profiles where pid = p_pid;
+  if p.id is null then raise exception '找不到这个 UID'; end if;
+  select data into d from saves where player_id = p.id for update;
+  if d is null then raise exception '这个玩家还没有存档'; end if;
+  for k, v in select * from jsonb_each(p_xp) loop
+    if k not in ('mining', 'woodcutting', 'fishing', 'gathering', 'farming', 'hunting', 'husbandry', 'thieving', 'cooking',
+      'smithing', 'fletching', 'herblore', 'crafting', 'enhancing', 'melee', 'ranged', 'magic', 'defence', 'hitpoints') then
+      raise exception '没有这个技能：%', k;
+    end if;
+    if jsonb_typeof(v) <> 'number' or (v #>> '{}')::numeric < 0 or (v #>> '{}')::numeric > 1e15 then
+      raise exception '经验数值不对：%', k;
+    end if;
+    d := jsonb_set(d, array['xp', k], to_jsonb(floor((v #>> '{}')::numeric)::bigint), true);
+    n := n + 1;
+  end loop;
+  if n = 0 then return 0; end if;
+  perform set_config('ac.bypass', '1', true);
+  update saves set data = d where player_id = p.id;
+  perform set_config('ac.bypass', '0', true);
+  return n;
+end $$;
+revoke execute on function public.gm_set_skills(bigint, jsonb) from public, anon;
+grant execute on function public.gm_set_skills(bigint, jsonb) to authenticated;
+
+-- ============ 可疑装备（11-02） ============
+-- 服务器结算时自动标出可疑的传说、神话装备（概率极低就出了、凭空多出来、一小时出太多），等 GM 处理：
+-- 没问题（ok）、没收（taken，从存档里拿走这件）。玩家看不到这张表。
+create table if not exists public.gear_flags (
+  id bigint generated always as identity primary key,
+  player_id uuid not null references public.profiles(id) on delete cascade,
+  item text not null,
+  src text not null default '',
+  reason text not null,
+  got_at bigint not null default 0,
+  detail jsonb not null default '{}'::jsonb,
+  status text not null default 'open' check (status in ('open', 'ok', 'taken')),
+  note text,
+  created_at timestamptz not null default now(),
+  handled_at timestamptz
+);
+create index if not exists gear_flags_open on public.gear_flags (status, created_at desc);
+alter table public.gear_flags enable row level security;
+-- 不开策略：只能通过下面的函数读写
+
+create or replace function public.gear_flag(p uuid, p_item text, p_src text, p_reason text, p_at bigint, p_detail jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  -- GM 自己的号不记；同一件同一时刻只记一次（同步重试）
+  if exists (select 1 from gm_admins a join profiles x on x.pid = a.pid where x.id = p) then return; end if;
+  if exists (select 1 from gear_flags where player_id = p and item = p_item and got_at = coalesce(p_at, 0) and reason = p_reason) then return; end if;
+  insert into gear_flags (player_id, item, src, reason, got_at, detail)
+    values (p, left(p_item, 80), left(coalesce(p_src, ''), 80), left(p_reason, 20), coalesce(p_at, 0), coalesce(p_detail, '{}'::jsonb));
+end $$;
+revoke execute on function public.gear_flag(uuid, text, text, text, bigint, jsonb) from public, anon, authenticated;
+grant execute on function public.gear_flag(uuid, text, text, text, bigint, jsonb) to service_role;
+
+-- 管理员：可疑装备列表（p_status 空 = 待处理）
+create or replace function public.gm_gear_flags(p_status text default 'open', p_limit int default 200)
+returns table (id bigint, player_id uuid, pid bigint, name text, item text, src text, reason text, got_at bigint, detail jsonb,
+  status text, note text, created_at timestamptz, handled_at timestamptz, banned boolean)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  return query
+    select f.id, f.player_id, p.pid, p.name, f.item, f.src, f.reason, f.got_at, f.detail, f.status, f.note, f.created_at, f.handled_at, p.banned
+    from gear_flags f join profiles p on p.id = f.player_id
+    where (coalesce(p_status, 'open') = 'all' or f.status = coalesce(p_status, 'open'))
+    order by f.created_at desc
+    limit least(greatest(p_limit, 1), 500);
+end $$;
+grant execute on function public.gm_gear_flags(text, int) to authenticated;
+
+-- 管理员：处理一条。ok = 没问题；taken = 从存档里没收这件（背包、仓库里没有了就报错）；open = 改回待处理
+create or replace function public.gm_gear_flag_set(p_id bigint, p_status text, p_note text default null) returns void
+language plpgsql security definer set search_path = public as $$
+declare f gear_flags;
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  if p_status not in ('open', 'ok', 'taken') then raise exception '状态不对'; end if;
+  select * into f from gear_flags where id = p_id for update;
+  if f.id is null then raise exception '找不到这条'; end if;
+  if p_status = 'taken' and f.status <> 'taken' then
+    perform public.save_take(f.player_id, f.item, 1);
+  end if;
+  update gear_flags set status = p_status, note = coalesce(left(p_note, 200), note),
+    handled_at = case when p_status = 'open' then null else now() end
+  where id = p_id;
+end $$;
+grant execute on function public.gm_gear_flag_set(bigint, text, text) to authenticated;
+
+-- ============ 制作者署名（11-02） ============
+-- 传说、神话装备做出来时服务器在存档 marks 里记下制作者（名字#数字ID，学阿尔比恩）。
+-- 交易、公会仓库搬东西时署名跟着一起搬：后得到的先搬走。
+alter table public.guild_bank add column if not exists marks jsonb not null default '[]'::jsonb;
+
+-- 数组前 n 个 / 后 n 个
+create or replace function public.marks_head(a jsonb, n int) returns jsonb
+language sql immutable as $$
+  select coalesce(jsonb_agg(e order by i), '[]'::jsonb) from jsonb_array_elements(coalesce(a, '[]'::jsonb)) with ordinality x(e, i) where i <= greatest(n, 0)
+$$;
+create or replace function public.marks_tail(a jsonb, n int) returns jsonb
+language sql immutable as $$
+  select coalesce(jsonb_agg(e order by i), '[]'::jsonb) from jsonb_array_elements(coalesce(a, '[]'::jsonb)) with ordinality x(e, i)
+  where i > jsonb_array_length(coalesce(a, '[]'::jsonb)) - greatest(n, 0)
+$$;
+
+-- 从存档拿走 qty 件的署名（只管传说、神话），返回拿走的
+create or replace function public.save_take_marks(p uuid, p_item text, p_qty bigint) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare d jsonb; a jsonb; n int; k int; rest jsonb;
+begin
+  if p_qty <= 0 or p_item !~ '@q[45]$' then return '[]'::jsonb; end if;
+  select data into d from saves where player_id = p for update;
+  a := d -> 'marks' -> p_item;
+  if a is null or jsonb_typeof(a) <> 'array' then return '[]'::jsonb; end if;
+  n := jsonb_array_length(a);
+  k := least(p_qty, n)::int;
+  if k <= 0 then return '[]'::jsonb; end if;
+  rest := public.marks_head(a, n - k);
+  d := jsonb_set(d, '{marks}', case when jsonb_array_length(rest) > 0 then (d -> 'marks') || jsonb_build_object(p_item, rest) else (d -> 'marks') - p_item end);
+  perform set_config('ac.bypass', '1', true);
+  update saves set data = d where player_id = p;
+  perform set_config('ac.bypass', '0', true);
+  return public.marks_tail(a, k);
+end $$;
+revoke execute on function public.save_take_marks(uuid, text, bigint) from public, anon, authenticated;
+
+create or replace function public.save_give_marks(p uuid, p_item text, p_marks jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+declare d jsonb;
+begin
+  if p_marks is null or jsonb_typeof(p_marks) <> 'array' or jsonb_array_length(p_marks) = 0 then return; end if;
+  select data into d from saves where player_id = p for update;
+  if d is null then return; end if;
+  d := jsonb_set(d, '{marks}', coalesce(d -> 'marks', '{}'::jsonb)
+    || jsonb_build_object(p_item, coalesce(d -> 'marks' -> p_item, '[]'::jsonb) || p_marks));
+  perform set_config('ac.bypass', '1', true);
+  update saves set data = d where player_id = p;
+  perform set_config('ac.bypass', '0', true);
+end $$;
+revoke execute on function public.save_give_marks(uuid, text, jsonb) from public, anon, authenticated;
+
+-- 下面三个和原来一样，只多了搬署名
+create or replace function public.guild_deposit(p_item text, p_qty int, p_vault int default 0) returns void
+language plpgsql security definer set search_path = public as $$
+declare mk jsonb; g uuid; lv int; nm text; cap int;
+begin
+  if p_qty <= 0 or p_qty > 1000000 then raise exception '数量不对'; end if;
+  if p_item = 'coins' then raise exception '金币不能存进公会仓库'; end if;
+  if not exists (select 1 from item_values where id = p_item) then raise exception '这个东西不能存'; end if;
+  select guild_id into g from guild_members where player_id = auth.uid();
+  if g is null then raise exception '还没加入公会'; end if;
+  if not can_vault(g, p_vault, auth.uid()) then raise exception '没有这个仓库的权限'; end if;
+  select level into lv from guilds where id = g for update;
+  cap := case when p_vault = 0 then guild_slots(lv) else 30 end;
+  if not exists (select 1 from guild_bank where guild_id = g and vault = p_vault and item = p_item)
+    and (select count(*) from guild_bank where guild_id = g and vault = p_vault) >= cap then
+    raise exception '公会仓库满了';
+  end if;
+  mk := public.save_take_marks(auth.uid(), p_item, p_qty);
+  perform save_take(auth.uid(), p_item, p_qty);
+  insert into guild_bank (guild_id, vault, item, qty, pos, marks)
+    values (g, p_vault, p_item, p_qty, (select coalesce(max(pos), 0) + 1 from guild_bank where guild_id = g and vault = p_vault), mk)
+    on conflict (guild_id, vault, item) do update set qty = guild_bank.qty + excluded.qty, marks = guild_bank.marks || excluded.marks;
+  select name into nm from profiles where id = auth.uid();
+  insert into guild_bank_log (guild_id, vault, player_id, name, item, qty) values (g, p_vault, auth.uid(), coalesce(nm, ''), p_item, p_qty);
+  delete from guild_bank_log where guild_id = g and at < now() - interval '30 days';
+end $$;
+
+create or replace function public.guild_withdraw(p_item text, p_qty int, p_vault int default 0) returns int
+language plpgsql security definer set search_path = public as $$
+declare mk jsonb; mn int; m guild_members; tm int; td int; have bigint; n int; nm text; v int; took bigint; capped boolean;
+begin
+  select * into m from guild_members where player_id = auth.uid();
+  if m.player_id is null then raise exception '还没加入公会'; end if;
+  if not can_vault(m.guild_id, p_vault, auth.uid()) then raise exception '没有这个仓库的权限'; end if;
+  select take_min, take_day into tm, td from guilds where id = m.guild_id;
+  if p_vault = 0 and m.role = 'member' and (tm < 0 or m.contrib < tm) then raise exception '贡献不够，不能从公会仓库取东西'; end if;
+  select qty into have from guild_bank where guild_id = m.guild_id and vault = p_vault and item = p_item for update;
+  n := least(greatest(p_qty, 0), coalesce(have, 0))::int;
+  if n <= 0 then return 0; end if;
+  -- 10-27：会长可以限制普通成员每天从公共仓库取多少金币价值的东西，防止有人一次搬空
+  capped := p_vault = 0 and m.role = 'member' and td > 0;
+  if capped then
+    perform guild_day_reset(auth.uid());
+    select coalesce(value, 1) into v from item_values where id = p_item;
+    v := greatest(coalesce(v, 1), 1);
+    select g_took into took from profiles where id = auth.uid() for update;
+    n := least(n::bigint, (td - took) / v)::int;
+    if n <= 0 then raise exception '今天从公会仓库取的东西已经到上限了'; end if;
+    update profiles set g_took = g_took + n::bigint * v where id = auth.uid();
+  end if;
+  -- 制作者署名跟着拿出来（后放进去的先拿）
+  select marks into mk from guild_bank where guild_id = m.guild_id and vault = p_vault and item = p_item;
+  mk := coalesce(mk, '[]'::jsonb);
+  mn := jsonb_array_length(mk);
+  if n = have then delete from guild_bank where guild_id = m.guild_id and vault = p_vault and item = p_item;
+  else update guild_bank set qty = qty - n, marks = public.marks_head(mk, greatest(mn - n, 0)) where guild_id = m.guild_id and vault = p_vault and item = p_item; end if;
+  perform save_give(auth.uid(), p_item, n);
+  perform public.save_give_marks(auth.uid(), p_item, public.marks_tail(mk, least(n, mn)));
+  select name into nm from profiles where id = auth.uid();
+  insert into guild_bank_log (guild_id, vault, player_id, name, item, qty) values (m.guild_id, p_vault, auth.uid(), coalesce(nm, ''), p_item, -n);
+  delete from guild_bank_log where guild_id = m.guild_id and at < now() - interval '30 days';
+  return n;
+end $$;
+
+create or replace function public.confirm_trade(p_trade uuid, p_ok boolean) returns text
+language plpgsql security definer set search_path = public as $$
+declare mk jsonb; t trades; k text; v jsonb; cap numeric; other uuid;
+begin
+  select * into t from trades where id = p_trade for update;
+  if t.id is null or auth.uid() not in (t.a, t.b) then raise exception '交易不存在'; end if;
+  if t.status <> 'open' then raise exception '交易已经结束'; end if;
+  other := case when auth.uid() = t.a then t.b else t.a end;
+  if p_ok then perform public.ac_trade_check(other); end if;
+  if auth.uid() = t.a then t.a_ok := p_ok; else t.b_ok := p_ok; end if;
+  if t.a_ok and t.b_ok then
+    if t.a_items = '{}'::jsonb and t.b_items = '{}'::jsonb then raise exception '双方都没放东西'; end if;
+    cap := public.ac_conf('trade_day_value', 0);
+    if cap > 0 and not public.is_gm() then
+      if public.ac_trade_got_today(t.a) + public.ac_value(t.b_items) > cap
+        or public.ac_trade_got_today(t.b) + public.ac_value(t.a_items) > cap then
+        raise exception '超过每天交易能收到的价值上限（%金币），明天再来', cap;
+      end if;
+    end if;
+    t.status := 'done';
+  end if;
+  update trades set a_ok = t.a_ok, b_ok = t.b_ok, status = t.status, updated_at = now() where id = p_trade;
+  if t.status = 'done' then
+    -- 成交：在数据库里把双方的东西换过来（不够就报错，整笔撤回、交易保持未成交）。
+    -- 放在改状态之后，交易检查触发器看到的还是换之前的存档
+    for k, v in select * from jsonb_each(t.a_items) loop
+      mk := public.save_take_marks(t.a, k, (v #>> '{}')::bigint);
+      perform save_take(t.a, k, (v #>> '{}')::bigint);
+      perform save_give(t.b, k, (v #>> '{}')::bigint);
+      perform public.save_give_marks(t.b, k, mk);
+    end loop;
+    for k, v in select * from jsonb_each(t.b_items) loop
+      mk := public.save_take_marks(t.b, k, (v #>> '{}')::bigint);
+      perform save_take(t.b, k, (v #>> '{}')::bigint);
+      perform save_give(t.a, k, (v #>> '{}')::bigint);
+      perform public.save_give_marks(t.a, k, mk);
+    end loop;
+  end if;
+  return t.status;
+end $$;
+
+-- GM 装备来源页：多返回制作者署名
+drop function if exists public.gm_gear(text);
+create or replace function public.gm_gear(p_who text)
+returns table (player_id uuid, pid bigint, name text, prov jsonb, bank jsonb, bag jsonb, equipment jsonb, belt jsonb, last_tick bigint, marks jsonb)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  return query
+    select p.id, p.pid, p.name, s.data->'prov', s.data->'bank', s.data->'bag', s.data->'equipment', s.data->'belt', s.last_tick, s.data->'marks'
+    from profiles p join saves s on s.player_id = p.id
+    where p.pid::text = trim(p_who) or lower(p.name) like '%' || lower(trim(p_who)) || '%'
+    order by (p.pid::text = trim(p_who)) desc, p.last_seen desc nulls last
+    limit 5;
+end $$;
+grant execute on function public.gm_gear(text) to authenticated;

@@ -144,6 +144,42 @@ describe('改过的客户端乱传参数', () => {
     expect(sync([{ gate: 'real1', floor: 1, idx: 0, phase: 'walk' }]).dungeon?.floor).toBe(1);
   });
 
+  it('自己开的蓝洞：本机和服务器都能进（洞口时间戳不能被截断）', () => {
+    const g = standOf(NODES.find((n) => n.id === 'starter_grove')!);
+    const base = { ...newGame(t0, 5), loc: g, bag: { dkey_b4: 1 } };
+    const team = { members: [{ id: 'me', name: 'a' }, { id: 'mate', name: 'b' }], me: 'me' };
+    const o = applyCmd(advance(base, t0 + 1000).state, 'openGate', ['dkey_b4', { x: g.x + 3, y: g.y }], t0 + 1000);
+    const gate = o.out as { x: number; y: number };
+    const w = applyCmd(advance(o.state, t0 + 2000).state, 'walk', [g, { x: gate.x, y: gate.y }, 2000], t0 + 2000);
+    const e = applyCmd(advance(w.state, t0 + 6000).state, 'enterDungeon', [JSON.parse(JSON.stringify(gate)), 2, team], t0 + 6000);
+    expect(e.state.dungeon).toBeTruthy();
+    const cmds: Cmd[] = [
+      { n: 'openGate', a: ['dkey_b4', { x: g.x + 3, y: g.y }], t: t0 + 1000, q: 1 },
+      { n: 'walk', a: [g, { x: gate.x, y: gate.y }, 2000], t: t0 + 2000, q: 2 },
+      { n: 'enterDungeon', a: [JSON.parse(JSON.stringify(gate)), 2, team], t: t0 + 6000, q: 3 },
+    ];
+    const r = runSync(JSON.parse(JSON.stringify(base)), cmds, t0 + 7000, { ...EX, me: 'me', party: ['me', 'mate'], partySize: 2 }, 'dev');
+    expect(r.state.dungeon?.gate.kind).toBe('blue');
+  });
+
+  it('一起打：下次结算开头接着上次的人数，新刷的怪不会变成单人怪', () => {
+    const grove = standOf(NODES.find((n) => n.id === 'starter_grove')!);
+    // 已经补过给（不用先回仓库拿吃的）
+    const base = { ...newGame(t0, 5), loc: grove, queue: [{ action: 'fight_rabbit', mode: { type: 'infinite' as const }, done: 0, elapsedMs: 0, stocked: true }] };
+    const ex = { ...EX, me: 'me', party: ['me', 'mate'], partySize: 2 };
+    const co = (t: number, q: number) => ({ n: 'coop' as const, a: [{ crew: 1, dg: 0, mates: [], hits: [] }], t, q });
+    const r1 = runSync(base, Array.from({ length: 20 }, (_, i) => co(t0 + 500 + i * 3000, i + 1)), t0 + 60_000, ex, 'dev');
+    // 这次结算只有别的指令（每 5 秒一条，结算一段一段都是实时的），还没收到 coop
+    const other = (from: number) => Array.from({ length: 5 }, (_, i) => ({ n: 'sortBank' as const, a: [], t: from + (i + 1) * 5000, q: 100 + i }));
+    const r2 = runSync(JSON.parse(JSON.stringify(r1.state)), other(t0 + 60_000), t0 + 85_000, ex, 'dev');
+    expect(r2.state.combat?.copy ?? 0).toBeGreaterThan(r1.state.combat?.copy ?? 0);
+    expect(r2.state.combat?.crew).toBe(1);
+    // 一直没再报一起打：再下一次按单人算
+    const r3 = runSync(JSON.parse(JSON.stringify(r2.state)), other(t0 + 85_000).map((c) => ({ ...c, q: c.q + 10 })), t0 + 110_000, ex, 'dev');
+    expect(r3.state.combat?.copy ?? 0).toBeGreaterThan(r2.state.combat?.copy ?? 0);
+    expect(r3.state.combat?.crew ?? 0).toBe(0);
+  });
+
   it('没组队时报的队友伤害不算', () => {
     const grove = standOf(NODES.find((n) => n.id === 'starter_grove')!);
     const base = { ...newGame(t0, 5), loc: grove };
@@ -228,5 +264,81 @@ describe('开箱随机数（11-02）', () => {
     // 没有密钥（本机测试服）就和本机一样
     const d = runSync(JSON.parse(JSON.stringify(base)), cmds, t0 + 5000, EX, 'dev');
     expect(d.results).toEqual([]);
+  });
+});
+
+describe('装备来源记录', () => {
+  it('制作记下次数、材料和产出；结算之间多出来的记成外面来的', () => {
+    const smithy = standOf(NODES.find((n) => n.id === 'smithy')!);
+    const base = newGame(t0, 7);
+    base.loc = { ...smithy };
+    base.bank = { wood_bar: 30, wood_sword: 2 };
+    let r = runSync(JSON.parse(JSON.stringify(base)), [{ n: 'startNow', a: ['smith_wood_dagger', { type: 'infinite' }], t: t0 + 100, q: 1 }], t0 + 10 * 60_000, EX, 'dev');
+    const p = r.state.prov!;
+    expect(p.base.wood_sword).toBe(2 + (base.equipment.weapon === 'wood_sword' ? 1 : 0));
+    const c = p.craft.smith_wood_dagger;
+    expect(c.n).toBeGreaterThan(0);
+    expect(c.in.wood_bar).toBeLessThanOrEqual(c.n);
+    const made = Object.entries(r.state.bank).filter(([id]) => id.startsWith('wood_dagger')).reduce((a, [, n]) => a + n, 0)
+      + Object.entries(r.state.bag).filter(([id]) => id.startsWith('wood_dagger')).reduce((a, [, n]) => a + n, 0);
+    expect(Object.values(c.out).reduce((a, b) => a + b, 0)).toBe(made);
+    expect(p.other).toEqual({});
+    expect(c.ms).toBeGreaterThan(0);
+    expect(p.pend['craft:smith_wood_dagger'].n).toBeGreaterThan(0);
+    // 两次结算之间存档里多了一件（交易、公会仓库）
+    const mid = JSON.parse(JSON.stringify(r.state));
+    mid.bank['wood_sword@q5'] = 1;
+    r = runSync(mid, [], t0 + 11 * 60_000, EX, 'dev');
+    expect(r.state.prov!.other.outside).toEqual({ 'wood_sword@q5': 1 });
+    expect(r.state.prov!.ev[r.state.prov!.ev.length - 1]).toMatchObject({ id: 'wood_sword@q5', src: 'outside' });
+    // 读档后还在
+    expect(runSync(JSON.parse(JSON.stringify(r.state)), [], t0 + 12 * 60_000, EX, 'dev').state.prov!.other.outside).toEqual({ 'wood_sword@q5': 1 });
+  });
+});
+
+describe('可疑装备', () => {
+  it('凭空多出来的、概率极低就出的、一小时太多的会被标出来；第一次记录时已有的不标', () => {
+    const base = newGame(t0, 7);
+    base.bank = { 'wood_sword@q5': 1 };
+    let r = runSync(JSON.parse(JSON.stringify(base)), [], t0 + 1000, EX, 'dev');
+    expect(r.gear ?? []).toEqual([]);
+    const mid = JSON.parse(JSON.stringify(r.state));
+    mid.bank['wood_axe@q4'] = 1;
+    r = runSync(mid, [], t0 + 2000, EX, 'dev');
+    expect(r.gear).toEqual([expect.objectContaining({ item: 'wood_axe@q4', reason: 'outside' })]);
+    // 再结算一次不重复标
+    r = runSync(JSON.parse(JSON.stringify(r.state)), [], t0 + 3000, EX, 'dev');
+    expect(r.gear ?? []).toEqual([]);
+  });
+  it('按概率和数量挑', async () => {
+    const { gearSuspects } = await import('../core/prov');
+    const p = { since: 0, base: {}, held: {}, craft: {}, drop: {}, other: {}, pend: {}, mats: {}, ev: [] as import('../core/prov').ProvEv[] };
+    const lucky = { t: t0, id: 'wood_dagger@q5', src: 'craft:smith_wood_dagger', n: 1, p: 0.003 };
+    const fair = { t: t0, id: 'wood_dagger@q5', src: 'craft:smith_wood_dagger', n: 400, p: 0.003 };
+    expect(gearSuspects(p, [lucky]).map((g) => g.reason)).toEqual(['luck']);
+    expect(gearSuspects(p, [fair])).toEqual([]);
+    p.ev = Array.from({ length: 6 }, (_, i) => ({ ...fair, t: t0 + i * 60_000 }));
+    expect(gearSuspects(p, [p.ev[5]]).map((g) => g.reason)).toEqual(['burst']);
+  });
+});
+
+describe('制作者署名', () => {
+  it('做出传说以上记上制作者，件数少了署名跟着少', () => {
+    const base = newGame(t0, 7);
+    base.loc = { ...standOf(NODES.find((n) => n.id === 'smithy')!) };
+    base.bank = { wood_bar: 3000 };
+    let r = runSync(JSON.parse(JSON.stringify(base)), [], t0, { ...EX, maker: 'Smith#12345678' }, 'dev');
+    r = runSync(JSON.parse(JSON.stringify(r.state)), [{ n: 'startNow', a: ['smith_wood_dagger', { type: 'infinite' }], t: t0 + 100, q: 1 }], t0 + 4 * 3600_000, { ...EX, maker: 'Smith#12345678' }, 'dev');
+    const s = r.state;
+    const hi = Object.entries({ ...s.bank }).filter(([id]) => /@q[45]$/.test(id));
+    expect(hi.length).toBeGreaterThan(0);
+    for (const [id, n] of hi) expect(s.marks![id]).toEqual(Array(n + (s.bag[id] ?? 0)).fill('Smith#12345678'));
+    // 卖掉一件：下次结算署名少一个
+    const [id] = hi[0];
+    const mid = JSON.parse(JSON.stringify(s));
+    const before = mid.marks[id].length;
+    mid.bank[id] -= 1; if (!mid.bank[id]) delete mid.bank[id];
+    r = runSync(mid, [], t0 + 4 * 3600_000 + 1000, EX, 'dev');
+    expect(r.state.marks?.[id]?.length ?? 0).toBe(before - 1);
   });
 });

@@ -1,8 +1,9 @@
 import { ITEMS } from './data';
 
 /*
- * 嘲讽和仇恨（用户 10-26）：组队打同一个目标时，怪物的普通攻击只打一个人，
- * 按嘲讽值挑：嘲讽高的大概率被打，低的也有小概率；大家一样就随机。精英、首领的大招打全体。
+ * 嘲讽和仇恨（用户 10-26）：组队打同一个目标时，怪物的普通攻击只打一个人。
+ * 11-02 用户要求「怪物只能攻击一个目标，除非使用特殊技能」：不再按几率掷，固定打嘲讽最高的那个人；
+ * 一样高时按玩家 id 定（联机层把并列的队友嘲讽 ±1 再塞进来，各家算出来是同一个人）。精英、首领的大招打全体。
  * 嘲讽值来自装备：每人基础 100，板甲和双手大盾加嘲讽。
  * 队友是谁、穿了什么在联机层（net/social）算好塞进来；离线补算没有队友，每下都打自己。
  */
@@ -15,14 +16,16 @@ export function threatOf(equip: Partial<Record<string, string | undefined>>): nu
   return t;
 }
 
-/**
- * 嘲讽值为 mine 的人被这一下打中的几率。权重 = 嘲讽值³：
- * 一样就平分；嘲讽 100 对 300 时低的那个约 3.6%，100 对 200 约 11%。
- */
+/** 怪物的普通攻击打不打嘲讽值为 mine 的人：1 = 打自己（嘲讽最高），0 = 打别人 */
 export function targetChance(mine: number, others: number[]): number {
   if (!others.length) return 1;
-  const w = (t: number) => Math.max(1, t) ** 3;
-  return w(mine) / (w(mine) + others.reduce((a, t) => a + w(t), 0));
+  return mine >= Math.max(...others) ? 1 : 0;
+}
+
+/** 联机层：并列最高时按 id 小的挨打，把队友的嘲讽 ±1 区分开 */
+export function tieBreak(mine: number, mate: number, myId: string, mateId: string): number {
+  if (mate !== mine) return mate;
+  return mateId < myId ? mate + 1 : mate - 1;
 }
 
 let mates: number[] = [];

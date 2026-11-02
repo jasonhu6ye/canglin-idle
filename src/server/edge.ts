@@ -10,6 +10,7 @@
 import { rankOf, runSync, type SyncExtras } from './sync';
 import type { DungeonGate, GmBuff, ItemStack } from '../core/types';
 import type { MateRun } from '../core/guard';
+import { onlinePartySize, PARTY_ONLINE_MS } from '../core/party';
 
 declare const Deno: { env: { get(k: string): string | undefined }; serve(h: (r: Request) => Promise<Response>): void };
 
@@ -43,7 +44,7 @@ async function whoAmI(req: Request): Promise<string | null> {
 }
 
 async function extras(uid: string, now: number): Promise<SyncExtras & { found: boolean }> {
-  const [p] = (await rest(`profiles?id=eq.${uid}&select=pid,outfit,guild_id,save_epoch,banned`)) as Row[];
+  const [p] = (await rest(`profiles?id=eq.${uid}&select=pid,name,outfit,guild_id,save_epoch,banned`)) as Row[];
   if (!p) return { found: false, gmBuffs: [], guildLv: 0, mails: [] };
   const pid = Number(p.pid) || 0;
   const since = new Date(now - 3600_000).toISOString();
@@ -54,9 +55,12 @@ async function extras(uid: string, now: number): Promise<SyncExtras & { found: b
     rest(`party_members?player_id=eq.${uid}&select=party_id`) as Promise<Row[]>,
   ]);
   const members = party[0] ? ((await rest(`party_members?party_id=eq.${party[0].party_id}&select=player_id`)) as Row[]).map((r) => String(r.player_id)) : [];
-  const partySize = members.length;
   // 队友存档里的洞口和副本进度：跟队友进洞口、按队友进度拉进度时核对（不信客户端报的）
   const mates = members.filter((id) => id !== uid && /^[0-9a-f-]{36}$/.test(id));
+  // 组队经验只算在线的队员（11-02）：离线的队友不算人数
+  const seen = mates.length ? (await rest(`profiles?id=in.(${mates.join(',')})&select=id,last_seen`)) as Row[] : [];
+  const onlineIds = new Set(seen.filter((r) => now - Date.parse(r.last_seen) < PARTY_ONLINE_MS).map((r) => String(r.id)));
+  const partySize = onlinePartySize(members, uid, (id) => onlineIds.has(id));
   const mateSaves = mates.length
     ? (await rest(`saves?player_id=in.(${mates.join(',')})&select=gates:data->gates,dungeon:data->dungeon,resume:data->dgResume,used:data->gatesUsed`)) as Row[]
     : [];
@@ -83,6 +87,7 @@ async function extras(uid: string, now: number): Promise<SyncExtras & { found: b
     epoch: Number(p.save_epoch) || 0,
     partySize,
     me: uid,
+    maker: p.name ? `${String(p.name).slice(0, 20)}#${pid}` : undefined,
     frozen: p.banned === true,
     party: members.length ? members : [uid],
     mateGates,
@@ -115,7 +120,7 @@ Deno.serve(async (req) => {
       ]);
       if (!ex.found) return json({ error: 'profile' }, 404);
       const row = rows[0];
-      const { state, applied, mailIds, ack, flags, results } = runSync(row?.data ?? null, body.cmds, now, ex, device ?? '');
+      const { state, applied, mailIds, ack, flags, results, gear } = runSync(row?.data ?? null, body.cmds, now, ex, device ?? '');
       const data: Row = device ? { ...state, _device: device } : { ...state };
       // 记下用过的设备和网络（变了或者半小时一次），给多开检测用
       const net = await netKey(req).catch(() => '');
@@ -133,6 +138,10 @@ Deno.serve(async (req) => {
         // 可疑操作记进防作弊记录（GM 面板看得到；严重的自动移出排行榜）。记不上不影响同步
         await Promise.all((flags ?? []).slice(0, 6).map((f) => rest('rpc/ac_flag', {
           method: 'POST', body: JSON.stringify({ p: uid, p_kind: f.kind, p_severe: f.severe, p_detail: f.detail }),
+        }).catch(() => {})));
+        // 可疑装备（11-02）：记进待处理列表，等管理员看
+        await Promise.all((gear ?? []).slice(0, 10).map((g) => rest('rpc/gear_flag', {
+          method: 'POST', body: JSON.stringify({ p: uid, p_item: g.item, p_src: g.src, p_reason: g.reason, p_at: g.t, p_detail: g.detail }),
         }).catch(() => {})));
         if (seen) await rest('rpc/ac_seen', { method: 'POST', body: JSON.stringify({ p: uid, p_ip: net, p_dev: device ?? '' }) }).catch(() => {});
         return json({ state: data, rev, now, applied, ack, results });

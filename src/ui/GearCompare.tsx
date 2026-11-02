@@ -60,13 +60,14 @@ function refMonsters(s: GameState): MonsterDef[] {
 
 /** 打怪效率（每小时击杀）和每只掉血，取平均 */
 function fightScore(s: GameState, mons: MonsterDef[]) {
-  let kph = 0, taken = 0;
+  let kph = 0, taken = 0, dps = 0;
   for (const m of mons) {
     const r = combatEstimate(s, m);
+    dps += Number.isFinite(r.dps) ? r.dps : 0;
     kph += Number.isFinite(r.killMs) ? 3_600_000 / r.killMs : 0;
     taken += Number.isFinite(r.taken) ? r.taken : 1e6;
   }
-  return { kph: kph / mons.length, taken: taken / mons.length };
+  return { kph: kph / mons.length, taken: taken / mons.length, dps: dps / mons.length };
 }
 
 /** 界面每秒刷新好几次，同样的装备和怪就别重算（换了装备、升了级、换了怪才重算） */
@@ -86,7 +87,7 @@ function compareRaw(s: GameState, id: string) {
   if (cur === id) return null;
   const c = cur ? ITEMS[cur]?.equip : undefined;
   const rows = STATS.map((st) => ({ st, a: c ? st.get(c) : 0, b: st.get(e) })).filter((r) => r.a || r.b);
-  let fight: { kph: number; taken: number; mon: string } | null = null;
+  let fight: { kph: number; taken: number; mon: string; dpsA: number; dpsB: number } | null = null;
   if (COMBAT_SLOTS.has(e.slot)) {
     const mons = refMonsters(s);
     if (mons.length) {
@@ -96,6 +97,7 @@ function compareRaw(s: GameState, id: string) {
         kph: before.kph > 0 ? after.kph / before.kph - 1 : after.kph > 0 ? 1 : 0,
         taken: before.taken > 0 ? after.taken / before.taken - 1 : 0,
         mon: mons.length === 1 ? mons[0].name : '',
+        dpsA: before.dps, dpsB: after.dps,
       };
     }
   }
@@ -106,6 +108,7 @@ function compareRaw(s: GameState, id: string) {
 }
 
 const sign = (v: number) => (v > 0 ? '+' : v < 0 ? '−' : '');
+const dpsTxt = (v: number) => (v >= 100 ? `${Math.round(v)}` : v.toFixed(1));
 const pctTxt = (v: number) => `${sign(v)}${Math.abs(Math.round(v * 100))}%`;
 
 /** 详情里的对比表 */
@@ -122,6 +125,18 @@ export function GearCompare({ s, id }: { s: GameState; id: string }) {
           <small className="muted">{r.fight.mon ? tl`对着正在打的 ${r.fight.mon}` : tl('按战斗等级附近的怪估算')}</small>
         </div>
       )}
+      {r.fight && (r.fight.dpsA > 0 || r.fight.dpsB > 0) && (() => {
+        const { dpsA: a, dpsB: b } = r.fight!;
+        const d = a > 0 ? b / a - 1 : b > 0 ? 1 : 0;
+        return (
+          <div className="gc-dps">
+            <span>{tl('每秒伤害（DPS）')}</span>
+            <span className="muted">{dpsTxt(a)}</span>
+            <b>→ {dpsTxt(b)}</b>
+            <span className={d > 0.005 ? 'good' : d < -0.005 ? 'bad' : 'muted'}>{Math.abs(d) < 0.005 ? tl('不变') : pctTxt(d)}</span>
+          </div>
+        );
+      })()}
       <table>
         <tbody>
           {r.rows.map(({ st, a, b }) => {

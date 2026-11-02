@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { levelSnapshot, online, type DungeonPresence, type Presence } from '../net';
 import { setBotViewer } from '../net/bots';
 import { moveCadence } from '../net/presenceSync';
-import { rallyTime, takeFieldHits, updateAggro, type FieldMateHit } from '../net/social';
+import { FIELD_CREW, assistTime, rallyTime, takeFieldHits, updateAggro, type FieldMateHit } from '../net/social';
 import { maxHp } from '../core/sim';
 import type { GameState } from '../core/types';
 import { FIGHT, FIGHT_RANGE, FRAME_H, FRAME_W, HERO_ANIMS, type FightWeapon, HERO_FEET, HERO_PAD, outfitOf, paintHeroSheet } from './hero';
@@ -66,17 +66,17 @@ export function publishSelf(st: GameState, x: number, y: number, work?: { anim: 
   const hp = Math.max(0, Math.round(st.hp));
   // 野外组队打同一只怪：带上自己对这一只累计打了多少（队友那边记到同一只怪上）
   const c = st.combat;
-  const fd = !dg && action && c?.crew && work?.anim.startsWith('fight-') ? { k: action, n: c.copy ?? 0, dmg: c.pTotal ?? 0, crit: c.pCrit || undefined } : undefined;
+  const fd = !dg && action && c?.crew && work?.anim.startsWith('fight-') ? { k: action, n: c.copy ?? 0, dmg: c.pTotal ?? 0, crit: c.pCrit || undefined, hp: Math.max(0, Math.round(c.monsterHp)), rs: c.respawnMs > 0 || undefined } : undefined;
   // 血量按 5% 一档比较，打怪时不用每下都发
-  const key = JSON.stringify([st.settings.skin, action, mounted, st.equipment, snap.total, snap.combat, Math.round((hp / max) * 20), rallyTime(), work?.anim, work?.flip, (st.gates ?? []).map((g) => g.id).join(),
-    dg && [dg.gate, dg.floor, dg.idx, dg.phase, dg.kills, dg.anim, dg.flip, dg.dmg], fd && [fd.n, fd.dmg]]);
+  const key = JSON.stringify([st.settings.skin, action, mounted, st.equipment, snap.total, snap.combat, Math.round((hp / max) * 20), rallyTime(), assistTime(), work?.anim, work?.flip, (st.gates ?? []).map((g) => g.id).join(),
+    dg && [dg.gate, dg.floor, dg.idx, dg.phase, dg.kills, dg.anim, dg.flip, dg.dmg], fd && [fd.n, fd.dmg, fd.rs]]);
   const px = dg ? dg.x / T : x;
   const py = dg ? dg.y / T : y;
   const moved = Math.abs(px - sent.x) + Math.abs(py - sent.y) >= step && now - sent.at >= gap;
   // 打怪、换装备这类变化马上发（副本里队友要立刻看到伤害），只是走路才按节奏
   if (!moved && key === sent.key && now - sent.at < KEEPALIVE_MS) return;
   sent = { x: px, y: py, key, at: now };
-  online.publishPresence({ x, y, outfit: st.settings.skin, action, mounted, equip: { ...st.equipment }, total: snap.total, combat: snap.combat, hp, maxHp: max, rally: rallyTime() || undefined, anim: work?.anim, flip: work?.flip, gates: st.gates?.length ? st.gates : undefined,
+  online.publishPresence({ x, y, outfit: st.settings.skin, action, mounted, equip: { ...st.equipment }, total: snap.total, combat: snap.combat, hp, maxHp: max, rally: rallyTime() || undefined, assist: assistTime() || undefined, anim: work?.anim, flip: work?.flip, gates: st.gates?.length ? st.gates : undefined,
     dg: dg ? { ...dg, x: Math.round(dg.x), y: Math.round(dg.y) } : undefined, fd });
 }
 
@@ -88,8 +88,13 @@ const CROWD: [number, number][] = [[0, 0], [-6, -10], [-6, 10], [-14, 0], [-14, 
  * 近战的在怪的两侧（右边那个朝左打），[横向 × 贴身距离, 纵向像素]；远程的在自己身后错开，[往后退, 纵向]。
  * 自己永远在怪的左边，所以自己是近战就不占左边正中，自己是远程就不占远程正中。
  */
+/** 多久没收到某人的伤害，就改成按节奏自己播出手动作 */
+const AUTO_SWING_AFTER = 2500;
+/** 一起打的人停手多久之内还站在怪旁边（等刷新、换下一只的空档） */
+const CREW_HOLD_MS = 5000;
 const MELEE_SPOTS: [number, number][] = [[1, 0], [-0.85, -11], [0.85, 11], [-0.85, 11], [0.85, -11], [1.5, -6], [1.5, 6]];
-const RANGED_SPOTS: [number, number][] = [[0, -12], [0, 12], [-10, -22], [-10, 22], [-18, 0]];
+// 11-02：远程以前只错开 12 像素，人物 30 像素高，两个弓手叠在一起；现在上下错开一个身位
+const RANGED_SPOTS: [number, number][] = [[-8, -24], [-8, 24], [-20, -46], [-20, 46], [-30, 0]];
 const meleeRange = (w?: FightWeapon) => (w ? FIGHT_RANGE[w] ?? 0 : 0) < 0.75;
 const weaponOfAnim = (anim?: string) => /^fight-(\w+?)(-ready)?$/.exec(anim ?? '')?.[1] as FightWeapon | undefined;
 
@@ -119,8 +124,10 @@ interface Other {
   front?: Phaser.GameObjects.Sprite;
   anim?: string;
   flip: boolean;
-  /** 副本里队友头顶的小血条（10-26） */
+  /** 副本里队友头顶的小血条（10-26）；野外和自己一起打同一只怪时也挂（11-02） */
   bar?: Phaser.GameObjects.Graphics;
+  /** 正和自己一起打同一只怪 */
+  inFight?: boolean;
   /** 估出来的对方移动速度（像素/秒）、目标上次变的时间、上次真在走的时间（10-27 插值） */
   spd: number;
   tAt: number;
@@ -138,6 +145,9 @@ export class OtherPlayers {
   /** 大地图上自己正在打的怪（地图场景每帧设），一起打它的人围着它站 */
   fight?: FightAnchor;
   private swingAt = new Map<string, number>();
+  /** 上次看到在一起打的时刻、上次自己在打的那只（两只怪之间短暂空档不散开） */
+  private crewAt = new Map<string, number>();
+  private lastFight?: { f: FightAnchor; at: number };
   /** place：这个人画在哪（像素，脚底），不画就返回 null。默认是大地图：按格子摆，在副本里的人不画 */
   constructor(private scene: Phaser.Scene, private place?: (p: Presence) => { x: number; y: number; anim?: string; flip?: boolean } | null) {
     this.off = online.onPresence((all) => { this.latest = all; });
@@ -176,13 +186,37 @@ export class OtherPlayers {
     return Math.round(FIGHT[w].ms * FIGHT[w].hit);
   }
 
+  /**
+   * 打怪的人播哪个动作（11-02 用户要求队友也要有攻击动作）：刚收到他的伤害就播一次出手；
+   * 一阵子没收到（没算成一起打、或在打别的怪）也按节奏自己挥，不会一直摆着架势不动
+   */
+  private fightAnim(p: Presence, now: number) {
+    const w = weaponOfAnim(p.anim);
+    if (!w || !p.anim?.endsWith('-ready')) return p.anim;
+    const hit = Math.min(FIGHT[w].ms, 700);
+    const last = this.swingAt.get(p.playerId) ?? -1e9;
+    if (now - last < hit) return `fight-${w}`;
+    if (now - last < AUTO_SWING_AFTER) return p.anim;
+    const period = Math.max(1200, FIGHT[w].ms + 700);
+    let h = 0;
+    for (let i = 0; i < p.playerId.length; i++) h = (h * 31 + p.playerId.charCodeAt(i)) | 0;
+    return (now + Math.abs(h)) % period < hit ? `fight-${w}` : p.anim;
+  }
+
   /** 和自己打同一只怪的人各站哪（按 id 排序，各家算出来的顺序一样） */
   private fightSpots(near: { x: number; y: number }) {
     const out = new Map<string, { x: number; y: number; flip: boolean }>();
-    const f = this.fight;
+    const now = this.scene.time.now;
+    // 两只怪之间（自己或队友在等刷新、走向下一只）不马上散开（11-02：以前队友在怪旁边和自己的格子之间来回跑）
+    if (this.fight) this.lastFight = { f: this.fight, at: now };
+    const f = this.fight ?? (this.lastFight && now - this.lastFight.at < CREW_HOLD_MS ? this.lastFight.f : undefined);
     if (!f) return out;
     const crew = this.latest
-      .filter((p) => !p.dg && p.action === f.action && p.anim?.startsWith('fight-') && Math.abs(p.x - near.x) + Math.abs(p.y - near.y) <= 10)
+      .filter((p) => {
+        if (p.dg || p.action !== f.action || Math.abs(p.x - near.x) + Math.abs(p.y - near.y) > FIELD_CREW) return false;
+        if (p.anim?.startsWith('fight-')) { this.crewAt.set(p.playerId, now); return true; }
+        return now - (this.crewAt.get(p.playerId) ?? -1e9) < CREW_HOLD_MS;
+      })
       .sort((a, b) => (a.playerId < b.playerId ? -1 : 1));
     const meMelee = meleeRange(f.weapon);
     const melee = meMelee ? MELEE_SPOTS : [[-1, 0] as [number, number], ...MELEE_SPOTS];
@@ -281,12 +315,7 @@ export class OtherPlayers {
       if (p.dg) return null;
       if (Math.abs(p.x - near.x) > VIEW_TILES || Math.abs(p.y - near.y) > VIEW_TILES) return null;
       const spot = spots?.get(p.playerId);
-      if (spot) {
-        // 刚打中一下：播出手动作，播完回到架势
-        const w = weaponOfAnim(p.anim);
-        const swing = w && now - (this.swingAt.get(p.playerId) ?? -1e9) < Math.min(FIGHT[w].ms, 700);
-        return { x: spot.x, y: spot.y, anim: swing ? `fight-${w}` : p.anim, flip: spot.flip };
-      }
+      if (spot) return { x: spot.x, y: spot.y, anim: this.fightAnim(p, now), flip: spot.flip };
       let x = p.x * T + T / 2, y = p.y * T + T / 2 + 7;
       if (p.anim) {
         const cell = `${p.x},${p.y}`;
@@ -297,7 +326,7 @@ export class OtherPlayers {
         x += ox - (w ? (FIGHT_RANGE[w] ?? 0) * T : 0);
         y += oy;
       }
-      return { x, y, anim: p.anim, flip: p.flip };
+      return { x, y, anim: this.fightAnim(p, now), flip: p.flip };
     };
     for (const p of this.latest) {
       const at = (this.place ?? onMap)(p);
@@ -328,6 +357,7 @@ export class OtherPlayers {
       }
       o.tx = tx; o.ty = ty;
       o.hp = p.hp; o.maxHp = p.maxHp;
+      o.inFight = !!spots?.has(p.playerId);
       this.setMount(o, p.mounted ? mountKindOf(p.mounted) : undefined);
       o.anim = at.anim && this.scene.anims.exists(`${key}:${at.anim}`) ? at.anim : undefined;
       if (o.anim) o.flip = !!at.flip;
@@ -354,7 +384,8 @@ export class OtherPlayers {
       // 刚走到上一个同步点、下一个还在路上：多播一小会儿走路动画，不在每格之间站一下又走
       else if (now - o.movedAt < 300 && now - o.tAt < 600) moving = true;
       this.pose(o, moving);
-      if (this.place) this.drawBar(o);
+      if (this.place || o.inFight) this.drawBar(o);
+      else o.bar?.setVisible(false);
       o.box.setDepth(o.box.y + 999);
       if (o.fx && o.front) {
         const fx = o.box.x + o.front.x;

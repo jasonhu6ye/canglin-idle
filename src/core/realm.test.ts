@@ -76,4 +76,16 @@ describe('读档（11-01 复查）', () => {
     expect(m.ranch?.pens[0]).toEqual({ start: 1, ms: 2 });
     expect(m.realmChest).toEqual({ got: { realm_tundra_chest0: 3 } });
   });
+
+  it('开到一半的冰原宝箱读档后还在（服务器每次同步都重新读档，11-02 修开箱进度被重置）', async () => {
+    const { migrate } = await import('./sim');
+    const s = { ...newGame(0, 1), realmChest: { opening: { id: 'realm_tundra_chest0', at: 123 } } };
+    expect(migrate(JSON.parse(JSON.stringify(s)))!.realmChest).toEqual({ got: {}, opening: { id: 'realm_tundra_chest0', at: 123 } });
+    const chest = NODES.find((n) => n.timed?.kind === 'chest')!;
+    const w = nextWindow(chest, 1_800_000_000_000)!;
+    const t = w.start + 1000;
+    const st = startRealmChest(at(newGame(0, 1), chest), chest.id, t);
+    const synced = migrate(JSON.parse(JSON.stringify(st)))!;
+    expect(finishRealmChest(synced, t + CHEST_OPEN_MS).bank.coins).toBeGreaterThan(st.bank.coins ?? 0);
+  });
 });

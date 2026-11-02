@@ -21,7 +21,9 @@ export type BeltSlot = 'food' | 'potion';
 export type BuffKind = 'atk' | 'str' | 'def' | 'speed' | 'xp';
 export interface Buff { kind: BuffKind; pct: number; ms: number }
 /** GM 增益（用户 10-26）：管理员加的，全服或指定玩家 */
-export type GmKind = 'xp' | 'drop' | 'coins' | 'yield' | 'speed' | 'atk' | 'str' | 'def' | 'hp';
+export type GmKind =
+  | 'xp' | 'drop' | 'coins' | 'yield' | 'speed' | 'atk' | 'str' | 'def' | 'hp'
+  | 'xp_combat' | 'xp_gather' | 'xp_produce' | 'crit' | 'critdmg' | 'dodge' | 'haste' | 'leech' | 'reduce' | 'regen' | 'move' | 'quality';
 export interface GmBuff {
   id: string;
   name: string;
@@ -261,6 +263,8 @@ export interface CombatState {
   mFrost?: boolean;
   /** 副本（10-26）：自己对这只怪一共打了多少伤害（发给队友）、怪的血量上限和开打时洞里有几个队友 */
   pTotal?: number;
+  /** 组队时怪的普通攻击挑中过自己（扛过怪）：没打出伤害也算出了力，照样有掉落（11-02） */
+  tanked?: boolean;
   monsterMax?: number;
   crew?: number;
   /** 野外（10-27）：这是第几只（刷新一只加一），队友按它分辨伤害打在哪一只上 */
@@ -377,6 +381,10 @@ export interface GameState {
   /** 永冬冰原的限时宝箱（11-01）：正在开的箱子，和每个箱子开过的轮次（每人每轮一次） */
   /** 永霜盾的寒冰护体还剩多少毫秒（防御 +50%） */
   frostGuard?: number;
+  /** 装备来源记录（11-02，服务器结算时记，见 core/prov.ts） */
+  prov?: import('./prov').Prov;
+  /** 传说以上装备的制作者署名（11-02）：物品 id → 每件的「名字#数字ID」 */
+  marks?: Record<string, string[]>;
   realmChest?: { opening?: { id: string; at: number }; got?: Record<string, number> };
   /** 万圣节活动：当前召唤出来的是第几档南瓜王（打赢就清掉）、上次召唤的时间 */
   halloween?: { summoned?: number; last?: number; mount?: boolean; /** 已兑换死神皮肤（老字段） */ skin?: boolean; /** 已兑换的万圣节外观 id */ skins?: string[] };

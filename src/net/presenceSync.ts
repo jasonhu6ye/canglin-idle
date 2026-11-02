@@ -48,7 +48,7 @@ function readFieldHit(v: unknown): Presence['fd'] {
   if (!v || typeof v !== 'object') return undefined;
   const f = v as Record<string, unknown>;
   if (typeof f.k !== 'string' || typeof f.n !== 'number' || typeof f.dmg !== 'number' || !Number.isFinite(f.dmg)) return undefined;
-  return { k: f.k, n: f.n, dmg: f.dmg, crit: f.crit === true || undefined };
+  return { k: f.k, n: f.n, dmg: f.dmg, crit: f.crit === true || undefined, hp: typeof f.hp === 'number' && Number.isFinite(f.hp) ? f.hp : undefined, rs: f.rs === true || undefined };
 }
 
 /**

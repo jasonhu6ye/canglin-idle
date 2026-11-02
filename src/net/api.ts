@@ -1,5 +1,6 @@
 import type { GameState, GmBuff, ItemStack, SkillId } from '../core/types';
 import type { Cmd } from '../core/commands';
+import type { Prov, ProvEv } from '../core/prov';
 
 export interface SyncReply { state: GameState; ack: number; now: number; /** 开箱这类指令服务器算出来的结果 */ results?: { q: number; out: unknown }[] }
 import { combatLevel, level } from '../core/sim';
@@ -114,6 +115,8 @@ export interface Presence {
   flip?: boolean;
   /** 队长发起召集的时间（毫秒），队友看到就寻路过来 */
   rally?: number;
+  /** 叫队友一起打的时间（毫秒）：队友收到弹窗，点了就去打同一只（action 就是要打的怪） */
+  assist?: number;
   /** 开着的副本洞口（10-25），队友可以进同一个 */
   gates?: import('../core/types').DungeonGate[];
   /** 在副本里（10-25 同步）：哪个洞口、第几层、进度、在副本里的像素位置和动作 */
@@ -132,6 +135,9 @@ export interface FieldHit {
   n: number;
   dmg: number;
   crit?: boolean;
+  /** 他这只怪现在的血量、是不是在等刷新（11-02：两边的怪血量对齐，一起死） */
+  hp?: number;
+  rs?: boolean;
 }
 
 export interface DungeonPresence {
@@ -364,11 +370,29 @@ export interface OnlineApi {
   /** 管理员：服务器存档（快照）和回档；pid 为空 = 全服回档，返回回档了几个人 */
   gmSnapshots(): Promise<Snapshot[]>;
   gmSnapshotCreate(label: string): Promise<void>;
+  /** GM 查 / 改玩家技能经验（11-02） */
+  gmGetSkills(pid: number): Promise<{ name: string; xp: Record<string, number> }>;
+  gmSetSkills(pid: number, xp: Record<string, number>): Promise<number>;
   gmSnapshotDelete(id: number): Promise<void>;
   gmRollback(id: number, pid?: number): Promise<number>;
   /** 管理员：真人玩家，新注册的在前；人数统计 */
-  gmPlayers(who?: string): Promise<GmPlayer[]>;
+  gmPlayers(who?: string, limit?: number): Promise<GmPlayer[]>;
   gmPlayerCount(): Promise<{ total: number; today: number; week: number }>;
+  /** 管理员：装备来源（11-02）：某个玩家的记录（数字 ID 或名字），全服最近得到的传说以上装备 */
+  gmGear(who: string): Promise<GearProvRow[]>;
+  gmGearRecent(): Promise<GearEvRow[]>;
+  /** 管理员：可疑装备（status 'open' 待处理 / 'all'），处理一条（ok 没问题 / taken 没收 / open 改回待处理） */
+  gmGearFlags(status?: 'open' | 'all'): Promise<GearFlagRow[]>;
+  gmGearFlagSet(id: number, status: GearFlagRow['status'], note?: string): Promise<void>;
+}
+
+/** 管理员看的装备来源：prov 见 core/prov.ts（没记过是 null），held 是身上的装备，mats 是身上的材料 */
+export interface GearProvRow { playerId: string; pid: number; name: string; prov: Prov | null; held: Record<string, number>; lastTick: number; /** 制作者署名 */ marks?: Record<string, string[]> }
+export interface GearEvRow { pid: number; name: string; ev: ProvEv }
+export interface GearFlagRow {
+  id: number; playerId: string; pid: number; name: string; item: string; src: string; reason: 'luck' | 'outside' | 'burst';
+  gotAt: number; detail: { n?: number; p?: number; ms?: number; chance?: number; hour?: number; cost?: Record<string, number> };
+  status: 'open' | 'ok' | 'taken'; note: string | null; at: number; handledAt: number | null; banned: boolean;
 }
 
 export interface GmPlayer {

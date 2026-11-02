@@ -5,7 +5,7 @@ import {
   depositLoot, dismissStop, markContrib, syncDungeon, eat, enqueue, enterDungeon, equip, finishRealmChest, fromBelt, leaveDungeon, leaveWork, openContainer,
   openDungeonChest, openGate, placeFoal, redeemCode, removeTask, resumeWork, salvage, sell, setLoc, setSettings, sortBank, startAt,
   newGame, startNow, startRealmChest, startWalk, summonPumpkin, teleport, toBag, toBank, toBelt, toggleMount, unequip, unlockWaystone, useGate,
-  useTownScroll, useWaystone, walkPos, moveSpeed, combatStats, playerAttackMs,
+  useTownScroll, useWaystone, walkPos, moveSpeed, combatStats, playerAttackMs, fieldMob,
 } from './sim';
 import { dungeonFloor } from './dungeon';
 import { flag, guard, maxSpeed } from './guard';
@@ -91,9 +91,25 @@ function coop(s: GameState, t: number, c: unknown): GameState {
   // 服务器：一起打的人数不能超过队伍里的其他人（冰原同打不用组队，最多 4 人）
   const tgt = target(s);
   const most = !G ? 4 : Math.min(4, Math.max(G.party.length - 1, !s.dungeon && tgt && SHARED.has(s.queue[0]?.action ?? '') ? 4 : 0));
-  setFieldCrew(Math.min(most, int(o.crew, 0, 4)));
+  const crewN = Math.min(most, int(o.crew, 0, 4));
+  setFieldCrew(crewN);
+  // 队友刚加入（11-02）：正在打的这只马上算一起打（以前要等下一只刷出来，队友到了十几秒都没伤害）
+  if (crewN > 0 && !s.dungeon && s.combat && !s.combat.crew && s.combat.respawnMs <= 0 && tgt) {
+    const max0 = s.combat.monsterMax ?? tgt.m.hp;
+    const max = fieldMob(tgt.m, crewN).hp;
+    s = { ...s, combat: { ...s.combat, crew: crewN, monsterMax: max, monsterHp: s.combat.monsterHp + (max - max0), pTotal: 0 } };
+  }
+  // 队友走了（11-02）：正在打的这只血量跟着降回来，不用一个人磨一只加了血的怪
+  else if (!s.dungeon && s.combat?.crew && crewN < s.combat.crew && s.combat.respawnMs <= 0 && tgt) {
+    const max0 = s.combat.monsterMax ?? fieldMob(tgt.m, s.combat.crew).hp;
+    const max = fieldMob(tgt.m, crewN).hp;
+    const hp = Math.max(1, Math.round(s.combat.monsterHp * (max / max0)));
+    s = { ...s, combat: { ...s.combat, crew: crewN || undefined, monsterMax: crewN ? max : undefined, monsterHp: hp, pTotal: crewN ? s.combat.pTotal : undefined } };
+  }
   setDgCrew(Math.min(most, int(o.dg, 0, 4)));
-  setAggroMates((Array.isArray(o.mates) ? o.mates : []).slice(0, most).map((x) => int(x, 1, 5000)));
+  const mates = (Array.isArray(o.mates) ? o.mates : []).slice(0, most).map((x) => int(x, 1, 5000));
+  setAggroMates(mates);
+  if (G) G.coop = { crew: Math.min(most, int(o.crew, 0, 4)), dg: Math.min(most, int(o.dg, 0, 4)), mates, t };
   const hits = (Array.isArray(o.hits) ? o.hits : []).slice(0, 20).filter((h): h is [string, number] => Array.isArray(h));
   if (G) {
     // 服务器：只收正在打的这只怪的伤害，按队友人数和时间限量（每人最多按自己输出的 8 倍、每秒至少怪物血量的 5%）
@@ -106,14 +122,17 @@ function coop(s: GameState, t: number, c: unknown): GameState {
     }
     const st = combatStats(s, tgt.m);
     const dps = (st.playerMaxHit * Math.max(1, st.critMult)) / Math.max(200, playerAttackMs(s));
-    let left = most * Math.max(dps * 8, tgt.m.hp * 0.05 / 1000) * since;
+    const rate = most * Math.max(dps * 8, tgt.m.hp * 0.05 / 1000);
+    // 额度攒着用（11-02）：以前每次只给这半秒的额度，队友一箭暴击就被截掉一截，两边怪物血量越差越多
+    let left = Math.min(rate * 10_000, (G.coopBank ?? rate * 2000) + rate * since);
     for (const h of hits) {
       if (str(h[0], 80) !== tgt.key || left <= 0) continue;
       const d = Math.min(left, num(h[1], 0, 1e9));
       left -= d;
       pushMateHit(tgt.key, d);
     }
-    if (left <= 0 && asked > 3 * most * Math.max(dps * 8, tgt.m.hp * 0.05 / 1000) * Math.max(since, 1000)) flag('fake_hits', false, { dmg: Math.round(asked) });
+    G.coopBank = Math.max(0, left);
+    if (left <= 0 && asked > 3 * rate * 10_000) flag('fake_hits', false, { dmg: Math.round(asked) });
     return { ...s };
   }
   const cap = Math.max(1, (s.combat?.monsterMax ?? s.combat?.monsterHp ?? 1000) * 0.5);
@@ -213,7 +232,7 @@ function cleanGate(x: unknown): DungeonGate | null {
   if ((o.kind !== 'green' && o.kind !== 'blue') || typeof o.id !== 'string') return null;
   return {
     id: str(o.id, 40), kind: o.kind, tier: int(o.tier, 1, 99), x: int(o.x, -10000, 100000), y: int(o.y, -10000, 100000),
-    at: num(o.at, 0), expires: num(o.expires, 0), seed: int(o.seed, 0, 2 ** 31), floors: int(o.floors, 1, 20),
+    at: num(o.at, 0, 1e15), expires: num(o.expires, 0, 1e15), seed: int(o.seed, 0, 2 ** 31), floors: int(o.floors, 1, 20),
   };
 }
 /**

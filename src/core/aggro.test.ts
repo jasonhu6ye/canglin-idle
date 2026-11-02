@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { ACTIONS, ITEMS, MONSTERS, TIERS } from './data';
-import { setAggroMates, targetChance, threatOf, THREAT_BASE } from './aggro';
+import { setAggroMates, targetChance, threatOf, THREAT_BASE, tieBreak } from './aggro';
 import { advance, combatEstimate, newGame, startNow } from './sim';
 
 const T0 = 1_800_000_000_000;
@@ -20,14 +20,16 @@ describe('组队嘲讽（10-26）', () => {
     expect(threatOf(Object.fromEntries(tank.map((id, i) => [i, id])))).toBe(100 + 138 + 150);
   });
 
-  it('选目标：一样就平分，嘲讽高的大概率，低的也有小概率', () => {
+  it('选目标：只打嘲讽最高的一个人（11-02），并列时按 id 定', () => {
     expect(targetChance(100, [])).toBe(1);
-    expect(targetChance(100, [100])).toBeCloseTo(0.5);
-    expect(targetChance(100, [100, 100, 100])).toBeCloseTo(0.25);
-    const low = targetChance(100, [388]);
-    expect(low).toBeGreaterThan(0);
-    expect(low).toBeLessThan(0.05);
-    expect(targetChance(388, [100])).toBeGreaterThan(0.95);
+    expect(targetChance(100, [388])).toBe(0);
+    expect(targetChance(388, [100])).toBe(1);
+    expect(targetChance(100, [100, 99])).toBe(1);
+    // 两个人一样：各家按 id 把对方 ±1，只有 id 小的那个挨打
+    const a = targetChance(100, [tieBreak(100, 100, 'a', 'b')]);
+    const b = targetChance(100, [tieBreak(100, 100, 'b', 'a')]);
+    expect(a + b).toBe(1);
+    expect(a).toBe(1);
   });
 
   it('有坦克队友时自己挨打少很多，大招仍然打到自己', () => {

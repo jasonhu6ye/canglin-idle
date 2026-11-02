@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { online, type Party, type Presence } from '../net';
-import { sendRally, useSocial } from '../net/social';
+import { sendAssist, sendRally, useSocial } from '../net/social';
 import { tl } from '../i18n';
 import { actionName } from './format';
 import { emitToGame, onGameEvent } from './GameCanvas';
@@ -15,6 +15,8 @@ import { setAutoGate } from './Dungeon';
 /** 召集只认最近 2 分钟的，刷新页面不会被旧召集拉走 */
 const RALLY_FRESH = 120_000;
 let answered = 0;
+/** 每个队友处理过的「一起打」邀请（按时间） */
+const assistSeen = new Map<string, number>();
 /** 自动跟随队长（用户 10-25）：跟着队长走，队长打哪只怪就一起打 */
 const FOLLOW_KEY = 'canglin-follow-leader';
 let follow = (() => { try { return localStorage.getItem(FOLLOW_KEY) === '1'; } catch { return false; } })();
@@ -36,15 +38,19 @@ function canJoin(s: GameState, action: string) {
   const a = ACTIONS[action];
   return a?.kind === 'skill' && !a.inputs?.length && a.skill !== 'farming' && level(s, a.skill) >= a.level;
 }
-/** 离队长最近的那个地点（同一个动作可能有好几处，要去队长那一处） */
-function nodeNear(action: string, x: number, y: number) {
+/**
+ * 离队长最近的那个地点（同一个动作可能有好几处，要去队长那一处）。
+ * 打怪时人会追着怪跑出刷怪点一段距离，所以打怪放宽到 40 格（11-02：以前 12 格找不到就乱跑）
+ */
+const NEAR_COMBAT = 40;
+function nodeNear(action: string, x: number, y: number, max = ACTIONS[action]?.kind === 'combat' ? NEAR_COMBAT : 12) {
   let best: string | undefined;
   let d = Infinity;
   for (const n of nodesOfAction(action)) {
     const e = Math.abs(n.x - x) + Math.abs(n.y - y);
     if (e < d) { d = e; best = n.id; }
   }
-  return d <= 12 ? best : undefined;
+  return d <= max ? best : undefined;
 }
 
 /**
@@ -158,6 +164,27 @@ export function PartyFrames({ onPick }: { onPick: (playerId: string) => void }) 
   }, [followOn, tick, leader?.x, leader?.y, leader?.action, leader?.dg?.gate, store.state.dungeon?.gate.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!note) return; const t = setTimeout(() => setNote(''), 6000); return () => clearTimeout(t); }, [note]);
   const mates = party?.members.filter((m) => m.playerId !== me?.id) ?? [];
+  // 队友叫我一起打（11-02，用户要求自动接受）：最近 2 分钟、他还在打那只怪，就自动赶过去
+  useEffect(() => {
+    for (const m of mates) {
+      const p = online.presenceOf(m.playerId);
+      const at = p?.assist;
+      if (!p || !at || at <= (assistSeen.get(m.playerId) ?? 0)) continue;
+      assistSeen.set(m.playerId, at);
+      if (Date.now() - at > RALLY_FRESH || !p.action || ACTIONS[p.action]?.kind !== 'combat') continue;
+      const node = nodeNear(p.action, p.x, p.y);
+      if (!node) { setNote(tl('找不到这只怪的位置')); continue; }
+      if (store.state.dungeon) { setNote(tl`${m.name} 叫你一起打 ${actionName(p.action)}，你在副本里，出来后再去`); continue; }
+      const cur = store.state.queue[0];
+      const here = walkPos(store.state);
+      if (!store.state.paused && cur?.action === p.action && Math.hypot(here.x - p.x, here.y - p.y) < 12) continue;
+      if (store.state.home?.inside) store.run('leaveHome');
+      store.run('startAt', p.action, node);
+      setNote(tl`${m.name} 叫你一起打 ${actionName(p.action)}，正在赶过去`);
+    }
+  });
+  const mineAction = store.state.paused ? undefined : store.state.queue[0]?.action;
+  const fighting = !!mineAction && ACTIONS[mineAction]?.kind === 'combat' && !store.state.dungeon;
   if (!mates.length) return null;
   return (
     <div className="party-frames">
@@ -184,6 +211,7 @@ export function PartyFrames({ onPick }: { onPick: (playerId: string) => void }) 
       {!lead && party && <button className={`pill pf-rally ${followOn ? 'on' : ''}`} onClick={() => setFollow(!followOn)}>{followOn ? tl('跟随队长中（点击停止）') : tl('跟随队长')}</button>}
       {!lead && party && followOn && status && <div className="pf-status muted">{status}</div>}
       {lead && <button className="pill pf-rally" onClick={() => { sendRally(); setNote(tl('已发出召集，在线队友会自动寻路到你身边')); }}>{tl('召集队友')}</button>}
+      {fighting && <button className="pill pf-rally" onClick={() => { sendAssist(); setNote(tl('已叫队友一起打，在线队友会自动赶过来')); }}>{tl('叫队友一起打')}</button>}
       {note && <div className="chip pf-note">{note}</div>}
     </div>
   );

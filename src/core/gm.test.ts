@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { advance, maxHp, migrate, newGame, startNow } from './sim';
+import { advance, armorPerks, combatStats, maxHp, migrate, moveSpeed, newGame, playerAttackMs, startNow } from './sim';
+import { MONSTERS } from './data';
+import { qualityOdds } from './quality';
 import { cleanGm, gmPct, setGmBuffs } from './gm';
 import type { GmBuff } from './types';
 
@@ -31,5 +33,50 @@ describe('GM 增益', () => {
     const s = setGmBuffs(newGame(T0, 1), [buff({}), buff({ id: 'old', from: T0 - 5 * 86_400_000, to: T0 - 3 * 86_400_000 })], T0);
     expect(s.gmBuffs?.map((b) => b.id)).toEqual(['b1']);
     expect(migrate(JSON.parse(JSON.stringify(s)))!.gmBuffs).toEqual(s.gmBuffs);
+  });
+});
+
+describe('GM 新增益类型（11-02）', () => {
+  const always = (p: Partial<GmBuff>) => buff({ from: 0, to: 9e15, ...p });
+  const g = (list: Partial<GmBuff>[]) => setGmBuffs(newGame(T0, 1), list.map((p, i) => always({ id: `b${i}`, ...p })), 0);
+
+  it('分类经验只加对应那一类', () => {
+    const base = startNow(newGame(T0, 1), 'mine_stone', { type: 'infinite' });
+    const plain = advance(base, T0 + 3600_000).state.xp.mining;
+    const gather = advance(setGmBuffs(base, [buff({ kind: 'xp_gather' })], T0), T0 + 3600_000).state.xp.mining;
+    const combat = advance(setGmBuffs(base, [buff({ kind: 'xp_combat' })], T0), T0 + 3600_000).state.xp.mining;
+    expect(gather / plain).toBeGreaterThan(1.9);
+    expect(combat).toBe(plain);
+  });
+
+  it('战斗类：暴击、暴击伤害、攻速、吸血；闪避和减伤最多 75%', () => {
+    const s0 = newGame(T0, 1);
+    const m = MONSTERS[Object.keys(MONSTERS)[0]];
+    const a = combatStats(s0, m);
+    const b = combatStats(g([{ kind: 'crit', pct: 20 }, { kind: 'critdmg', pct: 50 }, { kind: 'dodge', pct: 1000 }, { kind: 'reduce', pct: 30 }]), m);
+    expect(b.crit - a.crit).toBeCloseTo(0.2);
+    expect(b.critMult).toBeCloseTo(2);
+    expect(b.dodge).toBeCloseTo(0.75);
+    expect(armorPerks(g([{ kind: 'reduce', pct: 30 }])).reduce).toBeCloseTo(0.3);
+    expect(playerAttackMs(g([{ kind: 'haste', pct: 100 }]))).toBe(Math.round(playerAttackMs(s0) / 2));
+    expect(moveSpeed(g([{ kind: 'move', pct: 50 }]))).toBeCloseTo(moveSpeed(s0) * 1.5);
+  });
+
+  it('制作品质：良好、优秀、史诗变多，传说神话不变，普通最少留 5%', () => {
+    const a = qualityOdds(0), b = qualityOdds(0, false, 1), c = qualityOdds(0, true, 10);
+    for (const o of [b, c]) expect(o.reduce((x, y) => x + y, 0)).toBeCloseTo(100, 1);
+    expect(b[1]).toBeCloseTo(a[1] * 2, 1);
+    expect(b[3]).toBeCloseTo(a[3] * 2, 1);
+    expect(b.slice(4)).toEqual(a.slice(4));
+    expect(c[0]).toBeGreaterThanOrEqual(4.99);
+    expect(c.slice(4)).toEqual(a.slice(4));
+  });
+
+  it('回血速度', () => {
+    const hurt = (s: ReturnType<typeof newGame>) => ({ ...s, hp: 1 });
+    const plain = advance(hurt(newGame(T0, 1)), T0 + 15_000).state.hp;
+    const fast = advance(hurt(setGmBuffs(newGame(T0, 1), [buff({ kind: 'regen', pct: 100 })], T0)), T0 + 15_000).state.hp;
+    expect(fast - 1).toBeGreaterThanOrEqual((plain - 1) * 2 - 1);
+    expect(fast).toBeGreaterThan(plain);
   });
 });

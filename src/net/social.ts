@@ -1,5 +1,5 @@
-import { setPartySize } from '../core/party';
-import { fieldKey, threatOf } from '../core/aggro';
+import { onlinePartySize, setPartySize } from '../core/party';
+import { fieldKey, threatOf, tieBreak } from '../core/aggro';
 import type { GameState } from '../core/types';
 import { useEffect, useState } from 'react';
 import { worldResetAt } from './bots';
@@ -34,9 +34,15 @@ const st: State = {
 };
 type Fn = () => void;
 const fns = new Set<Fn>();
+/** 地图上在线的玩家（组队经验只算在线的队员，11-02） */
+let onlineIds = new Set<string>();
+const updateParty = () => {
+  const me = online.me()?.id ?? '';
+  setPartySize(st.party ? onlinePartySize(st.party.members.map((m) => m.playerId), me, (id) => onlineIds.has(id)) : 0);
+};
 const emit = () => {
-  // 组队经验加成按队伍人数算（用户 10-25）
-  setPartySize(st.party?.members.length ?? 0);
+  // 组队经验加成按在线的队员人数算（用户 10-25；11-02 起离线队员不算）
+  updateParty();
   fns.forEach((f) => f());
 };
 
@@ -84,6 +90,7 @@ export function syncSocial() {
     emit();
   }));
   offs.push(online.onSocial(() => void refreshSocial()));
+  offs.push(online.onPresence((all) => { onlineIds = new Set(all.map((p) => p.playerId)); updateParty(); }));
   void refreshSocial();
   // GM 增益（10-26）：登录后马上拉一次，之后每分钟一次
   void pullGm();
@@ -121,6 +128,10 @@ let rallyAt = 0;
 /** 队长召集：跟着位置一起发出去，队友收到后自动寻路过来 */
 export function sendRally() { rallyAt = Date.now(); emit(); }
 export const rallyTime = () => rallyAt;
+let assistAt = 0;
+/** 叫队友一起打（用户 11-02）：自己在打怪时发出，队友收到弹窗，点「一起打」就去打同一只 */
+export function sendAssist() { assistAt = Date.now(); emit(); }
+export const assistTime = () => assistAt;
 
 export function closeChat() { st.open = false; emit(); }
 
@@ -156,6 +167,14 @@ export function lacking(items: Record<string, number>) {
  * 附近打同一只的所有人都算一起打——伤害互相记到对方的怪上，血量按人数加厚（和野外组队一样）。
  */
 const SHARED = new Set(NODES.filter((n) => n.timed && (n.timed.kind === 'elite' || n.timed.kind === 'boss')).flatMap((n) => n.actions));
+/**
+ * 野外打同一种怪、离多近算一起打同一只（格）。11-02 从 10 放宽到 30：同一个刷怪点上各自站的位置
+ * 可能差十几格（用户截图：冰原猛犸两人隔着半个屏幕各打各的）。不同刷怪点之间远得多，不会算错
+ */
+export const FIELD_CREW = 30;
+/** 队友停手（等刷新、换下一只）多久之内仍算一起打 */
+const MATE_HOLD_MS = 8000;
+const mateFightAt = new Map<string, number>();
 export const sharedFight = (action: string | undefined) => !!action && SHARED.has(action);
 /** 最近一次收到的所有在线玩家（打冰原精英/首领时找一起打的人） */
 let lastAll: Presence[] = [];
@@ -172,7 +191,7 @@ function fightMates(action: string | undefined, meId: string): { id: string; nam
 let aggroAt = 0;
 /**
  * 嘲讽（用户 10-26）：找出正和我打同一个目标的队友，把他们的嘲讽值交给 sim。
- * 副本里看同一个洞口、同一层、同一个停靠点都在打；野外看同一个战斗动作、都在出手、离得近（10 格内）。
+ * 副本里看同一个洞口、同一层、同一个停靠点都在打；野外看同一个战斗动作、都在出手、离得近（FIELD_CREW 格内）。
  * 地图和副本场景每帧发位置时顺便调用，半秒算一次。
  */
 export function updateAggro(s: GameState, x: number, y: number, fighting: boolean, dg?: DungeonPresence) {
@@ -194,10 +213,14 @@ export function updateAggro(s: GameState, x: number, y: number, fighting: boolea
   for (const m of fightMates(action, me.id)) {
     const p = online.presenceOf(m.id);
     if (!p || now - p.at > 60_000) continue;
+    // 野外：队友打死一只、等下一只刷新时不在出手，几秒内仍算一起打（11-02：以前这几秒算单人，
+    // 这时刷出来的那只整只都没有队友伤害，看起来队友莫名其妙断了伤害）
+    const near = !p.dg && p.action === action && Math.abs(p.x - x) + Math.abs(p.y - y) <= FIELD_CREW;
+    if (near && p.anim?.startsWith('fight-')) mateFightAt.set(m.id, now);
     const same = dg
       ? p.dg && p.dg.gate === dg.gate && p.dg.floor === dg.floor && p.dg.idx === dg.idx && p.dg.phase === 'fight'
-      : !p.dg && p.action === action && !!p.anim?.startsWith('fight-') && Math.abs(p.x - x) + Math.abs(p.y - y) <= 10;
-    if (same) out.push(threatOf(p.equip ?? {}));
+      : near && now - (mateFightAt.get(m.id) ?? 0) < MATE_HOLD_MS;
+    if (same) out.push(tieBreak(threatOf(s.equipment), threatOf(p.equip ?? {}), me.id, m.id));
   }
   sendCoop(dg ? 0 : out.length, dgN, out);
 }
@@ -252,7 +275,8 @@ export function takeFieldHits(all: Presence[]): FieldMateHit[] {
     const delta = same ? f.dmg - last.dmg : f.dmg;
     fieldSeen.set(p.playerId, { k: f.k, n: f.n, dmg: same ? Math.max(f.dmg, last.dmg) : f.dmg });
     // 自己这只还在刷新、或者是第一次看到这个队友（以前打的旧账）就不记
-    if (!last || delta <= 0 || !s.combat || s.combat.respawnMs > 0 || !s.combat.crew) continue;
+    // 自己这只在刷新时队友打的伤害不丢：记下来算到刷出来的下一只上（两边的怪死得前后差一点，伤害不会白打）
+    if (!last || delta <= 0 || !s.combat || !s.combat.crew) continue;
     // 不是队友的（冰原同打）：一次最多算怪物血量的 20%，防止改过的客户端一下把大家的首领打没
     const party = st.party?.members.some((q) => q.playerId === p.playerId);
     const cap = party ? Infinity : Math.max(1, (s.combat.monsterMax ?? s.combat.monsterHp) * 0.2);
@@ -260,5 +284,42 @@ export function takeFieldHits(all: Presence[]): FieldMateHit[] {
     coopHit(fieldKey(action), dmg);
     out.push({ id: p.playerId, name: m.name, i: m.i, dmg, crit: !!f.crit });
   }
+  syncFieldHp(action, all);
   return out;
+}
+
+/**
+ * 两边的怪对齐（11-02 用户「我们应该是打同一只怪」）：各自的游戏里各有一只，伤害互相记，但开打时刻、
+ * 网络延迟会让血量差一截、一前一后死。这里把「同一只」配对（两边都活着时看到的那一对），
+ * 配对的那只队友那边血更少就跟到他的血量；他那边打死了，自己这只也一起倒下。差的血量作为队友伤害记账（服务器照样限量）。
+ */
+const pairs = new Map<string, { mine: number; theirs: number }>();
+let syncAt = 0;
+function syncFieldHp(action: string, all: Presence[]) {
+  const me = online.me();
+  const c = store.state.combat;
+  // 上一次补的差还没执行（随 coop 指令半秒发一次）就先不算，免得重复补
+  if (!me || !c || !c.crew || !st.party || Date.now() - syncAt < 700) return;
+  const mine = c.copy ?? 0;
+  let gap = 0;
+  for (const m of st.party.members) {
+    if (m.playerId === me.id) continue;
+    const f = all.find((q) => q.playerId === m.playerId)?.fd;
+    if (!f || f.k !== action || f.hp == null) { pairs.delete(m.playerId); continue; }
+    const pr = pairs.get(m.playerId);
+    const alive = c.respawnMs <= 0 && !f.rs;
+    if (alive && (!pr || pr.mine !== mine || pr.theirs !== f.n)) {
+      // 新配对：两边都刚刷出来、或者一个新的接上另一个
+      if (!pr || pr.mine !== mine || f.n === pr.theirs + 1) pairs.set(m.playerId, { mine, theirs: f.n });
+      continue;
+    }
+    if (!pr || pr.mine !== mine || c.respawnMs > 0) continue;
+    if (f.n === pr.theirs && !f.rs) gap = Math.max(gap, c.monsterHp - f.hp);
+    // 他把配对的那只打死了（已经在等下一只）：自己这只也一起倒
+    else if (f.n > pr.theirs || f.rs) gap = Math.max(gap, c.monsterHp);
+  }
+  // 这次刚收到、还没执行的队友伤害先扣掉
+  const key = fieldKey(action);
+  gap -= coopHits.reduce((n, h) => n + (h[0] === key ? h[1] : 0), 0);
+  if (gap >= 1) { coopHit(key, Math.ceil(gap)); syncAt = Date.now(); }
 }

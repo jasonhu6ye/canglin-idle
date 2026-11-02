@@ -1,8 +1,8 @@
-import { partyXpPct } from './party';
-import { cleanGm, gmPct, setGmClock } from './gm';
+import { ASSIST_XP, PARTY_LIVE_MS, partyXpPct } from './party';
+import { cleanGm, GM_CAP, gmPct, setGmClock } from './gm';
 import { GUILD_MAX_LV, cleanTech, guildPct, utcDay } from './guild';
 import { APT_MAX, APT_MIN, FOAL, growMs, HORSE_XP, horseItem, RANCH, RANCH_PENS } from './ranch';
-import { baseOf, qid, QUALITY_VALUE, rollQuality } from './quality';
+import { baseOf, qid, QUALITY_VALUE, qualityOdds, qualityOf, rollQuality } from './quality';
 import { HW_MOUNT, HW_MOUNT_COST, HW_POINT, HW_SKINS, HW_TIERS, hwFight, hwHasSkin, hwOpen, hwShopOpen, hwTierOf, hwWait } from './halloween';
 import { OLD_JEWELS, BAR_VALUE, inTownArea, KEY_SHOP, keyOf, OLD_ENH, SCROLL_TOWN, SHARD_PER_STONE, TIERS, ACTIONS, CROP_DEFS, FARM_NODES, PLOT_BY_ID, WAYSTONE_HOME, WAYSTONES, ITEMS, MAIN_SIZE, MID_BOX, nodeActive, REALM_GATES, WALK_TILES_PER_SEC, MONSTERS, nodeOfAction, nodesOfAction, NODES, OLD_BOX, MAT_DAILY, MAT_PRICE, MAT_SHOP, SCROLL_DAILY, SCROLL_PRICE, SEED_SHOP, seedLevel, seedPrice, SKILLS, SPAWN_TILE, FROSTHEART_CHEST, FROSTCRAFT_CHEST, fineMatOf, standOf, TOWN_CENTER, fastest, planRoute, travelMs, type MapNode } from './data';
 import { nextRandom } from './rng';
@@ -11,6 +11,7 @@ import { partySize } from './party';
 import { CHEST_OPEN_MS, chestTier, inRealm, timedWindow, type ChestTier } from './realm';
 import { aggroMates, dgCrew, fieldCrew, fieldKey, stopKey, takeMateHits, targetChance, threatOf } from './aggro';
 import { stepQuests } from './quests';
+import { isGear, migrateMarks, migrateProv, provCraft, provDrop, provMat } from './prov';
 import { migrateMail, sendMail } from './mail';
 import { stepAutoFarm, stepRain } from './farm';
 import { homeCan, homeCellIds, homeChest, homePct, migrateHome } from './home';
@@ -123,7 +124,10 @@ function migrateRanch(raw: unknown): GameState['ranch'] {
 function migrateRealmChest(raw: unknown): GameState['realmChest'] {
   const r = obj<NonNullable<GameState['realmChest']>>(raw);
   const got = Object.fromEntries(Object.entries(obj<Record<string, number>>(r?.got) ?? {}).filter(([id, n]) => typeof id === 'string' && Number.isInteger(n)));
-  return Object.keys(got).length ? { got } : undefined;
+  // 正在开的箱子也要留着：服务器每次同步都会重新读档，以前读丢了，开到一半就被重置（11-02）
+  const op = obj<{ id: string; at: number }>(r?.opening);
+  const opening = op && typeof op.id === 'string' && Number.isFinite(op.at) ? { id: op.id, at: op.at } : undefined;
+  return Object.keys(got).length || opening ? { got, ...(opening && { opening }) } : undefined;
 }
 
 export function migrate(raw: unknown): GameState | null {
@@ -218,6 +222,9 @@ export function migrate(raw: unknown): GameState | null {
     halloween: migrateHw(s.halloween),
     ranch: migrateRanch(s.ranch),
     realmChest: migrateRealmChest(s.realmChest),
+    // 装备来源记录（11-02，服务器结算时记）
+    prov: migrateProv(s.prov),
+    marks: migrateMarks(s.marks),
     // 永霜盾的寒冰护体（11-02）：服务器每次同步都会读档，要带上，最多 7 秒
     ...(Number.isFinite(s.frostGuard) && s.frostGuard! > 0 ? { frostGuard: Math.min(FROST.guardMs, s.frostGuard!) } : {}),
     redeemed: arr<string>(s.redeemed).filter((c) => typeof c === 'string'),
@@ -357,7 +364,7 @@ export function guardChance(s: GameState) {
 /** 冻结敌人多久、永霜之弓那一下的伤害倍率、寒冰护体的防御加成和持续时间 */
 export const FROST = { freezeMs: 1000, mult: 1.5, defPct: 0.5, guardMs: 7000 } as const;
 function leechHeal(s: GameState, dmg: number, rand: () => number) {
-  const ls = gearSum(s, 'leech');
+  const ls = gearSum(s, 'leech') + gmPct(s, 'leech');
   if (!ls || s.hp <= 0) return 0;
   const x = dmg * ls;
   const heal = Math.floor(x) + (rand() < x - Math.floor(x) ? 1 : 0);
@@ -400,7 +407,7 @@ export const toolSkillNames = (slot: EquipSlot) => (Object.keys(TOOL_FOR) as Ski
 /** 移动速度（格/秒）：骑着坐骑时按坐骑加成 */
 export function moveSpeed(s: GameState): number {
   const m = s.mounted ? ITEMS[s.equipment.mount ?? '']?.equip?.move ?? 0 : 0;
-  return WALK_TILES_PER_SEC * (1 + m);
+  return WALK_TILES_PER_SEC * (1 + m) * (1 + gmPct(s, 'move'));
 }
 
 /** 上下坐骑：正在走的路按新速度换算剩下的时间 */
@@ -563,7 +570,7 @@ export function rainBonus(s: GameState, a: SkillAction, t = Date.now()) {
 
 /** 玩家攻击间隔：看武器，匕首快、长枪和弩慢 */
 /** 攻速加成（火把，用户 10-25） */
-export const playerHaste = (s: GameState) => gearSum(s, 'haste');
+export const playerHaste = (s: GameState) => gearSum(s, 'haste') + gmPct(s, 'haste');
 export const playerAttackMs = (s: GameState) => Math.round((ITEMS[s.equipment.weapon ?? '']?.equip?.attackMs ?? PLAYER_ATTACK_MS) / (1 + playerHaste(s)));
 
 const healOf = (id: string) => ITEMS[id]?.heals ?? 0;
@@ -646,7 +653,10 @@ export function armorPerks(s: GameState) {
     const e = id && slot !== 'weapon' && slot !== 'offhand' ? ITEMS[id]?.equip : undefined;
     if (e?.armor) n[e.armor]++;
   }
-  return { reduce: n.plate * 0.03, dodge: 0.03 + n.leather * 0.02 + gearSum(s, 'dodge'), crit: n.cloth * 0.02 + gearSum(s, 'crit') };
+  const reduce = n.plate * 0.03, dodge = 0.03 + n.leather * 0.02 + gearSum(s, 'dodge');
+  // GM 增益（11-02）：闪避、减伤加的是百分点，加上以后最多到 75%（本来就更高的不往下压）
+  const capped = (base: number, add: number) => (add > 0 ? Math.max(base, Math.min(GM_CAP, base + add)) : base);
+  return { reduce: capped(reduce, gmPct(s, 'reduce')), dodge: capped(dodge, gmPct(s, 'dodge')), crit: n.cloth * 0.02 + gearSum(s, 'crit') + gmPct(s, 'crit') };
 }
 
 export function combatStats(s: GameState, m: MonsterDef) {
@@ -663,7 +673,7 @@ export function combatStats(s: GameState, m: MonsterDef) {
   return {
     style,
     crit: 0.05 + perks.crit,
-    critMult: 1.5,
+    critMult: 1.5 + gmPct(s, 'critdmg'),
     dodge: perks.dodge,
     reduce: 1 - (1 - perks.reduce) * (1 - COOP_DEF * mates),
     playerHit: hitChance((lvl + 8) * (b.attack + 64) * (1 + boostPct(s, 'atk')), (m.defence + 8) * 64) * (has('evasive') ? 0.8 : 1),
@@ -712,15 +722,48 @@ export function combatEstimate(s: GameState, m: MonsterDef) {
   const dps = avg / swing - heal;
   const killMs = dps > 1e-6 ? m.hp / dps : Infinity;
   // 灯笼吸血抵掉一部分掉血
-  const leech = gearSum(s, 'leech') * avg / swing;
+  const leech = (gearSum(s, 'leech') + gmPct(s, 'leech')) * avg / swing;
   const taken = killMs === Infinity ? Infinity : Math.max(0, mAvg / mMs - leech) * killMs;
   const hp = maxHp(s);
   const ratio = taken / hp;
   const rating = killMs === Infinity ? tl('打不动') : ratio < 0.2 ? tl('轻松') : ratio < 0.5 ? tl('适中') : ratio < 1 ? tl('危险') : tl('很难');
   // 新怪刷出来后要等一整次出手间隔才打第一下
   const perHour = 3_600_000 / (killMs + swing + (m.respawnMs ?? RESPAWN_MS));
-  return { killMs, taken, rating, perHour, swing };
+  // 每秒伤害（期望值，不算怪物回血）：装备对比显示用
+  return { killMs, taken, rating, perHour, swing, dps: (avg / swing) * 1000 };
 }
+
+/**
+ * 打怪收益预估（11-02，怪物推荐用）：按现在的装备、等级、增益算每小时击杀、经验、收益。
+ * 经验：打出多少伤害就有多少战斗经验，防御、生命各再拿三分之一；收益：掉落期望 × 卖店价（金币按数量）。
+ * 自然回血 1 点/秒（GM 回血增益另算）；回不过来的部分要靠吃东西，记成每小时要补多少血。
+ */
+export function monsterYield(s: GameState, m: MonsterDef) {
+  const e = combatEstimate(s, m);
+  const ok = e.killMs !== Infinity;
+  const kph = ok ? e.perHour : 0;
+  const mult = 1 + boostPct(s, 'xp') + gmPct(s, 'xp_combat') + gearSum(s, 'xp') + partyXpPct();
+  const xp = kph * m.hp * mult;
+  let coins = 0;
+  for (const d of m.drops) {
+    const p = d.chance === undefined ? 1 : dropChance(s, d.chance);
+    coins += p * (d.item === 'coins' ? coinQty(s, d.item, d.qty) : d.qty * (ITEMS[d.item]?.value ?? 0));
+  }
+  const cycle = e.killMs + e.swing + (m.respawnMs ?? RESPAWN_MS);
+  const regenPerKill = (cycle / REGEN_MS) * (1 + gmPct(s, 'regen'));
+  const foodHp = ok ? Math.max(0, e.taken - regenPerKill) * kph : 0;
+  const hp = maxHp(s);
+  /** 一只打下来掉的血超过八成血量就算有阵亡风险，推荐里不放 */
+  const safe = ok && e.taken < hp * 0.8;
+  // 收益扣掉吃的东西：按最便宜的食物每点血多少钱算
+  return { ...e, kph, xp, xpTotal: xp * (5 / 3), coins: Math.max(0, coins * kph - foodHp * FOOD_COIN_PER_HP), foodHp, safe };
+}
+/** 最便宜的食物每回 1 点血值多少钱（卖店价） */
+const FOOD_COIN_PER_HP = (() => {
+  let best = Infinity;
+  for (const it of Object.values(ITEMS)) if (it.heals && it.heals > 0 && it.value > 0) best = Math.min(best, it.value / it.heals);
+  return best === Infinity ? 0 : best;
+})();
 
 /** 战斗日志最多留多少条 */
 export const LOG_CAP = 300;
@@ -741,6 +784,8 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   const from = now - dt;
   /** 实时结算（正开着游戏）：组队一起打怪只在这时候算 */
   const live = dt <= LIVE_MS;
+  /** 组队经验加成只在线时算：下线几个小时回来补算的那段不加（11-02） */
+  const partyXp = dt <= PARTY_LIVE_MS ? partyXpPct() : 0;
 
   const rand = () => {
     const [r, next] = nextRandom(s.rng);
@@ -786,7 +831,10 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     s.seen[item] = 1;
     sum.items[item] = (sum.items[item] ?? 0) + qty;
     if (tally) tally.items[item] = (tally.items[item] ?? 0) + qty;
+    if (lootSrc && s.prov) provMat(s, item, qty, lootSrc);
   };
+  /** 材料来源（11-02）：正在干的活 / 正在打的怪 */
+  let lootSrc: string | null = null;
   /** 正在记日志的这一次动作拿到了什么 */
   let tally: { items: Record<string, number>; xp: Partial<Record<SkillId, number>> } | null = null;
 
@@ -896,7 +944,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
   };
 
   const addXp = (skill: SkillId, amount: number) => {
-    amount = sageXp(s, Math.round(amount * (1 + boostPct(s, 'xp') + gearSum(s, 'xp') + partyXpPct())), amount);
+    amount = sageXp(s, Math.round(amount * (1 + boostPct(s, 'xp') + gmPct(s, `xp_${SKILLS[skill].group}`) + gearSum(s, 'xp') + partyXp)), amount);
     if (tally) tally.xp[skill] = (tally.xp[skill] ?? 0) + amount;
     // 打怪的经验记在这只怪头上，打死时一起写进战斗日志
     if (s.combat && amount > 0) {
@@ -908,7 +956,19 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     sum.xp[skill] = (sum.xp[skill] ?? 0) + amount;
     const after = level(s, skill);
     if (after > before) sum.levelUps.push({ skill, level: after });
+  };  /**
+   * 助攻经验（11-02）：组队一起打的怪死了，自己打过它的话，队友在这只怪上打出的伤害按 ASSIST_XP 也算给你经验。
+   * 打怪本身的经验还是按自己的伤害算；这一份让输出低的队员（新人、坦克）也能跟着涨。
+   */
+  const assistXp = (mine: number, max: number) => {
+    if (mine <= 0) return;
+    const x = Math.max(0, max - mine) * ASSIST_XP;
+    if (x < 1) return;
+    addXp(weaponStyle(s), x);
+    addXp('defence', x / 3);
+    addXp('hitpoints', x / 3);
   };
+
 
   const endTask = (reason: TaskEndReason, item?: string) => {
     const task = s.queue.shift()!;
@@ -1035,11 +1095,15 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       s.progressMs = 0;
       const bonus = levelBonus(s, a);
       const gatherer = SKILLS[a.skill].group === 'gather';
-      if (!(a.inputs && !gatherer && rand() < bonus)) a.inputs?.forEach((i) => useItem(i.item, i.qty));
+      const saved = !!a.inputs && !gatherer && rand() < bonus;
+      if (!saved) a.inputs?.forEach((i) => useItem(i.item, i.qty));
       const failChance = a.fail
         ? Math.max(0, a.fail.chance * (a.fail.noFailLevel - level(s, a.skill)) / (a.fail.noFailLevel - a.level))
         : 0;
       tally = { items: {}, xp: {} };
+      lootSrc = `skill:${a.id}`;
+      /** 这次用掉的精炼石（装备来源记录用） */
+      const fineUsed: Record<string, number> = {};
       const failed = !!a.fail && rand() < failChance;
       if (failed) {
         if (a.fail!.item) addLoot(a.fail!.item, 1);
@@ -1053,16 +1117,29 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
             // 精炼石（11-02）：打开了「加精炼石」又有同阶的，每做一件用掉一颗，优秀、史诗概率 ×2.5
             const fm = s.settings.fineCraft?.[a.id] ? fineMatOf(o.item) : undefined;
             const fine = !!fm && haveItem(fm) >= 1;
-            if (fine) useItem(fm!, 1);
-            addLoot(qid(o.item, rollQuality(it.tier, rand(), fine)), 1);
+            if (fine) {
+              useItem(fm!, 1);
+              fineUsed[fm!] = (fineUsed[fm!] ?? 0) + 1;
+            }
+            addLoot(qid(o.item, rollQuality(it.tier, rand(), fine, gmPct(s, 'quality'))), 1);
           }
           else addLoot(o.item, o.qty);
         }
         if (gatherer && rand() < bonus + gmPct(s, 'yield')) a.outputs.forEach((o) => o.chance === undefined && addLoot(o.item, o.qty));
         addXp(a.skill, a.xp);
       }
+      // 装备来源（11-02）：做装备的配方、用到装备的配方记下材料和产出
+      if (s.prov && (a.outputs.some((o) => isGear(o.item)) || a.inputs?.some((i) => isGear(i.item))))
+        provCraft(s, a.id, { ...(saved ? {} : Object.fromEntries((a.inputs ?? []).map((i) => [i.item, i.qty]))), ...fineUsed }, tally.items, failed, now - dt, duration, (id) => {
+          const o = a.outputs.find((x) => x.item === baseOf(id));
+          const it = o && ITEMS[o.item];
+          if (!o || !it) return undefined;
+          const pq = it.equip && !it.equip.move && it.equip.slot !== 'pack' ? qualityOdds(it.tier, Object.keys(fineUsed).length > 0)[qualityOf(id)] / 100 : 1;
+          return (o.chance === undefined ? 1 : dropChance(s, o.chance)) * pq;
+        });
       log({ t: now - dt, kind: failed ? 'fail' : 'skill', action: a.id, xp: tally.xp, items: tally.items });
       tally = null;
+      lootSrc = null;
       task.done++;
     }
     return step;
@@ -1108,15 +1185,22 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     /** 怪倒下：掉落（组队时自己打过它才有）、记战绩、开始刷新；新刷出来的按当时队友人数定血量 */
     const kill = () => {
       const got: Record<string, number> = {};
-      if (!c.crew || (c.pTotal ?? 0) > 0) {
+      if (c.crew && c.monsterMax) assistXp(c.pTotal ?? 0, c.monsterMax);
+      if (!c.crew || (c.pTotal ?? 0) > 0 || c.tanked) {
         for (const d of m.drops) {
           if (d.chance === undefined || rand() < dropChance(s, d.chance)) {
             const q = coinQty(s, d.item, d.qty);
+            lootSrc = `drop:${m.id}`;
             addLoot(d.item, q);
+            lootSrc = null;
             got[d.item] = (got[d.item] ?? 0) + q;
           }
         }
       }
+      if (m.drops.some((d) => isGear(d.item))) provDrop(s, m.id, got, now - dt, (id) => {
+        const d = m.drops.find((x) => x.item === id);
+        return d ? (d.chance === undefined ? 1 : dropChance(s, d.chance)) : undefined;
+      });
       log({ t: now - dt, kind: 'kill', monster: m.id, xp: c.gain ?? {}, items: got });
       sum.kills[m.id] = (sum.kills[m.id] ?? 0) + 1;
       s.stats.kills++;
@@ -1133,8 +1217,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       const step = Math.min(budget, c.respawnMs);
       c.respawnMs -= step;
       regen(s, step);
-      // 怪还没刷出来，队友这时打的是上一只，不算
-      if (c.respawnMs <= 0) takeMateHits(fieldKey(task.action));
+      // 怪还没刷出来时队友打的伤害（两边的怪死的时刻差一点）留着，算到刷出来的这一只上
       return step;
     }
     // 队友打的伤害（10-27 野外组队）：记到同一只怪上，队友打死的也算一起打死
@@ -1201,7 +1284,10 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       c.mDmg = -1;
       c.mFrost = undefined;
       // 组队打同一个目标：普通攻击按嘲讽挑一个人，没挑中自己就是去打队友了（-2）；大招打全体
-      if (!big && aimsAtMate(s, rand)) c.mDmg = -2;
+      const atMate = !big && aimsAtMate(s, rand);
+      // 一起打时普通攻击挑中了自己 = 在扛怪，没打出伤害也有掉落
+      if (!atMate && !big && c.crew) c.tanked = true;
+      if (atMate) c.mDmg = -2;
       else if (st.monsterMaxHit > 0 && rand() < st.monsterHit && rand() >= st.dodge) {
         const rage = has('berserk') && c.monsterHp < m.hp / 2 ? 1.5 : 1;
         const mult = big && move ? (wm ? wm.mult[alt ? 1 : 0] : move.mult) : 1;
@@ -1284,16 +1370,23 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     /** 怪倒下：自己打过它才有掉落；记下最后一击给画面用 */
     const kill = (dmg: number, crit: boolean, mine: boolean) => {
       const got: Record<string, number> = {};
-      if ((c.pTotal ?? 0) > 0) {
+      if (c.crew) assistXp(c.pTotal ?? 0, c.monsterMax ?? 0);
+      if ((c.pTotal ?? 0) > 0 || c.tanked) {
         for (const d of m.drops) {
           if (d.chance === undefined || rand() < dropChance(s, d.chance)) {
             const q = coinQty(s, d.item, d.qty);
+            lootSrc = `drop:${m.id}`;
             addLoot(d.item, q);
+            lootSrc = null;
             got[d.item] = (got[d.item] ?? 0) + q;
             run.got = { ...run.got, [d.item]: (run.got?.[d.item] ?? 0) + q };
           }
         }
       }
+      if (m.drops.some((d) => isGear(d.item))) provDrop(s, m.id, got, now - dt, (id) => {
+        const d = m.drops.find((x) => x.item === id);
+        return d ? (d.chance === undefined ? 1 : dropChance(s, d.chance)) : undefined;
+      });
       log({ t: now - dt, kind: 'kill', monster: m.id, xp: c.gain ?? {}, items: got });
       sum.kills[m.id] = (sum.kills[m.id] ?? 0) + 1;
       s.stats.kills++;
@@ -1362,7 +1455,10 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       c.mDmg = -1;
       c.mFrost = undefined;
       // 组队打同一个目标：普通攻击按嘲讽挑一个人，没挑中自己就是去打队友了（-2）；大招打全体
-      if (!big && aimsAtMate(s, rand)) c.mDmg = -2;
+      const atMate = !big && aimsAtMate(s, rand);
+      // 一起打时普通攻击挑中了自己 = 在扛怪，没打出伤害也有掉落
+      if (!atMate && !big && c.crew) c.tanked = true;
+      if (atMate) c.mDmg = -2;
       else if (st.monsterMaxHit > 0 && rand() < st.monsterHit && rand() >= st.dodge) {
         const rage = has('berserk') && c.monsterHp < m.hp / 2 ? 1.5 : 1;
         let dmg = Math.max(1, Math.round((1 + Math.floor(rand() * st.monsterMaxHit * rage)) * (1 - st.reduce) * (big && move ? move.mult : 1)));
@@ -1493,7 +1589,7 @@ function regen(s: GameState, ms: number) {
     s.frostGuard -= ms;
     if (s.frostGuard <= 0) delete s.frostGuard;
   }
-  s.regenMs += ms;
+  s.regenMs += ms * (1 + gmPct(s, 'regen'));
   const ticks = Math.floor(s.regenMs / REGEN_MS);
   s.regenMs -= ticks * REGEN_MS;
   s.hp = Math.min(maxHp(s), s.hp + ticks);

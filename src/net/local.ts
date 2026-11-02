@@ -1,5 +1,5 @@
 import type { GameState } from '../core/types';
-import type { AiPlayer, AltRow, EconRow, RedeemCodeRow, CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
+import type { AiPlayer, AltRow, GearEvRow, GearFlagRow, GearProvRow, EconRow, RedeemCodeRow, CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { GUILD_MAX, levelSnapshot, type SyncReply } from './api';
 import { runSync } from '../server/sync';
 import type { Cmd } from '../core/commands';
@@ -453,8 +453,14 @@ export class LocalApi implements OnlineApi {
   async gmTrades(): Promise<GmTrade[]> { return []; }
   async gmSnapshots(): Promise<Snapshot[]> { return []; }
   async gmSnapshotCreate() { /* 本地不做 */ }
+  async gmGetSkills(): Promise<{ name: string; xp: Record<string, number> }> { throw new Error(tl('本地模式不能改别人的存档')); }
+  async gmSetSkills(): Promise<number> { throw new Error(tl('本地模式不能改别人的存档')); }
   async gmSnapshotDelete() { /* 本地不做 */ }
   async gmRollback() { return 0; }
   async gmPlayers(): Promise<GmPlayer[]> { return []; }
+  async gmGear(): Promise<GearProvRow[]> { return []; }
+  async gmGearRecent(): Promise<GearEvRow[]> { return []; }
+  async gmGearFlags(): Promise<GearFlagRow[]> { return []; }
+  async gmGearFlagSet() {}
   async gmPlayerCount() { return { total: 0, today: 0, week: 0 }; }
 }

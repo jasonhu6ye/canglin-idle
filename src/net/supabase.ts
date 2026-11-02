@@ -1,12 +1,13 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js';
 import type { GameState, GmBuff } from '../core/types';
-import type { EconRow, RedeemCodeRow, AltRow, CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMail, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildDay, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
+import type { EconRow, RedeemCodeRow, AltRow, GearEvRow, GearFlagRow, GearProvRow, CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMail, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildDay, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { type SyncReply } from './api';
 import type { Cmd } from '../core/commands';
 import type { TaskSpec } from '../core/guild';
 import { fastOf, readFast, slowKey, withMove, type Fast } from './presenceSync';
 import { tl } from '../i18n';
 import { gameNow } from '../core/clock';
+import { gearHeld, migrateMarks, migrateProv } from '../core/prov';
 
 /** Supabase 实现（10-25 用户选定）。表和权限见 supabase/schema.sql */
 
@@ -640,15 +641,45 @@ export class SupabaseApi implements OnlineApi {
     return rows.map((r): Snapshot => ({ id: Number(r.id), label: r.label, auto: !!r.auto, players: Number(r.players), at: Date.parse(r.created_at), mb: Number(r.mb) }));
   }
   async gmSnapshotCreate(label: string) { ok(await this.sb.rpc('gm_snapshot_create', { p_label: label })); }
+  async gmGetSkills(pid: number) {
+    const r = ok(await this.sb.rpc('gm_get_skills', { p_pid: pid })) as { name: string; xp: Record<string, unknown> };
+    return { name: String(r.name ?? ''), xp: Object.fromEntries(Object.entries(r.xp ?? {}).map(([k, v]) => [k, Number(v) || 0])) };
+  }
+  async gmSetSkills(pid: number, xp: Record<string, number>) { return Number(ok(await this.sb.rpc('gm_set_skills', { p_pid: pid, p_xp: xp }))); }
   async gmSnapshotDelete(id: number) { ok(await this.sb.rpc('gm_snapshot_delete', { p_id: id })); }
   async gmRollback(id: number, pid?: number) { return Number(ok(await this.sb.rpc('gm_rollback', { p_snapshot: id, p_pid: pid ?? null }))); }
-  async gmPlayers(who?: string) {
-    const rows = ok(await this.sb.rpc('gm_players', { p_who: who?.trim() || null, p_limit: 300 })) as Row[];
+  async gmPlayers(who?: string, limit = 300) {
+    const rows = ok(await this.sb.rpc('gm_players', { p_who: who?.trim() || null, p_limit: limit })) as Row[];
     return rows.map((r): GmPlayer => ({
       id: r.id, pid: Number(r.pid), name: r.name, joined: Date.parse(r.created_at), lastSeen: Date.parse(r.last_seen),
       total: r.total == null ? null : Number(r.total), combat: r.combat == null ? null : Number(r.combat), guildTag: r.guild_tag ?? null,
       hidden: !!r.hidden, banned: !!r.banned, flags: Number(r.flags ?? 0),
     }));
+  }
+  async gmGear(who: string) {
+    const rows = ok(await this.sb.rpc('gm_gear', { p_who: who.trim() })) as Row[];
+    return rows.map((r): GearProvRow => ({
+      playerId: r.player_id, pid: Number(r.pid), name: r.name, prov: migrateProv(r.prov) ?? null, lastTick: Number(r.last_tick), marks: migrateMarks(r.marks),
+      held: gearHeld({ bank: r.bank ?? {}, bag: r.bag ?? {}, equipment: r.equipment ?? {} } as GameState),
+    }));
+  }
+  async gmGearRecent() {
+    const rows = ok(await this.sb.rpc('gm_gear_recent', { p_limit: 300 })) as Row[];
+    return rows.map((r): GearEvRow | null => {
+      const p = migrateProv({ since: 0, ev: [r.ev] });
+      return p?.ev[0] ? { pid: Number(r.pid), name: r.name, ev: p.ev[0] } : null;
+    }).filter((x): x is GearEvRow => !!x);
+  }
+  async gmGearFlags(status: 'open' | 'all' = 'open') {
+    const rows = ok(await this.sb.rpc('gm_gear_flags', { p_status: status, p_limit: 300 })) as Row[];
+    return rows.map((r): GearFlagRow => ({
+      id: Number(r.id), playerId: r.player_id, pid: Number(r.pid), name: r.name, item: r.item, src: r.src ?? '', reason: r.reason,
+      gotAt: Number(r.got_at), detail: (r.detail ?? {}) as GearFlagRow['detail'], status: r.status, note: r.note ?? null,
+      at: Date.parse(r.created_at), handledAt: r.handled_at ? Date.parse(r.handled_at) : null, banned: !!r.banned,
+    }));
+  }
+  async gmGearFlagSet(id: number, status: GearFlagRow['status'], note?: string) {
+    ok(await this.sb.rpc('gm_gear_flag_set', { p_id: id, p_status: status, p_note: note ?? null }));
   }
   async gmPlayerCount() {
     const r = (ok(await this.sb.rpc('gm_player_count')) as Row[])[0] ?? {};

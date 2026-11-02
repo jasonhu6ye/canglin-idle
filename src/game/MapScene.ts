@@ -1,4 +1,5 @@
 import { leaveHome } from '../core/home';
+import { gameNow } from '../core/clock';
 import Phaser from 'phaser';
 import { ACTIONS, CROP_DEFS, CROPS, cropsOfField, FARM_PLOTS, PLOT_BY_ID, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, SKILLS, inTownArea, keyOf, DANGER, dangerLevel, nodeOfAction, nodesOfAction, planRoute, standOf, STONE_JUMP_MS, WAYSTONES, REALM_GATES, hopsOf, jumpNode, travelMs, WALK_TILES_PER_SEC, type MapNode, type Route } from '../core/data';
 import { atGate, WAYSTONE_REACH, combatLevel, combatStats, MONSTER_MOVES, isBankId, maxHp, moveSpeed, playerAttackMs, walkPos } from '../core/sim';
@@ -22,6 +23,7 @@ import { pumpkinEyes } from './pumpkinArt';
 import { FIGHT, FIGHT_RANGE, fightWeapon, FRAME_H, FRAME_W, HERO_ANIMS, HERO_FEET, HERO_PAD, NPC_ANIMS, NPC_OUTFITS, outfitOf, paintHeroSheet, type HeroDir } from './hero';
 import type { MonsterDef, RegionId, Summary } from '../core/types';
 import { store } from '../store';
+import { ME, recordHit } from '../ui/dpsMeter';
 import { frostBurst } from './frostFx';
 import { Ambience, D_FLOAT, D_GLOW, D_LABEL, D_PARTICLE, D_SMOKE } from './ambience';
 import { paintArrow, paintBolt, paintHit, paintSlash } from './fxArt';
@@ -1434,7 +1436,7 @@ export class MapScene extends Phaser.Scene {
     const img = this.add.image(cx, cy + T / 2, 'chest').setOrigin(0.5, 1).setScale(1.6).setDepth(cy + T / 2 + 1000);
     const glow = this.add.image(cx, cy - 4, 'glow').setBlendMode(Phaser.BlendModes.ADD).setDepth(cy + T / 2 + 1001).setAlpha(0.5);
     const paint = () => {
-      const w = timedWindow(n, Date.now());
+      const w = timedWindow(n, gameNow());
       const tint = tierTint[chestTier(n.id, w?.round ?? 0)];
       glow.setTint(tint);
     };
@@ -1540,7 +1542,7 @@ export class MapScene extends Phaser.Scene {
       for (let k = 0; k < count; k++) made.push(this.addMonWanderer(m, ox + k * 3, oy + (k ? 2 : 0), m.rank === 'boss' ? 2 : 4));
     });
     if (n.timed) {
-      const on = this.timedOn.get(n.id) ?? !!timedWindow(n, Date.now());
+      const on = this.timedOn.get(n.id) ?? !!timedWindow(n, gameNow());
       for (const o of made) (o as unknown as Phaser.GameObjects.Components.Visible).setVisible(on);
       this.timedViz.get(n.id)?.push(...made);
     }
@@ -1552,16 +1554,24 @@ export class MapScene extends Phaser.Scene {
   private timedClock = new Map<string, Phaser.GameObjects.Text>();
   private timedNode?: Map<string, MapNode>;
   private syncTimed() {
-    const now = Date.now();
+    // 和存档结算用同一个钟（本机时间不准时以服务器为准），不然怪已经刷出来了画面上还藏着
+    const now = gameNow();
     const view = this.cameras.main.worldView;
     for (const [id, objs] of this.timedViz) {
       const n = (this.timedNode ??= new Map(NODES.filter((x) => x.timed).map((x) => [x.id, x]))).get(id)!;
       const win = timedWindow(n, now);
-      const on = !!win;
+      // 宝箱自己这一轮开过了就不再显示（用户 11-02：开一次拿完奖励就消失）
+      const opened = n.timed?.kind === 'chest' && !!win && store.state.realmChest?.got?.[id] === win.round;
+      const on = !!win && !opened;
       const was = this.timedOn.get(id);
       if (was !== on) {
         this.timedOn.set(id, on);
         for (const o of objs) (o as unknown as Phaser.GameObjects.Components.Visible).setVisible(on);
+        // 开完消失：冒一圈光再隐去
+        if (!on && opened && was && view.contains(n.x * T, n.y * T)) {
+          const fx = this.add.image(n.x * T + T / 2, n.y * T, 'glow').setTint(0xffe08a).setBlendMode(Phaser.BlendModes.ADD).setDepth(D_FLOAT).setScale(0.4);
+          this.tweens.add({ targets: fx, scale: 2.4, alpha: 0, duration: 700, onComplete: () => fx.destroy() });
+        }
         if (on && was === false && view.contains(n.x * T, n.y * T)) {
           const fx = this.add.image(n.x * T + T / 2, n.y * T, 'glow').setTint(0x9ae8ff).setBlendMode(Phaser.BlendModes.ADD).setDepth(D_FLOAT).setScale(0.3);
           this.tweens.add({ targets: fx, scale: 3, alpha: 0, duration: 1200, onComplete: () => fx.destroy() });
@@ -2372,6 +2382,9 @@ export class MapScene extends Phaser.Scene {
       const top = b.spr.y - (S - 3 * b.spr.scaleY) + 6;
       // 首领的血条和名字压在所有东西上面，远处也看得清
       const depth = b.label ? D_LABEL - 1 : b.spr.depth + 1;
+      // 怪藏起来了（限时点没刷出来）血条也一起藏，不然只看到一根血条（11-02）
+      const vis = b.spr.visible;
+      b.bg.setVisible(vis); b.fill.setVisible(vis); b.trail.setVisible(vis); b.label?.setVisible(vis);
       b.bg.setPosition(b.spr.x, top).setDepth(depth).setAlpha(b.spr.alpha);
       const ratio = b.live && c ? (c.respawnMs > 0 ? 0 : Math.max(0, c.monsterHp / (c.monsterMax ?? b.m.hp))) : 1;
       b.fill.setPosition(b.spr.x - b.w / 2, top - 1).setDepth(depth).setAlpha(b.spr.alpha).setScale(ratio, 1);
@@ -2383,8 +2396,9 @@ export class MapScene extends Phaser.Scene {
         shadow.setPosition(b.spr.x, b.spr.y).setDepth(b.spr.depth - 2).setAlpha(0.35 * b.spr.alpha);
         ring.setPosition(b.spr.x, b.spr.y).setDepth(b.spr.depth - 1);
         glow.setPosition(b.spr.x, b.spr.y - S * 0.3).setDepth(D_GLOW);
-        ring.setVisible(b.spr.alpha > 0.1);
-        glow.setVisible(b.spr.alpha > 0.1);
+        ring.setVisible(vis && b.spr.alpha > 0.1);
+        glow.setVisible(vis && b.spr.alpha > 0.1);
+        shadow.setVisible(vis);
       }
       return true;
     });
@@ -2403,6 +2417,8 @@ export class MapScene extends Phaser.Scene {
     if (this.foeSeen.p > prev.p) {
       const dmg = c.pDmg ?? -1;
       const crit = !!c.pCrit;
+      // 伤害统计（11-02）：和飘出来的数字一样，连斩那一刀也算上
+      recordHit(ME, '', 0, Math.max(0, dmg) + (c.pDmg2 ?? 0));
       const hitIn = this.playerStrike();
       this.time.delayedCall(hitIn, () => this.foe === foe && this.playerSwingFx(foe, m, dmg, crit));
       // 幽魂链刃连斩（10-31）：第二刀晚一点，青色数字
@@ -2825,6 +2841,7 @@ export class MapScene extends Phaser.Scene {
 
   /** 野外组队：队友打中了我也在打的怪，队友出手、怪闪一下、用队友的颜色飘数字 */
   private mateHit(h: FieldMateHit) {
+    recordHit(h.id, h.name, h.i, h.dmg);
     const foe = this.foe;
     if (!foe?.active) return;
     const hitIn = Math.max(0, this.others.swing(h.id));

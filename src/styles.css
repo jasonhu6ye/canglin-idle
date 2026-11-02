@@ -925,6 +925,9 @@ html[lang="en"] .login-box h1 { letter-spacing: 2px; }
 .pf-hp { font-size: 10px; color: var(--muted); line-height: 1; }
 .pf-rally { align-self: flex-start; font-size: 12px; }
 .pf-note { font-size: 12px; max-width: 240px; }
+.pf-invite { display: flex; flex-direction: column; gap: 6px; font-size: 12px; max-width: 240px; padding: 6px 8px; }
+.pf-invite-btns { display: flex; gap: 6px; }
+.pf-invite-btns button { font-size: 12px; padding: 3px 10px; min-height: 26px; }
 .pf-status { font-size: 11px; max-width: 240px; padding: 2px 8px; background: rgba(0, 0, 0, 0.45); border-radius: 6px; text-shadow: 0 1px 0 #000; }
 .party-ops { display: inline-flex; gap: 4px; margin-left: 6px; }
 /* 开工提示：页面不关，按钮上方闪一下（10-25） */
@@ -1066,6 +1069,18 @@ h2.dg-blue { color: #6ab4ff; }
 .gm-actions .primary { flex: 1; }
 .gm-form .good { color: #8ee08a; margin: 0; }
 .gm-form .warn { margin: 0; }
+.gm-kinds { display: flex; gap: 8px; }
+.gm-kinds > span { flex: 0 0 40px; color: var(--muted, #a89a80); display: flex; flex-direction: column; }
+.gm-kinds > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.gm-kind-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.gm-kind-row > small { flex: 0 0 64px; }
+.gm-skills { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 4px 12px; }
+.gm-skills li { display: flex; align-items: center; gap: 6px; padding: 2px 4px; border-radius: 3px; }
+.gm-skills li.on { background: rgba(232, 184, 74, .14); }
+.gm-skills li > span { flex: 1; min-width: 0; }
+.gm-skills li input { width: 48px; text-align: center; }
+.gm-skills li input.bad { border-color: #e0503a; }
+.gm-skills li .pill { padding: 0 8px; }
 .gm-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
 .gm-list li { padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
 .gm-tabs { margin: 0 0 8px; flex: none; }
@@ -1112,6 +1127,10 @@ h2.dg-blue { color: #6ab4ff; }
 .mon-rows .mon-text small { overflow: hidden; text-overflow: ellipsis; }
 .mon-rows .mon-go { padding: 4px 8px; flex: 0 0 auto; }
 .mon-rows .rank-elite { color: #9ad0e0; }
+.mon-yield { color: var(--muted, #a89a80); }
+.mon-yield.kph .k, .mon-yield.xp .x, .mon-yield.coins .c { color: #e8b84a; font-weight: bold; }
+.mon-best { color: #7ad860; font-weight: bold; }
+.mon-filter .pill.rec { border-color: #8a6a30; }
 .mon-rows .rank-boss { color: #e8883a; }
 
 /* 手机：离线队友只占一行；地图矮（浏览器里玩）时左边浮层整体收紧，两摞放不下时左上那摞可滑动 */
@@ -1206,6 +1225,7 @@ button.chat-who { cursor: pointer; text-decoration: underline dotted; text-under
 .gear-compare { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border: 1px solid var(--edge); border-radius: 4px; background: rgba(0, 0, 0, 0.25); font-size: 12px; }
 .gear-compare .gc-head b { color: var(--gold); }
 .gear-compare .gc-fight { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; font-weight: bold; }
+.gear-compare .gc-dps { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; font-size: 0.95em; }
 .gear-compare table { border-collapse: collapse; width: 100%; }
 .gear-compare td { padding: 1px 6px 1px 0; white-space: nowrap; }
 .gear-compare td:first-child { width: 40%; white-space: normal; }
@@ -1228,4 +1248,16 @@ button.chat-who { cursor: pointer; text-decoration: underline dotted; text-under
 .gm-ac-flags { margin: 4px 0; padding-left: 14px; font-size: 12px; } .gm-ac-flags li { margin: 2px 0; }
 .gm-form.gm-ac-form label > span:first-child { flex: 0 0 auto; max-width: 55%; } .gm-form.gm-ac-form label > input { min-width: 0; }
 .gm-trade-side { margin-top: 2px; line-height: 1.4; }
-.gm-count { margin: 4px 0 8px; font-weight: bold; } .gm-players li > small { display: block; }
+.gm-src { list-style: none; margin: 0 0 2px; padding: 0 0 0 12px; display: flex; flex-direction: column; gap: 1px; }
+.gm-src-sub { padding-left: 10px; }
+.gm-cost { display: flex; flex-direction: column; gap: 2px; padding-left: 4px; border-left: 2px solid rgba(255,255,255,0.12); }
+.gm-stat { display: flex; flex-direction: column; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.gm-list .link { cursor: pointer; text-decoration: underline; }
+.gm-count { margin: 4px 0 8px; font-weight: bold; }
+.gm-online { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #7ad860; box-shadow: 0 0 4px #7ad860; margin-right: 6px; vertical-align: middle; }
+.gm-players .gm-copy { margin-left: 8px; padding: 0 8px; font-size: 12px; } .gm-players li > small { display: block; }
+/* 日志 DPS 页（11-02） */
+.dps-list li.dps-row { position: relative; display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px; padding: 3px 6px; overflow: hidden; }
+.dps-row .dps-bar { position: absolute; left: 0; top: 0; bottom: 0; opacity: 0.18; border-radius: 2px; pointer-events: none; }
+.dps-row .dps-name { position: relative; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: bold; }
+.dps-row b, .dps-row small { position: relative; }
