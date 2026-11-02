@@ -2327,3 +2327,77 @@ begin
     limit least(p_limit, 300);
 end $$;
 grant execute on function public.gm_cheaters(int) to authenticated;
+
+-- ============ 白名单（11-02）============
+-- 用户要求：选定的玩家（比如帮忙测试的）不会被自动处理。可疑操作照样记录，但不自动移出排行榜、
+-- 不自动回档 / 删档、不锁交易（新账号、核查中都不限）。GM 手动封禁、手动限制交易 / 禁言照常有效。
+alter table public.profiles add column if not exists ac_exempt boolean not null default false;
+
+create or replace function public.ac_flag(p uuid, p_kind text, p_severe boolean, p_detail jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if exists (select 1 from cheat_flags where player_id = p and kind = p_kind and (severe or not p_severe) and at > now() - interval '10 minutes') then
+    return;
+  end if;
+  insert into cheat_flags (player_id, kind, severe, detail) values (p, p_kind, p_severe, p_detail);
+  if coalesce((select ac_exempt from profiles where id = p), false) then return; end if;
+  if p_severe and public.ac_conf('auto_hide', 1) > 0 then
+    update profiles set ac_hidden = true where id = p;
+  end if;
+  if p_severe then perform public.ac_punish(p, p_kind); end if;
+end $$;
+revoke execute on function public.ac_flag(uuid, text, boolean, jsonb) from public, anon, authenticated;
+grant execute on function public.ac_flag(uuid, text, boolean, jsonb) to service_role;
+
+create or replace function public.ac_trade_block(p uuid) returns text
+language plpgsql stable security definer set search_path = public as $$
+declare pr profiles; h numeric;
+begin
+  select * into pr from profiles where id = p;
+  if pr.id is null then return '账号不存在'; end if;
+  if exists (select 1 from gm_admins a where a.pid = pr.pid) then return null; end if;
+  if pr.banned then return '账号已被限制，不能交易或使用公会仓库'; end if;
+  if pr.trade_until > now() then
+    return '账号交易受限，' || to_char(pr.trade_until at time zone 'Asia/Shanghai', 'MM-DD HH24:MI') || ' 后恢复';
+  end if;
+  if pr.ac_exempt then return null; end if;
+  if pr.ac_hidden and public.ac_conf('lock_hidden', 1) > 0 then return '账号数据正在核查，暂时不能交易或使用公会仓库'; end if;
+  h := public.ac_conf('trade_new_hours', 24);
+  if h > 0 and pr.created_at > now() - make_interval(secs => h * 3600) then
+    return '新账号满 ' || h || ' 小时后才能交易或使用公会仓库';
+  end if;
+  return null;
+end $$;
+revoke execute on function public.ac_trade_block(uuid) from public, anon, authenticated;
+
+-- 管理员：按数字 ID 加入 / 移出白名单，返回玩家名字
+create or replace function public.gm_ac_exempt(p_pid bigint, p_on boolean) returns text
+language plpgsql security definer set search_path = public as $$
+declare nm text;
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  update profiles set ac_exempt = p_on where pid = p_pid returning name into nm;
+  if nm is null then raise exception '没有这个 ID 的玩家'; end if;
+  return nm;
+end $$;
+grant execute on function public.gm_ac_exempt(bigint, boolean) to authenticated;
+
+-- 可疑玩家列表加上白名单；白名单里的人也列出来
+drop function if exists public.gm_cheaters(int);
+create or replace function public.gm_cheaters(p_limit int default 100)
+returns table (player_id uuid, pid bigint, name text, hidden boolean, banned boolean, note text, n bigint, severe bigint, last_at timestamptz, flags jsonb,
+  trade_until timestamptz, mute_until timestamptz, exempt boolean)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  return query
+    select p.id, p.pid, p.name, p.ac_hidden, p.banned, p.ac_note, count(f.id), count(f.id) filter (where f.severe), max(f.at),
+      (select jsonb_agg(x order by x.at desc) from (select f2.kind, f2.severe, f2.detail, f2.at from cheat_flags f2 where f2.player_id = p.id order by f2.at desc limit 10) x),
+      case when p.trade_until > now() then p.trade_until end, case when p.mute_until > now() then p.mute_until end, p.ac_exempt
+    from profiles p left join cheat_flags f on f.player_id = p.id
+    where f.id is not null or p.ac_hidden or p.banned or p.trade_until > now() or p.mute_until > now() or p.ac_exempt
+    group by p.id
+    order by max(f.at) desc nulls last
+    limit least(p_limit, 300);
+end $$;
+grant execute on function public.gm_cheaters(int) to authenticated;

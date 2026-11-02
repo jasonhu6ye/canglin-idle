@@ -439,6 +439,7 @@ export class LocalApi implements OnlineApi {
   async gmCheaters(): Promise<CheatRow[]> { return []; }
   async gmAcSet() { /* 本地没有别的玩家 */ }
   async gmAcLimit(): Promise<string> { throw new Error(tl('没有这个 ID 的玩家')); }
+  async gmAcExempt(): Promise<string> { throw new Error(tl('没有这个 ID 的玩家')); }
   async gmTrades(): Promise<GmTrade[]> { return []; }
   async gmSnapshots(): Promise<Snapshot[]> { return []; }
   async gmSnapshotCreate() { /* 本地不做 */ }

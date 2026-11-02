@@ -1208,4 +1208,11 @@ export const EN_UI: Record<string, string> = {
   "账号已被限制，不能交易或使用公会仓库": "Your account is restricted and can't trade or use the guild bank",
   "账号数据正在核查，暂时不能交易或使用公会仓库": "Your account is under review and can't trade or use the guild bank for now",
   "对方暂时不能交易": "That player can't trade right now",
+  "{0} 已加入白名单": "{0} added to the whitelist",
+  "{0} 已移出白名单": "{0} removed from the whitelist",
+  "白名单": "Whitelisted",
+  "移出白名单": "Remove from whitelist",
+  "加入白名单": "Add to whitelist",
+  "白名单（填 1 加入，填 0 移出）": "Whitelist (1 = add, 0 = remove)",
+  "限制交易期间不能交易、不能存取公会仓库；禁言期间世界、公会、队伍频道不能说话。时长填 0 解除。白名单里的人照样记录可疑操作，但不会被自动移出排行榜、自动回档、自动锁交易": "Trade lock blocks trading and the guild bank; mute blocks world, guild and party chat. Enter 0 hours to lift. Whitelisted players still get flags recorded, but are never auto-removed from the leaderboard, auto-rolled back or auto-trade-locked.",
 };

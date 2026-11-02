@@ -346,6 +346,8 @@ export interface OnlineApi {
   gmAcSet(playerId: string, action: 'hide' | 'unhide' | 'ban' | 'unban' | 'clear', note?: string): Promise<void>;
   /** 管理员：按数字 ID 限制交易（trade）/ 禁言（mute）多少小时，0 = 解除；返回玩家名字 */
   gmAcLimit(pid: number, what: 'trade' | 'mute', hours: number): Promise<string>;
+  /** 管理员：按数字 ID 加入 / 移出白名单（不被自动处理）；返回玩家名字 */
+  gmAcExempt(pid: number, on: boolean): Promise<string>;
   /** 管理员：所有玩家的交易记录（who = 数字 ID 或名字，空 = 全部） */
   gmTrades(who?: string): Promise<GmTrade[]>;
   /** 管理员：服务器存档（快照）和回档；pid 为空 = 全服回档，返回回档了几个人 */
@@ -374,7 +376,7 @@ export type CheatKind = 'clock_local' | 'save_edit' | 'speed';
 /** 上传存档被拒：服务器回档过了（ROLLBACK:新版本号） */
 export const isRollbackError = (e: unknown) => /ROLLBACK:\d+/.test(String((e as Error)?.message ?? e));
 export interface CheatFlag { kind: string; severe: boolean; detail: Record<string, unknown>; at: number }
-export interface CheatRow { playerId: string; pid: number; name: string; hidden: boolean; banned: boolean; note: string; n: number; severe: number; lastAt: number | null; flags: CheatFlag[]; tradeUntil: number | null; muteUntil: number | null }
+export interface CheatRow { playerId: string; pid: number; name: string; hidden: boolean; banned: boolean; note: string; n: number; severe: number; lastAt: number | null; flags: CheatFlag[]; tradeUntil: number | null; muteUntil: number | null; exempt: boolean }
 
 /** AI 玩家：服务器只存名字和种子，其余按种子和时间算（见 bots.ts）；at 是加入时间 */
 export interface AiPlayer { id: string; name: string; seed: number; at: number }

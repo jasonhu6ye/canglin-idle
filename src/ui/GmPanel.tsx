@@ -552,16 +552,23 @@ function AcTab() {
     if (ask && !confirm(ask)) return;
     void run(() => online.gmAcSet(r.playerId, a), ok);
   };
-  const [lim, setLim] = useState({ pid: '', what: 'trade' as 'trade' | 'mute', hours: '168' });
+  const [lim, setLim] = useState({ pid: '', what: 'trade' as 'trade' | 'mute' | 'exempt', hours: '168' });
   const limit = (pid: number, what: 'trade' | 'mute', hours: number) => {
     void run(async () => {
       const nm = await online.gmAcLimit(pid, what, hours);
       return hours <= 0 ? tl`已解除 ${nm} 的限制` : what === 'trade' ? tl`${nm} 限制交易 ${hours} 小时` : tl`${nm} 禁言 ${hours} 小时`;
     }, '');
   };
+  const exempt = (pid: number, on: boolean) => {
+    void run(async () => {
+      const nm = await online.gmAcExempt(pid, on);
+      return on ? tl`${nm} 已加入白名单` : tl`${nm} 已移出白名单`;
+    }, '');
+  };
   const submitLim = () => {
     const pid = Number(lim.pid), h = Number(lim.hours);
     if (!/^\d{8}$/.test(lim.pid)) return setMsg({ text: tl('数字 ID 是 8 位数字'), ok: false });
+    if (lim.what === 'exempt') return exempt(pid, h > 0);
     if (!Number.isFinite(h) || h < 0) return setMsg({ text: tl('时长要填不小于 0 的数字'), ok: false });
     limit(pid, lim.what, h);
   };
@@ -581,6 +588,7 @@ function AcTab() {
                 {r.banned ? <b className="warn"> {tl('已封禁')}</b> : r.hidden ? <b className="warn"> {tl('已移出排行榜')}</b> : null}
                 {r.tradeUntil && <b className="warn"> {tl`限制交易到 ${until(r.tradeUntil)}`}</b>}
                 {r.muteUntil && <b className="warn"> {tl`禁言到 ${until(r.muteUntil)}`}</b>}
+                {r.exempt && <b className="good"> {tl('白名单')}</b>}
               </div>
               <small className="muted">{tl`${r.n} 条记录（严重 ${r.severe}）`}{r.lastAt ? tl` · 最近 ${new Date(r.lastAt).toLocaleString()}` : ''}{r.note ? ` · ${r.note}` : ''}</small>
               {open === r.playerId && (
@@ -603,19 +611,21 @@ function AcTab() {
                 {r.muteUntil
                   ? <button className="pill" disabled={busy} onClick={() => limit(r.pid, 'mute', 0)}>{tl('解除禁言')}</button>
                   : <button className="pill" disabled={busy} onClick={() => limit(r.pid, 'mute', 24)}>{tl('禁言 1 天')}</button>}
+                <button className="pill" disabled={busy} onClick={() => exempt(r.pid, !r.exempt)}>{r.exempt ? tl('移出白名单') : tl('加入白名单')}</button>
                 <button className="pill" disabled={busy} onClick={() => act(r, 'clear', tl`已清除 ${r.name} 的记录`, tl`清除 ${r.name} 的全部记录（误判时用）？`)}>{tl('清除记录')}</button>
               </div>
             </li>
           ))}
         </ul>
       )}
-      <h3>{tl('限制玩家')} <small className="muted">{tl('限制交易期间不能交易、不能存取公会仓库；禁言期间世界、公会、队伍频道不能说话。时长填 0 解除')}</small></h3>
+      <h3>{tl('限制玩家')} <small className="muted">{tl('限制交易期间不能交易、不能存取公会仓库；禁言期间世界、公会、队伍频道不能说话。时长填 0 解除。白名单里的人照样记录可疑操作，但不会被自动移出排行榜、自动回档、自动锁交易')}</small></h3>
       <div className="gm-form frame">
         <label><span>{tl('数字 ID')}</span><input inputMode="numeric" value={lim.pid} onChange={(e) => setLim({ ...lim, pid: e.target.value.replace(/\D/g, '').slice(0, 8) })} /></label>
         <label><span>{tl('限制什么')}</span>
-          <select value={lim.what} onChange={(e) => setLim({ ...lim, what: e.target.value as 'trade' | 'mute' })}>
+          <select value={lim.what} onChange={(e) => setLim({ ...lim, what: e.target.value as 'trade' | 'mute' | 'exempt' })}>
             <option value="trade">{tl('交易和公会仓库')}</option>
             <option value="mute">{tl('禁言')}</option>
+            <option value="exempt">{tl('白名单（填 1 加入，填 0 移出）')}</option>
           </select>
         </label>
         <label><span>{tl('多少小时')}</span><input inputMode="numeric" value={lim.hours} onChange={(e) => setLim({ ...lim, hours: e.target.value.replace(/[^\d.]/g, '') })} /></label>
