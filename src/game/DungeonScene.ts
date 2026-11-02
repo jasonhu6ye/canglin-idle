@@ -6,6 +6,7 @@ import { baseOf } from '../core/quality';
 import { combatStats, dgMob } from '../core/sim';
 import type { DungeonRun, MonsterDef } from '../core/types';
 import { store } from '../store';
+import { ME, recordHit } from '../ui/dpsMeter';
 import { tl } from '../i18n';
 import { DPR } from './dpr';
 import { paintDgChest, paintDgDecor, paintDgFloor, paintDgWall, paintStairs, themeAccent, themeFog, type DgThemeId } from './dungeonArt';
@@ -460,6 +461,7 @@ export class DungeonScene extends Phaser.Scene {
     if (prev && lh && prev.floor === lh.floor && prev.idx === lh.idx && run.idx > prev.idx) {
       const spr = this.mobs.get(lh.idx);
       const m = MONSTERS[this.F!.stops[lh.idx]?.monster ?? ''];
+      if (lh.mine) recordHit(ME, '', 0, lh.dmg);
       if (spr && m && lh.mine) this.deathDelay.set(lh.idx, this.strike(spr, m, lh.dmg, !!lh.crit, 0));
       return;
     }
@@ -468,7 +470,10 @@ export class DungeonScene extends Phaser.Scene {
     const m = MONSTERS[this.F!.stops[run.idx]?.monster ?? ''];
     if (!spr || !m) return;
     const look = spr.getData('look') as string;
-    if ((c.pSwings ?? 0) > prev.p) this.strike(spr, m, c.pDmg ?? -1, !!c.pCrit, c.pLeech ?? 0);
+    if ((c.pSwings ?? 0) > prev.p) {
+      recordHit(ME, '', 0, Math.max(0, c.pDmg ?? 0) + (c.pDmg2 ?? 0));
+      this.strike(spr, m, c.pDmg ?? -1, !!c.pCrit, c.pLeech ?? 0);
+    }
     if ((c.mSwings ?? 0) > prev.m) {
       if (this.anims.exists(`mon-${look}-attack`)) {
         spr.play(`mon-${look}-attack`, true);
@@ -577,6 +582,7 @@ export class DungeonScene extends Phaser.Scene {
     if (!spr?.active) return;
     const i = Math.max(0, run.members?.findIndex((m) => m.id === id) ?? 0);
     const name = run.members?.[i]?.name ?? '';
+    recordHit(id, name, i, dmg);
     const color = MATE_COLORS[i % MATE_COLORS.length];
     this.popText(spr.x - 12, spr.y - 14, crit ? tl`${name} 暴击 ${dmg}!` : `${name} ${dmg}`, color, crit ? 9 : 7);
   }

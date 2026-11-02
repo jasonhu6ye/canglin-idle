@@ -1254,3 +1254,8 @@ button.chat-who { cursor: pointer; text-decoration: underline dotted; text-under
 .gm-count { margin: 4px 0 8px; font-weight: bold; }
 .gm-online { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #7ad860; box-shadow: 0 0 4px #7ad860; margin-right: 6px; vertical-align: middle; }
 .gm-players .gm-copy { margin-left: 8px; padding: 0 8px; font-size: 12px; } .gm-players li > small { display: block; }
+/* 日志 DPS 页（11-02） */
+.dps-list li.dps-row { position: relative; display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px; padding: 3px 6px; overflow: hidden; }
+.dps-row .dps-bar { position: absolute; left: 0; top: 0; bottom: 0; opacity: 0.18; border-radius: 2px; pointer-events: none; }
+.dps-row .dps-name { position: relative; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: bold; }
+.dps-row b, .dps-row small { position: relative; }
