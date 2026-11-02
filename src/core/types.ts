@@ -302,8 +302,9 @@ export interface Settings {
   farmSeed?: Record<string, string>;
   /** 种田：哪些田开了自动补种（熟了自动收、再种同一种，离线也照样） */
   autoFarm?: Record<string, boolean>;
-  /** 精炼石（11-02）：制作装备时自动加一颗同阶精炼石（有的话），提高优秀、史诗概率 */
-  fineCraft?: boolean;
+  /** 精炼石（11-02）：勾了的配方（动作 id），做的时候每件自动加一颗同阶精炼石（有的话），提高优秀、史诗概率。
+   *  按配方分开记，免得在剑那里勾了，排队做几百把镐子也把石头用掉 */
+  fineCraft?: Record<string, true>;
   /** 种田：每块田种下时施哪种肥料（fert_basic / fert_rich），不选就不施 */
   farmFert?: Record<string, string>;
 }

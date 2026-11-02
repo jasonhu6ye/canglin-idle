@@ -440,7 +440,8 @@ function seeded(seed: number) {
 /** 组队时宝箱品质按洞口算，全队一样 */
 export const teamChestQuality = (gate: DungeonGate) => rollChestQuality(gate.kind, gate.floors, seeded(gate.seed ^ 0x5bd1e995)());
 
-const rolled = (id: string) => !!ITEMS[id]?.equip || id.startsWith('dkey_') || id.startsWith('enhstone_');
+// 装备、钥匙、强化石和稀有材料（幽魂精魄、冥火灯芯、精炼石）每件单独掷点，掷到的人不再拿保底
+const rolled = (id: string) => !!ITEMS[id]?.equip || /^(dkey_|enhstone_|wraith_|wick_|finecraft_)/.test(id);
 
 export function teamChest(gate: DungeonGate, q: number, members: TeamMember[]) {
   const ids = members.map((m) => m.id);

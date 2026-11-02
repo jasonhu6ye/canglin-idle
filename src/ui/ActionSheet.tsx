@@ -223,15 +223,16 @@ function Recipe({ s, a }: { s: GameState; a: SkillAction }) {
       {a.outputs.map((st) => {
         // 精炼石（11-02）：打开开关、背包或仓库里有同阶的，每做一件自动加一颗
         const fm = fineMatOf(st.item);
-        const on = !!s.settings.fineCraft && !!fm && have(fm) > 0;
+        const ticked = !!s.settings.fineCraft?.[a.id];
+        const on = ticked && !!fm && have(fm) > 0;
         return (
           <span key={`q${st.item}`} className="q-fine">
             <QualityOdds item={st.item} fine={on} />
             {fm && (
               <label className="fine-toggle">
-                <input type="checkbox" checked={!!s.settings.fineCraft} onChange={(e) => store.run('settings', { fineCraft: e.target.checked })} />
+                <input type="checkbox" checked={ticked} onChange={(e) => { const next = { ...s.settings.fineCraft }; if (e.target.checked) next[a.id] = true; else delete next[a.id]; store.run('settings', { fineCraft: next }); }} />
                 <Icon item={fm} size={18} />
-                <small>{tl`加${ITEMS[fm].name.replace(/^T\d+ /, '')}（每件一颗，有 ${fmtNum(have(fm))} 颗）`}{s.settings.fineCraft && !have(fm) && <i className="warn">{tl(' 没有了，按普通概率做')}</i>}</small>
+                <small>{tl`加${ITEMS[fm].name.replace(/^T\d+ /, '')}（每件一颗，有 ${fmtNum(have(fm))} 颗）`}{ticked && !have(fm) && <i className="warn">{tl(' 没有了，按普通概率做')}</i>}</small>
               </label>
             )}
           </span>

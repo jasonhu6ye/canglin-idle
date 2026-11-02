@@ -1051,7 +1051,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
           const it = ITEMS[o.item];
           if (it?.equip && !it.equip.move && it.equip.slot !== 'pack') for (let k = 0; k < o.qty; k++) {
             // 精炼石（11-02）：打开了「加精炼石」又有同阶的，每做一件用掉一颗，优秀、史诗概率 ×2.5
-            const fm = s.settings.fineCraft ? fineMatOf(o.item) : undefined;
+            const fm = s.settings.fineCraft?.[a.id] ? fineMatOf(o.item) : undefined;
             const fine = !!fm && haveItem(fm) >= 1;
             if (fine) useItem(fm!, 1);
             addLoot(qid(o.item, rollQuality(it.tier, rand(), fine)), 1);

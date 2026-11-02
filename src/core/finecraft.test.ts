@@ -59,7 +59,7 @@ describe('精炼石（11-02）', () => {
       for (const k of Object.keys(s.xp) as (keyof typeof s.xp)[]) s.xp[k] = XP_TABLE[30];
       for (const i of act.inputs ?? []) s.bank[i.item] = 5000;
       s.bank.finecraft_1 = stones;
-      s.settings.fineCraft = fine;
+      s.settings.fineCraft = fine ? { [act.id]: true } : {};
       s = startNow(s, act.id, { type: 'count', count: 400 });
       s.loc = standOf(nodeOfAction(act.id)!);
       s.queue[0].stocked = true;
@@ -77,5 +77,18 @@ describe('精炼石（11-02）', () => {
     expect(on.good).toBeGreaterThan(off.good * 1.8);
     expect(none.good).toBeLessThan(on.good);
     expect(rollQuality(0, 0.999, true)).toBe(0);
+  });
+});
+
+describe('设置指令洗参数（11-02 复查）', () => {
+  it('乱传的值不会写进存档', async () => {
+    const { COMMANDS } = await import('./commands');
+    const s0 = newGame(T0, 1);
+    const s = (COMMANDS as any).settings(s0, T0, { eatThreshold: 'x', carryFood: 1e12, fineCraft: { nope: true, smith_wood_sword: true, cook_meat_1: true }, autoFarm: 5, hack: 1 });
+    expect(s.settings.eatThreshold).toBe(0);
+    expect(s.settings.carryFood).toBe(100000);
+    expect(s.settings.fineCraft).toEqual({ smith_wood_sword: true });
+    expect(s.settings.autoFarm).toEqual({});
+    expect((s.settings as any).hack).toBeUndefined();
   });
 });

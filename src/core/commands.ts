@@ -1,5 +1,5 @@
 import type { BeltSlot, DungeonGate, EquipSlot, GameState, Summary, TaskMode } from './types';
-import { ACTIONS, ITEMS, MONSTERS, NODES, jumpNode, keyOf, nodesOfAction, standOf } from './data';
+import { ACTIONS, fineMatOf, ITEMS, MONSTERS, NODES, jumpNode, keyOf, nodesOfAction, standOf } from './data';
 import {
   bagRoomFor, bagSlots, beltSlotOf, buyGoods, buyHwSkin, buyKey, buyPumpkinMount, buySeed, cancelRealmChest, collectHorse, combineShards,
   depositLoot, dismissStop, markContrib, syncDungeon, eat, enqueue, enterDungeon, equip, finishRealmChest, fromBelt, leaveDungeon, leaveWork, openContainer,
@@ -168,6 +168,29 @@ const settings = (x: unknown) => {
   const p = (x ?? {}) as Record<string, unknown>;
   const out: Record<string, unknown> = {};
   for (const k of SETTING_KEYS) if (k in p) out[k] = p[k];
+  // 11-02 复查：数值和开关洗一遍，免得乱传 NaN、超大数、对象把存档弄坏
+  if ('eatThreshold' in out) out.eatThreshold = num(out.eatThreshold, 0, 1);
+  if ('carryFood' in out) out.carryFood = int(out.carryFood, -1, 100000);
+  if ('carryPotion' in out) out.carryPotion = out.carryPotion !== false;
+  if ('skin' in out) { if (typeof out.skin === 'string') out.skin = str(out.skin, 40); else delete out.skin; }
+  for (const k of ['farmSeed', 'farmFert'] as const) if (k in out) {
+    const o = (out[k] && typeof out[k] === 'object' ? out[k] : {}) as Record<string, unknown>;
+    out[k] = Object.fromEntries(Object.entries(o).slice(0, 50).filter(([, v]) => typeof v === 'string').map(([a, v]) => [str(a, 40), str(v, 40)]));
+  }
+  if ('autoFarm' in out) {
+    const o = (out.autoFarm && typeof out.autoFarm === 'object' ? out.autoFarm : {}) as Record<string, unknown>;
+    out.autoFarm = Object.fromEntries(Object.entries(o).slice(0, 50).map(([a, v]) => [str(a, 40), v === true]));
+  }
+  // 精炼石开关：只留真的会做出装备的配方，最多 300 个
+  if ('fineCraft' in out) {
+    const fc: Record<string, true> = {};
+    const src = (out.fineCraft ?? {}) as Record<string, unknown>;
+    if (typeof src === 'object') for (const [a, v] of Object.entries(src).slice(0, 300)) {
+      const act = own(ACTIONS, a) ? ACTIONS[a] : undefined;
+      if (v === true && act?.kind === 'skill' && act.outputs.some((o) => fineMatOf(o.item))) fc[a] = true;
+    }
+    out.fineCraft = fc;
+  }
   return out as Partial<GameState['settings']>;
 };
 
