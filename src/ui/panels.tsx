@@ -3,11 +3,11 @@ import { UI_SCALES, useUiScale } from './uiScale';
 import { gfxLevel, gfxPref, onGfx, setGfxPref, type GfxPref } from '../game/gfx';
 import { qClass } from '../core/quality';
 import { useSticky } from './sticky';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { standOf, ACTIONS, BUFF_NAME, buffText, cropsOfField, nodesOfAction, WAYSTONES, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, keyOf, SCROLL_TOWN, SHARD_PER_STONE, type MapNode } from '../core/data';
 import {
   atBank, atMarket, nearestBank, nearestMarket, bagSlots, BELT_CAP, beltSlotOf, POTION_AT, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, level, playerBonuses, armorPerks, chainChance, frostChance, guardChance, slotSpeed, weaponStyle, walkPos, buffPct, levelSpeed, maxHp, moveSpeed, playerAttackMs,
-  sortBank, toolSkillNames, TOOL_FOR, playerHaste, combineShards, gearSum, builtinCode,
+  sortBank, toolSkillNames, TOOL_FOR, playerHaste, combineShards, gearSum, builtinCode, monsterYield,
 } from '../core/sim';
 import { USE_KEY } from '../game/MapScene';
 import { TownScrollPicker } from './Dungeon';
@@ -1070,17 +1070,37 @@ export function NodeList({ s, onPick }: { s: GameState; onPick: (id: string) => 
 }
 
 /** 怪物快捷寻路（用户 10-26：想刷某种怪不用开地图慢慢找）：搜名字、按等级或距离排，点一下打开那里的任务页，「寻路」直接走过去 */
+/** 推荐排序（用户 11-02）：按自己的装备、等级、增益预估每小时击杀、经验、收益 */
+type MonSort = 'lv' | 'near' | 'kph' | 'xp' | 'coins';
+const REC_SORTS: { id: MonSort; name: string }[] = [
+  { id: 'xp', name: tl('经验/时') }, { id: 'coins', name: tl('收益/时') }, { id: 'kph', name: tl('击杀/时') },
+];
+const short = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1e4 ? `${(n / 1e3).toFixed(n >= 1e5 ? 0 : 1)}k` : fmtNum(Math.round(n)));
+
 function MonsterFinder({ s, onPick }: { s: GameState; onPick: (action: string, nodeId: string) => void }) {
   const [q, setQ] = useState('');
   const [rank, setRank] = useSticky<'all' | 'normal' | 'elite' | 'boss'>('nodes.monRank', 'all');
-  const [sort, setSort] = useSticky<'lv' | 'near'>('nodes.monSort', 'lv');
+  const [sort, setSort] = useSticky<MonSort>('nodes.monSort', 'lv');
   const [fit, setFit] = useSticky('nodes.monFit', false);
   const cl = combatLevel(s);
   const key = q.trim().toLowerCase();
+  const rec = sort === 'kph' || sort === 'xp' || sort === 'coins';
+  // 预估只跟装备、等级、增益有关：这几样变了才重算（走路时不用每帧算一遍）
+  const sig = JSON.stringify([s.equipment, s.xp.melee, s.xp.ranged, s.xp.magic, s.xp.defence, s.xp.hitpoints, s.buffs, s.gmBuffs?.length, Math.floor(Date.now() / 60_000)]);
+  const est = useMemo(() => new Map(ALL_MONSTERS.filter((m) => !m.world && !m.event).map((m) => [m.id, monsterYield(s, m)])), [sig]); // eslint-disable-line react-hooks/exhaustive-deps
   let list = ALL_MONSTERS.filter((m) => (rank === 'all' || m.rank === rank) && (!key || m.name.toLowerCase().includes(key) || REGIONS[m.region].name.includes(key))
-    && (!fit || Math.abs(m.level - cl) <= 10)).map((m) => ({ m, near: nearestNode(s, nodesOfAction(`fight_${m.id}`).filter((n) => !n.closed))! }));
+    && (!fit || Math.abs(m.level - cl) <= 10) && (!rec || est.get(m.id)?.safe)).map((m) => ({ m, y: est.get(m.id), near: nearestNode(s, nodesOfAction(`fight_${m.id}`).filter((n) => !n.closed))! }));
   if (sort === 'near') list = list.sort((a, b) => a.near.route.ms - b.near.route.ms);
+  else if (rec) {
+    const v = (y?: ReturnType<typeof monsterYield>) => (!y ? 0 : sort === 'xp' ? y.xp : sort === 'coins' ? y.coins : y.kph);
+    list = list.sort((a, b) => v(b.y) - v(a.y));
+  }
   const shown = list.slice(0, 120);
+  // 三项各自最好的（只在安全的里面挑）
+  const safe = [...est.entries()].filter(([, y]) => y.safe);
+  const best = (f: (y: ReturnType<typeof monsterYield>) => number) => safe.reduce<[string, number] | null>((b, [id, y]) => (!b || f(y) > b[1] ? [id, f(y)] : b), null)?.[0];
+  const top = { xp: best((y) => y.xp), coins: best((y) => y.coins), kph: best((y) => y.kph) };
+  const tag = (id: string) => [top.xp === id && tl('经验最高'), top.coins === id && tl('收益最高'), top.kph === id && tl('击杀最快')].filter(Boolean).join(' · ');
   return (
     <div className="mon-finder">
       <div className="mon-filter">
@@ -1091,17 +1111,37 @@ function MonsterFinder({ s, onPick }: { s: GameState; onPick: (action: string, n
           <option value="elite">{tl('精英')}</option>
           <option value="boss">{tl('首领')}</option>
         </select>
-        <button className={`pill ${sort === 'near' ? 'on' : ''}`} onClick={() => setSort(sort === 'near' ? 'lv' : 'near')}>{sort === 'near' ? tl('按距离') : tl('按等级')}</button>
         <button className={`pill ${fit ? 'on' : ''}`} onClick={() => setFit(!fit)}>{tl`适合我（${cl}±10 级）`}</button>
       </div>
-      <p className="muted">{tl`共 ${list.length} 种。点一下打开那里的战斗页，点「寻路」直接走过去（远路自动用已激活的石碑）。`}</p>
+      <div className="mon-filter">
+        <small className="muted">{tl('排序')}</small>
+        <button className={`pill ${sort === 'lv' ? 'on' : ''}`} onClick={() => setSort('lv')}>{tl('等级')}</button>
+        <button className={`pill ${sort === 'near' ? 'on' : ''}`} onClick={() => setSort('near')}>{tl('距离')}</button>
+        {REC_SORTS.map((x) => <button key={x.id} className={`pill rec ${sort === x.id ? 'on' : ''}`} onClick={() => setSort(x.id)}>{x.name}</button>)}
+      </div>
+      {rec
+        ? <p className="muted">{tl('按你现在的装备、战斗等级和增益预估（单人、不算走路和回仓库）。一只打下来要掉八成血以上的有阵亡风险，不放进推荐。')}</p>
+        : <p className="muted">{tl`共 ${list.length} 种。点一下打开那里的战斗页，点「寻路」直接走过去（远路自动用已激活的石碑）。`}</p>}
       <ul className="mon-rows">
-        {shown.map(({ m, near }) => (
+        {shown.map(({ m, y, near }) => (
           <li key={m.id}>
             <button className="mon-main" onClick={() => onPick(`fight_${m.id}`, near.node.id)}>
               <MonsterIcon m={m} size={30} />
               <span className="mon-text">
                 <span className="row1"><b>{m.name}</b><small className={`rank-${m.rank}`}>{tl`Lv${m.level}`}{m.world ? tl(' 世界首领') : m.rank === 'boss' ? tl(' 首领') : m.rank === 'elite' ? tl(' 精英') : ''}</small></span>
+                {y && y.kph > 0 && (
+                  <small className={`mon-yield ${sort}`}>
+                    <span className="k">{tl`${short(y.kph)} 只/时`}</span> · <span className="x">{tl`经验 ${short(y.xp)}/时`}</span> · <span className="c">{tl`收益 ${short(y.coins)}/时`}</span>
+                  </small>
+                )}
+                {y && (
+                  <small className="muted">
+                    {y.kph > 0 ? y.rating : tl('打不动')}
+                    {y.kph > 0 && (y.foodHp > 0 ? tl` · 要补 ${short(y.foodHp)} 血/时` : tl(' · 不用吃东西'))}
+                    {!y.safe && y.kph > 0 && <b className="warn">{tl(' · 有阵亡风险')}</b>}
+                  </small>
+                )}
+                {tag(m.id) && <small className="mon-best">{tag(m.id)}</small>}
                 <small className="muted">{tl`${near.node.name}（${REGIONS[near.node.region].name}）离你最近`}{s.bestiary?.[m.id] ? tl` · 已击败 ${fmtNum(s.bestiary[m.id])}` : ''}</small>
                 <small className="eta">{etaText(near.route)}</small>
               </span>
