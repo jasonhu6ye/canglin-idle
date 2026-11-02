@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { GM_KINDS, GM_KIND_NAME, GM_PCT_MAX } from '../core/gm';
 import type { GmKind } from '../core/types';
-import { online, type AiPlayer, type CheatRow, type AltRow, type GmPlayer, type GmTrade, type Snapshot, type GmInput, type GmMailRow, type GmRow } from '../net';
+import { online, type AiPlayer, type CheatRow, type AltRow, type RedeemCodeRow, type EconRow, type GmPlayer, type GmTrade, type Snapshot, type GmInput, type GmMailRow, type GmRow } from '../net';
 import { aiPlayers, botDoing, botsMuted, setBotsMuted, botName, botOnline, botPresence, botProfile, habitOf, refreshBots, zoneOf } from '../net/bots';
 import { actionName } from './format';
 import { emitToGame } from './GameCanvas';
@@ -45,7 +45,7 @@ const left = (ms: number) => {
 };
 
 export function GmPanel({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<'buff' | 'mail' | 'gear' | 'ai' | 'players' | 'ac' | 'trade' | 'snap'>('buff');
+  const [tab, setTab] = useState<'buff' | 'mail' | 'gear' | 'code' | 'econ' | 'ai' | 'players' | 'ac' | 'trade' | 'snap'>('buff');
   return (
     <div className="page guild gm-panel">
       <div className="sheet-head">
@@ -57,13 +57,15 @@ export function GmPanel({ onClose }: { onClose: () => void }) {
         <button className={`pill ${tab === 'buff' ? 'on' : ''}`} onClick={() => setTab('buff')}>{tl('增益')}</button>
         <button className={`pill ${tab === 'mail' ? 'on' : ''}`} onClick={() => setTab('mail')}>{tl('赠送物品')}</button>
         <button className={`pill ${tab === 'gear' ? 'on' : ''}`} onClick={() => setTab('gear')}>{tl('赠送装备')}</button>
+        <button className={`pill ${tab === 'code' ? 'on' : ''}`} onClick={() => setTab('code')}>{tl('兑换码')}</button>
         <button className={`pill ${tab === 'ai' ? 'on' : ''}`} onClick={() => setTab('ai')}>{tl('AI 玩家')}</button>
         <button className={`pill ${tab === 'players' ? 'on' : ''}`} onClick={() => setTab('players')}>{tl('玩家')}</button>
         <button className={`pill ${tab === 'ac' ? 'on' : ''}`} onClick={() => setTab('ac')}>{tl('防作弊')}</button>
+        <button className={`pill ${tab === 'econ' ? 'on' : ''}`} onClick={() => setTab('econ')}>{tl('经济')}</button>
         <button className={`pill ${tab === 'trade' ? 'on' : ''}`} onClick={() => setTab('trade')}>{tl('交易记录')}</button>
         <button className={`pill ${tab === 'snap' ? 'on' : ''}`} onClick={() => setTab('snap')}>{tl('服务器存档')}</button>
       </div>
-      {tab === 'buff' ? <BuffTab /> : tab === 'ai' ? <AiTab onClose={onClose} /> : tab === 'ac' ? <AcTab /> : tab === 'players' ? <PlayersTab /> : tab === 'trade' ? <TradeTab /> : tab === 'snap' ? <SnapTab /> : <MailTab key={tab} gear={tab === 'gear'} />}
+      {tab === 'buff' ? <BuffTab /> : tab === 'ai' ? <AiTab onClose={onClose} /> : tab === 'ac' ? <AcTab /> : tab === 'players' ? <PlayersTab /> : tab === 'trade' ? <TradeTab /> : tab === 'econ' ? <EconTab /> : tab === 'snap' ? <SnapTab /> : <MailTab key={tab} gear={tab === 'gear'} code={tab === 'code'} />}
     </div>
   );
 }
@@ -212,8 +214,12 @@ const hasQuality = (base: string) => !!ITEMS[qid(base, 1)];
 const MAX_ATTACH = 10;
 
 /** 赠送物品（10-26）：给指定 UID 发一封带附件的邮件，标题正文自定义；gear = 赠送装备页，可选任意品质 */
-function MailTab({ gear }: { gear: boolean }) {
+function MailTab({ gear, code }: { gear: boolean; code?: boolean }) {
   const [rows, setRows] = useState<GmMailRow[] | null>(null);
+  const [codes, setCodes] = useState<RedeemCodeRow[] | null>(null);
+  const [codeText, setCodeText] = useState('');
+  const [days, setDays] = useState('0');
+  const [maxUses, setMaxUses] = useState('0');
   const [pid, setPid] = useState('');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -225,7 +231,8 @@ function MailTab({ gear }: { gear: boolean }) {
 
   const load = async () => {
     try {
-      setRows(await online.gmMailList());
+      if (code) setCodes(await online.gmCodeList());
+      else setRows(await online.gmMailList());
     } catch (e) {
       setMsg({ text: (e as Error).message, ok: false });
       setRows([]);
@@ -268,6 +275,7 @@ function MailTab({ gear }: { gear: boolean }) {
 
   const n = Number(pid);
   const bad =
+    code ? (!codeText.trim() ? tl('填兑换码') : !title.trim() ? tl('写个邮件标题') : !items.length ? tl('至少放一种物品') : items.some((i) => !(i.qty > 0)) ? tl('数量要大于 0') : null) :
     !(Number.isInteger(n) && n > 0) ? tl('填玩家的数字 UID') :
     !title.trim() ? tl('写个邮件标题') :
     !items.length ? tl('至少放一种物品') :
@@ -275,6 +283,13 @@ function MailTab({ gear }: { gear: boolean }) {
 
   const send = () => {
     if (bad) return;
+    if (code) {
+      const d = Number(days) || 0;
+      return void run(async () => {
+        await online.gmCodeSave({ code: codeText.trim(), title: title.trim(), body: body.trim(), items, maxUses: Math.floor(Number(maxUses) || 0), uses: 0, expiresAt: d > 0 ? Date.now() + d * 86400000 : null });
+        setItems([]); setTitle(''); setBody(''); setCodeText('');
+      }, tl('兑换码已保存'));
+    }
     void run(async () => {
       await online.gmMailSend({ targetPid: n, title: title.trim(), body: body.trim(), items });
       setItems([]);
@@ -285,11 +300,19 @@ function MailTab({ gear }: { gear: boolean }) {
 
   return (
     <>
-      {gear
+      {code
+        ? <h3>{tl('兑换码')} <small className="muted">{tl('玩家在「更多」页输入兑换码，奖励发到邮箱。每个账号每个码只能领一次；兑换码只存在服务器上，网页代码里看不到')}</small></h3>
+        : gear
         ? <h3>{tl('赠送装备')} <small className="muted">{tl('武器、护甲、饰品、工具都能送，品质任选，通过邮件发给指定玩家')}</small></h3>
         : <h3>{tl('赠送物品')} <small className="muted">{tl('通过邮件发给指定玩家，装备在「赠送装备」里送')}</small></h3>}
       <div className="gm-form frame">
-        <label><span>{tl('玩家')}</span><input inputMode="numeric" placeholder={tl('玩家 UID，如 10000002')} value={pid} onChange={(e) => { setPid(e.target.value.replace(/\D/g, '')); setMsg(null); }} /></label>
+        {code ? (
+          <>
+            <label><span>{tl('兑换码')}</span><input maxLength={32} placeholder={tl('如：周年快乐2026')} value={codeText} onChange={(e) => { setCodeText(e.target.value); setMsg(null); }} /></label>
+            <label><span>{tl('有效天数')}</span><input inputMode="numeric" placeholder={tl('0 = 永久')} value={days} onChange={(e) => setDays(e.target.value.replace(/[^\d.]/g, ''))} /></label>
+            <label><span>{tl('总次数')}</span><input inputMode="numeric" placeholder={tl('0 = 不限')} value={maxUses} onChange={(e) => setMaxUses(e.target.value.replace(/\D/g, ''))} /></label>
+          </>
+        ) : <label><span>{tl('玩家')}</span><input inputMode="numeric" placeholder={tl('玩家 UID，如 10000002')} value={pid} onChange={(e) => { setPid(e.target.value.replace(/\D/g, '')); setMsg(null); }} /></label>}
         <label><span>{tl('标题')}</span><input maxLength={30} placeholder={tl('如：活动补偿')} value={title} onChange={(e) => { setTitle(e.target.value); setMsg(null); }} /></label>
         <label className="gm-body"><span>{tl('正文')}</span><textarea maxLength={500} rows={4} placeholder={tl('邮件内容（可不写）')} value={body} onChange={(e) => setBody(e.target.value)} /></label>
         {gear && (
@@ -330,11 +353,36 @@ function MailTab({ gear }: { gear: boolean }) {
           </ul>
         )}
         <div className="gm-actions">
-          <button className="primary" disabled={!!bad || busy} onClick={send}>{tl('发送邮件')}</button>
+          <button className="primary" disabled={!!bad || busy} onClick={send}>{code ? tl('保存兑换码') : tl('发送邮件')}</button>
         </div>
-        {(bad && (pid || title || items.length)) || msg ? <p className={msg?.ok ? 'good' : 'warn'}>{msg?.text ?? bad}</p> : null}
+        {(bad && (pid || codeText || title || items.length)) || msg ? <p className={msg?.ok ? 'good' : 'warn'}>{msg?.text ?? bad}</p> : null}
       </div>
 
+      {code ? (
+        <>
+          <h3>{tl('已有的兑换码')}</h3>
+          {codes === null && <p className="muted">{tl('读取中…')}</p>}
+          {codes?.length === 0 && <p className="muted">{tl('还没有建过')}</p>}
+          <ul className="gm-list">
+            {codes?.map((c) => {
+              const over = (c.expiresAt != null && c.expiresAt < Date.now()) || (c.maxUses > 0 && c.uses >= c.maxUses);
+              return (
+                <li key={c.code} className={`frame ${over ? 'off' : 'on'}`}>
+                  <div><b>{c.code}</b> <small className="muted">{c.title}</small></div>
+                  <small className="muted">
+                    {c.maxUses > 0 ? tl`已领 ${c.uses} / ${c.maxUses} 次` : tl`已领 ${c.uses} 次`}{' · '}
+                    {c.expiresAt ? tl`${new Date(c.expiresAt).toLocaleString()} 过期` : tl('永久有效')}
+                  </small>
+                  <small>{c.items.map((i) => `${ITEMS[i.item]?.name ?? i.item} ×${fmtNum(i.qty)}`).join(tl('、'))}</small>
+                  <div className="gm-row-tools">
+                    <button className="pill warn" disabled={busy} onClick={() => confirm(tl`删除兑换码 ${c.code}？删除后没领的人就领不到了`) && run(() => online.gmCodeDelete(c.code), tl('已删除'))}>{tl('删除')}</button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      ) : <>
       <h3>{tl('已发送 ')}<small className="muted">{tl('对方上线后一分钟内收到')}</small></h3>
       {!!rows?.some((r) => r.claimedAt) && (
         <div className="gm-row-tools">
@@ -364,6 +412,7 @@ function MailTab({ gear }: { gear: boolean }) {
           </li>
         ))}
       </ul>
+      </>}
     </>
   );
 }
@@ -489,10 +538,10 @@ const AC_KIND: Record<string, string> = {
   items: tl('物品总价值涨得太快'), bad_item: tl('存档里有不存在或数量不对的物品'), rollback: tl('存档时间倒退（回档）'),
   trade: tl('交易价值严重不对等'), trade_fake: tl('交易给出的东西比存档里还多'), spam: tl('世界频道刷屏'), multi: tl('同一台设备登录多个账号'),
   move: tl('报的位置对不上（瞬移，服务器已拒绝）'), walk_fast: tl('走路速度被改过'), fake_gate: tl('伪造副本洞口'),
-  fake_hits: tl('伪造队友伤害'), bad_cmd: tl('发了不存在的操作'), backdate: tl('操作时间往前填（补领奖励）'), banned_play: tl('封禁后还在操作'), alt_trade: tl('和关联账号交易'), alt_bank: tl('从公会仓库取关联账号存的东西'),
+  fake_hits: tl('伪造队友伤害'), bad_cmd: tl('发了不存在的操作'), backdate: tl('操作时间往前填（补领奖励）'), banned_play: tl('封禁后还在操作'), alt_trade: tl('和关联账号交易'), alt_bank: tl('从公会仓库取关联账号存的东西'), multi_new: tl('同一个网络一天内注册了好几个新号'), chat_word: tl('聊天里有敏感词（已替换成 *）'), rank_jump: tl('一天经验涨得远超其他人'),
   auto_rollback: tl('已自动回档'), auto_wipe: tl('已自动删档封号'),
 };
-const AC_DEFAULT = { xp_per_hour: 6000000, coins_per_hour: 50000000, value_per_hour: 50000000, trade_gap: 3000000, chat_per_min: 8, multi_accounts: 3, drift_min: 30, snap_keep_auto: 3, auto_hide: 1, auto_punish: 1, wipe_strikes: 3, trade_new_hours: 24, trade_day_value: 0, lock_hidden: 1, punish_trade_days: 7, same_dev_trade: 1, same_ip_trade: 0, link_days: 30 };
+const AC_DEFAULT = { xp_per_hour: 6000000, coins_per_hour: 50000000, value_per_hour: 50000000, trade_gap: 3000000, chat_per_min: 8, multi_accounts: 3, drift_min: 30, snap_keep_auto: 3, auto_hide: 1, auto_punish: 1, wipe_strikes: 3, trade_new_hours: 24, trade_day_value: 0, lock_hidden: 1, punish_trade_days: 7, same_dev_trade: 1, same_ip_trade: 0, link_days: 30, new_per_net: 4, rank_jump: 3, rank_jump_min: 20000000 };
 const AC_FIELDS: [keyof typeof AC_DEFAULT, string][] = [
   ['xp_per_hour', tl('每小时经验上限')], ['coins_per_hour', tl('每小时金币上限')], ['value_per_hour', tl('每小时物品价值上限')],
   ['trade_gap', tl('交易价值差多少算不对等')], ['chat_per_min', tl('世界频道每分钟最多几句')], ['multi_accounts', tl('一台设备几个账号算多开')],
@@ -500,7 +549,8 @@ const AC_FIELDS: [keyof typeof AC_DEFAULT, string][] = [
   ['auto_punish', tl('明显作弊自动回档（1 开 / 0 关）')], ['wipe_strikes', tl('30 天内第几次自动删档封号')],
   ['trade_new_hours', tl('新账号几小时后才能交易（0 不限）')], ['trade_day_value', tl('每天交易最多收到多少价值（0 不限）')],
   ['lock_hidden', tl('移出排行榜的不能交易和用公会仓库（1 开 / 0 关）')], ['punish_trade_days', tl('自动回档后限制交易几天')],
-  ['same_dev_trade', tl('同设备的账号不能互相交易（1 开 / 0 关）')], ['same_ip_trade', tl('同网络的账号不能互相交易（1 开 / 0 只记录）')], ['link_days', tl('多少天内用过同设备 / 网络算关联')],
+  ['same_dev_trade', tl('同设备的账号不能互相交易（1 开 / 0 关）')], ['same_ip_trade', tl('同网络的账号不能互相交易（1 开 / 0 只记录）')], ['link_days', tl('多少天内用过同设备 / 网络算关联')], ['new_per_net', tl('同网络一天几个新号算批量注册')],
+  ['rank_jump', tl('一天经验比第二名多几倍算异常')], ['rank_jump_min', tl('一天至少涨多少经验才算异常')],
 ];
 function acDetail(d: Record<string, unknown>) {
   const n = (k: string) => fmtNum(Number(d[k] ?? 0));
@@ -514,6 +564,9 @@ function acDetail(d: Record<string, unknown>) {
   if ('with' in d) return d.by === 'dev' ? tl`对方 ${String(d.with)}（#${String(d.with_pid)}），同一台设备` : tl`对方 ${String(d.with)}（#${String(d.with_pid)}），同一个网络`;
   if ('got' in d) return tl`从 ${String(d.from)} 收到价值 ${n('got')}，只给出 ${n('gave')}`;
   if ('per_min' in d) return tl`一分钟 ${n('per_min')} 句`;
+  if ('day_xp' in d) return tl`一天涨了 ${n('day_xp')} 经验，第二名 ${n('second_xp')}`;
+  if (typeof d.text === 'string') return tl`原话：${d.text}`;
+  if ('new_accounts' in d) return tl`这个网络一天内有 ${n('new_accounts')} 个新号`;
   if ('accounts' in d) return tl`这台设备登录过 ${n('accounts')} 个账号`;
   if (Array.isArray(d.items)) return (d.items as { id: string; n?: unknown; gave?: unknown; had?: unknown }[]).map((x) => 'gave' in x ? tl`${itemLabel(x.id)} 给出 ${fmtNum(Number(x.gave))}，存档里 ${fmtNum(Number(x.had))}` : `${itemLabel(x.id)} × ${String(x.n)}`).join(tl('；'));
   return Object.keys(d).length ? JSON.stringify(d) : '';
@@ -639,6 +692,7 @@ function AcTab() {
         <label><span>{tl('多少小时')}</span><input inputMode="numeric" value={lim.hours} onChange={(e) => setLim({ ...lim, hours: e.target.value.replace(/[^\d.]/g, '') })} /></label>
         <div className="gm-actions"><button className="primary" disabled={busy} onClick={submitLim}>{tl('确定')}</button></div>
       </div>
+      <ChatWords />
       <h3>{tl('检查阈值')}</h3>
       <div className="gm-form gm-ac-form frame">
         {AC_FIELDS.map(([k, name]) => (
@@ -646,6 +700,63 @@ function AcTab() {
         ))}
         <p className="muted">{tl('默认值按满级角色最快的经验和金币速度留了几倍余量；GM 经验增益期间自动按比例放宽，GM 邮件送的金币不算。超过上限 3 倍（金币 5 倍）算严重。')}</p>
         <div className="gm-actions"><button className="primary" disabled={busy} onClick={saveConf}>{tl('保存')}</button></div>
+      </div>
+    </>
+  );
+}
+
+/** 每日经济报表（11-02）：全服金币、物品价值、经验每天的变化，GM 发了多少、交易了多少，一天涨得最多的人 */
+function EconTab() {
+  const [r, setR] = useState<{ now: EconRow; days: EconRow[] } | null>(null);
+  const [err, setErr] = useState('');
+  useEffect(() => { online.gmEconomy().then(setR, (e) => setErr((e as Error).message)); }, []);
+  if (err) return <p className="warn">{err}</p>;
+  if (!r) return <p className="muted">{tl('读取中…')}</p>;
+  const rows = [{ ...r.now, day: tl('现在') }, ...r.days];
+  const diff = (i: number, k: 'coins' | 'item_value' | 'xp') => {
+    const a = Number(rows[i][k]), b = rows[i + 1] ? Number(rows[i + 1][k]) : NaN;
+    if (!Number.isFinite(b)) return '';
+    const d = a - b;
+    return ` (${d >= 0 ? '+' : ''}${fmtNum(Math.round(d))})`;
+  };
+  return (
+    <>
+      <h3>{tl('每日经济')} <small className="muted">{tl('每天第一次有人上线时记一行；括号里是比前一天多了多少。哪天突然多出一大笔，就去看那天涨得最多的人')}</small></h3>
+      <ul className="gm-list">
+        {rows.map((x, i) => (
+          <li key={x.day ?? i} className="frame">
+            <div><b>{x.day}</b> <small className="muted">{tl`${x.players} 个存档 · 新玩家 ${x.new_players}`}</small></div>
+            <small>{tl`全服金币 ${fmtNum(Math.round(Number(x.coins)))}${diff(i, 'coins')}`}</small>
+            <small>{tl`物品总价值 ${fmtNum(Math.round(Number(x.item_value)))}${diff(i, 'item_value')}`}</small>
+            <small>{tl`总经验 ${fmtNum(Math.round(Number(x.xp)))}${diff(i, 'xp')}`}</small>
+            <small className="muted">{tl`GM 发金币 ${fmtNum(Math.round(Number(x.gm_coins)))} · 成交 ${x.trades} 笔（价值 ${fmtNum(Math.round(Number(x.trade_value)))}）· 兑换码 ${x.redeems} 次`}</small>
+            {!!x.top?.length && (
+              <small className="muted">{tl('涨得最多：')}{x.top.slice(0, 5).map((t) => tl`${t.name} #${t.pid} 经验 +${fmtNum(t.xp)} 金币 ${t.coins >= 0 ? '+' : ''}${fmtNum(t.coins)}`).join(tl('；'))}</small>
+            )}
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+/** 聊天敏感词（11-02）：一行一个，保存后马上生效；空着保存就恢复默认词表 */
+function ChatWords() {
+  const [text, setText] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  useEffect(() => { online.chatWords().then((w) => setText(w.join('\n')), () => setText('')); }, []);
+  const save = async () => {
+    const words = (text ?? '').split(/[\n,，、]/).map((w) => w.trim()).filter(Boolean).slice(0, 500);
+    try { await online.setFlag('chat_words', words.length ? words : false); setMsg({ text: tl('敏感词已保存'), ok: true }); if (!words.length) setText((await online.chatWords()).join('\n')); }
+    catch (e) { setMsg({ text: (e as Error).message, ok: false }); }
+  };
+  return (
+    <>
+      <h3>{tl('聊天敏感词')} <small className="muted">{tl('一行一个，所有频道都会换成 *；中间夹空格、点的也算。世界频道里的长串数字（QQ、手机号）和网址也会换掉')}</small></h3>
+      <div className="gm-form frame">
+        <textarea rows={6} value={text ?? ''} onChange={(e) => setText(e.target.value)} placeholder={tl('读取中…')} />
+        <div className="gm-actions"><button className="primary" disabled={text == null} onClick={() => void save()}>{tl('保存')}</button></div>
+        {msg && <p className={msg.ok ? 'good' : 'warn'}>{msg.text}</p>}
       </div>
     </>
   );

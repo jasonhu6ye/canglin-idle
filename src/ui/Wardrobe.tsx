@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { setSettings } from '../core/sim';
+import { hasCode, setSettings } from '../core/sim';
 import type { GameState } from '../core/types';
 import { hwHasSkin } from '../core/halloween';
 import { FRAME_H, FRAME_W, HERO_ANIMS, HERO_H, HERO_PAD, HERO_W, OUTFITS, paintHeroSheet, type Outfit } from '../game/hero';
@@ -66,7 +66,7 @@ export function Wardrobe({ s, onClose }: { s: GameState; onClose: () => void }) 
   const [pick, setPick] = useState(cur);
   const sel = OUTFITS.find((o) => o.id === pick) ?? OUTFITS[0];
   // 兑换码外观：领过对应兑换码才能穿（用户 10-23）
-  const locked = (o: Outfit) => !!o.sealed || (!!o.code && !s.redeemed?.includes(o.code)) || (o.event === 'halloween' && !hwHasSkin(s.halloween, o.id));
+  const locked = (o: Outfit) => !!o.sealed || (!!o.code && !hasCode(s, o.code)) || (o.event === 'halloween' && !hwHasSkin(s.halloween, o.id));
   return (
     <div className="page wardrobe">
       <div className="sheet-head">

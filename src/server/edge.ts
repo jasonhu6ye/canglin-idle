@@ -71,6 +71,7 @@ async function extras(uid: string, now: number): Promise<SyncExtras & { found: b
   }
   return {
     found: true,
+    salt: KEY,
     gmBuffs: buffs.map((r): GmBuff => ({ id: r.id, name: r.name, tag: r.tag ?? '', kind: r.kind, pct: Number(r.pct), from: Date.parse(r.starts_at), to: Date.parse(r.ends_at), all: r.target_pid == null })),
     guildLv: guild[0] ? Number(guild[0].level) || 1 : 0,
     guildTech: guild[0]?.tech,
@@ -114,7 +115,7 @@ Deno.serve(async (req) => {
       ]);
       if (!ex.found) return json({ error: 'profile' }, 404);
       const row = rows[0];
-      const { state, applied, mailIds, ack, flags } = runSync(row?.data ?? null, body.cmds, now, ex, device ?? '');
+      const { state, applied, mailIds, ack, flags, results } = runSync(row?.data ?? null, body.cmds, now, ex, device ?? '');
       const data: Row = device ? { ...state, _device: device } : { ...state };
       // 记下用过的设备和网络（变了或者半小时一次），给多开检测用
       const net = await netKey(req).catch(() => '');
@@ -134,7 +135,7 @@ Deno.serve(async (req) => {
           method: 'POST', body: JSON.stringify({ p: uid, p_kind: f.kind, p_severe: f.severe, p_detail: f.detail }),
         }).catch(() => {})));
         if (seen) await rest('rpc/ac_seen', { method: 'POST', body: JSON.stringify({ p: uid, p_ip: net, p_dev: device ?? '' }) }).catch(() => {});
-        return json({ state: data, rev, now, applied, ack });
+        return json({ state: data, rev, now, applied, ack, results });
       }
     }
     return json({ error: 'busy' }, 409);

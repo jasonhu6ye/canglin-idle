@@ -1,5 +1,5 @@
 import type { GameState } from '../core/types';
-import type { AiPlayer, AltRow, CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
+import type { AiPlayer, AltRow, EconRow, RedeemCodeRow, CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { GUILD_MAX, levelSnapshot, type SyncReply } from './api';
 import { runSync } from '../server/sync';
 import type { Cmd } from '../core/commands';
@@ -440,6 +440,15 @@ export class LocalApi implements OnlineApi {
   async gmAcSet() { /* 本地没有别的玩家 */ }
   async gmAcLimit(): Promise<string> { throw new Error(tl('没有这个 ID 的玩家')); }
   async gmLinks(): Promise<AltRow[]> { return []; }
+  async redeemCode() { return { ok: false, msg: tl('兑换码无效') }; }
+  async gmCodeList(): Promise<RedeemCodeRow[]> { return []; }
+  async chatWords() { return []; }
+  async gmEconomy() {
+    const z: EconRow = { players: 0, new_players: 0, coins: 0, item_value: 0, xp: 0, gm_coins: 0, trades: 0, trade_value: 0, redeems: 0, top: [] };
+    return { now: z, days: [] };
+  }
+  async gmCodeSave() { /* 本地没有服务器 */ }
+  async gmCodeDelete() { /* 本地没有服务器 */ }
   async gmAcExempt(): Promise<string> { throw new Error(tl('没有这个 ID 的玩家')); }
   async gmTrades(): Promise<GmTrade[]> { return []; }
   async gmSnapshots(): Promise<Snapshot[]> { return []; }

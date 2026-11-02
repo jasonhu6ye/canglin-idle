@@ -804,6 +804,7 @@ html[lang=en] .wm-region { letter-spacing: 0.5px; font-size: 11px; }
 .login-gate { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: #1b140f; overflow-y: auto; }
 .login-box { width: min(380px, 100%); padding: 18px 16px; display: flex; flex-direction: column; gap: 8px; }
 .login-box h1 { margin: 0 0 6px; text-align: center; color: #e8b84a; letter-spacing: 6px; font-size: 26px; }
+.captcha { display: flex; justify-content: center; min-height: 65px; }
 .login-box h2 { margin: 4px 0; font-size: 16px; }
 .login-box form { display: flex; flex-direction: column; gap: 8px; }
 .login-box input { background: #120b07; color: inherit; border: 1px solid var(--edge); border-radius: 2px; padding: 9px 10px; font: inherit; font-size: 16px; }

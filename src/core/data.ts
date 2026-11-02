@@ -635,7 +635,7 @@ export const OLD_JEWELS: Record<string, number> = {
   sapphire_ring: 520, sapphire_amulet: 540, ruby_ring: 720, ruby_amulet: 740, diamond_ring: 1000, diamond_amulet: 1020,
 };
 
-/** 坐骑：测试服兑换码「中国人能飞」领取（用户 10-23 要求，名字用户改为 Chinese can fly） */
+/** 坐骑：测试服兑换码领取（用户 10-23 要求，名字用户改为 Chinese can fly） */
 // 坐骑马（用户 10-24）：畜牧站养大的小马崽，速度资质 50%-200% 随机，每个资质一种物品
 item(FOAL, tl('小马崽'), 'misc', 0, { desc: tl('打败野马有几率得到。拿到城镇的畜牧站放进栏里养，大约 1 小时长成坐骑马，养殖等级越高长得越快。成年后才知道它的速度资质。') });
 for (let apt = APT_MIN; apt <= APT_MAX; apt++) {

@@ -1,6 +1,6 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js';
 import type { GameState, GmBuff } from '../core/types';
-import type { AltRow, CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMail, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildDay, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
+import type { EconRow, RedeemCodeRow, AltRow, CheatKind, CheatRow, GmPlayer, GmTrade, Snapshot, GmInput, GmMail, GmMailInput, GmMailRow, GmRow, Board, ChatChannel, ChatMsg, Friend, Party, PartyInvite, Trade, Guild, GuildBankLog, GuildDay, GuildEvent, GuildMember, GuildVault, GuildRole, GuildTask, OnlineApi, Presence, Profile, RankRow } from './api';
 import { type SyncReply } from './api';
 import type { Cmd } from '../core/commands';
 import type { TaskSpec } from '../core/guild';
@@ -97,12 +97,12 @@ export class SupabaseApi implements OnlineApi {
   }
   async ready() { return this.loadProfile(); }
 
-  async signIn(email: string, password: string) {
-    ok(await this.sb.auth.signInWithPassword({ email, password }));
+  async signIn(email: string, password: string, captcha?: string) {
+    ok(await this.sb.auth.signInWithPassword({ email, password, options: captcha ? { captchaToken: captcha } : undefined }));
     return this.loadProfile();
   }
-  async signUp(email: string, password: string) {
-    const r = ok(await this.sb.auth.signUp({ email, password }));
+  async signUp(email: string, password: string, captcha?: string) {
+    const r = ok(await this.sb.auth.signUp({ email, password, options: captcha ? { captchaToken: captcha } : undefined }));
     if (!r.session) throw new Error(tl('注册成功，请去邮箱点确认链接后再登录'));
     return this.loadProfile();
   }
@@ -146,10 +146,10 @@ export class SupabaseApi implements OnlineApi {
     this.need();
     const { data, error } = await this.sb.functions.invoke('game', { body: { cmds, device } });
     if (error) throw error;
-    const r = data as { state?: GameState; ack?: number; now?: number; error?: string };
+    const r = data as { state?: GameState; ack?: number; now?: number; error?: string; results?: { q: number; out: unknown }[] };
     if (!r?.state) throw new Error(r?.error ?? 'sync');
     this.touchSeen(this.need().id);
-    return { state: r.state, ack: Number(r.ack) || 0, now: Number(r.now) || Date.now() };
+    return { state: r.state, ack: Number(r.ack) || 0, now: Number(r.now) || Date.now(), results: Array.isArray(r.results) ? r.results : [] };
   }
   async cloudHead() {
     const r = ok(await this.sb.from('saves').select('last_tick, device:data->>_device').eq('player_id', this.need().id).maybeSingle()) as Row | null;
@@ -549,6 +549,25 @@ export class SupabaseApi implements OnlineApi {
     const who = ok(await this.sb.from('profiles').select('pid').eq('pid', m.targetPid).maybeSingle());
     if (!who) throw new Error(tl`找不到 UID ${m.targetPid} 的玩家`);
     ok(await this.sb.from('gm_mail').insert({ target_pid: m.targetPid, title: m.title, body: m.body, items: m.items }));
+  }
+  async redeemCode(code: string) {
+    const r = ok(await this.sb.rpc('redeem_code', { p_code: code })) as Row;
+    return { ok: !!r?.ok, msg: String(r?.msg ?? '') };
+  }
+  async chatWords() { return (ok(await this.sb.rpc('chat_words')) as string[] | null) ?? []; }
+  async gmEconomy() {
+    const r = ok(await this.sb.rpc('gm_economy', { p_days: 30 })) as { now: EconRow; days: EconRow[] };
+    return { now: r.now, days: Array.isArray(r.days) ? r.days : [] };
+  }
+  async gmCodeList() {
+    const rows: Row[] = ok(await this.sb.from('redeem_codes').select('*').order('created_at', { ascending: false }).limit(200));
+    return rows.map((r): RedeemCodeRow => ({ code: r.code, title: r.title, body: r.body ?? '', items: Array.isArray(r.items) ? r.items : [], maxUses: Number(r.max_uses), uses: Number(r.uses), expiresAt: r.expires_at ? Date.parse(r.expires_at) : null }));
+  }
+  async gmCodeSave(c: RedeemCodeRow) {
+    ok(await this.sb.from('redeem_codes').upsert({ code: c.code, title: c.title, body: c.body, items: c.items, max_uses: c.maxUses, expires_at: c.expiresAt ? new Date(c.expiresAt).toISOString() : null }));
+  }
+  async gmCodeDelete(code: string) {
+    ok(await this.sb.from('redeem_codes').delete().eq('code', code));
   }
   async gmMailDelete(id: string) {
     const r = ok(await this.sb.from('gm_mail').delete().eq('id', id).select('id'));

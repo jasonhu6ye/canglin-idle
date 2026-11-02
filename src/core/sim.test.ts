@@ -1,4 +1,4 @@
-import { actionDuration, advance, buySeed, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour, openContainer, redeemCode, toggleMount, moveSpeed, rainBonus, summonPumpkin, buyPumpkinMount, buyReaperSkin, buyHwSkin, placeFoal, collectHorse, RANCH_NODE, bagRoomFor, playerAttackMs, playerBonuses, salvage, salvageValue, sortBank, SALVAGE_NODES, SALVAGE_BONUS, startAt } from './sim';
+import { actionDuration, advance, buySeed, eat, toBelt, sell, marketStand, startWalk, walkPos, MAX_DEATH_STREAK, atBank, bankStand, toBank, depositLoot, leaveWork, resumeWork, setLoc, bagSlotsUsed, enqueue, equip, migrate, newGame, startNow, toBag, unequip, xpPerHour, openContainer, redeemCode, hasCode, builtinCode, SKIN_CODE, toggleMount, moveSpeed, rainBonus, summonPumpkin, buyPumpkinMount, buyReaperSkin, buyHwSkin, placeFoal, collectHorse, RANCH_NODE, bagRoomFor, playerAttackMs, playerBonuses, salvage, salvageValue, sortBank, SALVAGE_NODES, SALVAGE_BONUS, startAt } from './sim';
 import { baseOf, qid, qualityOdds, rollQuality } from './quality';
 import { claimMail, clearMail, GIFTS, HW_DAILY_BOXES, stepMail, unreadMail } from './mail';
 import { HW_BOX, HW_END, HW_MOUNT, HW_MOUNT_COST, HW_POINT, HW_REVEAL, HW_SKIN_COST, HW_TIERS, hwFight } from './halloween';
@@ -706,13 +706,15 @@ describe('坐骑和兑换码', () => {
   it('兑换码只能领一次，装上坐骑骑乘后移动速度翻倍', () => {
     let s = newGame(0, 1);
     expect(redeemCode(s, '乱写的').ok).toBe(false);
-    const r = redeemCode(s, ' 中国人能飞 ');
+    // 公开的外观码（公告里写过）：只能领一次；以前的存档记的是原文，也算领过
+    const r = redeemCode(s, ' 为爱发电 ');
     expect(r.ok).toBe(true);
-    s = r.state;
-    expect(s.bag.mount_danmark).toBeUndefined();
-    s = claimMail(s, s.mail![0].id, bagRoomFor)[0];
-    expect(s.bag.mount_danmark).toBe(1);
-    expect(redeemCode(s, '中国人能飞').ok).toBe(false);
+    expect(redeemCode(r.state, '为爱发电').ok).toBe(false);
+    expect(hasCode({ ...s, redeemed: ['为爱发电'] }, SKIN_CODE)).toBe(true);
+    expect(redeemCode({ ...s, redeemed: ['为爱发电'] }, '为爱发电').ok).toBe(false);
+    expect(builtinCode('为爱发电')).toBe(true);
+    expect(builtinCode('别的码')).toBe(false);
+    s = { ...s, bag: { ...s.bag, mount_danmark: 1 } };
     expect(toggleMount(s)).toBe(s);
     s = equip(s, 'mount_danmark');
     expect(s.equipment.mount).toBe('mount_danmark');

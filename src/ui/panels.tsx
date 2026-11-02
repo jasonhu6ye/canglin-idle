@@ -7,7 +7,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { standOf, ACTIONS, BUFF_NAME, buffText, cropsOfField, nodesOfAction, WAYSTONES, ITEMS, MAP_H, MAP_W, MONSTERS, NODES, tierName, REGIONS, SKILL_GROUPS, SKILLS, keyOf, SCROLL_TOWN, SHARD_PER_STONE, type MapNode } from '../core/data';
 import {
   atBank, atMarket, nearestBank, nearestMarket, bagSlots, BELT_CAP, beltSlotOf, POTION_AT, BAG_STACK, bagRoomFor, stackOf, bagSlotsUsed, combatLevel, level, playerBonuses, armorPerks, chainChance, frostChance, guardChance, slotSpeed, weaponStyle, walkPos, buffPct, levelSpeed, maxHp, moveSpeed, playerAttackMs,
-  sortBank, toolSkillNames, TOOL_FOR, playerHaste, combineShards, gearSum,
+  sortBank, toolSkillNames, TOOL_FOR, playerHaste, combineShards, gearSum, builtinCode,
 } from '../core/sim';
 import { USE_KEY } from '../game/MapScene';
 import { TownScrollPicker } from './Dungeon';
@@ -41,6 +41,8 @@ import { stopText } from './hud';
 import { actionName } from './format';
 import { AccountSettings, LeaderboardPage } from './Guild';
 import { online } from '../net';
+import { pushNow } from '../net/sync';
+import { errText } from './Login';
 import { emitToGame, gameFps } from './GameCanvas';
 import { tl } from '../i18n';
 
@@ -139,8 +141,11 @@ function ItemDetail({ s, id, from }: { s: GameState; id: string; from: 'bank' | 
 }
 
 function openBox(id: string, from: 'bag' | 'bank', n: number) {
-  const got = (store.run('openContainer', id, from, n) ?? {}) as Record<string, number>;
-  if (Object.keys(got).length) showLoot({ from: n > 1 ? `${ITEMS[id].name} ×${n}` : ITEMS[id].name, got });
+  // 开出什么以服务器为准（11-02）
+  void store.runServer('openContainer', id, from, n).then((r) => {
+    const got = (r ?? {}) as Record<string, number>;
+    if (Object.keys(got).length) showLoot({ from: n > 1 ? `${ITEMS[id].name} ×${n}` : ITEMS[id].name, got });
+  });
 }
 
 /** 背包里右键物品：能穿就穿，食物药水放进补给栏，箱子打开、钥匙开副本，别的不动 */
@@ -721,17 +726,28 @@ function UiScaleSetting() {
 function Redeem() {
   const [code, setCode] = useState('');
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
-  const submit = () => {
-    const r = (store.run('redeem', code) as { ok: boolean; msg: string } | undefined) ?? { ok: false, msg: '' };
-    if (r.ok) setCode('');
-    setMsg({ text: r.ok ? tl`${r.msg}。到「角色」页的坐骑栏装备，地图右下角点「骑乘」或按 R 上坐骑` : r.msg, ok: r.ok });
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    if (builtinCode(code)) {
+      const r = (store.run('redeem', code) as { ok: boolean; msg: string } | undefined) ?? { ok: false, msg: '' };
+      if (r.ok) setCode('');
+      setMsg({ text: r.msg, ok: r.ok });
+      return;
+    }
+    // 其余的码在服务器上查（11-02），奖励由服务器发到邮箱
+    setBusy(true);
+    try {
+      const r = await online.redeemCode(code.trim());
+      if (r.ok) { setCode(''); void pushNow(); }
+      setMsg({ text: r.ok ? tl`兑换成功：「${r.msg}」的奖励马上发到邮箱` : errText(new Error(r.msg)), ok: r.ok });
+    } catch (e) { setMsg({ text: errText(e), ok: false }); } finally { setBusy(false); }
   };
   return (
     <div className="redeem">
       <div className="go">
         <input className="redeem-input" value={code} placeholder={tl("输入兑换码")} maxLength={32}
-          onChange={(e) => { setCode(e.target.value); setMsg(null); }} onKeyDown={(e) => e.key === 'Enter' && code.trim() && submit()} />
-        <button className="primary" disabled={!code.trim()} onClick={submit}>{tl('兑换')}</button>
+          onChange={(e) => { setCode(e.target.value); setMsg(null); }} onKeyDown={(e) => e.key === 'Enter' && code.trim() && !busy && void submit()} />
+        <button className="primary" disabled={!code.trim() || busy} onClick={() => void submit()}>{tl('兑换')}</button>
       </div>
       {msg && <p className={msg.ok ? 'good' : 'warn'}>{msg.text}</p>}
     </div>

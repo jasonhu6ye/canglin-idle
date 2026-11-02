@@ -1,5 +1,6 @@
 import { mix, phash, Pix, ramp } from './pix';
 import { tl } from '../i18n';
+import { SKIN_CODE } from '../core/sim';
 
 /*
  * 主角多帧动画（冒险者造型，衣橱可换配色）：头、身体、双臂、双腿、围巾、行囊分开画，每一帧按姿势参数重新拼一次，
@@ -157,7 +158,7 @@ export const OUTFITS: Outfit[] = [
     pants: ['#1a1a18', '#2a2a26'], boots: ['#141412', '#2e2a24'], scarf: ['#3a4a3a', '#5a6e58'],
     pack: ['#2a2018', '#3e3024', '#5a4632'], roll: '#3a4a3a',
     head: 'pumpkin', noPack: true, cloak: ['#26342c', '#3a4c40', '#56705c'], offhand: 'lantern',
-    glow: ['#c84a10', '#ffa020', '#fff0a0'], fx: 'embers', code: tl('为爱发电'),
+    glow: ['#c84a10', '#ffa020', '#fff0a0'], fx: 'embers', code: SKIN_CODE,
   },
   {
     id: 'voidpumpkin', name: tl('幽蓝南瓜'), desc: tl('烧成焦黑的南瓜头里亮着幽蓝的鬼火，偶尔闪过一丝红光；提灯里的火也是冷的。'),
@@ -166,7 +167,7 @@ export const OUTFITS: Outfit[] = [
     pants: ['#141416', '#222226'], boots: ['#0e0e10', '#24242a'], scarf: ['#2e3e38', '#4a6058'],
     pack: ['#1e1e22', '#2e2e34', '#44444c'], roll: '#2e3e38',
     head: 'voidpumpkin', noPack: true, cloak: ['#1e2c28', '#2e423c', '#465e56'], offhand: 'lantern',
-    glow: ['#1a6ab0', '#4ab0ff', '#c8f0ff'], fx: 'wisps', code: tl('为爱发电'),
+    glow: ['#1a6ab0', '#4ab0ff', '#c8f0ff'], fx: 'wisps', code: SKIN_CODE,
   },
   {
     id: 'paleknight', name: tl('白发魔骑'), desc: tl('一头乱翘的白发，灰白的脸上一双红眼；黑铁铠甲配一面染血的木盾，脚下缠着暗红的雾。'),
@@ -175,7 +176,7 @@ export const OUTFITS: Outfit[] = [
     pants: ['#16161a', '#28282e'], boots: ['#0e0e10', '#2a2a30'], scarf: ['#2a2228', '#4a3a40'],
     pack: ['#4a2a1a', '#6e3e22', '#8e5a34'], roll: '#4a2a1a',
     head: 'paleknight', noPack: true, cloak: ['#141418', '#22222a', '#34343e'], offhand: 'shield',
-    glow: ['#8a0e0e', '#ff3a2a', '#ffb08a'], fx: 'mist', code: tl('为爱发电'),
+    glow: ['#8a0e0e', '#ff3a2a', '#ffb08a'], fx: 'mist', code: SKIN_CODE,
   },
   {
     id: 'jester', name: tl('红黑小丑'), desc: tl('红黑两色的分叉小丑帽挂着银铃，白面具上画着红泪痕；菱格衣服，走到哪都撒红色的纸花。'),
@@ -184,7 +185,7 @@ export const OUTFITS: Outfit[] = [
     pants: ['#1e1e24', '#34343c'], boots: ['#7a0a10', '#c81a22'], scarf: ['#b8b8c4', '#ffffff'],
     pack: ['#26262e', '#3a3a44', '#585864'], roll: '#8a0e14',
     head: 'jester', noPack: true, harlequin: true,
-    glow: ['#8a0e14', '#ff2a3a', '#ffd0d0'], fx: 'confetti', code: tl('为爱发电'),
+    glow: ['#8a0e14', '#ff2a3a', '#ffd0d0'], fx: 'confetti', code: SKIN_CODE,
   },
   {
     id: 'bone', name: tl('骸骨术士'), desc: tl('戴着兽骨头盔、肩披骨甲，眼窝里燃着青色的魂火，身边飘着点点灵光。'),
@@ -193,7 +194,7 @@ export const OUTFITS: Outfit[] = [
     pants: ['#241c16', '#3a2e24'], boots: ['#141010', '#2e2420'], scarf: ['#1a6a5a', '#3aa890'],
     pack: ['#3a2e24', '#5a4634', '#7a6248'], roll: '#5a2a1a',
     head: 'bone', noPack: true, cloak: ['#1a2a28', '#2a4440', '#3e5e58'],
-    glow: ['#1a8aa0', '#5ae0f0', '#e0ffff'], fx: 'sparks', code: tl('为爱发电'),
+    glow: ['#1a8aa0', '#5ae0f0', '#e0ffff'], fx: 'sparks', code: SKIN_CODE,
   },
 ];
 /** 兑换码解锁的外观 */

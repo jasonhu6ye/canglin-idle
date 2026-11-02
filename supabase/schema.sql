@@ -1323,6 +1323,7 @@ $$;
 grant execute on function public.my_ac() to authenticated;
 
 -- 管理员：可疑玩家列表（每人一行：最近的记录、次数、状态）
+drop function if exists public.gm_cheaters(int);
 create or replace function public.gm_cheaters(p_limit int default 100)
 returns table (player_id uuid, pid bigint, name text, hidden boolean, banned boolean, note text, n bigint, severe bigint, last_at timestamptz, flags jsonb)
 language plpgsql stable security definer set search_path = public as $$
@@ -2523,3 +2524,239 @@ begin
     limit 50;
 end $$;
 grant execute on function public.gm_links(uuid) to authenticated;
+
+-- ============ 服务器兑换码（11-02）============
+-- 兑换码原文只存在服务器上（玩家读不到），GM 面板「兑换码」页建：奖励、有效期、总次数。
+-- 每个账号每个码只能领一次；奖励走 GM 邮件，同步时进邮箱。一小时输错 10 次就暂时不让试（防止猜码）。
+create table if not exists public.redeem_codes (
+  code text primary key check (char_length(code) between 1 and 32),
+  title text not null check (char_length(title) between 1 and 30),
+  body text not null default '' check (char_length(body) <= 500),
+  items jsonb not null default '[]'::jsonb,
+  max_uses int not null default 0,
+  uses int not null default 0,
+  expires_at timestamptz,
+  created_at timestamptz not null default now()
+);
+alter table public.redeem_codes enable row level security;
+drop policy if exists "redeem_codes 管理员" on public.redeem_codes;
+create policy "redeem_codes 管理员" on public.redeem_codes for all using (public.is_gm()) with check (public.is_gm());
+
+create table if not exists public.redeem_uses (
+  code text not null references public.redeem_codes(code) on delete cascade on update cascade,
+  player_id uuid not null references public.profiles(id) on delete cascade,
+  at timestamptz not null default now(),
+  primary key (code, player_id)
+);
+alter table public.redeem_uses enable row level security;
+drop policy if exists "redeem_uses 管理员看" on public.redeem_uses;
+create policy "redeem_uses 管理员看" on public.redeem_uses for select using (public.is_gm());
+
+create table if not exists public.redeem_fails (
+  player_id uuid not null references public.profiles(id) on delete cascade,
+  at timestamptz not null default now()
+);
+create index if not exists redeem_fails_p on public.redeem_fails (player_id, at);
+alter table public.redeem_fails enable row level security;
+
+-- 返回 {ok, msg}（不用报错，输错的记录才留得住）
+create or replace function public.redeem_code(p_code text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare c redeem_codes; me profiles; k text := btrim(coalesce(p_code, ''));
+begin
+  select * into me from profiles where id = auth.uid();
+  if me.id is null then return jsonb_build_object('ok', false, 'msg', '请先登录'); end if;
+  if me.banned then return jsonb_build_object('ok', false, 'msg', '账号已被限制'); end if;
+  if (select count(*) from redeem_fails where player_id = me.id and at > now() - interval '1 hour') >= 10 then
+    return jsonb_build_object('ok', false, 'msg', '输错太多次了，一小时后再试');
+  end if;
+  select * into c from redeem_codes where code = k for update;
+  if c.code is null then
+    insert into redeem_fails (player_id) values (me.id);
+    delete from redeem_fails where player_id = me.id and at < now() - interval '1 day';
+    return jsonb_build_object('ok', false, 'msg', '兑换码无效');
+  end if;
+  if c.expires_at is not null and c.expires_at < now() then return jsonb_build_object('ok', false, 'msg', '兑换码已过期'); end if;
+  if exists (select 1 from redeem_uses where code = c.code and player_id = me.id) then
+    return jsonb_build_object('ok', false, 'msg', '这个兑换码已经领过了');
+  end if;
+  if c.max_uses > 0 and c.uses >= c.max_uses then return jsonb_build_object('ok', false, 'msg', '兑换码已经被领完了'); end if;
+  insert into redeem_uses (code, player_id) values (c.code, me.id);
+  update redeem_codes set uses = uses + 1 where code = c.code;
+  insert into gm_mail (target_pid, title, body, items, created_by) values (me.pid, c.title, c.body, c.items, null);
+  return jsonb_build_object('ok', true, 'msg', c.title);
+end $$;
+grant execute on function public.redeem_code(text) to authenticated;
+
+-- ============ 同网络批量注册（11-02）============
+-- 注册本身由 Supabase 管（按 IP 限速在后台 Authentication → Rate Limits 调；人机验证见网页 CAPTCHA_KEY）。
+-- 这里补一条：同一个网络 24 小时内出现 new_per_net 个以上新账号，新号记「批量注册」（新号本来就 24 小时不能交易）。
+create or replace function public.ac_seen(p uuid, p_ip text, p_dev text) returns void
+language plpgsql security definer set search_path = public as $$
+declare n_acc int; n_new int;
+begin
+  if coalesce(p_ip, '') <> '' then
+    insert into ac_links (player_id, kind, v) values (p, 'ip', left(p_ip, 64))
+      on conflict (player_id, kind, v) do update set last_at = now(), n = ac_links.n + 1;
+    if (select created_at from profiles where id = p) > now() - interval '1 day' then
+      select count(distinct l.player_id) into n_new from ac_links l join profiles x on x.id = l.player_id
+        where l.kind = 'ip' and l.v = left(p_ip, 64) and x.created_at > now() - interval '1 day';
+      if n_new >= public.ac_conf('new_per_net', 4) then
+        perform public.ac_flag(p, 'multi_new', false, jsonb_build_object('new_accounts', n_new));
+      end if;
+    end if;
+  end if;
+  if coalesce(p_dev, '') <> '' then
+    insert into ac_links (player_id, kind, v) values (p, 'dev', left(p_dev, 64))
+      on conflict (player_id, kind, v) do update set last_at = now(), n = ac_links.n + 1;
+    select count(distinct l.player_id) into n_acc from ac_links l
+      where l.kind = 'dev' and l.v = left(p_dev, 64) and l.last_at > now() - interval '30 days';
+    if n_acc >= public.ac_conf('multi_accounts', 3) then
+      perform public.ac_flag(p, 'multi', false, jsonb_build_object('accounts', n_acc));
+    end if;
+  end if;
+  delete from ac_links where player_id = p and last_at < now() - interval '90 days';
+end $$;
+revoke execute on function public.ac_seen(uuid, text, text) from public, anon, authenticated;
+grant execute on function public.ac_seen(uuid, text, text) to service_role;
+
+-- ============ 每日经济报表 + 涨得异常快的玩家（11-02）============
+-- 每天第一次有人同步时（和每日自动存档一起）记一行：全服金币、物品总价值、总经验、GM 发的金币、交易量、新玩家；
+-- 和上一份每日自动存档比，一天里经验涨得远超其他人的记一条「排行榜异常」。
+create table if not exists public.econ_daily (
+  day date primary key,
+  players int not null default 0,
+  new_players int not null default 0,
+  coins numeric not null default 0,
+  item_value numeric not null default 0,
+  xp numeric not null default 0,
+  gm_coins numeric not null default 0,
+  trades int not null default 0,
+  trade_value numeric not null default 0,
+  redeems int not null default 0,
+  top jsonb,
+  at timestamptz not null default now()
+);
+alter table public.econ_daily enable row level security;
+drop policy if exists "econ_daily 管理员看" on public.econ_daily;
+create policy "econ_daily 管理员看" on public.econ_daily for select using (public.is_gm());
+
+create or replace function public.ac_xp_sum(d jsonb) returns numeric
+language sql immutable as $$
+  select coalesce(sum(case when jsonb_typeof(e.value) = 'number' then e.value::text::numeric else 0 end), 0) from jsonb_each(coalesce(d -> 'xp', '{}'::jsonb)) e
+$$;
+
+-- 现在的全服数据（p_since 起的流水），top = 和上一份每日存档比涨得最多的 10 个人
+create or replace function public.ac_econ_now(p_since timestamptz) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare r jsonb; top jsonb; snap bigint;
+begin
+  select id into snap from server_snapshots where auto order by id desc limit 1;
+  select coalesce(jsonb_agg(x), '[]'::jsonb) into top from (
+    select p.pid, p.name, round(public.ac_xp_sum(s.data) - public.ac_xp_sum(o.data)) as xp,
+      round(coalesce((s.data -> 'bank' ->> 'coins')::numeric, 0) - coalesce((o.data -> 'bank' ->> 'coins')::numeric, 0)) as coins,
+      round(public.ac_save_value(s.data) - public.ac_save_value(o.data)) as value
+    from saves s join snapshot_saves o on o.player_id = s.player_id and o.snapshot_id = snap
+      join profiles p on p.id = s.player_id
+    order by public.ac_xp_sum(s.data) - public.ac_xp_sum(o.data) desc
+    limit 10) x;
+  select jsonb_build_object(
+    'players', (select count(*) from saves),
+    'new_players', (select count(*) from profiles where created_at >= p_since),
+    'coins', (select coalesce(sum(coalesce((data -> 'bank' ->> 'coins')::numeric, 0)), 0) from saves),
+    'item_value', (select coalesce(sum(public.ac_save_value(data)), 0) from saves),
+    'xp', (select coalesce(sum(public.ac_xp_sum(data)), 0) from saves),
+    'gm_coins', (select coalesce(sum((i ->> 'qty')::numeric), 0) from gm_mail m, jsonb_array_elements(m.items) i where m.created_at >= p_since and i ->> 'item' = 'coins'),
+    'trades', (select count(*) from trades where status = 'done' and updated_at >= p_since),
+    'trade_value', (select coalesce(sum(public.ac_value(a_items) + public.ac_value(b_items)), 0) from trades where status = 'done' and updated_at >= p_since),
+    'redeems', (select count(*) from redeem_uses where at >= p_since),
+    'top', top
+  ) into r;
+  return r;
+end $$;
+revoke execute on function public.ac_econ_now(timestamptz) from public, anon, authenticated;
+
+create or replace function public.ac_econ_record() returns void
+language plpgsql security definer set search_path = public as $$
+declare d date := (now() at time zone 'Asia/Shanghai')::date; since timestamptz; r jsonb; t jsonb; second numeric;
+begin
+  if exists (select 1 from econ_daily where day = d) then return; end if;
+  since := coalesce((select at from econ_daily order by day desc limit 1), now() - interval '1 day');
+  r := public.ac_econ_now(since);
+  insert into econ_daily (day, players, new_players, coins, item_value, xp, gm_coins, trades, trade_value, redeems, top)
+    values (d, (r ->> 'players')::int, (r ->> 'new_players')::int, (r ->> 'coins')::numeric, (r ->> 'item_value')::numeric,
+      (r ->> 'xp')::numeric, (r ->> 'gm_coins')::numeric, (r ->> 'trades')::int, (r ->> 'trade_value')::numeric, (r ->> 'redeems')::int, r -> 'top')
+    on conflict (day) do nothing;
+  -- 排行榜异常：涨得最多的人比第二名多出 rank_jump 倍以上，而且超过 rank_jump_min 经验
+  second := coalesce((r -> 'top' -> 1 ->> 'xp')::numeric, 0);
+  t := r -> 'top' -> 0;
+  if t is not null and (t ->> 'xp')::numeric > public.ac_conf('rank_jump_min', 20000000)
+     and (t ->> 'xp')::numeric > greatest(second, 1) * public.ac_conf('rank_jump', 3) then
+    perform public.ac_flag((select id from profiles where pid = (t ->> 'pid')::bigint), 'rank_jump', false,
+      jsonb_build_object('day_xp', t -> 'xp', 'second_xp', second));
+  end if;
+end $$;
+revoke execute on function public.ac_econ_record() from public, anon, authenticated;
+
+-- 每日自动存档前先记经济（要拿上一份存档比）
+create or replace function public.ac_auto_snapshot() returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if exists (select 1 from server_snapshots where auto and created_at > now() - interval '24 hours') then return; end if;
+  if not pg_try_advisory_xact_lock(424242) then return; end if;
+  begin
+    perform public.ac_econ_record();
+  exception when others then null;
+  end;
+  perform public.ac_snapshot('每日自动', true);
+end $$;
+revoke execute on function public.ac_auto_snapshot() from public, anon, authenticated;
+
+-- 管理员：最近几天的经济报表 + 现在（从最后一次记录到现在）
+create or replace function public.gm_economy(p_days int default 14) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  return jsonb_build_object(
+    'now', public.ac_econ_now(coalesce((select at from econ_daily order by day desc limit 1), now() - interval '1 day')),
+    'days', (select coalesce(jsonb_agg(to_jsonb(e) order by e.day desc), '[]'::jsonb) from (select * from econ_daily order by day desc limit least(p_days, 90)) e));
+end $$;
+grant execute on function public.gm_economy(int) to authenticated;
+
+-- ============ 聊天敏感词（11-02）============
+-- 世界 / 公会 / 队伍 / 私聊都过滤：词表里的词换成 *；世界频道里 6 位以上的数字串（QQ、手机号）和网址也换掉。
+-- 词表在 GM 面板「防作弊」页改（game_flags.chat_words，一行一个），没设就用下面的默认词。
+create or replace function public.chat_words() returns text[]
+language sql stable security definer set search_path = public as $$
+  select coalesce(
+    (select array(select jsonb_array_elements_text(value)) from game_flags where key = 'chat_words' and jsonb_typeof(value) = 'array'),
+    array['傻逼','煞笔','sb','操你','草泥马','cnm','nmsl','尼玛死','你妈死','妈的','他妈的','tmd','滚蛋','去死','死全家','狗日','fuck','shit','bitch',
+      '外挂','代练','代充','刷钱','加群','加q','加v','加微','vx','qq群','微信','卖号','收号']
+  )
+$$;
+grant execute on function public.chat_words() to authenticated;
+
+create or replace function public.ac_filter_chat() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare w text; t text := new.text;
+begin
+  if public.is_gm() then return new; end if;
+  foreach w in array public.chat_words() loop
+    w := btrim(w);
+    if w = '' then continue; end if;
+    -- 不分大小写；中间夹空格、点、横线的也算（傻 逼、s.b）
+    t := regexp_replace(t, (select string_agg(regexp_replace(c, '([\\^$.|?*+()\[\]{}-])', '\\\1', 'g'), '[\s.\-_*·]*') from regexp_split_to_table(w, '') c), repeat('*', char_length(w)), 'gi');
+  end loop;
+  if new.channel = 'world' then
+    t := regexp_replace(t, '\d[\d\s\-]{4,}\d', '***', 'g');
+    t := regexp_replace(t, '(https?://|www\.)\S+', '***', 'gi');
+    t := regexp_replace(t, '[a-z0-9-]+\.(com|cn|net|top|xyz|cc|vip)\b\S*', '***', 'gi');
+  end if;
+  if t <> new.text then
+    perform public.ac_flag(new.player_id, 'chat_word', false, jsonb_build_object('text', left(new.text, 80)));
+    new.text := t;
+  end if;
+  return new;
+end $$;
+drop trigger if exists ac_filter_chat on public.chat;
+create trigger ac_filter_chat before insert on public.chat for each row execute function public.ac_filter_chat();

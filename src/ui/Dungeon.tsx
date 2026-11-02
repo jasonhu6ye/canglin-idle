@@ -212,8 +212,10 @@ export function DungeonPopups({ s }: { s: GameState }) {
 
 function openChest() {
   const q = store.state.dungeon?.chest ?? 0;
-  const got = (store.run('dungeonChest') ?? {}) as Record<string, number>;
-  if (Object.keys(got).length) showLoot({ from: CHEST_NAMES()[q], got });
+  void store.runServer('dungeonChest').then((r) => {
+    const got = (r ?? {}) as Record<string, number>;
+    if (Object.keys(got).length) showLoot({ from: CHEST_NAMES()[q], got });
+  });
 }
 
 /** 洞口面板：剩余时间、能不能进、进去、召集队友、寻路过去 */

@@ -207,3 +207,26 @@ describe('改过的客户端乱传参数', () => {
     expect(r3.state.mail?.filter((m) => m.kind === 'gift').length).toBe(1);
   });
 });
+
+describe('开箱随机数（11-02）', () => {
+  it('服务器用密钥混过随机数：本机按存档算的结果对不上，服务器结果按序号带回来', () => {
+    const base = newGame(t0, 5);
+    base.bag.luckybag_3 = 20;
+    const cmds: Cmd[] = Array.from({ length: 5 }, (_, i) => ({ n: 'openContainer', a: ['luckybag_3', 'bag', 1], t: t0 + 1000 + i, q: i + 1 }));
+    // 本机预测（没有密钥）
+    let local = base;
+    const predicted: unknown[] = [];
+    for (const c of cmds) { const r = applyCmd(local, c.n, c.a, c.t); local = r.state; predicted.push(r.out); }
+    const a = runSync(JSON.parse(JSON.stringify(base)), cmds, t0 + 5000, { ...EX, salt: 'secret-A' }, 'dev');
+    const b = runSync(JSON.parse(JSON.stringify(base)), cmds, t0 + 5000, { ...EX, salt: 'secret-A' }, 'dev');
+    const c = runSync(JSON.parse(JSON.stringify(base)), cmds, t0 + 5000, { ...EX, salt: 'secret-B' }, 'dev');
+    expect(a.results!.map((r) => r.q)).toEqual([1, 2, 3, 4, 5]);
+    expect(a.results).toEqual(b.results);
+    expect(JSON.stringify(a.results!.map((r) => r.out))).not.toBe(JSON.stringify(predicted));
+    expect(JSON.stringify(a.results)).not.toBe(JSON.stringify(c.results));
+    expect(a.state.bag.luckybag_3).toBe(15);
+    // 没有密钥（本机测试服）就和本机一样
+    const d = runSync(JSON.parse(JSON.stringify(base)), cmds, t0 + 5000, EX, 'dev');
+    expect(d.results).toEqual([]);
+  });
+});
