@@ -64,6 +64,8 @@ export interface SyncExtras {
   salt?: string;
   /** 制作者署名：「名字#数字ID」（做出传说以上装备时记上） */
   maker?: string;
+  /** 服务器上兑换码的标题（把以前记成 GM 邮件的兑换码奖励分出来） */
+  codeTitles?: string[];
   /** 被 GM 封禁：进度冻结（不执行指令、不结算，时间直接跳到现在，解封后也补不回来） */
   frozen?: boolean;
 }
@@ -148,7 +150,7 @@ function syncInner(saved: unknown, cmds: unknown, now: number, ex: SyncExtras, d
       provSettleMats(s, src, mBefore, mTot);
     }
   };
-  s = markOldGmMail(s);
+  s = markOldGmMail(s, ex.codeTitles);
   s = setGmBuffs(s, ex.gmBuffs, s.lastTick);
   s = setGuildLv(s, ex.guildLv, ex.guildTech);
   // 每日礼物、全服赠礼、过期清理：由服务器发（玩家领邮件的指令要能找到这封）

@@ -106,7 +106,8 @@ export function claimMail(prev: GameState, id: number | 'all', room: RoomFn): [G
       if (qty > n) s.bank[item] = (s.bank[item] ?? 0) + qty - n;
       s.seen[item] = 1;
     }
-    if (m.gm) addGmGot(s, m.items);
+    // 只有 GM 手发的记账（兑换码奖励不回收、可以交易）
+    if (m.gm === 'gm') addGmGot(s, m.items);
     m.claimed = true;
     m.read = true;
   }
@@ -127,7 +128,7 @@ export function clearMail(prev: GameState): GameState {
 
 export const unreadMail = (s: GameState) => (s.mail ?? []).filter((m) => !m.read || (!m.claimed && m.items.length > 0)).length;
 
-/** 记账：从带标记的邮件领到的东西（直接改 s） */
+/** 记账：从 GM 邮件领到的东西（直接改 s） */
 function addGmGot(s: GameState, items: ItemStack[]) {
   const g = { ...(s.gmGot ?? {}) };
   const left = { ...(s.gmLeft ?? {}) };
@@ -148,14 +149,43 @@ export function clampGmLeft(s: GameState, held: Record<string, number>) {
 }
 
 /**
- * 老邮件补标记（11-02，只做一次）：管理员邮件（custom）记 gm，兑换码奖励记 code；已经领过的附件补进 gmGot。
- * 已经被玩家删掉的邮件这里补不回来，以服务器 gm_grants 表为准。
+ * 老邮件补标记（11-02）：管理员邮件（custom）记 gm，兑换码奖励记 code；已经领过的 GM 附件补进 gmGot / gmLeft。
+ * 兑换码奖励也是从 gm_mail 发的 custom 邮件，按标题对 codeTitles（服务器上兑换码的标题）分出来。
+ * gmMark 1 = 第一版（没分兑换码，全记成 gm），2 = 已按标题分过。已经被玩家删掉的邮件补不回来，以服务器 gm_grants 表为准。
+ * 用户 11-02：兑换码奖励不回收、可以交易，只有 GM 手发的算。
  */
-export function markOldGmMail(s: GameState): GameState {
-  if (s.gmMark) return s;
-  const out: GameState = { ...s, gmMark: 1, mail: (s.mail ?? []).map((m) => (m.gm || (m.kind !== 'custom' && m.kind !== 'redeem') ? m : { ...m, gm: m.kind === 'custom' ? 'gm' : 'code' })) };
-  for (const m of out.mail!) if (m.gm && m.claimed && !s.mail!.find((x) => x.id === m.id)?.gm) addGmGot(out, m.items);
+export function markOldGmMail(s: GameState, codeTitles?: string[]): GameState {
+  const want = codeTitles ? 2 : 1;
+  if ((s.gmMark ?? 0) >= want) return s;
+  const codes = new Set(codeTitles ?? []);
+  const isCode = (m: Mail) => m.kind === 'redeem' || (m.kind === 'custom' && !!m.title && codes.has(m.title));
+  const out: GameState = { ...s, gmMark: want as 1 | 2 };
+  out.mail = (s.mail ?? []).map((m) => {
+    if (m.kind !== 'custom' && m.kind !== 'redeem') return m;
+    if (!m.gm) {
+      const gm = isCode(m) ? 'code' : 'gm';
+      if (gm === 'gm' && m.claimed) addGmGot(out, m.items);
+      return { ...m, gm };
+    }
+    // 第一版记成 gm 的兑换码奖励：改回 code，领过的从账上减掉
+    if (m.gm === 'gm' && isCode(m)) {
+      if (m.claimed) subGmGot(out, m.items);
+      return { ...m, gm: 'code' as const };
+    }
+    return m;
+  });
   return out;
+}
+
+function subGmGot(s: GameState, items: ItemStack[]) {
+  const g = { ...(s.gmGot ?? {}) };
+  const left = { ...(s.gmLeft ?? {}) };
+  for (const { item, qty } of items) {
+    if (g[item] !== undefined) { g[item] -= qty; if (g[item] <= 0) delete g[item]; }
+    if (left[item] !== undefined) { left[item] -= qty; if (left[item] <= 0) delete left[item]; }
+  }
+  s.gmGot = g;
+  s.gmLeft = left;
 }
 
 /** 读档：只留格式对的邮件、认识的物品 */

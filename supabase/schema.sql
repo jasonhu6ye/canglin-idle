@@ -3340,3 +3340,38 @@ begin
   insert into guild_bank_log (guild_id, vault, player_id, name, item, qty) values (g, p_vault, auth.uid(), coalesce(nm, ''), p_item, p_qty);
   delete from guild_bank_log where guild_id = g and at < now() - interval '30 days';
 end $$;
+
+-- ============ 兑换码奖励不回收（11-02 用户定）============
+-- 公测审查只回收 GM 手发的邮件：gm_gear 的 grants 只算 src = 'gm'（兑换码奖励 src = 'code' 不算）
+drop function if exists public.gm_gear(text);
+create or replace function public.gm_gear(p_who text)
+returns table (player_id uuid, pid bigint, name text, prov jsonb, bank jsonb, bag jsonb, equipment jsonb, belt jsonb, last_tick bigint, marks jsonb,
+  xp jsonb, gm_got jsonb, mail jsonb, grants jsonb, flagged jsonb, sent jsonb)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  return query
+    select p.id, p.pid, p.name, s.data->'prov', s.data->'bank', s.data->'bag', s.data->'equipment', s.data->'belt', s.last_tick, s.data->'marks',
+      s.data->'xp', s.data->'gmGot', s.data->'mail',
+      (select coalesce(jsonb_object_agg(t.item, t.qty), '{}'::jsonb) from (
+        select it ->> 'item' as item, sum((it ->> 'qty')::numeric) as qty
+        from gm_grants g, jsonb_array_elements(g.items) it
+        where g.target_pid = p.pid and g.src = 'gm' and g.claimed_at is not null and g.revoked_at is null
+        group by 1) t),
+      (select coalesce(jsonb_agg(distinct f.item), '[]'::jsonb) from gear_flags f where f.player_id = p.id and f.status = 'open'),
+      -- 转出去的东西（防偷跑：GM 发的东西转给小号）：成交的交易里自己给出的，存进公会仓库的
+      (select coalesce(jsonb_agg(z), '[]'::jsonb) from (
+        select jsonb_build_object('to', o.name || '#' || o.pid, 'items', case when t.a = p.id then t.a_items else t.b_items end) z
+        from trades t join profiles o on o.id = case when t.a = p.id then t.b else t.a end
+        where (t.a = p.id or t.b = p.id) and t.status = 'done'
+        union all
+        select jsonb_build_object('to', '公会仓库', 'items', jsonb_object_agg(l.item, l.qty))
+        from guild_bank_log l where l.player_id = p.id and l.qty > 0
+        having count(*) > 0
+        limit 300) q)
+    from profiles p join saves s on s.player_id = p.id
+    where p.pid::text = trim(p_who) or lower(p.name) like '%' || lower(trim(p_who)) || '%'
+    order by (p.pid::text = trim(p_who)) desc, p.last_seen desc nulls last
+    limit 5;
+end $$;
+grant execute on function public.gm_gear(text) to authenticated;

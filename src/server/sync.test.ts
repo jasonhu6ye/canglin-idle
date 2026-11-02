@@ -243,7 +243,7 @@ describe('改过的客户端乱传参数', () => {
     expect(r3.state.mail?.filter((m) => m.kind === 'gift').length).toBe(1);
   });
 
-  it('GM 邮件、兑换码奖励打标记，领取后记进 gmGot；系统礼物不记；老邮件补标记只补一次', () => {
+  it('GM 邮件、兑换码奖励打标记，只有 GM 邮件领取后记进 gmGot；系统礼物不记；老邮件补标记只补一次', () => {
     const mails = [
       { id: 'a', title: 'GM', body: '', items: [{ item: 'coins', qty: 1000 }, { item: 'dkey_g4', qty: 2 }] },
       { id: 'b', title: 'code', body: '', items: [{ item: 'dkey_g4', qty: 1 }], code: true },
@@ -252,10 +252,11 @@ describe('改过的客户端乱传参数', () => {
     expect(r1.state.mail?.filter((m) => m.gm).map((m) => m.gm).sort()).toEqual(['code', 'gm']);
     expect(r1.state.mail?.find((m) => m.kind === 'gift')?.gm).toBeUndefined();
     const r2 = runSync(r1.state, [{ n: 'claimMail', a: ['all'], t: t0 + 500, q: 1 }], t0 + 1000, EX, 'dev');
-    expect(r2.state.gmGot).toEqual({ coins: 1000, dkey_g4: 3 });
+    // 兑换码奖励不回收（用户 11-02），不记账
+    expect(r2.state.gmGot).toEqual({ coins: 1000, dkey_g4: 2 });
     // 存档读写一遍还在，再同步不重复记
     const r3 = runSync(JSON.parse(JSON.stringify(r2.state)), [], t0 + 2000, EX, 'dev');
-    expect(r3.state.gmGot).toEqual({ coins: 1000, dkey_g4: 3 });
+    expect(r3.state.gmGot).toEqual({ coins: 1000, dkey_g4: 2 });
     // 标记上线前的老存档：已领的 custom 邮件补进账，没领的打上标记
     const old = JSON.parse(JSON.stringify(r1.state)) as GameState;
     delete old.gmMark;
@@ -266,6 +267,15 @@ describe('改过的客户端乱传参数', () => {
     expect(r4.state.mail?.find((m) => m.title === 'code')?.gm).toBe('gm');
     const r5 = runSync(r4.state, [{ n: 'claimMail', a: ['all'], t: t0 + 1500, q: 1 }], t0 + 2000, EX, 'dev');
     expect(r5.state.gmGot).toEqual({ coins: 1000, dkey_g4: 3 });
+    // 服务器给了兑换码标题：第一版记成 gm 的兑换码奖励改回 code，账上减掉；只分一次
+    const r6 = runSync(r5.state, [], t0 + 2500, { ...EX, codeTitles: ['code'] }, 'dev');
+    expect(r6.state.mail?.find((m) => m.title === 'code')?.gm).toBe('code');
+    expect(r6.state.gmGot).toEqual({ coins: 1000, dkey_g4: 2 });
+    // 测试里假装领过的那封东西不在身上，gmLeft 早被压到 0；这里只剩兑换码那 1 把，改回 code 后也减掉
+    expect(r6.state.gmLeft?.dkey_g4 ?? 0).toBe(0);
+    expect(r6.state.gmMark).toBe(2);
+    const r7 = runSync(r6.state, [], t0 + 3000, { ...EX, codeTitles: ['code'] }, 'dev');
+    expect(r7.state.gmGot).toEqual({ coins: 1000, dkey_g4: 2 });
   });
 
   it('物品来源：领邮件按邮件种类记来源，结算返回这次新得到的（got）', () => {

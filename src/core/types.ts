@@ -378,7 +378,7 @@ export interface GameState {
   mailKeys?: string[];
   /** 邮件编号计数 */
   mailSeq?: number;
-  /** 从带 gm 标记的邮件领到的物品累计（11-02 内测记账，物品 id → 数量） */
+  /** 从 GM 邮件（gm 标记，不含兑换码）领到的物品累计（11-02 内测记账，物品 id → 数量） */
   gmGot?: Record<string, number>;
   /**
    * GM 发的东西还剩多少在身上（交易把关用：这部分不能交易、不能存公会仓库）。
@@ -386,7 +386,7 @@ export interface GameState {
    */
   gmLeft?: Record<string, number>;
   /** 老邮件补标记做过了 */
-  gmMark?: 1;
+  gmMark?: 1 | 2;
   /** 畜牧站的栏位：每栏一匹小马崽，start 放进去的时间，ms 要长多久（放进去时按养殖等级算好） */
   ranch?: { pens: ({ start: number; ms: number } | null)[] };
   /** 永冬冰原的限时宝箱（11-01）：正在开的箱子，和每个箱子开过的轮次（每人每轮一次） */

@@ -48,11 +48,13 @@ async function extras(uid: string, now: number): Promise<SyncExtras & { found: b
   if (!p) return { found: false, gmBuffs: [], guildLv: 0, mails: [] };
   const pid = Number(p.pid) || 0;
   const since = new Date(now - 3600_000).toISOString();
-  const [buffs, guild, mails, party] = await Promise.all([
+  const [buffs, guild, mails, party, codes] = await Promise.all([
     rest(`gm_buffs?select=id,target_pid,name,tag,kind,pct,starts_at,ends_at&ends_at=gt.${since}&or=(target_pid.is.null,target_pid.eq.${pid})&limit=50`) as Promise<Row[]>,
     p.guild_id ? rest(`guilds?id=eq.${p.guild_id}&select=level,tech`) as Promise<Row[]> : Promise.resolve([] as Row[]),
     pid ? rest(`gm_mail?select=id,title,body,items,created_by&target_pid=eq.${pid}&claimed_at=is.null&limit=20`) as Promise<Row[]> : Promise.resolve([] as Row[]),
     rest(`party_members?player_id=eq.${uid}&select=party_id`) as Promise<Row[]>,
+    // 兑换码标题：只有还没按标题分过的老存档要用（gmMark < 2），拿不到就下次再分
+    (rest(`redeem_codes?select=title&limit=1000`) as Promise<Row[]>).catch(() => null),
   ]);
   const members = party[0] ? ((await rest(`party_members?party_id=eq.${party[0].party_id}&select=player_id`)) as Row[]).map((r) => String(r.player_id)) : [];
   // 队友存档里的洞口和副本进度：跟队友进洞口、按队友进度拉进度时核对（不信客户端报的）
@@ -84,6 +86,7 @@ async function extras(uid: string, now: number): Promise<SyncExtras & { found: b
       items: (Array.isArray(m.items) ? m.items : []).filter((i: Row) => typeof i?.item === 'string' && Number(i.qty) > 0).map((i: Row): ItemStack => ({ item: i.item, qty: Math.floor(Number(i.qty)) })),
     })),
     outfit: p.outfit ?? undefined,
+    codeTitles: codes ? codes.map((c) => String(c.title ?? '')).filter(Boolean) : undefined,
     epoch: Number(p.save_epoch) || 0,
     partySize,
     me: uid,
