@@ -8,6 +8,13 @@ import { tl } from '../i18n';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-11-02-d', date: tl('11 月 2 日'), title: tl('修复邮件反复弹出'),
+    lines: [
+      tl('修复登录后邮件反复弹出、领了又出现的问题：每日礼物和全服赠礼改由服务器发放，领过就是领过了。'),
+      tl('「每天」统一按北京时间计算（家园宠物、访客订单、每日礼物）。'),
+    ],
+  },
+  {
     id: '2026-11-02-c', date: tl('11 月 2 日'), title: tl('存档改由服务器保存和结算'),
     lines: [
       tl('游戏进度现在由服务器按服务器时间结算并保存：你的每个操作会发给服务器，服务器算好后同步回来，手机和电脑之间换着玩更稳。'),

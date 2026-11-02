@@ -89,6 +89,7 @@ async function doSync(): Promise<boolean> {
         return false;
       }
     }
+    store.serverMail = true;
     const sentAt = Date.now();
     const r = await online.gameSync(store.pending.slice(0, 3000), deviceId());
     calibrate(r.now, sentAt, Date.now());
@@ -162,6 +163,8 @@ let ac = { hidden: false, banned: false };
 export const myAcStatus = () => ac;
 async function refreshAc() {
   try { ac = await online.myAc(); fns.forEach((f) => f()); } catch { /* 拿不到就当正常 */ }
+  // 被封禁：服务器不再结算，这边也停下并说明
+  if (ac.banned && phase === 'play') store.stop('banned');
 }
 
 const wrap = async (f: () => Promise<unknown>) => {

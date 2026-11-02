@@ -46,6 +46,7 @@ describe('服务器结算', () => {
     expect(r.state.xp).toEqual(s.xp);
     expect(r.state.loc).toEqual(s.loc);
     expect(r.state.xp.fishing).toBeGreaterThan(0);
+    expect(r.flags).toEqual([]);
   });
 
   it('变速：指令时间跑在服务器前面也只算到服务器的现在', () => {
@@ -168,5 +169,41 @@ describe('改过的客户端乱传参数', () => {
     expect(typeof s).toBe('object');
     const bad = run(base, [{ n: 'startNow', a: ['__proto__', {}], t: t0 + 1 }, { n: 'startNow', a: ['nope', {}], t: t0 + 2 }], t0 + 1000);
     expect(bad.queue).toEqual([]);
+  });
+
+  it('可疑操作记下来：瞬移、伪造洞口、改走路速度', () => {
+    const base = newGame(t0, 5);
+    const gate = { id: 'fake9', kind: 'blue', tier: 6, x: base.loc.x, y: base.loc.y, at: t0, expires: t0 + 3600_000, seed: 1, floors: 9 };
+    const r = runSync(base, [
+      { n: 'setLoc', a: [far.x, far.y], t: t0 + 100, q: 1 },
+      { n: 'enterDungeon', a: [gate, 1], t: t0 + 200, q: 2 },
+      { n: 'walk', a: [base.loc, far, 1], t: t0 + 300, q: 3 },
+      { n: 'nope' as CmdName, a: [], t: t0 + 400, q: 4 },
+    ], t0 + 1000, EX, 'dev');
+    const k = Object.fromEntries((r.flags ?? []).map((f) => [f.kind, f.severe]));
+    expect(k).toEqual({ move: false, fake_gate: true, walk_fast: true, bad_cmd: false });
+  });
+
+  it('封禁：进度冻结，指令不执行，解封后也不补', () => {
+    const base = { ...newGame(t0, 5), loc: far };
+    const r = runSync(base, [{ n: 'startNow', a: ['fish_minnow', { type: 'infinite' }], t: t0 + 100, q: 5 }], t0 + 3600_000, { ...EX, frozen: true }, 'dev');
+    expect(r.ack).toBe(5);
+    expect(r.state.queue).toEqual([]);
+    expect(r.state.lastTick).toBe(t0 + 3600_000);
+    expect(r.state.xp.fishing).toBe(base.xp.fishing);
+    expect(r.flags?.map((f) => f.kind)).toEqual(['banned_play']);
+  });
+
+  it('全服赠礼、每日礼物由服务器发，领了就是领了，不会再发', () => {
+    const r1 = runSync(null, [], t0, EX, 'dev');
+    const gift = r1.state.mail?.find((m) => m.kind === 'gift');
+    expect(gift).toBeTruthy();
+    const r2 = runSync(r1.state, [{ n: 'claimMail', a: [gift!.id], t: t0 + 500, q: 1 }], t0 + 1000, EX, 'dev');
+    expect(r2.state.mail?.find((m) => m.id === gift!.id)?.claimed).toBe(true);
+    const keys = (st: GameState) => (st.bag.dkey_g4 ?? 0) + (st.bank.dkey_g4 ?? 0);
+    expect(keys(r2.state)).toBe(5);
+    const r3 = runSync(r2.state, [{ n: 'claimMail', a: [gift!.id], t: t0 + 1500, q: 2 }], t0 + 86_400_000 * 2, EX, 'dev');
+    expect(keys(r3.state)).toBe(5);
+    expect(r3.state.mail?.filter((m) => m.kind === 'gift').length).toBe(1);
   });
 });

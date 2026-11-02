@@ -386,7 +386,12 @@ function Game() {
       {inactive && (
         <div className="modal-bg tab-lock">
           <div className="modal frame">
-            {store.inactiveWhy === 'device' ? (
+            {store.inactiveWhy === 'banned' ? (
+              <>
+                <h2>{tl('账号已被限制')}</h2>
+                <p>{tl('你的账号因为数据异常被管理员限制，游戏进度已暂停。有疑问请联系管理员。')}</p>
+              </>
+            ) : store.inactiveWhy === 'device' ? (
               <>
                 <h2>{tl('这个账号在别的设备上玩过了')}</h2>
                 <p>{tl('别的设备或浏览器在这之后上传了更新的存档。为了不拿这边的旧进度盖掉它，这里已经暂停。点下面的按钮会读取云端最新的存档，并结算离开期间的收获。')}</p>
@@ -397,7 +402,7 @@ function Game() {
                 <p>{tl('为了不让两边的进度互相覆盖，这个页面已经暂停，不会再保存。')}</p>
               </>
             )}
-            <div className="go"><button className="primary" onClick={() => location.reload()}>{store.inactiveWhy === 'device' ? tl('读取最新存档，在这里继续') : tl('在这个页面继续玩')}</button></div>
+            <div className="go"><button className="primary" onClick={() => location.reload()}>{store.inactiveWhy === 'banned' ? tl('重新检查') : store.inactiveWhy === 'device' ? tl('读取最新存档，在这里继续') : tl('在这个页面继续玩')}</button></div>
           </div>
         </div>
       )}

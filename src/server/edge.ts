@@ -43,7 +43,7 @@ async function whoAmI(req: Request): Promise<string | null> {
 }
 
 async function extras(uid: string, now: number): Promise<SyncExtras & { found: boolean }> {
-  const [p] = (await rest(`profiles?id=eq.${uid}&select=pid,outfit,guild_id,save_epoch`)) as Row[];
+  const [p] = (await rest(`profiles?id=eq.${uid}&select=pid,outfit,guild_id,save_epoch,banned`)) as Row[];
   if (!p) return { found: false, gmBuffs: [], guildLv: 0, mails: [] };
   const pid = Number(p.pid) || 0;
   const since = new Date(now - 3600_000).toISOString();
@@ -82,6 +82,7 @@ async function extras(uid: string, now: number): Promise<SyncExtras & { found: b
     epoch: Number(p.save_epoch) || 0,
     partySize,
     me: uid,
+    frozen: p.banned === true,
     party: members.length ? members : [uid],
     mateGates,
     mateRuns,
@@ -103,7 +104,7 @@ Deno.serve(async (req) => {
       ]);
       if (!ex.found) return json({ error: 'profile' }, 404);
       const row = rows[0];
-      const { state, applied, mailIds, ack } = runSync(row?.data ?? null, body.cmds, now, ex, device ?? '');
+      const { state, applied, mailIds, ack, flags } = runSync(row?.data ?? null, body.cmds, now, ex, device ?? '');
       const data = device ? { ...state, _device: device } : state;
       const rev = await rest('rpc/server_commit', {
         method: 'POST',
@@ -112,7 +113,13 @@ Deno.serve(async (req) => {
           p_mail: mailIds, p_rank: rankOf(state),
         }),
       }) as number;
-      if (rev > 0) return json({ state: data, rev, now, applied, ack });
+      if (rev > 0) {
+        // 可疑操作记进防作弊记录（GM 面板看得到；严重的自动移出排行榜）。记不上不影响同步
+        await Promise.all((flags ?? []).slice(0, 6).map((f) => rest('rpc/ac_flag', {
+          method: 'POST', body: JSON.stringify({ p: uid, p_kind: f.kind, p_severe: f.severe, p_detail: f.detail }),
+        }).catch(() => {})));
+        return json({ state: data, rev, now, applied, ack });
+      }
     }
     return json({ error: 'busy' }, 409);
   } catch (e) {
