@@ -8,7 +8,8 @@
  * 服务器用 service_role 写存档，玩家自己不能再写存档（见 schema.sql「服务器结算」）。
  */
 import { rankOf, runSync, type SyncExtras } from './sync';
-import type { GmBuff, ItemStack } from '../core/types';
+import type { DungeonGate, GmBuff, ItemStack } from '../core/types';
+import type { MateRun } from '../core/guard';
 
 declare const Deno: { env: { get(k: string): string | undefined }; serve(h: (r: Request) => Promise<Response>): void };
 
@@ -52,7 +53,22 @@ async function extras(uid: string, now: number): Promise<SyncExtras & { found: b
     pid ? rest(`gm_mail?select=id,title,body,items&target_pid=eq.${pid}&claimed_at=is.null&limit=20`) as Promise<Row[]> : Promise.resolve([] as Row[]),
     rest(`party_members?player_id=eq.${uid}&select=party_id`) as Promise<Row[]>,
   ]);
-  const partySize = party[0] ? ((await rest(`party_members?party_id=eq.${party[0].party_id}&select=player_id`)) as Row[]).length : 0;
+  const members = party[0] ? ((await rest(`party_members?party_id=eq.${party[0].party_id}&select=player_id`)) as Row[]).map((r) => String(r.player_id)) : [];
+  const partySize = members.length;
+  // 队友存档里的洞口和副本进度：跟队友进洞口、按队友进度拉进度时核对（不信客户端报的）
+  const mates = members.filter((id) => id !== uid && /^[0-9a-f-]{36}$/.test(id));
+  const mateSaves = mates.length
+    ? (await rest(`saves?player_id=in.(${mates.join(',')})&select=gates:data->gates,dungeon:data->dungeon,resume:data->dgResume,used:data->gatesUsed`)) as Row[]
+    : [];
+  const mateGates: DungeonGate[] = [];
+  const mateRuns: MateRun[] = [];
+  for (const m of mateSaves) {
+    for (const g of Array.isArray(m.gates) ? m.gates : []) if (g && typeof g.id === 'string') mateGates.push(g);
+    for (const r of [m.dungeon, ...(Array.isArray(m.resume) ? m.resume : [])]) {
+      if (r?.gate && typeof r.gate.id === 'string') mateRuns.push({ gate: r.gate.id, floor: Number(r.floor) || 0, idx: Number(r.idx) || 0, phase: String(r.phase ?? '') });
+    }
+    for (const id of Array.isArray(m.used) ? m.used : []) if (typeof id === 'string') mateRuns.push({ gate: id, floor: 0, idx: 0, phase: 'open' });
+  }
   return {
     found: true,
     gmBuffs: buffs.map((r): GmBuff => ({ id: r.id, name: r.name, tag: r.tag ?? '', kind: r.kind, pct: Number(r.pct), from: Date.parse(r.starts_at), to: Date.parse(r.ends_at), all: r.target_pid == null })),
@@ -65,6 +81,10 @@ async function extras(uid: string, now: number): Promise<SyncExtras & { found: b
     outfit: p.outfit ?? undefined,
     epoch: Number(p.save_epoch) || 0,
     partySize,
+    me: uid,
+    party: members.length ? members : [uid],
+    mateGates,
+    mateRuns,
   };
 }
 

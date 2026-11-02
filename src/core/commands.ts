@@ -1,32 +1,113 @@
 import type { BeltSlot, DungeonGate, EquipSlot, GameState, Summary, TaskMode } from './types';
-import { ITEMS, keyOf } from './data';
+import { ACTIONS, ITEMS, MONSTERS, NODES, jumpNode, keyOf, nodesOfAction, standOf } from './data';
 import {
   bagRoomFor, bagSlots, beltSlotOf, buyGoods, buyHwSkin, buyKey, buyPumpkinMount, buySeed, cancelRealmChest, collectHorse, combineShards,
   depositLoot, dismissStop, markContrib, syncDungeon, eat, enqueue, enterDungeon, equip, finishRealmChest, fromBelt, leaveDungeon, leaveWork, openContainer,
   openDungeonChest, openGate, placeFoal, redeemCode, removeTask, resumeWork, salvage, sell, setLoc, setSettings, sortBank, startAt,
   newGame, startNow, startRealmChest, startWalk, summonPumpkin, teleport, toBag, toBank, toBelt, toggleMount, unequip, unlockWaystone, useGate,
-  useTownScroll, useWaystone,
+  useTownScroll, useWaystone, walkPos, moveSpeed, combatStats, playerAttackMs,
 } from './sim';
+import { dungeonFloor } from './dungeon';
+import { guard, maxSpeed } from './guard';
 import { claimRepReward, collectHome, deliverOrder, enterHome, leaveHome, petPet, placeBuild, removeAt, upgradeHome } from './home';
 import { harvestAll, installSprinkler, plantAll, tendPlot, waterAll } from './farm';
 import { claimMail, clearMail, readMail } from './mail';
 import type { TeamMember } from './dungeon';
-import { pushMateHit, setAggroMates, setDgCrew, setFieldCrew } from './aggro';
+import { fieldKey, pushMateHit, setAggroMates, setDgCrew, setFieldCrew, stopKey } from './aggro';
+
+/*
+ * 位置核对（11-02，只在服务器结算时）：「我走到了哪」是地图画面报上来的，改过的客户端可以乱报（瞬移、
+ * 隔空激活石碑、站到仓库旁）。服务器按存档里能确定的位置（站的点、正在走的路、寻路走了多久、最近报过的点）
+ * 加上最快跑速，算出现在可能在的范围，报的位置不在范围里就不认。
+ */
+type Pt = { x: number; y: number; r: number; t: number };
+const own = (o: object, k: string) => Object.prototype.hasOwnProperty.call(o, k);
+/** 画面上的格子和存档里的格子差这么多以内都算对得上 */
+const SLACK = 8;
+/** 报过的位置留多久（够「停下来、换方向走」连着几条指令用） */
+const MV_KEEP = 20_000;
+function anchors(s: GameState, t: number): Pt[] {
+  const G = guard();
+  const out: Pt[] = [{ ...walkPos(s), r: SLACK, t }, { ...s.loc, r: SLACK, t }];
+  if (s.walk) out.push({ ...s.walk.from, r: SLACK, t: t - (s.walk.total - s.walk.ms) }, { ...s.walk.to, r: SLACK, t });
+  if (s.travel) {
+    const from = t - (s.travel.total - s.travel.ms);
+    out.push({ ...s.loc, r: SLACK, t: from });
+    const dest = NODES.find((n) => n.id === s.travel!.to);
+    if (dest) out.push({ ...standOf(dest), r: SLACK, t });
+    for (const id of [...(s.travel.via ?? []), ...(s.travel.hops ?? []).flat()]) {
+      const n = jumpNode(id);
+      if (n) out.push({ ...standOf(n), r: SLACK, t: from });
+    }
+  }
+  for (const p of G?.mv?.pts ?? []) if (t - p.t <= MV_KEEP) out.push(p);
+  return out;
+}
+/** 服务器结算：p 是不是现在可能站的位置（extra：再放宽几格） */
+function canBe(s: GameState, t: number, p: { x: number; y: number }, extra = 0): boolean {
+  if (!guard()) return true;
+  const sp = maxSpeed(s) / 1000;
+  return anchors(s, t).some((a) => Math.hypot(p.x - a.x, p.y - a.y) <= a.r + extra + sp * Math.max(0, t - a.t));
+}
+/** 每条指令执行前记下当时可能的位置（停下工作、换路走之后还能对上之前的路） */
+function remember(s: GameState, t: number) {
+  const G = guard();
+  if (!G) return;
+  const seen = new Set<string>();
+  const pts = anchors(s, t).filter((p) => {
+    const k = `${p.x},${p.y},${p.t}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  G.mv = { pts: pts.slice(-16), t };
+}
 
 /**
  * 组队同打（11-02）：一起打的队友人数、嘲讽、队友新打出的伤害，本机从联机层收到后作为指令执行，
  * 服务器结算时也按同样的时刻用上（和本机一样只在实时结算时生效）。伤害每条最多算怪物血量的一半，防止乱报
  */
 export interface Coop { crew: number; dg: number; mates: number[]; hits: [string, number][] }
-function coop(s: GameState, c: unknown): GameState {
-  const o = (c ?? {}) as Partial<Coop>;
-  setFieldCrew(int(o.crew, 0, 4));
-  setDgCrew(int(o.dg, 0, 4));
-  setAggroMates((Array.isArray(o.mates) ? o.mates : []).slice(0, 4).map((x) => int(x, 1, 5000)));
-  const cap = Math.max(1, (s.combat?.monsterMax ?? s.combat?.monsterHp ?? 1000) * 0.5);
-  for (const h of (Array.isArray(o.hits) ? o.hits : []).slice(0, 20)) {
-    if (Array.isArray(h)) pushMateHit(str(h[0], 80), Math.min(cap, num(h[1], 0, 1e9)));
+/** 永冬冰原的限时精英、首领：附近的人不组队也能一起打 */
+const SHARED = new Set(NODES.filter((n) => n.timed && (n.timed.kind === 'elite' || n.timed.kind === 'boss')).flatMap((n) => n.actions));
+/** 正在打的这只怪（副本里的停靠点或野外动作）和它的标识 */
+function target(s: GameState): { key: string; m: (typeof MONSTERS)[string] } | null {
+  const r = s.dungeon;
+  if (r) {
+    const st = dungeonFloor(r.gate, r.floor).stops[r.idx];
+    return st?.kind === 'mob' && st.monster && MONSTERS[st.monster] ? { key: stopKey(r.gate.id, r.floor, r.idx), m: MONSTERS[st.monster] } : null;
   }
+  const a = s.paused ? undefined : ACTIONS[s.queue[0]?.action ?? ''];
+  return a?.kind === 'combat' && MONSTERS[a.monster] ? { key: fieldKey(a.id), m: MONSTERS[a.monster] } : null;
+}
+function coop(s: GameState, t: number, c: unknown): GameState {
+  const o = (c ?? {}) as Partial<Coop>;
+  const G = guard();
+  // 服务器：一起打的人数不能超过队伍里的其他人（冰原同打不用组队，最多 4 人）
+  const tgt = target(s);
+  const most = !G ? 4 : Math.min(4, Math.max(G.party.length - 1, !s.dungeon && tgt && SHARED.has(s.queue[0]?.action ?? '') ? 4 : 0));
+  setFieldCrew(Math.min(most, int(o.crew, 0, 4)));
+  setDgCrew(Math.min(most, int(o.dg, 0, 4)));
+  setAggroMates((Array.isArray(o.mates) ? o.mates : []).slice(0, most).map((x) => int(x, 1, 5000)));
+  const hits = (Array.isArray(o.hits) ? o.hits : []).slice(0, 20).filter((h): h is [string, number] => Array.isArray(h));
+  if (G) {
+    // 服务器：只收正在打的这只怪的伤害，按队友人数和时间限量（每人最多按自己输出的 8 倍、每秒至少怪物血量的 5%）
+    const since = Math.min(10_000, Math.max(0, t - (G.coopAt ?? t - 1000)));
+    G.coopAt = t;
+    if (!tgt || most <= 0) return { ...s };
+    const st = combatStats(s, tgt.m);
+    const dps = (st.playerMaxHit * Math.max(1, st.critMult)) / Math.max(200, playerAttackMs(s));
+    let left = most * Math.max(dps * 8, tgt.m.hp * 0.05 / 1000) * since;
+    for (const h of hits) {
+      if (str(h[0], 80) !== tgt.key || left <= 0) continue;
+      const d = Math.min(left, num(h[1], 0, 1e9));
+      left -= d;
+      pushMateHit(tgt.key, d);
+    }
+    return { ...s };
+  }
+  const cap = Math.max(1, (s.combat?.monsterMax ?? s.combat?.monsterHp ?? 1000) * 0.5);
+  for (const h of hits) pushMateHit(str(h[0], 80), Math.min(cap, num(h[1], 0, 1e9)));
   // 存档本身没变，返回新对象好让它被记成指令
   return { ...s };
 }
@@ -90,6 +171,50 @@ export function quickUse(g: GameState, id: string) {
 }
 export const quickUseOpens = (g: GameState, id: string) => ({ box: !!ITEMS[id]?.opens, key: !!keyOf(id) && !g.dungeon && !g.home?.inside });
 
+/** 动作存在、地图上有地方做（乱传的动作名会让结算出错） */
+const canDo = (a: string) => own(ACTIONS, a) && nodesOfAction(a).length > 0;
+
+/** 只认洞口本身的这几样（其余字段客户端传什么都不要） */
+function cleanGate(x: unknown): DungeonGate | null {
+  const o = (x ?? {}) as Record<string, unknown>;
+  if ((o.kind !== 'green' && o.kind !== 'blue') || typeof o.id !== 'string') return null;
+  return {
+    id: str(o.id, 40), kind: o.kind, tier: int(o.tier, 1, 99), x: int(o.x, -10000, 100000), y: int(o.y, -10000, 100000),
+    at: num(o.at, 0), expires: num(o.expires, 0), seed: int(o.seed, 0, 2 ** 31), floors: int(o.floors, 1, 20),
+  };
+}
+/**
+ * 进洞口：服务器只认真的洞口（自己开的、或者队友存档里开着的），洞口的层数、阶级、过期时间都用查到的那份；
+ * 队伍人数、队员名单按服务器查到的队伍来
+ */
+function enterGate(s: GameState, t: number, gate: unknown, party: unknown, team: unknown): GameState {
+  const G = guard();
+  const want = cleanGate(gate);
+  if (!want) return s;
+  const real = !G ? want : (s.gates ?? []).find((x) => x.id === want.id) ?? G.gates.find((x) => x.id === want.id);
+  if (!real) return s;
+  let n = int(party, 1, 10);
+  const tm = (team ?? null) as { members?: unknown; me?: unknown } | null;
+  let members = Array.isArray(tm?.members)
+    ? (tm!.members as unknown[]).slice(0, 10).map((m) => ({ id: str((m as TeamMember)?.id, 64), name: str((m as TeamMember)?.name, 40) })).filter((m) => m.id)
+    : [];
+  let me = str(tm?.me, 64);
+  if (G) {
+    n = Math.min(n, Math.max(1, G.party.length));
+    members = members.filter((m) => G.party.includes(m.id));
+    me = G.me;
+  }
+  const ok = members.length > 1 && members.some((m) => m.id === me);
+  return enterDungeon(s, { ...real }, n, t, ok ? { members, me } : undefined);
+}
+/** 服务器：队友真的打到了这里（按队友存档里的进度） */
+function mateAt(m: { gate: string; floor: number; idx: number; phase: string }): boolean {
+  const G = guard();
+  if (!G) return true;
+  const done = (p: string) => p === 'chest' || p === 'open';
+  return G.runs.some((r) => r.gate === m.gate && (done(r.phase) || (!done(m.phase) && (r.floor > m.floor || (r.floor === m.floor && r.idx >= m.idx)))));
+}
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Fn = (s: GameState, t: number, ...a: any[]) => GameState | [GameState, unknown] | { state: GameState; [k: string]: unknown };
 
@@ -114,7 +239,7 @@ export const COMMANDS = {
   /** 删除进度从头开始 */
   reset: (s, t) => newGame(t, s.rng),
   // 干活和任务
-  startNow: (s, _t, a, m) => startNow(s, str(a), mode(m)),
+  startNow: (s, _t, a, m) => (canDo(str(a)) ? startNow(s, str(a), mode(m)) : s),
   enqueue: (s, _t, a, m) => enqueue(s, str(a), mode(m)),
   startAt: (s, _t, a, node, m?: unknown) => startAt(s, str(a), str(node), m === undefined ? undefined : mode(m)),
   removeTask: (s, _t, i) => removeTask(s, int(i, 0, 100)),
@@ -123,25 +248,42 @@ export const COMMANDS = {
   leaveWork: (s) => leaveWork(s),
   // 走路、坐骑、传送
   mount: (s, _t, on?: unknown) => toggleMount(s, on === undefined ? undefined : bool(on)),
-  setLoc: (s, _t, x, y) => setLoc(s, int(x, -10000, 100000), int(y, -10000, 100000)),
-  leaveAndSetLoc: (s, _t, x, y) => setLoc(leaveWork(s), int(x, -10000, 100000), int(y, -10000, 100000)),
-  walk: (s, _t, a, b, ms) => startWalk(s, xy(a), xy(b), num(ms, 0, 24 * 3600_000)),
-  teleport: (s, _t, node) => teleport(s, str(node)),
+  setLoc: (s, t, x, y) => {
+    const p = xy({ x, y });
+    return canBe(s, t, p) ? setLoc(s, p.x, p.y) : s;
+  },
+  leaveAndSetLoc: (s, t, x, y) => {
+    const p = xy({ x, y });
+    return canBe(s, t, p) ? setLoc(leaveWork(s), p.x, p.y) : leaveWork(s);
+  },
+  walk: (s, t, a, b, ms) => {
+    // 服务器：起点要对得上，时间不能比直线跑过去还短（报短了按最快速度算）
+    const from = canBe(s, t, xy(a)) ? xy(a) : walkPos(s);
+    const to = xy(b);
+    const least = guard() ? (Math.hypot(to.x - from.x, to.y - from.y) / moveSpeed(s)) * 1000 * 0.9 : 0;
+    return startWalk(s, from, to, Math.max(least, num(ms, 0, 24 * 3600_000)));
+  },
+  /** 回城卷轴用过之后画面上把人挪过去（存档里卷轴已经挪过了）：服务器只在本来就站在那里时才认 */
+  teleport: (s, t, node) => {
+    const n = NODES.find((x) => x.id === str(node));
+    return n && canBe(s, t, standOf(n), -SLACK + 2) ? teleport(s, n.id) : s;
+  },
   useWaystone: (s, _t, id) => useWaystone(s, str(id)),
-  unlockWaystone: (s, _t, at) => unlockWaystone(s, xy(at)),
+  unlockWaystone: (s, t, at) => unlockWaystone(s, canBe(s, t, xy(at)) ? xy(at) : walkPos(s)),
   useGate: (s, _t, id) => useGate(s, str(id)),
   townScroll: (s, _t, bank) => useTownScroll(s, str(bank)),
   // 组队同打
-  coop: (s, _t, c) => coop(s, c),
+  coop: (s, t, c) => coop(s, t, c),
   // 副本
-  openGate: (s, t, key, at) => openGate(s, str(key), xy(at), t),
-  enterDungeon: (s, t, gate, party, team) => enterDungeon(s, gate as DungeonGate, int(party, 1, 10), t,
-    team ? (team as { members: TeamMember[]; me: string }) : undefined),
+  // 洞口开在身边找好的空地（在城里会开到最近的城外，最远九十来格）
+  openGate: (s, t, key, at) => (canBe(s, t, xy(at), 92) ? openGate(s, str(key), xy(at), t) : [s, null]),
+  enterDungeon: (s, t, gate, party, team) => enterGate(s, t, gate, party, team),
   leaveDungeon: (s) => leaveDungeon(s),
-  markContrib: (s, _t, id) => markContrib(s, str(id)),
+  markContrib: (s, _t, id) => (guard() && !guard()!.party.includes(str(id)) ? s : markContrib(s, str(id))),
   syncDungeon: (s, _t, d) => {
     const m = (d ?? {}) as Record<string, unknown>;
-    return syncDungeon(s, { gate: str(m.gate), floor: int(m.floor, 0, 1000), idx: int(m.idx, 0, 1000), phase: str(m.phase, 16) });
+    const mate = { gate: str(m.gate), floor: int(m.floor, 0, 1000), idx: int(m.idx, 0, 1000), phase: str(m.phase, 16) };
+    return mateAt(mate) ? syncDungeon(s, mate) : s;
   },
   dungeonChest: (s, t) => openDungeonChest(s, t),
   buyKey: (s, _t, key, n) => buyKey(s, str(key), int(n, 1, 100)),
@@ -186,9 +328,10 @@ export type CmdArgs<N extends CmdName> = Rest<(typeof COMMANDS)[N]>;
 
 /** 执行一条指令；名字不认识、参数乱传导致出错，都当这条没执行 */
 export function applyCmd(s: GameState, n: string, a: unknown[], t: number): CmdResult {
-  const f = (COMMANDS as Record<string, Fn>)[n];
+  const f = own(COMMANDS, n) ? (COMMANDS as Record<string, Fn>)[n] : undefined;
   if (!f || !Array.isArray(a)) return { state: s };
   try {
+    remember(s, t);
     const r = f(s, t, ...a);
     if (Array.isArray(r)) return { state: r[0], out: r[1] };
     if (r && typeof r === 'object' && 'state' in r && (r as { state: unknown }).state && typeof (r as { state: unknown }).state === 'object' && !('bank' in r)) {

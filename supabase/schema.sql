@@ -2034,3 +2034,17 @@ begin
   end if;
   return t.status;
 end $$;
+
+-- ============ 资料表收紧（11-02）============
+-- 建角色时只能填名字和外观（以前能自己填数字 ID、公会每日计数、隐藏标记）；
+-- 别人只能看公开的几项（名字、数字 ID、外观、公会、上线时间），其余只有服务器函数能读
+revoke insert, select on public.profiles from anon, authenticated;
+grant insert (id, name, outfit) on public.profiles to authenticated;
+grant select (id, pid, name, outfit, guild_id, last_seen, created_at) on public.profiles to anon, authenticated;
+-- 已经被乱填过的改回正常值
+update public.profiles set
+  g_exchanged = greatest(g_exchanged, 0),
+  g_took = greatest(g_took, 0),
+  g_day = least(g_day, (now() at time zone 'utc')::date),
+  g_checkin = least(g_checkin, (now() at time zone 'utc')::date)
+where g_exchanged < 0 or g_took < 0 or g_day > (now() at time zone 'utc')::date or g_checkin > (now() at time zone 'utc')::date;

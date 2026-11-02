@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { runSync } from './sync';
 import { advance, newGame } from '../core/sim';
 import { applyCmd, type Cmd, type CmdName } from '../core/commands';
-import { NODES, standOf } from '../core/data';
+import { NODES, WALK_TILES_PER_SEC, WAYSTONES, standOf } from '../core/data';
 import type { GameState } from '../core/types';
 
 const EX = { gmBuffs: [], guildLv: 0, mails: [] };
@@ -24,9 +24,13 @@ function client(s: GameState, plan: [number, CmdName, unknown[]][], until: numbe
   }
   return { s, cmds };
 }
+const spawn = newGame(t0, 5).loc;
+/** 从出生点走到湖边要多久（直线，放宽两成） */
+const walkMs = Math.ceil((Math.hypot(pine.x - spawn.x, pine.y - spawn.y) / WALK_TILES_PER_SEC) * 1200);
 const PLAN: [number, CmdName, unknown[]][] = [
-  [1000, 'setLoc', [pine.x, pine.y]],
-  [1200, 'startNow', ['fish_minnow', { type: 'infinite' }]],
+  [1000, 'walk', [spawn, pine, walkMs]],
+  [1200 + walkMs, 'setLoc', [pine.x, pine.y]],
+  [1400 + walkMs, 'startNow', ['fish_minnow', { type: 'infinite' }]],
   [600_000, 'leaveWork', []],
 ];
 
@@ -62,7 +66,7 @@ describe('服务器结算', () => {
   it('重发的指令不会执行两次', () => {
     const base = newGame(t0, 5);
     base.bank.minnow = 10;
-    const sell: Cmd[] = [{ n: 'setLoc', a: [pine.x, pine.y], t: t0 + 1, q: 1 }];
+    const sell: Cmd[] = [{ n: 'setLoc', a: [spawn.x + 2, spawn.y], t: t0 + 1, q: 1 }];
     const r1 = runSync(base, sell, t0 + 1000, EX, 'dev');
     const r2 = runSync(r1.state, sell, t0 + 2000, EX, 'dev');
     expect(r1.ack).toBe(1);
@@ -82,5 +86,87 @@ describe('服务器结算', () => {
     const r = runSync(null, [], t0, { ...EX, outfit: 'ranger', mails: [{ id: 'm1', title: '礼物', body: '', items: [{ item: 'minnow', qty: 3 }] }] }, 'dev');
     expect(r.mailIds).toEqual(['m1']);
     expect(r.state.mail?.[0]?.items).toEqual([{ item: 'minnow', qty: 3 }]);
+  });
+});
+
+describe('改过的客户端乱传参数', () => {
+  const far = standOf(NODES.find((n) => n.id === 'town_lake')!);
+  const run = (base: GameState, cmds: Omit<Cmd, 'q'>[], now: number, ex = {}) =>
+    runSync({ ...JSON.parse(JSON.stringify(base)), _seq: {} }, cmds.map((c, i) => ({ ...c, q: i + 1 })), now, { ...EX, ...ex }, 'dev').state;
+
+  it('瞬移：一下报到很远的地方不认，走够时间才认', () => {
+    const base = newGame(t0, 5);
+    const d = Math.hypot(far.x - base.loc.x, far.y - base.loc.y);
+    expect(d).toBeGreaterThan(30);
+    expect(run(base, [{ n: 'setLoc', a: [far.x, far.y], t: t0 + 500 }], t0 + 1000).loc).toEqual(base.loc);
+    expect(run(base, [{ n: 'leaveAndSetLoc', a: [far.x, far.y], t: t0 + 500 }], t0 + 1000).loc).toEqual(base.loc);
+    // 走路说 1 毫秒走完：按最快速度算，2 秒后还在半路
+    const w = run(base, [{ n: 'walk', a: [base.loc, far, 1], t: t0 + 100 }], t0 + 2000);
+    expect(w.loc).toEqual(base.loc);
+    expect(w.walk?.to).toEqual(far);
+    // 走够了时间
+    const ok = run(base, [{ n: 'walk' as CmdName, a: [base.loc, far, walkMs] }, { n: 'setLoc' as CmdName, a: [far.x, far.y] }].map((c, i) => ({ ...c, t: t0 + 100 + i * (walkMs + 500) })), t0 + 2 * walkMs);
+    expect(ok.loc).toEqual(far);
+  });
+
+  it('诚实：自动寻路走到一半点地面换路，起点认画面上的位置', () => {
+    const base = newGame(t0, 5);
+    const dx = far.x - base.loc.x, dy = far.y - base.loc.y, d = Math.hypot(dx, dy);
+    const k = (WALK_TILES_PER_SEC * 10) / d;
+    const mid = { x: Math.round(base.loc.x + dx * k), y: Math.round(base.loc.y + dy * k) };
+    const s = run(base, [
+      { n: 'startAt', a: ['fish_minnow', 'town_lake'], t: t0 + 100 },
+      { n: 'leaveWork', a: [], t: t0 + 10_100 },
+      { n: 'walk', a: [mid, { x: mid.x + 3, y: mid.y }, 3000], t: t0 + 10_110 },
+    ], t0 + 11_000);
+    expect(s.walk?.from).toEqual(mid);
+  });
+
+  it('隔空激活石碑、回城传送不认', () => {
+    const base = newGame(t0, 5);
+    const stone = WAYSTONES.find((n) => Math.hypot(n.x - base.loc.x, n.y - base.loc.y) > 40)!;
+    const s = run(base, [{ n: 'unlockWaystone', a: [{ x: stone.x, y: stone.y + 1 }], t: t0 + 500 }, { n: 'teleport', a: [stone.id], t: t0 + 600 }], t0 + 1000);
+    expect(s.waystones ?? []).not.toContain(stone.id);
+    expect(s.loc).toEqual(base.loc);
+  });
+
+  it('伪造的洞口进不去；队友存档里真开着的可以进', () => {
+    const base = newGame(t0, 5);
+    const gate = { id: 'fake1', kind: 'blue', tier: 6, x: base.loc.x, y: base.loc.y, at: t0, expires: t0 + 3600_000, seed: 1, floors: 9 };
+    expect(run(base, [{ n: 'enterDungeon', a: [gate, 5, { members: [{ id: 'me', name: 'a' }, { id: 'x', name: 'b' }], me: 'me' }], t: t0 + 500 }], t0 + 1000).dungeon ?? null).toBeNull();
+    const real = { ...gate, id: 'real1', kind: 'green', floors: 2 };
+    const s = run(base, [{ n: 'enterDungeon', a: [{ ...real, floors: 20, tier: 6 }, 1], t: t0 + 500 }], t0 + 1000, { me: 'me', party: ['me', 'mate'], mateGates: [real] });
+    expect(s.dungeon?.gate.floors).toBe(2);
+    // 队友进度：队友存档里没打到那里就不拉
+    const sync = (runs: unknown[]) => run(s, [{ n: 'syncDungeon', a: [{ gate: 'real1', floor: 1, idx: 0, phase: 'walk' }], t: t0 + 1100 }], t0 + 1200, { me: 'me', party: ['me', 'mate'], mateGates: [real], mateRuns: runs });
+    expect(sync([]).dungeon?.floor).toBe(0);
+    expect(sync([{ gate: 'real1', floor: 1, idx: 0, phase: 'walk' }]).dungeon?.floor).toBe(1);
+  });
+
+  it('没组队时报的队友伤害不算', () => {
+    const grove = standOf(NODES.find((n) => n.id === 'starter_grove')!);
+    const base = { ...newGame(t0, 5), loc: grove };
+    const cmds: Omit<Cmd, 'q'>[] = [{ n: 'startNow', a: ['fight_rabbit', { type: 'infinite' }], t: t0 + 100 }];
+    for (let t = 600; t < 60_000; t += 500) cmds.push({ n: 'coop', a: [{ crew: 4, dg: 4, mates: [9999], hits: [['field:fight_rabbit', 1e9]] }], t: t0 + t });
+    const plain = run(base, cmds.slice(0, 1), t0 + 60_000);
+    const hacked = run(base, cmds, t0 + 60_000);
+    expect(hacked.stats.kills).toBeLessThanOrEqual(plain.stats.kills + 1);
+  });
+
+  it('攒着不发、把指令时间填成几小时前：最多往回算半小时', () => {
+    const base = { ...newGame(t0, 5), loc: far };
+    const now = t0 + 3 * 3600_000;
+    const back = run(base, [{ n: 'startNow', a: ['fish_minnow', { type: 'infinite' }], t: t0 + 1 }], now);
+    const honest = run(base, [{ n: 'startNow', a: ['fish_minnow', { type: 'infinite' }], t: now - 30 * 60_000 }], now);
+    expect(back.xp.fishing).toBe(honest.xp.fishing);
+  });
+
+  it('不存在的指令名、原型上的名字不会弄坏存档', () => {
+    const base = newGame(t0, 5);
+    const s = run(base, ['toString', '__proto__', 'constructor', 'hasOwnProperty'].map((n, i) => ({ n: n as CmdName, a: [], t: t0 + i })), t0 + 1000);
+    expect(s.bank).toEqual(base.bank);
+    expect(typeof s).toBe('object');
+    const bad = run(base, [{ n: 'startNow', a: ['__proto__', {}], t: t0 + 1 }, { n: 'startNow', a: ['nope', {}], t: t0 + 2 }], t0 + 1000);
+    expect(bad.queue).toEqual([]);
   });
 });
