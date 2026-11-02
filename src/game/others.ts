@@ -96,7 +96,8 @@ const AUTO_SWING_AFTER = 2500;
 /** 一起打的人停手多久之内还站在怪旁边（等刷新、换下一只的空档） */
 const CREW_HOLD_MS = 5000;
 const MELEE_SPOTS: [number, number][] = [[1, 0], [-0.85, -11], [0.85, 11], [-0.85, 11], [0.85, -11], [1.5, -6], [1.5, 6]];
-const RANGED_SPOTS: [number, number][] = [[0, -12], [0, 12], [-10, -22], [-10, 22], [-18, 0]];
+// 11-02：远程以前只错开 12 像素，人物 30 像素高，两个弓手叠在一起；现在上下错开一个身位
+const RANGED_SPOTS: [number, number][] = [[-8, -24], [-8, 24], [-20, -46], [-20, 46], [-30, 0]];
 const meleeRange = (w?: FightWeapon) => (w ? FIGHT_RANGE[w] ?? 0 : 0) < 0.75;
 const weaponOfAnim = (anim?: string) => /^fight-(\w+?)(-ready)?$/.exec(anim ?? '')?.[1] as FightWeapon | undefined;
 
