@@ -11,7 +11,7 @@ import { partySize } from './party';
 import { CHEST_OPEN_MS, chestTier, inRealm, timedWindow, type ChestTier } from './realm';
 import { aggroMates, dgCrew, fieldCrew, fieldKey, stopKey, takeMateHits, targetChance, threatOf } from './aggro';
 import { stepQuests } from './quests';
-import { isGear, migrateProv, provCraft, provDrop, provMat } from './prov';
+import { isGear, migrateMarks, migrateProv, provCraft, provDrop, provMat } from './prov';
 import { migrateMail, sendMail } from './mail';
 import { stepAutoFarm, stepRain } from './farm';
 import { homeCan, homeCellIds, homeChest, homePct, migrateHome } from './home';
@@ -221,6 +221,7 @@ export function migrate(raw: unknown): GameState | null {
     realmChest: migrateRealmChest(s.realmChest),
     // 装备来源记录（11-02，服务器结算时记）
     prov: migrateProv(s.prov),
+    marks: migrateMarks(s.marks),
     // 永霜盾的寒冰护体（11-02）：服务器每次同步都会读档，要带上，最多 7 秒
     ...(Number.isFinite(s.frostGuard) && s.frostGuard! > 0 ? { frostGuard: Math.min(FROST.guardMs, s.frostGuard!) } : {}),
     redeemed: arr<string>(s.redeemed).filter((c) => typeof c === 'string'),
@@ -725,7 +726,8 @@ export function combatEstimate(s: GameState, m: MonsterDef) {
   const rating = killMs === Infinity ? tl('打不动') : ratio < 0.2 ? tl('轻松') : ratio < 0.5 ? tl('适中') : ratio < 1 ? tl('危险') : tl('很难');
   // 新怪刷出来后要等一整次出手间隔才打第一下
   const perHour = 3_600_000 / (killMs + swing + (m.respawnMs ?? RESPAWN_MS));
-  return { killMs, taken, rating, perHour, swing };
+  // 每秒伤害（期望值，不算怪物回血）：装备对比显示用
+  return { killMs, taken, rating, perHour, swing, dps: (avg / swing) * 1000 };
 }
 
 /** 战斗日志最多留多少条 */

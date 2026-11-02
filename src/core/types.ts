@@ -381,6 +381,8 @@ export interface GameState {
   frostGuard?: number;
   /** 装备来源记录（11-02，服务器结算时记，见 core/prov.ts） */
   prov?: import('./prov').Prov;
+  /** 传说以上装备的制作者署名（11-02）：物品 id → 每件的「名字#数字ID」 */
+  marks?: Record<string, string[]>;
   realmChest?: { opening?: { id: string; at: number }; got?: Record<string, number> };
   /** 万圣节活动：当前召唤出来的是第几档南瓜王（打赢就清掉）、上次召唤的时间 */
   halloween?: { summoned?: number; last?: number; mount?: boolean; /** 已兑换死神皮肤（老字段） */ skin?: boolean; /** 已兑换的万圣节外观 id */ skins?: string[] };

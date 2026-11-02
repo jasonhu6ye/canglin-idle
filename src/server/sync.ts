@@ -9,7 +9,7 @@ import { clearMateHits, setAggroMates, setDgCrew, setFieldCrew } from '../core/a
 import { setPartySize } from '../core/party';
 import { flag, setGuard, type Flag, type Guard, type MateRun } from '../core/guard';
 import type { DungeonGate } from '../core/types';
-import { gearHeld, gearSuspects, matTotals, matsHeld, newEvents, newProv, provSettle, provSettleMats, provTotals, type GearSuspect } from '../core/prov';
+import { gearHeld, gearSuspects, setMaker, trimMarks, matTotals, matsHeld, newEvents, newProv, provSettle, provSettleMats, provTotals, type GearSuspect } from '../core/prov';
 
 /** 组队相关的全局状态清零（服务器一次处理一个玩家，算完不能留给下一个） */
 function resetShared(party = 0) {
@@ -19,6 +19,7 @@ function resetShared(party = 0) {
   setAggroMates([]);
   clearMateHits();
   setGuard(null);
+  setMaker(null);
 }
 
 /*
@@ -58,6 +59,8 @@ export interface SyncExtras {
   mateRuns?: MateRun[];
   /** 只有服务器知道的密钥：开箱这类指令的随机数和它混一下，本机算不出结果 */
   salt?: string;
+  /** 制作者署名：「名字#数字ID」（做出传说以上装备时记上） */
+  maker?: string;
   /** 被 GM 封禁：进度冻结（不执行指令、不结算，时间直接跳到现在，解封后也补不回来） */
   frozen?: boolean;
 }
@@ -72,6 +75,7 @@ export function runSync(saved: unknown, cmds: unknown, now: number, ex: SyncExtr
     mv: keep.mv && Array.isArray(keep.mv.pts) ? keep.mv : undefined, coopAt: Number(keep.coopAt) || undefined,
   };
   setGuard(G);
+  setMaker(ex.maker || null);
   try {
     const p0 = (saved as { prov?: { seq?: number; ev?: unknown[] } } | null)?.prov;
     const seq0 = Number(p0?.seq ?? (Array.isArray(p0?.ev) ? p0!.ev!.length : 0)) || 0;
@@ -162,6 +166,7 @@ function syncInner(saved: unknown, cmds: unknown, now: number, ex: SyncExtras, d
     s = next;
   }
   const out = s as GameState & { _epoch?: number; _seq?: Record<string, number> };
+  trimMarks(out);
   if (out.prov) {
     out.prov.held = gearHeld(out);
     out.prov.matHeld = matsHeld(out);

@@ -125,6 +125,7 @@ export function provCraft(s: GameState, action: string, used: Record<string, num
   for (const [id, n] of Object.entries(got)) {
     if (!isGear(id) || n <= 0) continue;
     c.out[id] = (c.out[id] ?? 0) + n;
+    for (let k = 0; k < n; k++) addMark(s, id);
     if (qualityOf(id) < PROV_EV_Q) continue;
     hi = true;
     pushEv(p, { t, id, src: key, n: pd.n, ms: Math.round(pd.ms), cost: { ...pd.in }, p: odds(id) });
@@ -258,4 +259,58 @@ export function gearSuspects(p: Prov | undefined, fresh: ProvEv[]): GearSuspect[
     if (hour > BURST_N && e.src !== 'cmd:claimMail') out.push({ ...base, reason: 'burst', detail: { ...detail, hour } });
   }
   return out;
+}
+
+/*
+ * 制作者署名（用户 11-02，学阿尔比恩）：传说、神话装备做出来时记下制作者「名字#数字ID」。
+ * 存档 marks[物品 id] = 每件的制作者（同一种可能有好几件，没署名的是掉落、开箱或记录之前就有的）。
+ * 交易、公会仓库搬东西时数据库会把署名一起搬走（save_take_marks / save_give_marks）。
+ */
+export const MARK_Q = 4;
+let maker: string | null = null;
+/** 服务器结算前设：这次结算的玩家（名字#数字ID），结算完清掉 */
+export function setMaker(m: string | null) { maker = m; }
+export const makerNow = () => maker;
+
+/** 做出一件传说以上：记下制作者 */
+export function addMark(s: GameState, id: string) {
+  if (!maker || qualityOf(id) < MARK_Q) return;
+  const m = (s.marks ??= {});
+  (m[id] ??= []).push(maker);
+}
+
+/** 署名不能比身上的件数多（卖掉、分解、强化用掉的那几件署名去掉，后来的先去掉） */
+export function trimMarks(s: GameState) {
+  if (!s.marks) return;
+  const held = gearHeld(s);
+  for (const [id, list] of Object.entries(s.marks)) {
+    const n = held[id] ?? 0;
+    if (list.length > n) s.marks[id] = list.slice(0, n);
+    if (!s.marks[id].length) delete s.marks[id];
+  }
+  if (!Object.keys(s.marks).length) delete s.marks;
+}
+
+export function migrateMarks(raw: unknown): Record<string, string[]> | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const out: Record<string, string[]> = {};
+  for (const [id, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!ITEMS[id] || !Array.isArray(v)) continue;
+    const list = v.filter((x): x is string => typeof x === 'string' && x.length > 0).map((x) => x.slice(0, 40)).slice(0, 500);
+    if (list.length) out[id] = list;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** 署名「名字#数字ID」拆开 */
+export function splitMark(m: string): { name: string; pid: string } {
+  const i = m.lastIndexOf('#');
+  return i > 0 ? { name: m.slice(0, i), pid: m.slice(i + 1) } : { name: m, pid: '' };
+}
+
+/** 某种物品的署名按人数合起来：[[署名, 件数]]，多的在前 */
+export function marksOf(s: Pick<GameState, 'marks'>, id: string): [string, number][] {
+  const c: Record<string, number> = {};
+  for (const m of s.marks?.[id] ?? []) c[m] = (c[m] ?? 0) + 1;
+  return Object.entries(c).sort((a, b) => b[1] - a[1]);
 }

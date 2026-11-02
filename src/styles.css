@@ -1216,6 +1216,7 @@ button.chat-who { cursor: pointer; text-decoration: underline dotted; text-under
 .gear-compare { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border: 1px solid var(--edge); border-radius: 4px; background: rgba(0, 0, 0, 0.25); font-size: 12px; }
 .gear-compare .gc-head b { color: var(--gold); }
 .gear-compare .gc-fight { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; font-weight: bold; }
+.gear-compare .gc-dps { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; font-size: 0.95em; }
 .gear-compare table { border-collapse: collapse; width: 100%; }
 .gear-compare td { padding: 1px 6px 1px 0; white-space: nowrap; }
 .gear-compare td:first-child { width: 40%; white-space: normal; }

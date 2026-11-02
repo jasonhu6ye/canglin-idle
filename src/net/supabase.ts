@@ -7,7 +7,7 @@ import type { TaskSpec } from '../core/guild';
 import { fastOf, readFast, slowKey, withMove, type Fast } from './presenceSync';
 import { tl } from '../i18n';
 import { gameNow } from '../core/clock';
-import { gearHeld, migrateProv } from '../core/prov';
+import { gearHeld, migrateMarks, migrateProv } from '../core/prov';
 
 /** Supabase 实现（10-25 用户选定）。表和权限见 supabase/schema.sql */
 
@@ -659,7 +659,7 @@ export class SupabaseApi implements OnlineApi {
   async gmGear(who: string) {
     const rows = ok(await this.sb.rpc('gm_gear', { p_who: who.trim() })) as Row[];
     return rows.map((r): GearProvRow => ({
-      playerId: r.player_id, pid: Number(r.pid), name: r.name, prov: migrateProv(r.prov) ?? null, lastTick: Number(r.last_tick),
+      playerId: r.player_id, pid: Number(r.pid), name: r.name, prov: migrateProv(r.prov) ?? null, lastTick: Number(r.last_tick), marks: migrateMarks(r.marks),
       held: gearHeld({ bank: r.bank ?? {}, bag: r.bag ?? {}, equipment: r.equipment ?? {} } as GameState),
     }));
   }

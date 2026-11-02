@@ -4,7 +4,7 @@ import type { GmKind } from '../core/types';
 import { online, type GearEvRow, type GearFlagRow, type GearProvRow, type AiPlayer, type CheatRow, type AltRow, type RedeemCodeRow, type EconRow, type GmPlayer, type GmTrade, type Snapshot, type GmInput, type GmMailRow, type GmRow } from '../net';
 import { aiPlayers, botDoing, botsMuted, setBotsMuted, botName, botOnline, botPresence, botProfile, habitOf, refreshBots, zoneOf } from '../net/bots';
 import { actionName, fmtDuration } from './format';
-import { PROV_EV_Q, type Prov, type ProvEv } from '../core/prov';
+import { marksOf, PROV_EV_Q, type Prov, type ProvEv } from '../core/prov';
 import { emitToGame } from './GameCanvas';
 import { ACTIONS, ITEMS, MONSTERS, SKILLS } from '../core/data';
 import { levelForXp, XP_TABLE } from '../core/xp';
@@ -1134,6 +1134,7 @@ function GearPlayer({ r }: { r: GearProvRow }) {
           <small key={id}>{qName(id)} × {n}
             {(p.base[id] ?? 0) > 0 && <span className="muted"> {tl`（记录开始前就有 ${p.base[id]}）`}</span>}
             {lost > 0 && <b className="warn"> {tl`来源不明 ${lost} 件`}</b>}
+            {marksOf(r, id).length > 0 && <span className="muted"> · {tl('制作者：')}{marksOf(r, id).map(([m, k]) => `${m}${k > 1 ? ` ×${k}` : ''}`).join(tl('、'))}</span>}
           </small>
         );
       })}

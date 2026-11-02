@@ -382,7 +382,7 @@ export interface OnlineApi {
 }
 
 /** 管理员看的装备来源：prov 见 core/prov.ts（没记过是 null），held 是身上的装备，mats 是身上的材料 */
-export interface GearProvRow { playerId: string; pid: number; name: string; prov: Prov | null; held: Record<string, number>; lastTick: number }
+export interface GearProvRow { playerId: string; pid: number; name: string; prov: Prov | null; held: Record<string, number>; lastTick: number; /** 制作者署名 */ marks?: Record<string, string[]> }
 export interface GearEvRow { pid: number; name: string; ev: ProvEv }
 export interface GearFlagRow {
   id: number; playerId: string; pid: number; name: string; item: string; src: string; reason: 'luck' | 'outside' | 'burst';

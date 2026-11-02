@@ -2914,3 +2914,176 @@ begin
   where id = p_id;
 end $$;
 grant execute on function public.gm_gear_flag_set(bigint, text, text) to authenticated;
+
+-- ============ 制作者署名（11-02） ============
+-- 传说、神话装备做出来时服务器在存档 marks 里记下制作者（名字#数字ID，学阿尔比恩）。
+-- 交易、公会仓库搬东西时署名跟着一起搬：后得到的先搬走。
+alter table public.guild_bank add column if not exists marks jsonb not null default '[]'::jsonb;
+
+-- 数组前 n 个 / 后 n 个
+create or replace function public.marks_head(a jsonb, n int) returns jsonb
+language sql immutable as $$
+  select coalesce(jsonb_agg(e order by i), '[]'::jsonb) from jsonb_array_elements(coalesce(a, '[]'::jsonb)) with ordinality x(e, i) where i <= greatest(n, 0)
+$$;
+create or replace function public.marks_tail(a jsonb, n int) returns jsonb
+language sql immutable as $$
+  select coalesce(jsonb_agg(e order by i), '[]'::jsonb) from jsonb_array_elements(coalesce(a, '[]'::jsonb)) with ordinality x(e, i)
+  where i > jsonb_array_length(coalesce(a, '[]'::jsonb)) - greatest(n, 0)
+$$;
+
+-- 从存档拿走 qty 件的署名（只管传说、神话），返回拿走的
+create or replace function public.save_take_marks(p uuid, p_item text, p_qty bigint) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare d jsonb; a jsonb; n int; k int; rest jsonb;
+begin
+  if p_qty <= 0 or p_item !~ '@q[45]$' then return '[]'::jsonb; end if;
+  select data into d from saves where player_id = p for update;
+  a := d -> 'marks' -> p_item;
+  if a is null or jsonb_typeof(a) <> 'array' then return '[]'::jsonb; end if;
+  n := jsonb_array_length(a);
+  k := least(p_qty, n)::int;
+  if k <= 0 then return '[]'::jsonb; end if;
+  rest := public.marks_head(a, n - k);
+  d := jsonb_set(d, '{marks}', case when jsonb_array_length(rest) > 0 then (d -> 'marks') || jsonb_build_object(p_item, rest) else (d -> 'marks') - p_item end);
+  perform set_config('ac.bypass', '1', true);
+  update saves set data = d where player_id = p;
+  perform set_config('ac.bypass', '0', true);
+  return public.marks_tail(a, k);
+end $$;
+revoke execute on function public.save_take_marks(uuid, text, bigint) from public, anon, authenticated;
+
+create or replace function public.save_give_marks(p uuid, p_item text, p_marks jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+declare d jsonb;
+begin
+  if p_marks is null or jsonb_typeof(p_marks) <> 'array' or jsonb_array_length(p_marks) = 0 then return; end if;
+  select data into d from saves where player_id = p for update;
+  if d is null then return; end if;
+  d := jsonb_set(d, '{marks}', coalesce(d -> 'marks', '{}'::jsonb)
+    || jsonb_build_object(p_item, coalesce(d -> 'marks' -> p_item, '[]'::jsonb) || p_marks));
+  perform set_config('ac.bypass', '1', true);
+  update saves set data = d where player_id = p;
+  perform set_config('ac.bypass', '0', true);
+end $$;
+revoke execute on function public.save_give_marks(uuid, text, jsonb) from public, anon, authenticated;
+
+-- 下面三个和原来一样，只多了搬署名
+create or replace function public.guild_deposit(p_item text, p_qty int, p_vault int default 0) returns void
+language plpgsql security definer set search_path = public as $$
+declare mk jsonb; g uuid; lv int; nm text; cap int;
+begin
+  if p_qty <= 0 or p_qty > 1000000 then raise exception '数量不对'; end if;
+  if p_item = 'coins' then raise exception '金币不能存进公会仓库'; end if;
+  if not exists (select 1 from item_values where id = p_item) then raise exception '这个东西不能存'; end if;
+  select guild_id into g from guild_members where player_id = auth.uid();
+  if g is null then raise exception '还没加入公会'; end if;
+  if not can_vault(g, p_vault, auth.uid()) then raise exception '没有这个仓库的权限'; end if;
+  select level into lv from guilds where id = g for update;
+  cap := case when p_vault = 0 then guild_slots(lv) else 30 end;
+  if not exists (select 1 from guild_bank where guild_id = g and vault = p_vault and item = p_item)
+    and (select count(*) from guild_bank where guild_id = g and vault = p_vault) >= cap then
+    raise exception '公会仓库满了';
+  end if;
+  mk := public.save_take_marks(auth.uid(), p_item, p_qty);
+  perform save_take(auth.uid(), p_item, p_qty);
+  insert into guild_bank (guild_id, vault, item, qty, pos, marks)
+    values (g, p_vault, p_item, p_qty, (select coalesce(max(pos), 0) + 1 from guild_bank where guild_id = g and vault = p_vault), mk)
+    on conflict (guild_id, vault, item) do update set qty = guild_bank.qty + excluded.qty, marks = guild_bank.marks || excluded.marks;
+  select name into nm from profiles where id = auth.uid();
+  insert into guild_bank_log (guild_id, vault, player_id, name, item, qty) values (g, p_vault, auth.uid(), coalesce(nm, ''), p_item, p_qty);
+  delete from guild_bank_log where guild_id = g and at < now() - interval '30 days';
+end $$;
+
+create or replace function public.guild_withdraw(p_item text, p_qty int, p_vault int default 0) returns int
+language plpgsql security definer set search_path = public as $$
+declare mk jsonb; mn int; m guild_members; tm int; td int; have bigint; n int; nm text; v int; took bigint; capped boolean;
+begin
+  select * into m from guild_members where player_id = auth.uid();
+  if m.player_id is null then raise exception '还没加入公会'; end if;
+  if not can_vault(m.guild_id, p_vault, auth.uid()) then raise exception '没有这个仓库的权限'; end if;
+  select take_min, take_day into tm, td from guilds where id = m.guild_id;
+  if p_vault = 0 and m.role = 'member' and (tm < 0 or m.contrib < tm) then raise exception '贡献不够，不能从公会仓库取东西'; end if;
+  select qty into have from guild_bank where guild_id = m.guild_id and vault = p_vault and item = p_item for update;
+  n := least(greatest(p_qty, 0), coalesce(have, 0))::int;
+  if n <= 0 then return 0; end if;
+  -- 10-27：会长可以限制普通成员每天从公共仓库取多少金币价值的东西，防止有人一次搬空
+  capped := p_vault = 0 and m.role = 'member' and td > 0;
+  if capped then
+    perform guild_day_reset(auth.uid());
+    select coalesce(value, 1) into v from item_values where id = p_item;
+    v := greatest(coalesce(v, 1), 1);
+    select g_took into took from profiles where id = auth.uid() for update;
+    n := least(n::bigint, (td - took) / v)::int;
+    if n <= 0 then raise exception '今天从公会仓库取的东西已经到上限了'; end if;
+    update profiles set g_took = g_took + n::bigint * v where id = auth.uid();
+  end if;
+  -- 制作者署名跟着拿出来（后放进去的先拿）
+  select marks into mk from guild_bank where guild_id = m.guild_id and vault = p_vault and item = p_item;
+  mk := coalesce(mk, '[]'::jsonb);
+  mn := jsonb_array_length(mk);
+  if n = have then delete from guild_bank where guild_id = m.guild_id and vault = p_vault and item = p_item;
+  else update guild_bank set qty = qty - n, marks = public.marks_head(mk, greatest(mn - n, 0)) where guild_id = m.guild_id and vault = p_vault and item = p_item; end if;
+  perform save_give(auth.uid(), p_item, n);
+  perform public.save_give_marks(auth.uid(), p_item, public.marks_tail(mk, least(n, mn)));
+  select name into nm from profiles where id = auth.uid();
+  insert into guild_bank_log (guild_id, vault, player_id, name, item, qty) values (m.guild_id, p_vault, auth.uid(), coalesce(nm, ''), p_item, -n);
+  delete from guild_bank_log where guild_id = m.guild_id and at < now() - interval '30 days';
+  return n;
+end $$;
+
+create or replace function public.confirm_trade(p_trade uuid, p_ok boolean) returns text
+language plpgsql security definer set search_path = public as $$
+declare mk jsonb; t trades; k text; v jsonb; cap numeric; other uuid;
+begin
+  select * into t from trades where id = p_trade for update;
+  if t.id is null or auth.uid() not in (t.a, t.b) then raise exception '交易不存在'; end if;
+  if t.status <> 'open' then raise exception '交易已经结束'; end if;
+  other := case when auth.uid() = t.a then t.b else t.a end;
+  if p_ok then perform public.ac_trade_check(other); end if;
+  if auth.uid() = t.a then t.a_ok := p_ok; else t.b_ok := p_ok; end if;
+  if t.a_ok and t.b_ok then
+    if t.a_items = '{}'::jsonb and t.b_items = '{}'::jsonb then raise exception '双方都没放东西'; end if;
+    cap := public.ac_conf('trade_day_value', 0);
+    if cap > 0 and not public.is_gm() then
+      if public.ac_trade_got_today(t.a) + public.ac_value(t.b_items) > cap
+        or public.ac_trade_got_today(t.b) + public.ac_value(t.a_items) > cap then
+        raise exception '超过每天交易能收到的价值上限（%金币），明天再来', cap;
+      end if;
+    end if;
+    t.status := 'done';
+  end if;
+  update trades set a_ok = t.a_ok, b_ok = t.b_ok, status = t.status, updated_at = now() where id = p_trade;
+  if t.status = 'done' then
+    -- 成交：在数据库里把双方的东西换过来（不够就报错，整笔撤回、交易保持未成交）。
+    -- 放在改状态之后，交易检查触发器看到的还是换之前的存档
+    for k, v in select * from jsonb_each(t.a_items) loop
+      mk := public.save_take_marks(t.a, k, (v #>> '{}')::bigint);
+      perform save_take(t.a, k, (v #>> '{}')::bigint);
+      perform save_give(t.b, k, (v #>> '{}')::bigint);
+      perform public.save_give_marks(t.b, k, mk);
+    end loop;
+    for k, v in select * from jsonb_each(t.b_items) loop
+      mk := public.save_take_marks(t.b, k, (v #>> '{}')::bigint);
+      perform save_take(t.b, k, (v #>> '{}')::bigint);
+      perform save_give(t.a, k, (v #>> '{}')::bigint);
+      perform public.save_give_marks(t.a, k, mk);
+    end loop;
+  end if;
+  return t.status;
+end $$;
+
+-- GM 装备来源页：多返回制作者署名
+drop function if exists public.gm_gear(text);
+create or replace function public.gm_gear(p_who text)
+returns table (player_id uuid, pid bigint, name text, prov jsonb, bank jsonb, bag jsonb, equipment jsonb, belt jsonb, last_tick bigint, marks jsonb)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_gm() then raise exception '没有权限'; end if;
+  return query
+    select p.id, p.pid, p.name, s.data->'prov', s.data->'bank', s.data->'bag', s.data->'equipment', s.data->'belt', s.last_tick, s.data->'marks'
+    from profiles p join saves s on s.player_id = p.id
+    where p.pid::text = trim(p_who) or lower(p.name) like '%' || lower(trim(p_who)) || '%'
+    order by (p.pid::text = trim(p_who)) desc, p.last_seen desc nulls last
+    limit 5;
+end $$;
+grant execute on function public.gm_gear(text) to authenticated;

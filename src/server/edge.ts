@@ -43,7 +43,7 @@ async function whoAmI(req: Request): Promise<string | null> {
 }
 
 async function extras(uid: string, now: number): Promise<SyncExtras & { found: boolean }> {
-  const [p] = (await rest(`profiles?id=eq.${uid}&select=pid,outfit,guild_id,save_epoch,banned`)) as Row[];
+  const [p] = (await rest(`profiles?id=eq.${uid}&select=pid,name,outfit,guild_id,save_epoch,banned`)) as Row[];
   if (!p) return { found: false, gmBuffs: [], guildLv: 0, mails: [] };
   const pid = Number(p.pid) || 0;
   const since = new Date(now - 3600_000).toISOString();
@@ -83,6 +83,7 @@ async function extras(uid: string, now: number): Promise<SyncExtras & { found: b
     epoch: Number(p.save_epoch) || 0,
     partySize,
     me: uid,
+    maker: p.name ? `${String(p.name).slice(0, 20)}#${pid}` : undefined,
     frozen: p.banned === true,
     party: members.length ? members : [uid],
     mateGates,

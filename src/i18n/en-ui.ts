@@ -1424,4 +1424,9 @@ export const EN_UI: Record<string, string> = {
   "没问题": "OK",
   "没收这件": "Confiscate",
   "改回待处理": "Reopen",
+  "制作者：": "Crafted by: ",
+  "无（掉落、开箱或署名前得到的）": "None (looted, from a chest, or obtained before signing)",
+  "制作材料：": "Materials: ",
+  "每秒伤害（DPS）": "Damage per second (DPS)",
+  "不变": "no change",
 };

@@ -1,6 +1,6 @@
 import { gearLine } from './format';
-import { qClass, qid, QUALITY_NAME } from '../core/quality';
-import { QualityTable } from './Quality';
+import { baseOf, qClass, qid, QUALITY_NAME } from '../core/quality';
+import { marksOf, MARK_Q, splitMark } from '../core/prov';
 import { useSticky } from './sticky';
 import { useMemo } from 'react';
 import { ACTIONS, buffText, CROP_DEFS, fieldOfCrop, ITEMS, MONSTERS, NODES, nodeOfAction, nodesOfAction, SKILLS, TIERS, tierName } from '../core/data';
@@ -160,6 +160,13 @@ export function Codex({ s, onClose }: { s: GameState; onClose: () => void }) {
   );
 }
 
+/** 做出这件装备（不分品质）的配方 */
+const recipesOf = (id: string) => {
+  const b = baseOf(id);
+  return Object.values(ACTIONS).filter((a): a is Extract<typeof a, { inputs?: unknown }> & { inputs: { item: string; qty: number }[] } =>
+    'outputs' in a && a.outputs.some((o) => o.item === b) && 'inputs' in a && !!a.inputs?.length).slice(0, 2);
+};
+
 export function CodexDetail({ s, id, reveal = false }: { s: GameState; id: string; reveal?: boolean }) {
   const it = ITEMS[id];
   // 图鉴里只列普通版，任何品质拿到过都算见过
@@ -199,7 +206,16 @@ export function CodexDetail({ s, id, reveal = false }: { s: GameState; id: strin
           {e.move ? '' : e.speed ? tl` · ${toolSkillNames(e.slot) || SKILLS[e.skill].name}速度 +${Math.round(e.speed * 100)}%` : ` · ${gearLine(e)}`}
         </span>
       )}
-      {e && !e.move && e.slot !== 'pack' && <QualityTable id={id} />}
+      {/* 用户 11-02：详情里不列各品质概率，只列这件的属性和制作材料；传说、神话写上制作者 */}
+      {e && (it.quality ?? 0) >= MARK_Q && (
+        <span>{tl('制作者：')}{marksOf(s, id).length
+          ? marksOf(s, id).map(([m, n]) => `${splitMark(m).name}${n > 1 ? ` ×${n}` : ''}`).join(tl('、'))
+          : <span className="muted">{tl('无（掉落、开箱或署名前得到的）')}</span>}
+        </span>
+      )}
+      {e && recipesOf(id).map((a) => (
+        <span key={a.id} className="muted">{tl('制作材料：')}{a.inputs!.map((i) => `${ITEMS[i.item]?.name ?? i.item} ×${i.qty}`).join(tl('、'))}</span>
+      ))}
       {(src.make.length > 0 || src.drops.length > 0) && <b className="sub">{tl('来源')}</b>}
       {withEta(s, [...src.make, ...src.drops]).map(({ x, r, first }) => (r
         ? <button key={x.text} className="src-go" onClick={() => goSource(x)}><span>· {first && <b className="near-tag">{tl('最近')}</b>}{x.text}</span><b>{etaText(r)} ›</b></button>

@@ -285,3 +285,24 @@ describe('可疑装备', () => {
     expect(gearSuspects(p, [p.ev[5]]).map((g) => g.reason)).toEqual(['burst']);
   });
 });
+
+describe('制作者署名', () => {
+  it('做出传说以上记上制作者，件数少了署名跟着少', () => {
+    const base = newGame(t0, 7);
+    base.loc = { ...standOf(NODES.find((n) => n.id === 'smithy')!) };
+    base.bank = { wood_bar: 3000 };
+    let r = runSync(JSON.parse(JSON.stringify(base)), [], t0, { ...EX, maker: 'Smith#12345678' }, 'dev');
+    r = runSync(JSON.parse(JSON.stringify(r.state)), [{ n: 'startNow', a: ['smith_wood_dagger', { type: 'infinite' }], t: t0 + 100, q: 1 }], t0 + 4 * 3600_000, { ...EX, maker: 'Smith#12345678' }, 'dev');
+    const s = r.state;
+    const hi = Object.entries({ ...s.bank }).filter(([id]) => /@q[45]$/.test(id));
+    expect(hi.length).toBeGreaterThan(0);
+    for (const [id, n] of hi) expect(s.marks![id]).toEqual(Array(n + (s.bag[id] ?? 0)).fill('Smith#12345678'));
+    // 卖掉一件：下次结算署名少一个
+    const [id] = hi[0];
+    const mid = JSON.parse(JSON.stringify(s));
+    const before = mid.marks[id].length;
+    mid.bank[id] -= 1; if (!mid.bank[id]) delete mid.bank[id];
+    r = runSync(mid, [], t0 + 4 * 3600_000 + 1000, EX, 'dev');
+    expect(r.state.marks?.[id]?.length ?? 0).toBe(before - 1);
+  });
+});
