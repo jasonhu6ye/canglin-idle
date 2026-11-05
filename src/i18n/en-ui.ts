@@ -1504,4 +1504,8 @@ export const EN_UI: Record<string, string> = {
   '11 月 5 日': 'Nov 5',
   '冰原限时怪结算修正': 'Frostland timed monsters fix',
   '在永冬冰原打限时怪时，刷新点正好消失的那一刻，服务器和画面上算的不一样，打完回来食物、经验数字会跳一下。现在两边一致了。': 'When a timed Frostland spawn point vanished mid-fight, the server and your screen worked it out differently, so food and XP numbers could jump afterwards. They now match.',
+  '组队打怪更同步': 'Party fights stay in sync',
+  '队友打出的伤害一收到就算到怪身上，不再等半秒，几个人画面上同一只怪的血量差得更少。': 'Teammate damage now lands on the monster as soon as it arrives instead of up to half a second later, so everyone sees much closer monster HP.',
+  '队友那边把怪打死了，自己这边马上跟着倒，不会再站着多挨几下。': 'When a teammate kills the monster, it now drops on your screen right away instead of hitting you a few more times.',
+  '三个人以上一起近战时，第三个人不再叠在自己身后，队友的伤害数字也上下错开，不挤成一团。': 'With three or more melee fighters, the third one no longer stands on top of you, and teammate damage numbers are staggered so they do not pile up.',
 };

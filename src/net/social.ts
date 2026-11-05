@@ -246,6 +246,18 @@ function sendCoop(crew: number, dg: number, mates: number[]) {
   coopHits = [];
   store.run('coop', { crew, dg, mates, hits });
 }
+/**
+ * 收到队友伤害就马上记上（11-05：以前要等下一次半秒一次的嘲讽检查才发，三个人一起打时
+ * 各自画面上同一只怪的血量能差一半）。人数、嘲讽沿用上一次发的。
+ */
+function flushHits() {
+  if (!coopHits.length || !coopLast) return;
+  const [crew, dg, mates] = JSON.parse(coopLast) as [number, number, number[]];
+  coopAt = Date.now();
+  const hits = coopHits;
+  coopHits = [];
+  store.run('coop', { crew, dg, mates, hits });
+}
 
 /** 每个队友上次报的野外伤害：哪个点、第几只、累计多少 */
 const fieldSeen = new Map<string, { k: string; n: number; dmg: number }>();
@@ -285,6 +297,7 @@ export function takeFieldHits(all: Presence[]): FieldMateHit[] {
     out.push({ id: p.playerId, name: m.name, i: m.i, dmg, crit: !!f.crit });
   }
   syncFieldHp(action, all);
+  flushHits();
   return out;
 }
 
@@ -293,15 +306,18 @@ export function takeFieldHits(all: Presence[]): FieldMateHit[] {
  * 网络延迟会让血量差一截、一前一后死。这里把「同一只」配对（两边都活着时看到的那一对），
  * 配对的那只队友那边血更少就跟到他的血量；他那边打死了，自己这只也一起倒下。差的血量作为队友伤害记账（服务器照样限量）。
  */
-const pairs = new Map<string, { mine: number; theirs: number }>();
+const pairs = new Map<string, { mine: number; theirs: number; killed?: boolean }>();
 let syncAt = 0;
 function syncFieldHp(action: string, all: Presence[]) {
   const me = online.me();
   const c = store.state.combat;
-  // 上一次补的差还没执行（随 coop 指令半秒发一次）就先不算，免得重复补
-  if (!me || !c || !c.crew || !st.party || Date.now() - syncAt < 700) return;
+  if (!me || !c || !c.crew || !st.party) return;
+  // 上一次补的血量差还没执行就先不补，免得重复补；「他打死了」不等（11-05：以前要等这 0.7 秒，
+  // 一边的怪已经倒了、另一边还站着挨打）
+  const wait = Date.now() - syncAt < 700;
   const mine = c.copy ?? 0;
   let gap = 0;
+  let kill = false;
   for (const m of st.party.members) {
     if (m.playerId === me.id) continue;
     const f = all.find((q) => q.playerId === m.playerId)?.fd;
@@ -314,10 +330,11 @@ function syncFieldHp(action: string, all: Presence[]) {
       if (!pr || pr.mine !== mine) { pairs.set(m.playerId, { mine, theirs: f.n }); continue; }
     }
     if (!pr || pr.mine !== mine || c.respawnMs > 0) continue;
-    if (f.n === pr.theirs && !f.rs) gap = Math.max(gap, c.monsterHp - f.hp);
-    // 他把配对的那只打死了（已经在等下一只）：自己这只也一起倒
-    else if (f.n > pr.theirs || f.rs) gap = Math.max(gap, c.monsterHp);
+    if (f.n === pr.theirs && !f.rs) { if (!wait) gap = Math.max(gap, c.monsterHp - f.hp); }
+    // 他把配对的那只打死了（已经在等下一只）：自己这只也一起倒（每只只补一次）
+    else if ((f.n > pr.theirs || f.rs) && !pr.killed) { pr.killed = true; kill = true; }
   }
+  if (kill) gap = c.monsterHp;
   // 这次刚收到、还没执行的队友伤害先扣掉
   const key = fieldKey(action);
   gap -= coopHits.reduce((n, h) => n + (h[0] === key ? h[1] : 0), 0);

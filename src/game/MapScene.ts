@@ -2851,7 +2851,9 @@ export class MapScene extends Phaser.Scene {
       const m = this.currentAction ? MONSTERS[(ACTIONS[this.currentAction] as { monster?: string }).monster ?? ''] : undefined;
       const S = m ? monsterFrameSize(m) * foe.scaleY : 24;
       const color = MATE_COLORS[h.i % MATE_COLORS.length];
-      this.popText(foe.x - 8, foe.y - S * 0.5, h.crit ? tl`${h.name} 暴击 ${h.dmg}!` : `${h.name} ${h.dmg}`, color, h.crit ? 9 : 7);
+      // 几个队友的数字上下错开一行（11-05：三人一起打时名字和数字叠成一团）
+      const row = h.i % 3;
+      this.popText(foe.x - 8 + (row === 1 ? 6 : 0), foe.y - S * 0.5 - row * 8, h.crit ? tl`${h.name} 暴击 ${h.dmg}!` : `${h.name} ${h.dmg}`, color, h.crit ? 9 : 7);
     });
   }
 
