@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { runSync } from './sync';
-import { advance, newGame } from '../core/sim';
+import { advance, newGame, startNow } from '../core/sim';
+import { timedWindow } from '../core/realm';
 import { applyCmd, type Cmd, type CmdName } from '../core/commands';
-import { NODES, WALK_TILES_PER_SEC, WAYSTONES, standOf } from '../core/data';
+import { ACTIONS, NODES, WALK_TILES_PER_SEC, WAYSTONES, nodesOfAction, standOf } from '../core/data';
 import type { GameState } from '../core/types';
 
 const EX = { gmBuffs: [], guildLv: 0, mails: [] };
@@ -47,6 +48,30 @@ describe('服务器结算', () => {
     expect(r.state.loc).toEqual(s.loc);
     expect(r.state.xp.fishing).toBeGreaterThan(0);
     expect(r.flags).toEqual([]);
+  });
+
+  it('冰原限时怪打到一半刷新点消失：一次结算一大段和每 200 毫秒结算一次结果一样', () => {
+    const act = Object.keys(ACTIONS).find((a) => ACTIONS[a].kind === 'combat' && nodesOfAction(a).length > 1 && nodesOfAction(a).every((n) => n.timed))!;
+    const nodes = nodesOfAction(act);
+    // 找一个刷新点正开着、还剩 1 分钟消失，而且同时还有别的点开着（消失后要换点）
+    let t = t0, here = nodes[0];
+    for (; t < t0 + 30 * 86_400_000; t += 60_000) {
+      const on = nodes.filter((n) => { const w = timedWindow(n, t); return w && w.end - t > 30_000 && w.end - t <= 90_000; });
+      if (on.length && nodes.some((n) => n !== on[0] && timedWindow(n, t + 90_000))) { here = on[0]; break; }
+    }
+    expect(t).toBeLessThan(t0 + 30 * 86_400_000);
+    let s = newGame(t, 5);
+    for (const k of Object.keys(s.xp)) (s.xp as Record<string, number>)[k] = 2e8;
+    s.loc = standOf(here);
+    s = startNow(s, act, { type: 'infinite' });
+    s.queue[0].stocked = true;
+    let a: GameState = JSON.parse(JSON.stringify(s));
+    for (let x = t + 200; x <= t + 5 * 60_000; x += 200) a = advance(a, x).state;
+    const b = advance(JSON.parse(JSON.stringify(s)), t + 5 * 60_000).state;
+    expect(b.xp).toEqual(a.xp);
+    expect(b.loc).toEqual(a.loc);
+    expect(b.travel).toEqual(a.travel);
+    expect(b.rng).toBe(a.rng);
   });
 
   it('变速：指令时间跑在服务器前面也只算到服务器的现在', () => {

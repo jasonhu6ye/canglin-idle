@@ -1501,4 +1501,7 @@ export const EN_UI: Record<string, string> = {
   '双手大盾和永霜盾看防御等级才能装备（不是近战等级），拿着打怪照样算近战。': 'The Tower Shield and the Everfrost Shield require a Defence level to equip (not a Melee level). Fighting with them still counts as Melee.',
   '双手盾改看防御等级': 'Two-handed shields now use Defence',
   '双手大盾和永霜盾的装备条件从近战等级改成防御等级，拿着打怪照样算近战经验。': 'The Tower Shield and the Everfrost Shield now require a Defence level instead of a Melee level. Fighting with them still gives Melee XP.',
+  '11 月 5 日': 'Nov 5',
+  '冰原限时怪结算修正': 'Frostland timed monsters fix',
+  '在永冬冰原打限时怪时，刷新点正好消失的那一刻，服务器和画面上算的不一样，打完回来食物、经验数字会跳一下。现在两边一致了。': 'When a timed Frostland spawn point vanished mid-fight, the server and your screen worked it out differently, so food and XP numbers could jump afterwards. They now match.',
 };

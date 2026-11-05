@@ -8,6 +8,12 @@ import { tl } from '../i18n';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-11-05-a', date: tl('11 月 5 日'), title: tl('冰原限时怪结算修正'),
+    lines: [
+      tl('在永冬冰原打限时怪时，刷新点正好消失的那一刻，服务器和画面上算的不一样，打完回来食物、经验数字会跳一下。现在两边一致了。'),
+    ],
+  },
+  {
     id: '2026-11-02-y', date: tl('11 月 2 日'), title: tl('双手盾改看防御等级'),
     lines: [
       tl('双手大盾和永霜盾的装备条件从近战等级改成防御等级，拿着打怪照样算近战经验。'),

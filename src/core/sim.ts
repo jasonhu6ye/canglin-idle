@@ -1555,7 +1555,14 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       continue;
     }
     const a = ACTIONS[task.action];
-    const budget = Math.min(dt, timeLeft(task));
+    let budget = Math.min(dt, timeLeft(task));
+    // 永冬冰原的限时点：这一段最多算到它消失那一刻（11-05：不然一次结算一大段和每 200 毫秒结算一次，
+    // 发现「点消失了、去下一个点」的时刻不一样，服务器和画面上的食物、经验对不上）
+    {
+      const here = nodesOfAction(task.action).find((n) => n.timed && standOf(n).x === s.loc.x && standOf(n).y === s.loc.y);
+      const w = here && timedWindow(here, now - dt);
+      if (w) budget = Math.min(budget, Math.max(1, w.end - (now - dt)));
+    }
     const used = a.kind === 'skill' ? stepSkill(task, a, budget) : stepCombat(task, a, budget);
     dt -= used;
     if (s.queue[0] === task) {
