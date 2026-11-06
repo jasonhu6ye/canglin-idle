@@ -315,6 +315,18 @@ for (const i of [6, 7]) {
     tier: i, desc: tl('一截烧不尽的冥火灯芯，点着时火苗是青色的。打造提灯要用。只能从 T7 以上的副本宝箱里低概率开出。'),
   });
 }
+/**
+ * 近战特殊装备材料（用户 11-06）：古龙骨做裂岳战锤、血月弯刀，英灵徽记做荆棘护盾、战魂号角。
+ * 只有 T7、T8，和幽魂精魄一样只能从 T7 以上的副本宝箱里低概率开出（dungeon.ts rollChest）。
+ */
+for (const i of [6, 7]) {
+  item(`dragonbone_${i + 1}`, tl`T${i + 1} 古龙骨`, 'material', BAR_VALUE[i] * 6, {
+    tier: i, desc: tl('远古巨龙留下的一截骨头，比精金还硬。打造裂岳战锤、血月弯刀要用。只能从 T7 以上的副本宝箱里低概率开出。'),
+  });
+  item(`valor_${i + 1}`, tl`T${i + 1} 英灵徽记`, 'material', BAR_VALUE[i] * 6, {
+    tier: i, desc: tl('战死在副本深处的英灵留下的徽记，摸上去还有点温热。打造荆棘护盾、战魂号角要用。只能从 T7 以上的副本宝箱里低概率开出。'),
+  });
+}
 /** 永霜之心（用户 11-02）：做永霜之弓、永霜盾，只有 T7、T8，只在永冬冰原打首领、开限时宝箱有概率得到 */
 for (const i of [6, 7]) {
   item(`frostheart_${i + 1}`, tl`T${i + 1} 永霜之心`, 'material', BAR_VALUE[i] * 6, {
@@ -409,7 +421,7 @@ item(SCROLL_TOWN, tl('回城卷轴'), 'misc', 200, {
  * mat 是材料：bar 精炼锭、plank 加工木材、leather 皮革、cloth 布料。
  * plus 是在本阶解锁等级上再加几级才能做。
  */
-type Mat = 'bar' | 'plank' | 'leather' | 'cloth' | 'resin' | 'wraith' | 'wick' | 'frostheart';
+type Mat = 'bar' | 'plank' | 'leather' | 'cloth' | 'resin' | 'wraith' | 'wick' | 'frostheart' | 'dragonbone' | 'valor';
 export interface EquipType {
   key: string;
   name: string;
@@ -432,7 +444,9 @@ export interface EquipType {
     /** 提灯（10-31）：固定暴击率、武器特殊效果触发概率提升（不随品质变） */
     crit?: number; proc?: number;
     /** 永霜之弓、永霜盾（11-02）：特效触发概率（固定，不随品质变） */
-    frost?: number; guard?: number };
+    frost?: number; guard?: number;
+    /** 近战特殊装备（11-06）：裂岳战锤破甲概率、血月弯刀斩杀加成（随品质涨）；荆棘护盾反伤、战魂号角暴击伤害（固定） */
+    sunder?: number; execute?: number; thorns?: number; critDmg?: number };
   group: string;
   /** 特殊装备（10-31）：只有这一阶及以上的版本（6 = T7），不会在野外、福袋、副本宝箱里直接掉 */
   minTier?: number;
@@ -496,6 +510,13 @@ export const EQUIP_TYPES: EquipType[] = [
   // 内测版本主推的最强近战（用户 10-31）：配灯笼约剑的 110%，配提灯约 118%，材料要副本宝箱里的幽魂精魄
   { ...W('chainblade', tl('幽魂链刃'), 'melee', 'smithing', [['bar', 3], ['leather', 1], ['wraith', 2]], 8, 1.05, 0.9, 2300, 'melee', -4), minTier: 6,
     stats: { attack: 1.05, strength: 0.9, strFlat: -4, attackMs: 2300, style: 'melee', chain: 0.17 } },
+  // 裂岳战锤（用户 11-06，特殊装备，只有 T7/T8）：双手重锤，打中时 15% 让敌人破甲 6 秒（防御 -40%，更容易打中），打高防首领最好用。
+  // 材料古龙骨只从 T7 以上的副本宝箱开出
+  { ...W('sunderhammer', tl('裂岳战锤'), 'melee', 'smithing', [['bar', 4], ['plank', 1], ['dragonbone', 2]], 8, 0.8, 3.1, 4000, 'melee', 40, true), minTier: 6,
+    stats: { attack: 0.8, strength: 3.1, strFlat: 40, attackMs: 4000, style: 'melee', twoHanded: true, sunder: 0.15 } },
+  // 血月弯刀（用户 11-06，特殊装备，只有 T7/T8）：单手，敌人血量低于 30% 时伤害 +50%（斩杀），能配副手
+  { ...W('bloodsabre', tl('血月弯刀'), 'melee', 'smithing', [['bar', 3], ['leather', 1], ['dragonbone', 2]], 8, 1.05, 1.05, 2400, 'melee'), minTier: 6,
+    stats: { attack: 1.05, strength: 1.05, strFlat: 0, attackMs: 2400, style: 'melee', execute: 0.5 } },
   // 永霜盾（用户 11-02，特殊装备，只有 T7/T8）：双手，底子比双手大盾略好；挨打时 17% 冻住敌人 1 秒，自己防御 +50% 持续 7 秒。
   // 材料永霜之心只在永冬冰原的首领和限时宝箱里出
   { ...W('frostshield', tl('永霜盾'), 'defence', 'smithing', [['bar', 4], ['plank', 1], ['frostheart', 2]], 8, 0.6, 0.65, 2800, 'melee'), minTier: 6,
@@ -531,6 +552,10 @@ export const EQUIP_TYPES: EquipType[] = [
   OH('lantern', tl('灯笼'), 'defence', 'smithing', [['bar', 1], ['resin', 2]], 3, { strength: 0.4, leech: 0.05 }),
   // 提灯（用户 10-31，特殊副手，只有 T7/T8）：攻击力和灯笼一样，没有吸血，改成暴击率 +5%、武器特殊效果触发概率 +5%
   { ...OH('soullamp', tl('提灯'), 'defence', 'smithing', [['bar', 2], ['resin', 2], ['wick', 2]], 8, { strength: 0.4, crit: 0.05, proc: 0.05 }), minTier: 6 },
+  // 荆棘护盾（用户 11-06，近战特殊副手，只有 T7/T8）：防御同副手盾，挨打时把受到伤害的 25% 弹回去（只在拿近战武器时生效）
+  { ...OH('thornguard', tl('荆棘护盾'), 'defence', 'smithing', [['bar', 2], ['leather', 1], ['valor', 2]], 8, { defence: 0.6, style: 'melee', thorns: 0.25 }), minTier: 6 },
+  // 战魂号角（用户 11-06，近战特殊副手，只有 T7/T8）：力量约灯笼的八成，暴击伤害 150% → 180%，没有吸血（只在拿近战武器时生效）
+  { ...OH('warhorn', tl('战魂号角'), 'defence', 'smithing', [['bar', 2], ['leather', 1], ['valor', 2]], 8, { strength: 0.4, style: 'melee', critDmg: 0.5 }), minTier: 6 },
   // 工具
   TL('axe', tl('斧头'), 'axe', 'woodcutting', 'smithing', [['bar', 1], ['plank', 1]], 1),
   TL('pickaxe', tl('镐子'), 'pickaxe', 'mining', 'smithing', [['bar', 1], ['plank', 1]], 1),
@@ -545,7 +570,7 @@ export const EQUIP_TYPES: EquipType[] = [
 ];
 const TOOL_SLOTS: EquipSlot[] = ['axe', 'pickaxe', 'sickle', 'knife', 'rod', 'hoe', 'hammer', 'needle', 'pan'];
 const matItem = (m: Mat, i: number) => (m === 'bar' ? `${TIERS[i].id}_bar` : `${m}_${i + 1}`);
-const matCost = (m: Mat, i: number) => (m === 'bar' ? BAR_VALUE[i] : m === 'wraith' || m === 'wick' || m === 'frostheart' ? BAR_VALUE[i] * 6 : RES_VALUE[i] * 3);
+const matCost = (m: Mat, i: number) => (m === 'bar' ? BAR_VALUE[i] : m === 'wraith' || m === 'wick' || m === 'frostheart' || m === 'dragonbone' || m === 'valor' ? BAR_VALUE[i] * 6 : RES_VALUE[i] * 3);
 /** 普通装备（野外、福袋、副本宝箱会掉的那些），不含只有高阶才有的特殊装备 */
 export const COMMON_EQUIP = () => EQUIP_TYPES.filter((e) => e.minTier === undefined);
 
@@ -563,7 +588,7 @@ TIERS.forEach((t, i) => {
         attack: Math.round(p * (st.attack ?? 0)), strength: st.strength ? Math.max(1, Math.round(p * st.strength + (st.strFlat ?? 0))) : 0, defence: Math.round(p * (st.defence ?? 0)),
         style: st.style, speed: st.speed ? TOOL_SPEED[i] : undefined, attackMs: st.attackMs,
         ...(st.haste ? { haste: TORCH_HASTE[i] } : {}), ...(st.twoHanded ? { twoHanded: true } : {}), ...(st.leech ? { leech: st.leech } : {}), ...(st.threat ? { threat: st.threat } : {}),
-        ...(st.chain ? { chain: st.chain } : {}), ...(st.frost ? { frost: st.frost } : {}), ...(st.guard ? { guard: st.guard } : {}), ...(st.crit ? { crit: st.crit } : {}), ...(st.proc ? { proc: st.proc } : {}),
+        ...(st.chain ? { chain: st.chain } : {}), ...(st.sunder ? { sunder: st.sunder } : {}), ...(st.execute ? { execute: st.execute } : {}), ...(st.thorns ? { thorns: st.thorns } : {}), ...(st.critDmg ? { critDmg: st.critDmg } : {}), ...(st.frost ? { frost: st.frost } : {}), ...(st.guard ? { guard: st.guard } : {}), ...(st.crit ? { crit: st.crit } : {}), ...(st.proc ? { proc: st.proc } : {}),
         ...(st.armor ? { armor: st.armor, defPct: pct3(ARMOR_PCT[i] * st.defPct!), dmgPct: pct3(ARMOR_PCT[i] * st.dmgPct!) } : {}),
         ...(st.hastePct ? { haste: pct3(ARMOR_PCT[i] * st.hastePct) } : {}),
         ...(st.dodgePct ? { dodge: pct3(ARMOR_PCT[i] * st.dodgePct) } : {}),
@@ -818,6 +843,9 @@ for (const it of itemList.filter((x) => x.equip && !x.equip.move && x.equip.slot
         // 永霜之弓、永霜盾（11-02 平衡）：和链刃一样，触发概率随品质涨（弓 12% → 神话 24%，盾 17% → 神话 34%），高品质才追得上同品质的十字弩
         ...(e.frost ? { frost: Math.round(e.frost * CHAIN_QUALITY[q] * 100) / 100 } : {}),
         ...(e.guard ? { guard: Math.round(e.guard * CHAIN_QUALITY[q] * 100) / 100 } : {}),
+        // 裂岳战锤、血月弯刀（11-06）：破甲概率、斩杀加成一样随品质涨（锤 15% → 神话 30%，刀 +50% → 神话 +100%）
+        ...(e.sunder ? { sunder: Math.round(e.sunder * CHAIN_QUALITY[q] * 100) / 100 } : {}),
+        ...(e.execute ? { execute: Math.round(e.execute * CHAIN_QUALITY[q] * 100) / 100 } : {}),
         ...Object.fromEntries((['xp', 'luck', 'crit', 'dodge', 'work', 'defPct', 'dmgPct'] as const).filter((k) => e[k] && !(k === 'crit' && e.slot === 'offhand')).map((k) => [k, Math.round(e[k]! * QUALITY_SPEED[q] * 1000) / 1000])),
       },
     };

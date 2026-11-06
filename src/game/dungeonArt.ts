@@ -277,6 +277,42 @@ export function fineStoneIconUrl(tier: number, frost: boolean): string {
   return done(k, p);
 }
 
+// ---- 近战特殊装备材料（11-06）：古龙骨是一截斜放的大骨头，英灵徽记是一枚带剑纹的金边圆章；T8 多一圈光点 ----
+
+export function specialMatIconUrl(kind: 'bone' | 'valor', tier: number): string {
+  const k = `sm${kind}${tier}`;
+  const hit = cache.get(k);
+  if (hit) return hit;
+  const p = new Pix(20, 20);
+  if (kind === 'bone') {
+    const B = ['#6a6050', '#a89c84', '#d8ccb0', '#f8f0dc'];
+    for (let i = 0; i <= 12; i++) {
+      const x = 4 + i, y = 15 - i * 0.85;
+      for (let w = -1; w <= 1; w++) p.set(x, Math.round(y + w), w === -1 ? B[3] : w === 1 ? B[0] : B[2]);
+    }
+    // 两头的骨节
+    for (const [cx, cy] of [[4, 15], [16, 5]]) for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+      const d = Math.hypot(dx, dy);
+      if (d <= 2.3) p.set(cx + dx, cy + dy, d < 1 ? B[3] : dx + dy > 1 ? B[0] : B[1]);
+    }
+    // 骨头上发光的龙纹
+    for (const [x, y] of [[8, 12], [10, 10], [12, 9]]) p.set(x, y, '#ff8a1a');
+  } else {
+    const G = ['#7a5a12', '#c8a030', '#f0d060', '#fff4b0'];
+    for (let y = 0; y < 20; y++) for (let x = 0; x < 20; x++) {
+      const d = Math.hypot(x + 0.5 - 10, y + 0.5 - 10);
+      if (d > 7.5) continue;
+      p.set(x, y, d > 6.5 ? (y < 10 ? G[3] : G[1]) : d > 5.6 ? G[0] : y < 9 ? '#3a4a8a' : '#2a3466');
+    }
+    // 竖着的一把小剑
+    for (let y = 5; y <= 13; y++) p.set(10, y, y < 11 ? '#e8ecf4' : G[2]);
+    for (let x = 8; x <= 12; x++) p.set(x, 11, G[2]);
+    p.set(10, 14, G[1]);
+  }
+  if (tier >= 7) for (const [x, y] of [[2, 3], [17, 2], [18, 16], [2, 17]]) p.set(x, y, '#fff0a0');
+  return done(k, p);
+}
+
 // ---- 回城卷轴 ----
 
 export function scrollIconUrl(): string {
@@ -317,6 +353,8 @@ export function dungeonIconUrl(id: string, tier?: number): string | null {
   if (id.startsWith('sageeye_')) return sageEyeIconUrl(tier);
   if (id.startsWith('finecraft_')) return fineStoneIconUrl(tier, false);
   if (id.startsWith('frostcraft_')) return fineStoneIconUrl(tier, true);
+  if (id.startsWith('dragonbone_')) return specialMatIconUrl('bone', tier);
+  if (id.startsWith('valor_')) return specialMatIconUrl('valor', tier);
   return null;
 }
 

@@ -917,6 +917,96 @@ function frostshield(p: Pix, t: number) {
   });
 }
 
+/*
+ * 近战特殊装备（用户 11-06）：裂岳战锤、血月弯刀、荆棘护盾、战魂号角，只有 T7/T8。t 只会是 6 或 7。
+ */
+const LAVA = ['#6a1a08', '#c8400a', '#ff8a1a', '#ffd060', '#fff4c0'];
+const BLOOD = ['#3a0610', '#7a1020', '#b81e2e', '#e8505a', '#ffc0c4'];
+const DBONE = ['#5a5248', '#8a8070', '#b8ae98', '#ddd4bc', '#f6f0dc'];
+function sunderhammer(p: Pix, t: number) {
+  // 裂岳战锤：黑铁长柄，龙骨大锤头，锤面裂开几道岩浆一样发光的缝；T8 锤头两侧包金
+  const parts: Part[] = [shaft(-3, 19, 1, ramp('#3a3236')), grip(-3, 3.5, 1.1, '#5a2a1a', '#8a4a2a')];
+  const c = 18.5, len = 6.4, thick = 3.6;
+  parts.push((u, v) => {
+    const du = u - c;
+    // 锤头一端平、一端带一圈骨刺
+    let hw = thick;
+    if (v < -len + 1.6) hw = thick + 0.7;
+    if (Math.abs(v) > len || Math.abs(du) > hw) return null;
+    if (t >= 7 && Math.abs(v) > len - 1.2) return Math.abs(du) > hw - 0.8 ? GOLDS[1] : GOLDS[2];
+    if (Math.abs(v) > len - 0.9) return DBONE[4];
+    // 岩浆裂缝：几道斜线
+    const crack = [0.7 * v + du, -0.9 * v + du * 0.6 - 1.5, 1.4 * v - du + 3];
+    if (crack.some((k) => Math.abs(k) < 0.45) && Math.abs(v) < len - 1) return Math.abs(du) < 1.2 ? LAVA[3] : LAVA[2];
+    return du > hw * 0.35 ? DBONE[3] : du < -hw * 0.35 ? DBONE[1] : DBONE[2];
+  });
+  // 柄和锤头的接口：一圈铁箍 + 一颗熔岩宝石
+  parts.push(bar(c - thick - 0.6, 1.6, 0.7, ramp('#5a4a48')), ball(c, 0, 1.2, LAVA));
+  axis(p, parts);
+}
+function bloodsabre(p: Pix, t: number) {
+  // 血月弯刀：黑皮握把，月牙形护手，刃身暗红往外弯、越往前越宽，刃口亮红；T8 刃脊镶一排金点
+  const o = 2.5;
+  const parts: Part[] = [
+    grip(o, o + 4.5, 0.95, '#1a1014', '#3a2630'),
+    ball(o - 0.4, 0, 1.3, t >= 7 ? [GOLDS[0], GOLDS[1], GOLDS[2], GOLDS[3]] : BLOOD),
+    bar(o + 5, 3.2, 0.7, DBONE, -1.4),
+    blade(o + 5.6, o + 21, (q) => (q < 0.7 ? 1.5 + q * 1.4 : 2.5 * Math.sqrt(Math.max(0, (1 - q) / 0.3))), BLOOD, {
+      c: (q) => -Math.sin(q * Math.PI * 0.9) * 1.8, fuller: BLOOD[0], edge: BLOOD[4] }),
+  ];
+  if (t >= 7) parts.push((u, v) => (u > o + 8 && u < o + 18 && Math.abs(v - (-Math.sin(((u - o - 5.6) / 15.4) * Math.PI * 0.9) * 1.8 + 1.2)) < 0.5 && Math.floor(u) % 3 === 0 ? GOLDS[2] : null));
+  axis(p, parts);
+}
+function thornguard(p: Pix, t: number) {
+  // 荆棘护盾：深绿铜色圆盾，边上一圈尖刺，盾面缠着荆棘藤，正中一颗血红宝石；T8 边框金色
+  const RIM = t >= 7 ? GOLDS : ['#3a3a2a', '#6a6a4a', '#9a9a6a', '#c8c89a'];
+  const FACE = ['#14301e', '#24502e', '#3a7240', '#5a9a5a'];
+  sym(p, (dx, y) => {
+    const cy = 12, ry = y + 0.5 - cy;
+    const r = Math.hypot(dx, ry);
+    const ang = Math.atan2(ry, dx);
+    // 尖刺：圆外一圈三角
+    const spike = 9.2 + Math.max(0, Math.cos(ang * 8)) ** 3 * 2.4;
+    if (r > 9.2 && r <= spike) return r > spike - 0.8 ? RIM[3] : RIM[2];
+    if (r > 9.2) return null;
+    if (r > 8) return r > 8.6 ? RIM[1] : RIM[2];
+    if (r < 1.6) return r < 0.8 ? BLOOD[4] : BLOOD[2];
+    // 荆棘藤：一圈波浪 + 小刺
+    const vine = Math.abs(r - 5 - Math.sin(ang * 5) * 1.2);
+    if (vine < 0.55) return '#5a3a1a';
+    if (vine < 1.1 && Math.sin(ang * 15) > 0.7) return '#c8b070';
+    return ry < -3 ? FACE[3] : dx > 5 ? FACE[0] : ry > 3 ? FACE[1] : FACE[2];
+  });
+}
+function warhorn(p: Pix, t: number) {
+  // 战魂号角：一只弯弯的龙骨号角，几道铜箍，喇叭口朝右上，挂一条红布穗；T8 箍是金的
+  const BAND = t >= 7 ? GOLDS : ['#5a3a1a', '#9a6a2a', '#c89040', '#f0c070'];
+  for (let k = 0; k <= 60; k++) {
+    const q = k / 60;
+    // 号角中线：从左下往右上弯一道弧
+    const x = 4 + q * 15 + Math.sin(q * Math.PI) * 2.5;
+    const y = 18 - q * 13 + Math.sin(q * Math.PI) * 2.5;
+    const w = 0.9 + q * q * 3.6;
+    for (let dy = -Math.ceil(w); dy <= Math.ceil(w); dy++) for (let dx = -Math.ceil(w); dx <= Math.ceil(w); dx++) {
+      const d = Math.hypot(dx, dy);
+      if (d > w) continue;
+      const band = Math.abs((q * 60) % 14 - 7) < 1.1 && q > 0.12 && q < 0.85;
+      const shade = dx - dy > w * 0.6 ? 3 : dx - dy < -w * 0.6 ? 1 : 2;
+      p.set(Math.round(x + dx), Math.round(y + dy), band ? BAND[shade] : DBONE[shade]);
+    }
+  }
+  // 喇叭口：亮一圈、里面暗
+  for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) {
+    const d = Math.hypot(dx, dy);
+    if (d <= 4.4 && d > 3.4) p.set(19 + dx, 5 + dy, BAND[3]);
+    else if (d <= 3.4) p.set(19 + dx, 5 + dy, d < 2 ? '#1a1014' : '#3a2a24');
+  }
+  // 吹嘴和红布穗
+  p.set(3, 19, BAND[2]); p.set(3, 18, BAND[3]); p.set(2, 19, BAND[1]);
+  for (let k = 0; k < 4; k++) { p.set(9 + (k % 2), 15 + k, BLOOD[2]); p.set(10 + (k % 2), 15 + k, BLOOD[1]); }
+  p.set(9, 19, BLOOD[3]); p.set(11, 19, BLOOD[0]);
+}
+
 function buckler(p: Pix, t: number) {
   // 副手盾：小圆盾或小鸢盾，正中一个盾心
   const { M, A, W, T } = shieldFace(t);
@@ -1792,6 +1882,10 @@ export function equipIconUrl(key: string, tier: number): string | null {
   else if (key === 'handaxe') handaxe(p, tier);
   else if (key === 'shortsword') shortsword(p, tier);
   else if (key === 'chainblade') chainblade(p, tier);
+  else if (key === 'sunderhammer') sunderhammer(p, tier);
+  else if (key === 'bloodsabre') bloodsabre(p, tier);
+  else if (key === 'thornguard') thornguard(p, tier);
+  else if (key === 'warhorn') warhorn(p, tier);
   else if (key === 'soullamp') soullamp(p, tier);
   else if (key === 'broadsword') broadsword(p, tier);
   else if (key === 'greataxe') greataxe(p, tier);

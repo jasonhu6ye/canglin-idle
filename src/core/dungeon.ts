@@ -411,6 +411,9 @@ export function rollChest(gate: DungeonGate, q: number, rand: () => number): Rec
     const k = Q_SPECIAL[q] * (gate.kind === 'blue' ? 1.3 : 1);
     if (rand() < k) add(`wraith_${n}`, 1);
     if (rand() < k) add(`wick_${n}`, 1);
+    // 近战特殊装备材料（用户 11-06）：古龙骨、英灵徽记，概率一样，各自单独掷
+    if (rand() < k) add(`dragonbone_${n}`, 1);
+    if (rand() < k) add(`valor_${n}`, 1);
   }
   // 精炼石（用户 11-02）：和宝箱同阶，箱子越好越容易出、越多
   if (rand() < Q_FINE[q] * (gate.kind === 'blue' ? 1.3 : 1)) add(`finecraft_${n}`, q >= 3 ? ri(1, 2) : 1);
@@ -441,7 +444,7 @@ function seeded(seed: number) {
 export const teamChestQuality = (gate: DungeonGate) => rollChestQuality(gate.kind, gate.floors, seeded(gate.seed ^ 0x5bd1e995)());
 
 // 装备、钥匙、强化石和稀有材料（幽魂精魄、冥火灯芯、精炼石）每件单独掷点，掷到的人不再拿保底
-const rolled = (id: string) => !!ITEMS[id]?.equip || /^(dkey_|enhstone_|wraith_|wick_|finecraft_)/.test(id);
+const rolled = (id: string) => !!ITEMS[id]?.equip || /^(dkey_|enhstone_|wraith_|wick_|dragonbone_|valor_|finecraft_)/.test(id);
 
 export function teamChest(gate: DungeonGate, q: number, members: TeamMember[]) {
   const ids = members.map((m) => m.id);

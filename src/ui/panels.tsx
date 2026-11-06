@@ -233,6 +233,10 @@ export function gearStats(id: string) {
   if (e.chain) out.push(tl`连斩 ${Math.round(e.chain * 100)}%（打中后再砍一刀）`);
   if (e.frost) out.push(tl`冻结 ${Math.round(e.frost * 100)}%（打中时冻住敌人 1 秒，这一下 150% 伤害）`);
   if (e.guard) out.push(tl`寒冰护体 ${Math.round(e.guard * 100)}%（挨打时冻住敌人 1 秒，防御 +50% 持续 7 秒）`);
+  if (e.sunder) out.push(tl`破甲 ${Math.round(e.sunder * 100)}%（打中时让敌人防御 -40%，持续 6 秒）`);
+  if (e.execute) out.push(tl`斩杀 +${Math.round(e.execute * 100)}%（敌人血量低于 30% 时的伤害）`);
+  if (e.thorns) out.push(tl`反伤 ${Math.round(e.thorns * 100)}%（挨打时弹回去，只在近战时生效）`);
+  if (e.critDmg) out.push(tl`暴击伤害 +${Math.round(e.critDmg * 100)}%（只在近战时生效）`);
   if (e.proc) out.push(tl`武器特效触发 +${Math.round(e.proc * 100)}%`);
   if (e.threat) out.push(tl`嘲讽 +${e.threat}`);
   if (e.twoHanded) out.push(tl('双手'));

@@ -364,6 +364,27 @@ export function guardChance(s: GameState) {
   const w = s.equipment.weapon ? ITEMS[s.equipment.weapon]?.equip : undefined;
   return w?.guard ? w.guard + gearSum(s, 'proc') : 0;
 }
+/** 裂岳战锤（11-06）：打中时让敌人破甲的概率，提灯一样加触发概率 */
+export function sunderChance(s: GameState) {
+  const w = s.equipment.weapon ? ITEMS[s.equipment.weapon]?.equip : undefined;
+  return w?.sunder ? w.sunder + gearSum(s, 'proc') : 0;
+}
+/** 血月弯刀（11-06）：敌人残血时多打的伤害比例 */
+export function executeBonus(s: GameState) {
+  const w = s.equipment.weapon ? ITEMS[s.equipment.weapon]?.equip : undefined;
+  return w?.execute ?? 0;
+}
+/** 近战特殊副手（11-06）：荆棘护盾反伤、战魂号角暴击伤害，只在拿近战武器时生效 */
+function meleeOff(s: GameState, k: 'thorns' | 'critDmg') {
+  const o = s.equipment.offhand ? ITEMS[s.equipment.offhand]?.equip : undefined;
+  return o?.[k] && weaponStyle(s) === 'melee' ? o[k]! : 0;
+}
+export const thornsPct = (s: GameState) => meleeOff(s, 'thorns');
+export const critDmgBonus = (s: GameState) => meleeOff(s, 'critDmg');
+/** 破甲：敌人防御 -40%，持续 6 秒（再触发就重新计时）；斩杀：敌人血量低于 30% */
+export const SUNDER = { ms: 6000, defPct: 0.4 } as const;
+export const EXECUTE_BELOW = 0.3;
+export const sunderMob = (m: MonsterDef): MonsterDef => ({ ...m, defence: Math.round(m.defence * (1 - SUNDER.defPct)) });
 /** 冻结敌人多久、永霜之弓那一下的伤害倍率、寒冰护体的防御加成和持续时间 */
 export const FROST = { freezeMs: 1000, mult: 1.5, defPct: 0.5, guardMs: 7000 } as const;
 function leechHeal(s: GameState, dmg: number, rand: () => number) {
@@ -676,7 +697,7 @@ export function combatStats(s: GameState, m: MonsterDef) {
   return {
     style,
     crit: 0.05 + perks.crit,
-    critMult: 1.5 + gmPct(s, 'critdmg'),
+    critMult: 1.5 + gmPct(s, 'critdmg') + critDmgBonus(s),
     dodge: perks.dodge,
     reduce: 1 - (1 - perks.reduce) * (1 - COOP_DEF * mates),
     playerHit: hitChance((lvl + 8) * (b.attack + 64) * (1 + boostPct(s, 'atk')), (m.defence + 8) * 64) * (has('evasive') ? 0.8 : 1),
@@ -697,7 +718,18 @@ export function combatEstimate(s: GameState, m: MonsterDef) {
   const st = combatStats(s, m);
   const swing = playerAttackMs(s);
   const fc = frostChance(s);
-  let avg = st.playerHit * ((1 + st.playerMaxHit) / 2) * (1 + st.crit * (st.critMult - 1)) * (1 + chainChance(s)) * (1 + fc * (FROST.mult - 1));
+  // 裂岳战锤：破甲期间命中率更高，按覆盖率混合（破甲 6 秒 ≈ 6000 / 出手间隔 下）
+  const sc = sunderChance(s);
+  let pHit = st.playerHit;
+  if (sc) {
+    const hitS = combatStats(s, sunderMob(m)).playerHit;
+    const u = 1 - Math.pow(1 - sc * st.playerHit, SUNDER.ms / swing);
+    pHit = st.playerHit * (1 - u) + hitS * u;
+  }
+  // 血月弯刀：最后 30% 的血伤害 ×(1+斩杀)，等于整只怪的输出 ×1/(0.7 + 0.3/(1+斩杀))
+  const ex = executeBonus(s);
+  const exMult = ex ? 1 / (1 - EXECUTE_BELOW + EXECUTE_BELOW / (1 + ex)) : 1;
+  let avg = pHit * ((1 + st.playerMaxHit) / 2) * (1 + st.crit * (st.critMult - 1)) * (1 + chainChance(s)) * (1 + fc * (FROST.mult - 1)) * exMult;
   const rage = m.traits.includes('berserk') ? 1.25 : 1;
   const venom = m.traits.includes('venom') ? Math.ceil(m.level / 8) : 0;
   const mv = moveOf(m);
@@ -722,7 +754,9 @@ export function combatEstimate(s: GameState, m: MonsterDef) {
   const mMs = m.attackMs + FROST.freezeMs * (guardFreeze + fc * st.playerHit * (m.attackMs / swing));
   // 怪物的再生和吸血抵掉一部分输出；抵光了就打不死
   const heal = ((m.traits.includes('regen') ? Math.ceil(m.hp * regenPct(m)) : 0) + (m.traits.includes('lifesteal') ? mAvg / 2 : 0)) / mMs;
-  const dps = avg / swing - heal;
+  // 荆棘护盾：挨打的伤害弹回去一部分，也算输出
+  const thorns = thornsPct(s) * mAvg / mMs;
+  const dps = avg / swing + thorns - heal;
   const killMs = dps > 1e-6 ? m.hp / dps : Infinity;
   // 灯笼吸血抵掉一部分掉血
   const leech = (gearSum(s, 'leech') + gmPct(s, 'leech')) * avg / swing;
@@ -823,6 +857,30 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     c.monsterTimerMs += FROST.freezeMs;
     s.frostGuard = FROST.guardMs;
     c.mFrost = true;
+  };
+
+  /** 血月弯刀：敌人血量低于 30% 时这一下伤害 ×(1+斩杀)，返回倍率 */
+  const executeHit = (c: NonNullable<GameState['combat']>, max: number) => {
+    const ex = executeBonus(s);
+    if (!ex || c.monsterHp >= max * EXECUTE_BELOW) return 1;
+    c.pExec = true;
+    return 1 + ex;
+  };
+  /** 裂岳战锤：打中时按概率让敌人破甲 6 秒（再触发就重新计时） */
+  const sunderHit = (c: NonNullable<GameState['combat']>) => {
+    const ch = sunderChance(s);
+    if (!ch || rand() >= ch) return;
+    c.sunderMs = SUNDER.ms;
+    c.pSunder = true;
+  };
+  /** 荆棘护盾：挨打后把伤害的一部分弹回去（不超过怪剩下的血），返回弹回多少 */
+  const thornsHit = (c: NonNullable<GameState['combat']>, dmg: number) => {
+    const t = thornsPct(s);
+    if (!t || c.monsterHp <= 0) return 0;
+    const r = Math.min(c.monsterHp, Math.max(1, Math.round(dmg * t)));
+    c.monsterHp -= r;
+    c.mThorns = r;
+    return r;
   };
 
   /** 采集、制作、打怪的产出进背包；万一放不下，多出来的才进仓库 */
@@ -1214,7 +1272,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       if (m.event && s.halloween) s.halloween = { ...s.halloween, summoned: undefined };
       const crew = crewNow();
       const hp = fieldMob(m0, crew).hp;
-      s.combat = { monsterHp: hp, monsterMax: crew ? hp : undefined, crew: crew || undefined, copy: (c.copy ?? 0) + 1, playerTimerMs: playerAttackMs(s), monsterTimerMs: m.attackMs, respawnMs: m.respawnMs ?? RESPAWN_MS, pSwings: c.pSwings, pDmg: c.pDmg, mSwings: c.mSwings, pCrit: c.pCrit, pDmg2: c.pDmg2, pFrost: c.pFrost };
+      s.combat = { monsterHp: hp, monsterMax: crew ? hp : undefined, crew: crew || undefined, copy: (c.copy ?? 0) + 1, playerTimerMs: playerAttackMs(s), monsterTimerMs: m.attackMs, respawnMs: m.respawnMs ?? RESPAWN_MS, pSwings: c.pSwings, pDmg: c.pDmg, mSwings: c.mSwings, pCrit: c.pCrit, pDmg2: c.pDmg2, pFrost: c.pFrost, pSunder: c.pSunder, pExec: c.pExec, mThorns: c.mThorns };
     };
     if (c.respawnMs > 0) {
       const step = Math.min(budget, c.respawnMs);
@@ -1237,7 +1295,8 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     c.monsterTimerMs -= step;
     // 回血先算到出手这一刻：不管离线一次结算还是分段结算，回血和挨打的先后都一样
     regen(s, step);
-    const st = combatStats(s, m);
+    if (c.sunderMs) c.sunderMs = Math.max(0, c.sunderMs - step) || undefined;
+    const st = combatStats(s, c.sunderMs ? sunderMob(m) : m);
 
     if (c.playerTimerMs <= 0) {
       c.playerTimerMs += playerAttackMs(s);
@@ -1247,10 +1306,14 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       c.pLeech = undefined;
       c.pDmg2 = undefined;
       c.pFrost = undefined;
+      c.pSunder = undefined;
+      c.pExec = undefined;
       if (rand() < st.playerHit) {
         let raw = 1 + Math.floor(rand() * st.playerMaxHit);
         if (rand() < st.crit) { raw *= st.critMult; c.pCrit = true; }
         if (frostHit(c)) raw *= FROST.mult;
+        raw *= executeHit(c, m.hp);
+        sunderHit(c);
         let dmg = Math.max(1, Math.min(c.monsterHp, Math.round(raw)));
         c.monsterHp -= dmg;
         c.pDmg = dmg;
@@ -1286,6 +1349,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       c.mSwings = (c.mSwings ?? 0) + 1;
       c.mDmg = -1;
       c.mFrost = undefined;
+      c.mThorns = undefined;
       // 组队打同一个目标：普通攻击按嘲讽挑一个人，没挑中自己就是去打队友了（-2）；大招打全体
       const atMate = !big && aimsAtMate(s, rand);
       // 一起打时普通攻击挑中了自己 = 在扛怪，没打出伤害也有掉落
@@ -1301,7 +1365,19 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         if (alt && wm?.freezeMs) c.playerTimerMs += wm.freezeMs;
         c.mDmg = dmg;
         frostGuardHit(c);
-        hurt(dmg);
+        if (hurt(dmg)) return step;
+        // 荆棘护盾（11-06）：弹回去的伤害也算自己打的
+        const r = thornsHit(c, dmg);
+        if (r > 0) {
+          if (c.crew) c.pTotal = (c.pTotal ?? 0) + r;
+          addXp(st.style, r);
+          addXp('defence', r / 3);
+          addXp('hitpoints', r / 3);
+          if (c.monsterHp <= 0) {
+            kill();
+            return step;
+          }
+        }
       }
     }
     return step;
@@ -1415,7 +1491,8 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     c.playerTimerMs -= step;
     c.monsterTimerMs -= step;
     regen(s, step);
-    const st = combatStats(s, m);
+    if (c.sunderMs) c.sunderMs = Math.max(0, c.sunderMs - step) || undefined;
+    const st = combatStats(s, c.sunderMs ? sunderMob(m) : m);
     if (c.playerTimerMs <= 0) {
       c.playerTimerMs += playerAttackMs(s);
       c.pSwings = (c.pSwings ?? 0) + 1;
@@ -1424,10 +1501,14 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       c.pLeech = undefined;
       c.pDmg2 = undefined;
       c.pFrost = undefined;
+      c.pSunder = undefined;
+      c.pExec = undefined;
       if (rand() < st.playerHit) {
         let raw = 1 + Math.floor(rand() * st.playerMaxHit);
         if (rand() < st.crit) { raw *= st.critMult; c.pCrit = true; }
         if (frostHit(c)) raw *= FROST.mult;
+        raw *= executeHit(c, m.hp);
+        sunderHit(c);
         let dmg = Math.max(1, Math.min(c.monsterHp, Math.round(raw)));
         c.monsterHp -= dmg;
         c.pDmg = dmg;
@@ -1457,6 +1538,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       c.mSwings = (c.mSwings ?? 0) + 1;
       c.mDmg = -1;
       c.mFrost = undefined;
+      c.mThorns = undefined;
       // 组队打同一个目标：普通攻击按嘲讽挑一个人，没挑中自己就是去打队友了（-2）；大招打全体
       const atMate = !big && aimsAtMate(s, rand);
       // 一起打时普通攻击挑中了自己 = 在扛怪，没打出伤害也有掉落
@@ -1469,7 +1551,19 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
         if (has('lifesteal')) c.monsterHp = Math.min(m.hp, c.monsterHp + Math.ceil(dmg / 2));
         c.mDmg = dmg;
         frostGuardHit(c);
-        hurt(dmg);
+        if (hurt(dmg)) return Math.max(step, 1);
+        const r = thornsHit(c, dmg);
+        if (r > 0) {
+          c.pTotal = (c.pTotal ?? 0) + r;
+          if (run.me && !run.contrib?.includes(run.me)) run.contrib = [...(run.contrib ?? []), run.me];
+          addXp(st.style, r);
+          addXp('defence', r / 3);
+          addXp('hitpoints', r / 3);
+          if (c.monsterHp <= 0) {
+            kill(r, false, true);
+            return Math.max(step, 1);
+          }
+        }
       }
     }
     return Math.max(step, 1);

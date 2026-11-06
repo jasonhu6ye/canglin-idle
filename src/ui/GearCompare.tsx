@@ -34,6 +34,10 @@ const STATS: Stat[] = [
   { label: tl('连斩'), get: (e) => e.chain ?? 0, fmt: p1 },
   { label: tl('冻结'), get: (e) => e.frost ?? 0, fmt: p1 },
   { label: tl('寒冰护体'), get: (e) => e.guard ?? 0, fmt: p1 },
+  { label: tl('破甲'), get: (e) => e.sunder ?? 0, fmt: p1 },
+  { label: tl('斩杀'), get: (e) => e.execute ?? 0, fmt: p1 },
+  { label: tl('反伤'), get: (e) => e.thorns ?? 0, fmt: p1 },
+  { label: tl('暴击伤害'), get: (e) => e.critDmg ?? 0, fmt: p1 },
   { label: tl('武器特效触发'), get: (e) => e.proc ?? 0, fmt: p1 },
   { label: tl('嘲讽'), get: (e) => e.threat ?? 0, fmt: (v) => `${v}` },
 ];

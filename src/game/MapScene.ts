@@ -2436,6 +2436,16 @@ export class MapScene extends Phaser.Scene {
         frostBurst(this, foe, S, D_FLOAT - 4);
         this.popText(foe.x - 10, foe.y - S * 0.7 - 4, tl('冻结'), '#9fe6ff', 9);
       });
+      // 裂岳战锤破甲、血月弯刀斩杀（11-06）
+      if (c.pSunder || c.pExec) {
+        const word = c.pSunder ? tl('破甲') : tl('斩杀');
+        const col = c.pSunder ? '#ffa040' : '#ff5a6a';
+        this.time.delayedCall(hitIn + 60, () => {
+          if (this.foe !== foe || !foe.active) return;
+          const S = monsterFrameSize(m) * foe.scaleY;
+          this.popText(foe.x - 12, foe.y - S * 0.7 - 4, word, col, 9);
+        });
+      }
       // 灯笼吸血：打中后主角头顶飘一个血红色的回血数字
       const leech = c.pLeech ?? 0;
       if (leech > 0) this.time.delayedCall(hitIn + 260, () => this.float(`+${leech}`, '#6ee86a'));
@@ -2450,6 +2460,16 @@ export class MapScene extends Phaser.Scene {
       this.popText(foe.x - 10, foe.y - S * 0.7 - 4, tl('冻结'), '#9fe6ff', 9);
       this.float(tl('寒冰护体'), '#9fe6ff');
     });
+    // 荆棘护盾（11-06）：挨打时弹回去的伤害，绿色数字飘在怪头上
+    const thorns = c.mThorns ?? 0;
+    if (this.foeSeen.m > prev.m && thorns > 0) {
+      recordHit(ME, '', 0, thorns);
+      this.time.delayedCall(200, () => {
+        if (this.foe !== foe || !foe.active) return;
+        const S = monsterFrameSize(m) * foe.scaleY;
+        this.popText(foe.x + 8, foe.y - S * 0.6 - 4, tl`反伤 ${thorns}`, '#8ae86a', 8);
+      });
+    }
     if (c.respawnMs > 0 && prev.respawn <= 0) {
       this.playMon(foe, m, 'death');
       this.deathPuff(foe);

@@ -491,6 +491,7 @@ export class DungeonScene extends Phaser.Scene {
         this.tweens.add({ targets: spr, x: x0 + gx * k, y: y0 + gy * k, duration: 160, ease: 'Quad.easeOut', yoyo: true, hold: 120, onComplete: () => spr.setPosition(x0, y0) });
       }
       if (d !== -2) this.popText(this.player.x - 6, this.player.y - 30, d < 0 ? tl('闪避') : `-${d}`, d < 0 ? '#a8d8ff' : '#ff5a4a', 8);
+      if (c.mThorns) { recordHit(ME, '', 0, c.mThorns); this.popText(spr.x + 8, spr.y - 28, tl`反伤 ${c.mThorns}`, '#8ae86a', 8); }
       if (c.mFrost) {
         frostBurst(this, spr, spr.displayHeight, D_FLOAT - 4);
         this.popText(spr.x - 6, spr.y - 30, tl('冻结'), '#9fe6ff', 9);
@@ -510,6 +511,8 @@ export class DungeonScene extends Phaser.Scene {
     const st = combatStats(store.state, m);
     const d2 = store.state.combat?.pDmg2 ?? 0;
     const frost = !!store.state.combat?.pFrost;
+    const sunder = !!store.state.combat?.pSunder;
+    const exec = !!store.state.combat?.pExec;
     const dur = Math.min(f.ms, Math.max(200, (store.state.combat?.playerTimerMs ?? 2000) * 0.85));
     const key = `fight-${w}`;
     this.anim = key;
@@ -538,6 +541,8 @@ export class DungeonScene extends Phaser.Scene {
         frostBurst(this, spr, S, D_FLOAT - 4);
         this.popText(spr.x - 6, spr.y - 30, tl('冻结'), '#9fe6ff', 9);
       }
+      // 裂岳战锤破甲、血月弯刀斩杀（11-06）
+      if (sunder || exec) this.popText(spr.x - 8, spr.y - 32, sunder ? tl('破甲') : tl('斩杀'), sunder ? '#ffa040' : '#ff5a6a', 9);
       if (d2 > 0) this.time.delayedCall(220, () => {
         if (!spr.active) return;
         spr.setTintFill(0xaaf8ff);
