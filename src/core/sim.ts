@@ -374,13 +374,20 @@ export function executeBonus(s: GameState) {
   const w = s.equipment.weapon ? ITEMS[s.equipment.weapon]?.equip : undefined;
   return w?.execute ?? 0;
 }
-/** 近战特殊副手（11-06）：荆棘护盾反伤、战魂号角暴击伤害，只在拿近战武器时生效 */
-function meleeOff(s: GameState, k: 'thorns' | 'critDmg') {
+/** 特殊副手（11-06）：近战的荆棘护盾、战魂号角，远程的穿云箭袋、鹰眼目镜，只在拿对应战斗方式的武器时生效 */
+function styledOff(s: GameState, k: 'thorns' | 'critDmg' | 'pierce' | 'aimCrit') {
   const o = s.equipment.offhand ? ITEMS[s.equipment.offhand]?.equip : undefined;
-  return o?.[k] && weaponStyle(s) === 'melee' ? o[k]! : 0;
+  return o?.[k] && (!o.style || o.style === weaponStyle(s)) ? o[k]! : 0;
 }
-export const thornsPct = (s: GameState) => meleeOff(s, 'thorns');
-export const critDmgBonus = (s: GameState) => meleeOff(s, 'critDmg');
+export const thornsPct = (s: GameState) => styledOff(s, 'thorns');
+export const critDmgBonus = (s: GameState) => styledOff(s, 'critDmg');
+export const piercePct = (s: GameState) => styledOff(s, 'pierce');
+export const aimCrit = (s: GameState) => styledOff(s, 'aimCrit');
+/** 追星长弓（11-06）：专注每层加的伤害；猎王手弩：打精英、首领加的伤害 */
+const weaponOf = (s: GameState) => (s.equipment.weapon ? ITEMS[s.equipment.weapon]?.equip : undefined);
+export const focusPer = (s: GameState) => weaponOf(s)?.focus ?? 0;
+export const slayerBonus = (s: GameState, m: MonsterDef) => (m.rank !== 'normal' || m.world ? weaponOf(s)?.slayer ?? 0 : 0);
+export const FOCUS_MAX = 5;
 /** 破甲：敌人防御 -40%，持续 6 秒（再触发就重新计时）；斩杀：敌人血量低于 30% */
 export const SUNDER = { ms: 6000, defPct: 0.4 } as const;
 export const EXECUTE_BELOW = 0.3;
@@ -696,11 +703,11 @@ export function combatStats(s: GameState, m: MonsterDef) {
   const mates = m.dungeon?.kind === 'blue' ? coopMates(s.dungeon?.party ?? partySize()) : 0;
   return {
     style,
-    crit: 0.05 + perks.crit,
+    crit: 0.05 + perks.crit + aimCrit(s),
     critMult: 1.5 + gmPct(s, 'critdmg') + critDmgBonus(s),
     dodge: perks.dodge,
     reduce: 1 - (1 - perks.reduce) * (1 - COOP_DEF * mates),
-    playerHit: hitChance((lvl + 8) * (b.attack + 64) * (1 + boostPct(s, 'atk')), (m.defence + 8) * 64) * (has('evasive') ? 0.8 : 1),
+    playerHit: hitChance((lvl + 8) * (b.attack + 64) * (1 + boostPct(s, 'atk')), (m.defence * (1 - piercePct(s)) + 8) * 64) * (has('evasive') ? 0.8 : 1),
     playerMaxHit: Math.max(1, Math.round((((lvl + 8) * (strength + 64)) / 64) * dmgMult * (1 + boostPct(s, 'str')) * (1 + gearSum(s, 'dmgPct')) * (1 + COOP_DMG * mates))),
     monsterHit: m.maxHit > 0 ? hitChance((m.attack + 8) * 64, (level(s, 'defence') + 8) * (b.defence + 64) * (1 + boostPct(s, 'def')) * (1 + gearSum(s, 'defPct')) * ((s.frostGuard ?? 0) > 0 ? 1 + FROST.defPct : 1)) : 0,
     monsterMaxHit: m.maxHit * MONSTER_DAMAGE_SCALE,
@@ -729,7 +736,12 @@ export function combatEstimate(s: GameState, m: MonsterDef) {
   // 血月弯刀：最后 30% 的血伤害 ×(1+斩杀)，等于整只怪的输出 ×1/(0.7 + 0.3/(1+斩杀))
   const ex = executeBonus(s);
   const exMult = ex ? 1 / (1 - EXECUTE_BELOW + EXECUTE_BELOW / (1 + ex)) : 1;
-  let avg = pHit * ((1 + st.playerMaxHit) / 2) * (1 + st.crit * (st.critMult - 1)) * (1 + chainChance(s)) * (1 + fc * (FROST.mult - 1)) * exMult;
+  // 追星长弓：这一箭前面连中了 k 箭的概率是 命中率^k，专注层数的期望 = Σ 命中率^k（k = 1..5）
+  const fp = focusPer(s);
+  let stacks = 0;
+  for (let k = 1; k <= FOCUS_MAX; k++) stacks += Math.pow(pHit, k);
+  const focusMult = 1 + fp * stacks;
+  let avg = pHit * ((1 + st.playerMaxHit) / 2) * (1 + st.crit * (st.critMult - 1)) * (1 + chainChance(s)) * (1 + fc * (FROST.mult - 1)) * exMult * focusMult * (1 + slayerBonus(s, m));
   const rage = m.traits.includes('berserk') ? 1.25 : 1;
   const venom = m.traits.includes('venom') ? Math.ceil(m.level / 8) : 0;
   const mv = moveOf(m);
@@ -865,6 +877,22 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
     if (!ex || c.monsterHp >= max * EXECUTE_BELOW) return 1;
     c.pExec = true;
     return 1 + ex;
+  };
+  /** 追星长弓、猎王手弩：这一箭的伤害倍率（专注按打中前的层数算，然后叠一层；猎王打精英首领） */
+  const rangedHit = (c: NonNullable<GameState['combat']>, m: MonsterDef) => {
+    let k = 1;
+    const fp = focusPer(s);
+    if (fp) {
+      k *= 1 + fp * (c.focus ?? 0);
+      if ((c.focus ?? 0) === FOCUS_MAX - 1) c.pFocus = true;
+      c.focus = Math.min(FOCUS_MAX, (c.focus ?? 0) + 1);
+    }
+    const sl = slayerBonus(s, m);
+    if (sl) {
+      k *= 1 + sl;
+      c.pSlay = true;
+    }
+    return k;
   };
   /** 裂岳战锤：打中时按概率让敌人破甲 6 秒（再触发就重新计时） */
   const sunderHit = (c: NonNullable<GameState['combat']>) => {
@@ -1272,7 +1300,7 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       if (m.event && s.halloween) s.halloween = { ...s.halloween, summoned: undefined };
       const crew = crewNow();
       const hp = fieldMob(m0, crew).hp;
-      s.combat = { monsterHp: hp, monsterMax: crew ? hp : undefined, crew: crew || undefined, copy: (c.copy ?? 0) + 1, playerTimerMs: playerAttackMs(s), monsterTimerMs: m.attackMs, respawnMs: m.respawnMs ?? RESPAWN_MS, pSwings: c.pSwings, pDmg: c.pDmg, mSwings: c.mSwings, pCrit: c.pCrit, pDmg2: c.pDmg2, pFrost: c.pFrost, pSunder: c.pSunder, pExec: c.pExec, mThorns: c.mThorns };
+      s.combat = { monsterHp: hp, monsterMax: crew ? hp : undefined, crew: crew || undefined, copy: (c.copy ?? 0) + 1, playerTimerMs: playerAttackMs(s), monsterTimerMs: m.attackMs, respawnMs: m.respawnMs ?? RESPAWN_MS, pSwings: c.pSwings, pDmg: c.pDmg, mSwings: c.mSwings, pCrit: c.pCrit, pDmg2: c.pDmg2, pFrost: c.pFrost, pSunder: c.pSunder, pExec: c.pExec, mThorns: c.mThorns, focus: c.focus, pSlay: c.pSlay, pFocus: c.pFocus };
     };
     if (c.respawnMs > 0) {
       const step = Math.min(budget, c.respawnMs);
@@ -1308,11 +1336,17 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       c.pFrost = undefined;
       c.pSunder = undefined;
       c.pExec = undefined;
-      if (rand() < st.playerHit) {
+      c.pSlay = undefined;
+      c.pFocus = undefined;
+      const landed = rand() < st.playerHit;
+      // 追星长弓：没中就把专注层数清零
+      if (!landed && c.focus) c.focus = undefined;
+      if (landed) {
         let raw = 1 + Math.floor(rand() * st.playerMaxHit);
         if (rand() < st.crit) { raw *= st.critMult; c.pCrit = true; }
         if (frostHit(c)) raw *= FROST.mult;
         raw *= executeHit(c, m.hp);
+        raw *= rangedHit(c, m);
         sunderHit(c);
         let dmg = Math.max(1, Math.min(c.monsterHp, Math.round(raw)));
         c.monsterHp -= dmg;
@@ -1503,11 +1537,17 @@ export function advance(prev: GameState, now: number): { state: GameState; summa
       c.pFrost = undefined;
       c.pSunder = undefined;
       c.pExec = undefined;
-      if (rand() < st.playerHit) {
+      c.pSlay = undefined;
+      c.pFocus = undefined;
+      const landed = rand() < st.playerHit;
+      // 追星长弓：没中就把专注层数清零
+      if (!landed && c.focus) c.focus = undefined;
+      if (landed) {
         let raw = 1 + Math.floor(rand() * st.playerMaxHit);
         if (rand() < st.crit) { raw *= st.critMult; c.pCrit = true; }
         if (frostHit(c)) raw *= FROST.mult;
         raw *= executeHit(c, m.hp);
+        raw *= rangedHit(c, m);
         sunderHit(c);
         let dmg = Math.max(1, Math.min(c.monsterHp, Math.round(raw)));
         c.monsterHp -= dmg;

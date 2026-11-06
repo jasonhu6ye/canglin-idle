@@ -237,6 +237,10 @@ export function gearStats(id: string) {
   if (e.execute) out.push(tl`斩杀 +${Math.round(e.execute * 100)}%（敌人血量低于 30% 时的伤害）`);
   if (e.thorns) out.push(tl`反伤 ${Math.round(e.thorns * 100)}%（挨打时弹回去，只在近战时生效）`);
   if (e.critDmg) out.push(tl`暴击伤害 +${Math.round(e.critDmg * 100)}%（只在近战时生效）`);
+  if (e.focus) out.push(tl`专注 每层 +${Math.round(e.focus * 100)}%（连续命中叠加，最多 5 层，没中清零）`);
+  if (e.slayer) out.push(tl`猎王 +${Math.round(e.slayer * 100)}%（打精英、首领的伤害）`);
+  if (e.pierce) out.push(tl`穿甲 ${Math.round(e.pierce * 100)}%（算命中时无视敌人防御，只在远程时生效）`);
+  if (e.aimCrit) out.push(tl`暴击率 +${Math.round(e.aimCrit * 100)}%（只在远程时生效）`);
   if (e.proc) out.push(tl`武器特效触发 +${Math.round(e.proc * 100)}%`);
   if (e.threat) out.push(tl`嘲讽 +${e.threat}`);
   if (e.twoHanded) out.push(tl('双手'));

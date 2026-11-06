@@ -513,6 +513,7 @@ export class DungeonScene extends Phaser.Scene {
     const frost = !!store.state.combat?.pFrost;
     const sunder = !!store.state.combat?.pSunder;
     const exec = !!store.state.combat?.pExec;
+    const slay = !!store.state.combat?.pSlay;
     const dur = Math.min(f.ms, Math.max(200, (store.state.combat?.playerTimerMs ?? 2000) * 0.85));
     const key = `fight-${w}`;
     this.anim = key;
@@ -542,7 +543,7 @@ export class DungeonScene extends Phaser.Scene {
         this.popText(spr.x - 6, spr.y - 30, tl('冻结'), '#9fe6ff', 9);
       }
       // 裂岳战锤破甲、血月弯刀斩杀（11-06）
-      if (sunder || exec) this.popText(spr.x - 8, spr.y - 32, sunder ? tl('破甲') : tl('斩杀'), sunder ? '#ffa040' : '#ff5a6a', 9);
+      if (sunder || exec || slay) this.popText(spr.x - 8, spr.y - 32, sunder ? tl('破甲') : exec ? tl('斩杀') : tl('猎王'), sunder ? '#ffa040' : exec ? '#ff5a6a' : '#ffd040', 9);
       if (d2 > 0) this.time.delayedCall(220, () => {
         if (!spr.active) return;
         spr.setTintFill(0xaaf8ff);

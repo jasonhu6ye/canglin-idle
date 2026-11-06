@@ -327,6 +327,18 @@ for (const i of [6, 7]) {
     tier: i, desc: tl('战死在副本深处的英灵留下的徽记，摸上去还有点温热。打造荆棘护盾、战魂号角要用。只能从 T7 以上的副本宝箱里低概率开出。'),
   });
 }
+/**
+ * 远程特殊装备材料（用户 11-06）：雷鸟羽做追星长弓、猎王手弩，星辉碎片做穿云箭袋、鹰眼目镜。
+ * 只有 T7、T8，只能从 T7 以上的副本宝箱里低概率开出（dungeon.ts rollChest）。
+ */
+for (const i of [6, 7]) {
+  item(`stormplume_${i + 1}`, tl`T${i + 1} 雷鸟羽`, 'material', BAR_VALUE[i] * 6, {
+    tier: i, desc: tl('雷鸟身上掉下来的长羽毛，羽尖噼啪冒着电光。打造追星长弓、猎王手弩要用。只能从 T7 以上的副本宝箱里低概率开出。'),
+  });
+  item(`starshard_${i + 1}`, tl`T${i + 1} 星辉碎片`, 'material', BAR_VALUE[i] * 6, {
+    tier: i, desc: tl('坠进副本深处的星星碎成的小片，夜里会自己发光。打造穿云箭袋、鹰眼目镜要用。只能从 T7 以上的副本宝箱里低概率开出。'),
+  });
+}
 /** 永霜之心（用户 11-02）：做永霜之弓、永霜盾，只有 T7、T8，只在永冬冰原打首领、开限时宝箱有概率得到 */
 for (const i of [6, 7]) {
   item(`frostheart_${i + 1}`, tl`T${i + 1} 永霜之心`, 'material', BAR_VALUE[i] * 6, {
@@ -421,7 +433,7 @@ item(SCROLL_TOWN, tl('回城卷轴'), 'misc', 200, {
  * mat 是材料：bar 精炼锭、plank 加工木材、leather 皮革、cloth 布料。
  * plus 是在本阶解锁等级上再加几级才能做。
  */
-type Mat = 'bar' | 'plank' | 'leather' | 'cloth' | 'resin' | 'wraith' | 'wick' | 'frostheart' | 'dragonbone' | 'valor';
+type Mat = 'bar' | 'plank' | 'leather' | 'cloth' | 'resin' | 'wraith' | 'wick' | 'frostheart' | 'dragonbone' | 'valor' | 'stormplume' | 'starshard';
 export interface EquipType {
   key: string;
   name: string;
@@ -446,7 +458,9 @@ export interface EquipType {
     /** 永霜之弓、永霜盾（11-02）：特效触发概率（固定，不随品质变） */
     frost?: number; guard?: number;
     /** 近战特殊装备（11-06）：裂岳战锤破甲概率、血月弯刀斩杀加成（随品质涨）；荆棘护盾反伤、战魂号角暴击伤害（固定） */
-    sunder?: number; execute?: number; thorns?: number; critDmg?: number };
+    sunder?: number; execute?: number; thorns?: number; critDmg?: number;
+    /** 远程特殊装备（11-06）：追星长弓专注、猎王手弩猎王（随品质涨）；穿云箭袋穿甲、鹰眼目镜暴击（固定） */
+    focus?: number; slayer?: number; pierce?: number; aimCrit?: number };
   group: string;
   /** 特殊装备（10-31）：只有这一阶及以上的版本（6 = T7），不会在野外、福袋、副本宝箱里直接掉 */
   minTier?: number;
@@ -535,6 +549,12 @@ export const EQUIP_TYPES: EquipType[] = [
   // 双手用不了副手，底子比长弓厚一些，整体和幽魂链刃差不多（balance.test）
   { ...W('frostbow', tl('永霜之弓'), 'ranged', 'fletching', [['plank', 3], ['leather', 1], ['frostheart', 2]], 8, 1.25, 2.1, 3000, 'ranged', 0, true), minTier: 6,
     stats: { attack: 1.25, strength: 2.1, strFlat: 0, attackMs: 3000, style: 'ranged', twoHanded: true, frost: 0.12 } },
+  // 追星长弓（用户 11-06，特殊装备，只有 T7/T8）：双手长弓，「专注」连续命中每箭 +4% 伤害，最多 5 层（+20%），没中清零。材料雷鸟羽
+  { ...W('starbow', tl('追星长弓'), 'ranged', 'fletching', [['plank', 3], ['leather', 1], ['stormplume', 2]], 8, 1.2, 1.8, 2800, 'ranged', 6, true), minTier: 6,
+    stats: { attack: 1.2, strength: 1.8, strFlat: 6, attackMs: 2800, style: 'ranged', twoHanded: true, focus: 0.04 } },
+  // 猎王手弩（用户 11-06，特殊装备，只有 T7/T8）：单手小弩，打精英、首领伤害 +30%，打普通怪和单手战弓差不多
+  { ...W('kingslayer', tl('猎王手弩'), 'ranged', 'fletching', [['plank', 2], ['bar', 1], ['stormplume', 2]], 8, 1.0, 1.0, 2200, 'ranged', -3), minTier: 6,
+    stats: { attack: 1.0, strength: 1.0, strFlat: -3, attackMs: 2200, style: 'ranged', slayer: 0.3 } },
   // 魔法：加工木材 + 布料
   W('staff', tl('法杖'), 'magic', 'crafting', [['plank', 2], ['cloth', 1]], 4, 1.0, 1.1, 2400, 'magic'),
   // 护甲：头、身、脚、手
@@ -556,6 +576,10 @@ export const EQUIP_TYPES: EquipType[] = [
   { ...OH('thornguard', tl('荆棘护盾'), 'defence', 'smithing', [['bar', 2], ['leather', 1], ['valor', 2]], 8, { defence: 0.6, style: 'melee', thorns: 0.25 }), minTier: 6 },
   // 战魂号角（用户 11-06，近战特殊副手，只有 T7/T8）：力量约灯笼的八成，暴击伤害 150% → 180%，没有吸血（只在拿近战武器时生效）
   { ...OH('warhorn', tl('战魂号角'), 'defence', 'smithing', [['bar', 2], ['leather', 1], ['valor', 2]], 8, { strength: 0.4, style: 'melee', critDmg: 0.5 }), minTier: 6 },
+  // 穿云箭袋（用户 11-06，远程特殊副手，只有 T7/T8）：箭袋的攻击力，外加「穿甲」，算命中时无视敌人 25% 防御
+  { ...OH('cloudquiver', tl('穿云箭袋'), 'ranged', 'crafting', [['leather', 2], ['cloth', 1], ['starshard', 2]], 8, { attack: 0.3, strength: 0.35, style: 'ranged', pierce: 0.1 }), minTier: 6 },
+  // 鹰眼目镜（用户 11-06，远程特殊副手，只有 T7/T8）：箭袋的攻击力，外加暴击率 +10%
+  { ...OH('hawkeye', tl('鹰眼目镜'), 'ranged', 'crafting', [['leather', 1], ['bar', 1], ['starshard', 2]], 8, { attack: 0.3, strength: 0.35, style: 'ranged', aimCrit: 0.06 }), minTier: 6 },
   // 工具
   TL('axe', tl('斧头'), 'axe', 'woodcutting', 'smithing', [['bar', 1], ['plank', 1]], 1),
   TL('pickaxe', tl('镐子'), 'pickaxe', 'mining', 'smithing', [['bar', 1], ['plank', 1]], 1),
@@ -570,7 +594,7 @@ export const EQUIP_TYPES: EquipType[] = [
 ];
 const TOOL_SLOTS: EquipSlot[] = ['axe', 'pickaxe', 'sickle', 'knife', 'rod', 'hoe', 'hammer', 'needle', 'pan'];
 const matItem = (m: Mat, i: number) => (m === 'bar' ? `${TIERS[i].id}_bar` : `${m}_${i + 1}`);
-const matCost = (m: Mat, i: number) => (m === 'bar' ? BAR_VALUE[i] : m === 'wraith' || m === 'wick' || m === 'frostheart' || m === 'dragonbone' || m === 'valor' ? BAR_VALUE[i] * 6 : RES_VALUE[i] * 3);
+const matCost = (m: Mat, i: number) => (m === 'bar' ? BAR_VALUE[i] : m === 'wraith' || m === 'wick' || m === 'frostheart' || m === 'dragonbone' || m === 'valor' || m === 'stormplume' || m === 'starshard' ? BAR_VALUE[i] * 6 : RES_VALUE[i] * 3);
 /** 普通装备（野外、福袋、副本宝箱会掉的那些），不含只有高阶才有的特殊装备 */
 export const COMMON_EQUIP = () => EQUIP_TYPES.filter((e) => e.minTier === undefined);
 
@@ -588,7 +612,7 @@ TIERS.forEach((t, i) => {
         attack: Math.round(p * (st.attack ?? 0)), strength: st.strength ? Math.max(1, Math.round(p * st.strength + (st.strFlat ?? 0))) : 0, defence: Math.round(p * (st.defence ?? 0)),
         style: st.style, speed: st.speed ? TOOL_SPEED[i] : undefined, attackMs: st.attackMs,
         ...(st.haste ? { haste: TORCH_HASTE[i] } : {}), ...(st.twoHanded ? { twoHanded: true } : {}), ...(st.leech ? { leech: st.leech } : {}), ...(st.threat ? { threat: st.threat } : {}),
-        ...(st.chain ? { chain: st.chain } : {}), ...(st.sunder ? { sunder: st.sunder } : {}), ...(st.execute ? { execute: st.execute } : {}), ...(st.thorns ? { thorns: st.thorns } : {}), ...(st.critDmg ? { critDmg: st.critDmg } : {}), ...(st.frost ? { frost: st.frost } : {}), ...(st.guard ? { guard: st.guard } : {}), ...(st.crit ? { crit: st.crit } : {}), ...(st.proc ? { proc: st.proc } : {}),
+        ...(st.chain ? { chain: st.chain } : {}), ...(st.sunder ? { sunder: st.sunder } : {}), ...(st.execute ? { execute: st.execute } : {}), ...(st.thorns ? { thorns: st.thorns } : {}), ...(st.critDmg ? { critDmg: st.critDmg } : {}), ...(st.focus ? { focus: st.focus } : {}), ...(st.slayer ? { slayer: st.slayer } : {}), ...(st.pierce ? { pierce: st.pierce } : {}), ...(st.aimCrit ? { aimCrit: st.aimCrit } : {}), ...(st.frost ? { frost: st.frost } : {}), ...(st.guard ? { guard: st.guard } : {}), ...(st.crit ? { crit: st.crit } : {}), ...(st.proc ? { proc: st.proc } : {}),
         ...(st.armor ? { armor: st.armor, defPct: pct3(ARMOR_PCT[i] * st.defPct!), dmgPct: pct3(ARMOR_PCT[i] * st.dmgPct!) } : {}),
         ...(st.hastePct ? { haste: pct3(ARMOR_PCT[i] * st.hastePct) } : {}),
         ...(st.dodgePct ? { dodge: pct3(ARMOR_PCT[i] * st.dodgePct) } : {}),
@@ -846,6 +870,9 @@ for (const it of itemList.filter((x) => x.equip && !x.equip.move && x.equip.slot
         // 裂岳战锤、血月弯刀（11-06）：破甲概率、斩杀加成一样随品质涨（锤 15% → 神话 30%，刀 +50% → 神话 +100%）
         ...(e.sunder ? { sunder: Math.round(e.sunder * CHAIN_QUALITY[q] * 100) / 100 } : {}),
         ...(e.execute ? { execute: Math.round(e.execute * CHAIN_QUALITY[q] * 100) / 100 } : {}),
+        // 追星长弓、猎王手弩（11-06）：专注每层、猎王加成随品质涨（每层 4% → 神话 8%，+30% → 神话 +60%）
+        ...(e.focus ? { focus: Math.round(e.focus * CHAIN_QUALITY[q] * 1000) / 1000 } : {}),
+        ...(e.slayer ? { slayer: Math.round(e.slayer * CHAIN_QUALITY[q] * 100) / 100 } : {}),
         ...Object.fromEntries((['xp', 'luck', 'crit', 'dodge', 'work', 'defPct', 'dmgPct'] as const).filter((k) => e[k] && !(k === 'crit' && e.slot === 'offhand')).map((k) => [k, Math.round(e[k]! * QUALITY_SPEED[q] * 1000) / 1000])),
       },
     };

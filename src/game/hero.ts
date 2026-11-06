@@ -248,7 +248,7 @@ const HERO_ICE = ['#2a5a8a', '#5aa8d8', '#bff0ff'];
 const BELT = ['#1e120a', '#3a2414', '#5a3a20'];
 
 export type HeroDir = 'down' | 'up' | 'side';
-export type HeroTool = 'pickaxe' | 'axe' | 'hoe' | 'sickle' | 'rod' | 'hammer' | 'knife' | 'sword' | 'spear' | 'dagger' | 'bow' | 'staff' | 'handaxe' | 'shortsword' | 'broadsword' | 'greataxe' | 'warhammer' | 'warscythe' | 'chainblade' | 'sunderhammer' | 'bloodsabre' | 'greatshield' | 'frostshield' | 'longbow' | 'frostbow' | 'crossbow' | 'warbow' | 'arbalest' | 'scythe' | 'greatsword' | 'none';
+export type HeroTool = 'pickaxe' | 'axe' | 'hoe' | 'sickle' | 'rod' | 'hammer' | 'knife' | 'sword' | 'spear' | 'dagger' | 'bow' | 'staff' | 'handaxe' | 'shortsword' | 'broadsword' | 'greataxe' | 'warhammer' | 'warscythe' | 'chainblade' | 'sunderhammer' | 'bloodsabre' | 'greatshield' | 'frostshield' | 'longbow' | 'frostbow' | 'starbow' | 'kingslayer' | 'crossbow' | 'warbow' | 'arbalest' | 'scythe' | 'greatsword' | 'none';
 
 interface Pose {
   dir: HeroDir;
@@ -570,14 +570,16 @@ function drawTool(p: Pix, tool: HeroTool, hx: number, hy: number, a: number, pos
       p.set(bx, by, '#e04a4a');
       p.set(bx, by - 1, '#ffffff');
     }
-  } else if (tool === 'bow' || tool === 'longbow' || tool === 'warbow' || tool === 'frostbow') {
+  } else if (tool === 'bow' || tool === 'longbow' || tool === 'warbow' || tool === 'frostbow' || tool === 'starbow') {
     // 弓竖在手里，弓背朝前；长弓更高、弯得更深、拉得更开；单手战弓短小、两端反曲
     // 永霜之弓（11-02）：和长弓一样大，弓臂是冰蓝色，两端冰刺
+    // 追星长弓（11-06）：长弓大小，深蓝弓臂，弓梢和握把上点着金色星光
     const ice = tool === 'frostbow';
-    const long = tool === 'longbow' || ice;
+    const star = tool === 'starbow';
+    const long = tool === 'longbow' || ice || star;
     const L = long ? 10 : tool === 'warbow' ? 6 : 7;
     const pull = (pose.draw ?? 0) * (long ? 7 : tool === 'warbow' ? 4.5 : 5);
-    const BW = ice ? HERO_ICE : WOOD;
+    const BW = ice ? HERO_ICE : star ? ['#1a2050', '#2e3a8a', '#5a6ad0', '#a8b8ff'] : WOOD;
     p.line(hx, hy - L, hx - pull, hy, '#e8e8e8');
     p.line(hx - pull, hy, hx, hy + L, '#e8e8e8');
     for (let i = -L; i <= L; i++) {
@@ -587,6 +589,7 @@ function drawTool(p: Pix, tool: HeroTool, hx: number, hy: number, a: number, pos
     }
     if (tool === 'longbow') for (const i of [-L, L]) p.set(hx + 0.6, hy + i, GOLD[2]);
     if (ice) for (const sg of [-1, 1]) { p.set(hx + 0.6, hy + sg * L, '#ffffff'); p.set(hx + 1, hy + sg * (L + 1), HERO_ICE[2]); p.set(hx - 0.4, hy + sg * (L + 1), HERO_ICE[2]); p.set(hx + 4, hy - 1, '#cff4ff'); }
+    if (star) for (const sg of [-1, 1]) { p.set(hx + 0.6, hy + sg * L, '#fff0a0'); p.set(hx + 1, hy + sg * (L + 1), '#f0d060'); p.set(hx + 3.6, hy + sg * 4, '#fff0a0'); }
     // 战弓：两端往前翻卷的弓梢
     if (tool === 'warbow') for (const sg of [-1, 1]) { p.set(hx + 1, hy + sg * (L + 1), WOOD[0]); p.set(hx + 2, hy + sg * (L + 1), WOOD[2]); p.set(hx + 2, hy + sg * L, STEEL[2]); }
     p.rect(Math.round(hx + 2), Math.round(hy) - 1, 2, 2, '#e0d0a8');
@@ -597,17 +600,19 @@ function drawTool(p: Pix, tool: HeroTool, hx: number, hy: number, a: number, pos
       p.set(hx - pull - 1, hy - 1, '#e8e8e8');
       p.set(hx - pull - 1, hy + 1, '#e8e8e8');
     }
-  } else if (tool === 'crossbow') {
+  } else if (tool === 'crossbow' || tool === 'kingslayer') {
     // 弩横端在胸前：木托朝前，弩臂横在前端；draw=1 时弦扣在机括上、箭已上好
-    handle(-3.5, 6.5);
+    // 猎王手弩（11-06）：短一截的黑木托，弩臂包金，前端一颗红宝石
+    const king = tool === 'kingslayer';
+    handle(-3.5, king ? 5 : 6.5, king ? ['#1a1418', '#3a2a30'] : WOOD);
     p.set(...along(-3.8), WOOD[0]);
     const [nx, ny] = along(5.6);
     for (let i = -10; i <= 10; i++) {
       const k = i / 10;
       const [x, y] = perp(...along(5.6 - k * k * 1.6), k * 4.6);
-      p.set(x, y, Math.abs(k) > 0.8 ? STEEL[3] : STEEL[1]);
+      p.set(x, y, Math.abs(k) > 0.8 ? (king ? GOLD[3] : STEEL[3]) : king ? GOLD[1] : STEEL[1]);
     }
-    p.set(nx, ny, GOLD[2]);
+    p.set(nx, ny, king ? '#e8303a' : GOLD[2]);
     const loaded = (pose.draw ?? 0) > 0.5;
     const [tx, ty] = loaded ? along(1.2) : along(4.6);
     p.line(...perp(...along(4), 4.6), tx, ty, '#e8e8e8');
@@ -3447,7 +3452,7 @@ const ride = (dir: HeroDir, run: boolean): HeroAnim => ({
  * 出手只在真正攻击的那一下播一遍（地图场景按攻速缩放），两次攻击之间停在架势里不乱挥。
  * 出手动作开头的蓄力要短，hit 是打中的时刻（0-1），特效在这时候放。
  */
-export type FightWeapon = 'sword' | 'spear' | 'dagger' | 'handaxe' | 'shortsword' | 'chainblade' | 'sunderhammer' | 'bloodsabre' | 'broadsword' | 'greataxe' | 'warhammer' | 'warscythe' | 'greatshield' | 'frostshield' | 'shortbow' | 'longbow' | 'frostbow' | 'crossbow' | 'warbow' | 'arbalest' | 'staff' | 'fist';
+export type FightWeapon = 'sword' | 'spear' | 'dagger' | 'handaxe' | 'shortsword' | 'chainblade' | 'sunderhammer' | 'bloodsabre' | 'broadsword' | 'greataxe' | 'warhammer' | 'warscythe' | 'greatshield' | 'frostshield' | 'shortbow' | 'longbow' | 'frostbow' | 'starbow' | 'kingslayer' | 'crossbow' | 'warbow' | 'arbalest' | 'staff' | 'fist';
 export const FIGHT: Record<FightWeapon, { hit: number; ms: number }> = {
   sword: { hit: 0.42, ms: 640 },
   spear: { hit: 0.4, ms: 700 },
@@ -3464,6 +3469,8 @@ export const FIGHT: Record<FightWeapon, { hit: number; ms: number }> = {
   greatshield: { hit: 0.45, ms: 760 },
   frostshield: { hit: 0.45, ms: 760 },
   frostbow: { hit: 0.6, ms: 900 },
+  starbow: { hit: 0.6, ms: 900 },
+  kingslayer: { hit: 0.22, ms: 1100 },
   shortbow: { hit: 0.55, ms: 720 },
   longbow: { hit: 0.6, ms: 900 },
   crossbow: { hit: 0.22, ms: 1100 },
@@ -3475,7 +3482,7 @@ export const FIGHT: Record<FightWeapon, { hit: number; ms: number }> = {
 /** 战斗站位（用户 10-25）：离怪多远开打，单位格。近战贴身，长枪隔半格，远程隔几格 */
 export const FIGHT_RANGE: Record<FightWeapon, number> = {
   sword: 0, spear: 0.6, dagger: 0, handaxe: 0, shortsword: 0, chainblade: 0, broadsword: 0.2, greataxe: 0.3, warhammer: 0.3, sunderhammer: 0.3, bloodsabre: 0, warscythe: 0.6, greatshield: 0, frostshield: 0, fist: 0,
-  shortbow: 3, longbow: 4, frostbow: 4, crossbow: 3.5, warbow: 3, arbalest: 4.5, staff: 3,
+  shortbow: 3, longbow: 4, frostbow: 4, starbow: 4, kingslayer: 3.5, crossbow: 3.5, warbow: 3, arbalest: 4.5, staff: 3,
 };
 /** 装备的武器 id（已去掉品质后缀）对应哪套动作 */
 export function fightWeapon(base: string): FightWeapon {
@@ -3731,6 +3738,11 @@ export const HERO_ANIMS: HeroAnim[] = [
   ...FIGHT_ANIMS.filter((a) => /^fight-(warhammer|sword)(-|$)/.test(a.key)).map((a): HeroAnim => {
     const w = a.key.includes('warhammer') ? 'sunderhammer' : 'bloodsabre';
     return { ...a, key: a.key.replace(/warhammer|sword/, w), pose: (t, i) => ({ ...a.pose(t, i), tool: w }) };
+  }),
+  // 追星长弓、猎王手弩（11-06）：动作和长弓、弩一样，只换手里的武器
+  ...FIGHT_ANIMS.filter((a) => /^fight-(longbow|crossbow)(-|$)/.test(a.key)).map((a): HeroAnim => {
+    const w = a.key.includes('longbow') ? 'starbow' : 'kingslayer';
+    return { ...a, key: a.key.replace(/longbow|crossbow/, w), pose: (t, i) => ({ ...a.pose(t, i), tool: w }) };
   }),
   // 永霜之弓、永霜盾（11-02）：动作和长弓、双手大盾一样，只换手里的武器
   ...FIGHT_ANIMS.filter((a) => /^fight-(longbow|greatshield)(-|$)/.test(a.key)).map((a): HeroAnim => {

@@ -1007,6 +1007,94 @@ function warhorn(p: Pix, t: number) {
   p.set(9, 19, BLOOD[3]); p.set(11, 19, BLOOD[0]);
 }
 
+/*
+ * 远程特殊装备（用户 11-06）：追星长弓、猎王手弩、穿云箭袋、鹰眼目镜，只有 T7/T8。t 只会是 6 或 7。
+ */
+const STARP = ['#141a40', '#26307a', '#4a5ad0', '#98a8ff', '#e8ecff'];
+function starbow(p: Pix, t: number) {
+  // 追星长弓：深蓝弓臂，弓臂上一排金色星点，握把上方一颗五角星，弓梢挂着小星星；T8 星星更多、弦是金色
+  const u0 = -2, u1 = 25.5, mid = (u0 + u1) / 2, bend = 4.2;
+  const parts: Part[] = [
+    string(u0 + 0.4, u1 - 0.4, t >= 7 ? GOLDS[3] : '#e8ecff', 1.2),
+    bowLimb(u0, u1, bend, 1.35, STARP, 1),
+    (u, v) => (Math.abs(u - mid) <= 1.7 && Math.abs(v + bend) <= 1.4 ? (Math.floor(u) % 2 ? '#3a2a10' : '#6a4a20') : null),
+    dots(u0 + 4, u1 - 4, t >= 7 ? 2.6 : 3.4, -bend * 0.75, GOLDS[2]),
+    // 五角星：用角度画一个星形
+    (u, v) => {
+      const du = u - mid, dv = v + bend + 2.2;
+      const r = Math.hypot(du, dv);
+      const a = Math.atan2(dv, du);
+      const lim = 1.1 + 1.1 * Math.max(0, Math.cos(a * 5 + 1.57));
+      return r <= lim ? (r < 0.8 ? '#ffffff' : GOLDS[2]) : null;
+    },
+    ball(u0 + 0.3, -0.2, 1, [GOLDS[0], GOLDS[1], GOLDS[2], GOLDS[3]]),
+    ball(u1 - 0.3, -0.2, 1, [GOLDS[0], GOLDS[1], GOLDS[2], GOLDS[3]]),
+  ];
+  axis(p, parts, 3, 21);
+}
+function kingslayer(p: Pix, t: number) {
+  // 猎王手弩：短小的黑木托，弩臂包金，前端一颗血红宝石，搭着一支金头短矢；T8 托上多一道金纹
+  const B = ['#120c10', '#2a1c24', '#3e2a34', '#5a4250', '#7a6070'];
+  const RED = ['#4a0810', '#9a1420', '#e8303a', '#ff9098', '#ffe0e0'];
+  const prodU = 13, len = 7.5, bendP = 2.2;
+  const parts: Part[] = [
+    shaft(1, 16, 1.25, B),
+    grip(1, 5, 1.35, B[1], B[3], 1.6),
+  ];
+  parts.push((u, v) => {
+    if (Math.abs(v) > len) return null;
+    const k = Math.abs(v) / len;
+    return Math.abs(u - (prodU - (1 - k) * 5 - 0.4)) < 0.45 ? '#e8e0d0' : null;
+  });
+  parts.push((u, v) => {
+    if (Math.abs(v) > len) return null;
+    const uc = prodU - bendP * (1 - (v / len) ** 2);
+    const d = u - uc;
+    const w = 0.7 + (1 - Math.abs(v) / len) * 0.5;
+    return Math.abs(d) <= w ? (d > 0.2 ? GOLDS[3] : d < -0.2 ? GOLDS[0] : GOLDS[2]) : null;
+  });
+  parts.push((u, v) => (u > 7 && u < 19 && Math.abs(v) < 0.4 ? (u > 17.5 ? GOLDS[3] : '#c8a070') : null));
+  parts.push((u, v) => (u > 4 && u < 6 && v > 1 && v < 3 ? GOLDS[1] : null));
+  parts.push(ball(prodU - bendP, 0, 1.3, RED));
+  if (t >= 7) parts.push(dots(2, 11, 2.4, 0, GOLDS[2]));
+  axis(p, parts, 4, 19);
+}
+function cloudquiver(p: Pix, t: number) {
+  // 穿云箭袋：斜挎的天蓝色皮箭袋，袋口露出三支白羽钢头箭，袋身绣一朵白云，T8 袋口包金
+  const BAG = ['#1a3a5a', '#2e5e8a', '#4a8ac0', '#8ac0e8'];
+  const RIM = t >= 7 ? GOLDS : ['#3a3a40', '#6a6a74', '#a0a0ac', '#d8d8e0'];
+  for (let y = 0; y < 24; y++) for (let x = 0; x < 24; x++) {
+    // 袋身：一根斜放的圆角长条，左下到右上
+    const u = (x - y + 6) / Math.SQRT2, v = (x + y - 23) / Math.SQRT2;
+    if (u > 2 && u < 16 && Math.abs(v) < 3.4) {
+      const edge = Math.abs(v) > 2.6;
+      const cloud = Math.hypot(u - 8, v + 0.4) < 1.3 || Math.hypot(u - 9.6, v - 0.2) < 1.5 || Math.hypot(u - 11.2, v + 0.3) < 1.2;
+      p.set(x, y, u > 14.6 ? RIM[2] : cloud ? '#f4f8ff' : edge ? (v > 0 ? BAG[0] : BAG[3]) : v > 0.8 ? BAG[1] : BAG[2]);
+    }
+    // 三支箭从袋口伸出来
+    for (const off of [-1.6, 0, 1.6]) if (u >= 16 && u < 21 && Math.abs(v - off) < 0.4) p.set(x, y, u > 19.6 ? '#f4f8ff' : '#c8a070');
+  }
+  for (const [x, y] of [[20, 2], [21, 4], [18, 1]]) p.set(x, y, '#d8e4f0');
+  // 背带
+  for (let k = 0; k < 9; k++) p.set(4 + k, 7 + Math.round(k * 0.2), '#5a3a20');
+}
+function hawkeye(p: Pix, t: number) {
+  // 鹰眼目镜：铜框单片镜，镜片琥珀色、里面一道金色竖瞳，边上挂一根羽毛和细链；T8 镜框金色
+  const RIM = t >= 7 ? GOLDS : ['#5a3a1a', '#9a6a2a', '#c89040', '#f0c070'];
+  const cx = 11, cy = 10, r = 7;
+  for (let y = 0; y < 24; y++) for (let x = 0; x < 24; x++) {
+    const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
+    if (d > r + 1.2) continue;
+    if (d > r - 0.4) { p.set(x, y, x + y < cx + cy ? RIM[3] : RIM[1]); continue; }
+    const pupil = Math.abs(x + 0.5 - cx) < 0.9 && Math.abs(y + 0.5 - cy) < 4;
+    p.set(x, y, pupil ? '#2a1a08' : d < 2.2 ? '#ffe080' : x + y < cx + cy - 4 ? '#ffd890' : '#e8a030');
+  }
+  p.set(cx - 3, cy - 3, '#ffffff'); p.set(cx - 2, cy - 4, '#fff4c0');
+  // 细链往右下垂，挂一根羽毛
+  for (let k = 0; k < 5; k++) p.set(17 + k * 0.6 | 0, 15 + k, k % 2 ? RIM[1] : RIM[2]);
+  for (let k = 0; k < 6; k++) { p.set(19 + (k >> 1), 19 + (k % 3), '#e8e0d0'); p.set(20 + (k >> 1), 20 + (k % 2), '#8a7a6a'); }
+}
+
 function buckler(p: Pix, t: number) {
   // 副手盾：小圆盾或小鸢盾，正中一个盾心
   const { M, A, W, T } = shieldFace(t);
@@ -1886,6 +1974,10 @@ export function equipIconUrl(key: string, tier: number): string | null {
   else if (key === 'bloodsabre') bloodsabre(p, tier);
   else if (key === 'thornguard') thornguard(p, tier);
   else if (key === 'warhorn') warhorn(p, tier);
+  else if (key === 'starbow') starbow(p, tier);
+  else if (key === 'kingslayer') kingslayer(p, tier);
+  else if (key === 'cloudquiver') cloudquiver(p, tier);
+  else if (key === 'hawkeye') hawkeye(p, tier);
   else if (key === 'soullamp') soullamp(p, tier);
   else if (key === 'broadsword') broadsword(p, tier);
   else if (key === 'greataxe') greataxe(p, tier);

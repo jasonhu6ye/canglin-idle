@@ -38,6 +38,10 @@ const STATS: Stat[] = [
   { label: tl('斩杀'), get: (e) => e.execute ?? 0, fmt: p1 },
   { label: tl('反伤'), get: (e) => e.thorns ?? 0, fmt: p1 },
   { label: tl('暴击伤害'), get: (e) => e.critDmg ?? 0, fmt: p1 },
+  { label: tl('专注'), get: (e) => e.focus ?? 0, fmt: p1 },
+  { label: tl('猎王'), get: (e) => e.slayer ?? 0, fmt: p1 },
+  { label: tl('穿甲'), get: (e) => e.pierce ?? 0, fmt: p1 },
+  { label: tl('远程暴击'), get: (e) => e.aimCrit ?? 0, fmt: p1 },
   { label: tl('武器特效触发'), get: (e) => e.proc ?? 0, fmt: p1 },
   { label: tl('嘲讽'), get: (e) => e.threat ?? 0, fmt: (v) => `${v}` },
 ];

@@ -2437,9 +2437,11 @@ export class MapScene extends Phaser.Scene {
         this.popText(foe.x - 10, foe.y - S * 0.7 - 4, tl('冻结'), '#9fe6ff', 9);
       });
       // 裂岳战锤破甲、血月弯刀斩杀（11-06）
-      if (c.pSunder || c.pExec) {
-        const word = c.pSunder ? tl('破甲') : tl('斩杀');
-        const col = c.pSunder ? '#ffa040' : '#ff5a6a';
+      // 猎王手弩打精英首领、追星长弓专注叠满（11-06）
+      const fullFocus = !!c.pFocus;
+      if (c.pSunder || c.pExec || c.pSlay || fullFocus) {
+        const word = c.pSunder ? tl('破甲') : c.pExec ? tl('斩杀') : c.pSlay ? tl('猎王') : tl('专注');
+        const col = c.pSunder ? '#ffa040' : c.pExec ? '#ff5a6a' : c.pSlay ? '#ffd040' : '#a8b8ff';
         this.time.delayedCall(hitIn + 60, () => {
           if (this.foe !== foe || !foe.active) return;
           const S = monsterFrameSize(m) * foe.scaleY;
@@ -2552,7 +2554,7 @@ export class MapScene extends Phaser.Scene {
           if (!crit) this.cameras.main.shake(70, 0.0018);
         },
       });
-    } else if (['shortbow', 'longbow', 'frostbow', 'crossbow', 'warbow'].includes(key)) {
+    } else if (['shortbow', 'longbow', 'frostbow', 'starbow', 'kingslayer', 'crossbow', 'warbow'].includes(key)) {
       // 单手战弓（10-26）：箭飞得更快，后面拖一道残影
       const fast = key === 'warbow';
       const ang = Math.atan2(ty - from.y, tx - from.x);

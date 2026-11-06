@@ -279,7 +279,7 @@ export function fineStoneIconUrl(tier: number, frost: boolean): string {
 
 // ---- 近战特殊装备材料（11-06）：古龙骨是一截斜放的大骨头，英灵徽记是一枚带剑纹的金边圆章；T8 多一圈光点 ----
 
-export function specialMatIconUrl(kind: 'bone' | 'valor', tier: number): string {
+export function specialMatIconUrl(kind: 'bone' | 'valor' | 'plume' | 'star', tier: number): string {
   const k = `sm${kind}${tier}`;
   const hit = cache.get(k);
   if (hit) return hit;
@@ -297,6 +297,24 @@ export function specialMatIconUrl(kind: 'bone' | 'valor', tier: number): string 
     }
     // 骨头上发光的龙纹
     for (const [x, y] of [[8, 12], [10, 10], [12, 9]]) p.set(x, y, '#ff8a1a');
+  } else if (kind === 'plume') {
+    // 雷鸟羽：一根斜放的长羽毛，蓝紫色羽片，羽尖一道黄色电光
+    for (let i = 0; i <= 14; i++) {
+      const x = 3 + i, y = 16 - i;
+      p.set(x, y, '#e8e4d8');
+      const w = i < 3 ? 0 : Math.min(3, (i - 2) * 0.6) * (i > 12 ? (15 - i) / 3 : 1);
+      for (let k = 1; k <= w; k++) { p.set(x - k, y - k + 1, k === Math.ceil(w) ? '#3a3aa0' : '#6a6ad8'); p.set(x + k, y + k - 1, k === Math.ceil(w) ? '#2a2a7a' : '#4a4ab8'); }
+    }
+    for (const [x, y] of [[17, 1], [18, 2], [17, 3], [18, 4]]) p.set(x, y, '#ffe040');
+  } else if (kind === 'star') {
+    // 星辉碎片：一块尖尖的淡紫色晶片，中间发白光，周围几颗小星点
+    const S = ['#3a2a6a', '#6a5ab8', '#a898f0', '#e8e0ff'];
+    for (let y = 0; y < 20; y++) for (let x = 0; x < 20; x++) {
+      const dx = Math.abs(x + 0.5 - 10), dy = y + 0.5 - 10;
+      if (dx / 4.5 + Math.abs(dy) / 8 > 1) continue;
+      p.set(x, y, dx / 4.5 + Math.abs(dy) / 8 < 0.3 ? '#ffffff' : x < 10 ? (dy < 0 ? S[3] : S[2]) : dy < 0 ? S[1] : S[0]);
+    }
+    for (const [x, y] of [[3, 4], [16, 6], [15, 15], [4, 14]]) p.set(x, y, '#fff0a0');
   } else {
     const G = ['#7a5a12', '#c8a030', '#f0d060', '#fff4b0'];
     for (let y = 0; y < 20; y++) for (let x = 0; x < 20; x++) {
@@ -355,6 +373,8 @@ export function dungeonIconUrl(id: string, tier?: number): string | null {
   if (id.startsWith('frostcraft_')) return fineStoneIconUrl(tier, true);
   if (id.startsWith('dragonbone_')) return specialMatIconUrl('bone', tier);
   if (id.startsWith('valor_')) return specialMatIconUrl('valor', tier);
+  if (id.startsWith('stormplume_')) return specialMatIconUrl('plume', tier);
+  if (id.startsWith('starshard_')) return specialMatIconUrl('star', tier);
   return null;
 }
 
