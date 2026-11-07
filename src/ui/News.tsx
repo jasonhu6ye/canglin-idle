@@ -8,6 +8,12 @@ import { tl } from '../i18n';
 interface Note { id: string; date: string; title: string; lines: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-11-07-a', date: tl('11 月 7 日'), title: tl('新增「更新计划」'),
+    lines: [
+      tl('公告窗口下面多了「更新计划」按钮，可以看到正在做和接下来准备做的内容。'),
+    ],
+  },
+  {
     id: '2026-11-06-b', date: tl('11 月 6 日'), title: tl('新的远程特殊武器和副手'),
     lines: [
       tl('追星长弓（双手）：连续命中每箭 +4% 伤害，最多 5 层（+20%），没中清零。'),
@@ -1034,6 +1040,21 @@ export const NEWS: Note[] = [
   },
 ];
 
+/**
+ * 更新计划（用户 11-07）：公告弹窗里「更新计划」页。状态：doing 正在做、next 接下来、later 以后。
+ * 做完上线的从这里删掉，写进上面的 NEWS。
+ */
+type PlanState = 'doing' | 'next' | 'later';
+interface Plan { state: PlanState; title: string; text: string }
+export const ROADMAP: Plan[] = [
+  { state: 'next', title: tl('公测'), text: tl('内测结束后开始公测，存档怎么处理到时候单独公告。') },
+  { state: 'next', title: tl('Steam 版'), text: tl('游戏会上架 Steam。') },
+  { state: 'later', title: tl('异域之路'), text: tl('野外随机亮起异域传送门，通往随机拼接的古道，里面有 T6-T8 资源、守卫和宝箱，公会可以在古道扎营。') },
+  { state: 'later', title: tl('南瓜积分商店'), text: tl('万圣节攒下的南瓜积分可以换东西。') },
+  { state: 'later', title: tl('晶石、树脂、羽毛新用途'), text: tl('给这几种材料加更多用处。') },
+];
+const PLAN_LABEL: Record<PlanState, [string, string]> = { doing: [tl('正在做'), 'gold'], next: [tl('接下来'), 'gold'], later: [tl('以后'), 'muted'] };
+
 const KEY = 'canglin-news-seen';
 type Fn = () => void;
 const fns = new Set<Fn>();
@@ -1064,8 +1085,9 @@ export function News() {
     }
   });
   const [more, setMore] = useState(false);
+  const [plan, setPlan] = useState(false);
   useEffect(() => {
-    const f = () => { setOpen(true); setMore(false); };
+    const f = () => { setOpen(true); setMore(false); setPlan(false); };
     fns.add(f);
     return () => { fns.delete(f); };
   }, []);
@@ -1079,17 +1101,30 @@ export function News() {
   return (
     <div className="item-popup" onClick={close}>
       <div className="item-popup-body frame news" onClick={(e) => e.stopPropagation()}>
-        <h2 className="gold">{tl('更新公告')}</h2>
-        <div className="news-body">
-          {shown.map((n) => (
-            <section key={n.id}>
-              <h3>{n.title} <small className="muted">{n.date}</small></h3>
-              <ul>{n.lines.map((l) => <li key={l}>{l}</li>)}</ul>
-            </section>
-          ))}
-        </div>
+        <h2 className="gold">{plan ? tl('更新计划') : tl('更新公告')}</h2>
+        {plan ? (
+          <div className="news-body">
+            <p className="muted">{tl('接下来准备做的内容，顺序和时间可能会调整。')}</p>
+            {(['doing', 'next', 'later'] as PlanState[]).filter((st) => ROADMAP.some((p) => p.state === st)).map((st) => (
+              <section key={st}>
+                <h3 className={PLAN_LABEL[st][1]}>{PLAN_LABEL[st][0]}</h3>
+                <ul>{ROADMAP.filter((p) => p.state === st).map((p) => <li key={p.title}><b>{p.title}</b>{tl`：${p.text}`}</li>)}</ul>
+              </section>
+            ))}
+          </div>
+        ) : (
+          <div className="news-body">
+            {shown.map((n) => (
+              <section key={n.id}>
+                <h3>{n.title} <small className="muted">{n.date}</small></h3>
+                <ul>{n.lines.map((l) => <li key={l}>{l}</li>)}</ul>
+              </section>
+            ))}
+          </div>
+        )}
         <div className="go">
-          {!more && NEWS.length > 1 && <button onClick={() => setMore(true)}>{tl('往期公告')}</button>}
+          <button onClick={() => setPlan(!plan)}>{plan ? tl('更新公告') : tl('更新计划')}</button>
+          {!plan && !more && NEWS.length > 1 && <button onClick={() => setMore(true)}>{tl('往期公告')}</button>}
           <button className="primary" onClick={close}>{tl('知道了')}</button>
         </div>
       </div>
