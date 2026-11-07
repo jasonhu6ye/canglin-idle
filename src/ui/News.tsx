@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
 import { tl } from '../i18n';
+import { ITEMS } from '../core/data';
+import { Icon } from './icons';
 
 /**
  * 更新公告（用户 10-23 要求）：有新版本时进游戏自动弹一次，「更多」页也能再打开。
  * 新玩家第一次进游戏先看新手指引，不弹公告。
  */
-interface Note { id: string; date: string; title: string; lines: string[] }
+/** icons：公告配图，物品 id（用户 11-07 要公告有贴图），点一下看物品详情 */
+interface Note { id: string; date: string; title: string; lines: string[]; icons?: string[] }
 export const NEWS: Note[] = [
   {
     id: '2026-11-07-a', date: tl('11 月 7 日'), title: tl('新增「更新计划」'),
@@ -15,6 +18,7 @@ export const NEWS: Note[] = [
   },
   {
     id: '2026-11-06-b', date: tl('11 月 6 日'), title: tl('新的远程特殊武器和副手'),
+    icons: ['adamant_starbow', 'adamant_kingslayer', 'adamant_cloudquiver', 'adamant_hawkeye', 'stormplume_8', 'starshard_8'],
     lines: [
       tl('追星长弓（双手）：连续命中每箭 +4% 伤害，最多 5 层（+20%），没中清零。'),
       tl('猎王手弩（单手）：打精英、首领伤害 +30%。'),
@@ -25,6 +29,7 @@ export const NEWS: Note[] = [
   },
   {
     id: '2026-11-06-a', date: tl('11 月 6 日'), title: tl('新的近战特殊武器和副手'),
+    icons: ['adamant_sunderhammer', 'adamant_bloodsabre', 'adamant_thornguard', 'adamant_warhorn', 'dragonbone_8', 'valor_8'],
     lines: [
       tl('裂岳战锤（双手）：打中时 15% 概率让敌人破甲 6 秒，敌人防御 -40%，打高防首领最好用。'),
       tl('血月弯刀（单手）：敌人血量低于 30% 时伤害 +50%（斩杀）。'),
@@ -49,6 +54,7 @@ export const NEWS: Note[] = [
   },
   {
     id: '2026-11-02-y', date: tl('11 月 2 日'), title: tl('双手盾改看防御等级'),
+    icons: ['adamant_greatshield', 'adamant_frostshield'],
     lines: [
       tl('双手大盾和永霜盾的装备条件从近战等级改成防御等级，拿着打怪照样算近战经验。'),
     ],
@@ -62,6 +68,7 @@ export const NEWS: Note[] = [
   },
   {
     id: '2026-11-02-w', date: tl('11 月 2 日'), title: tl('传说、神话装备更稀有了'),
+    icons: ['adamant_chainblade@q5', 'adamant_frostbow@q4', 'adamant_broadsword@q5'],
     lines: [
       tl('材料可以一直采，所以传说和神话装备的出货率调低了：T1 传说 1% → 0.2%（约 500 件出一件），神话 0.3% → 0.02%（约 5000 件出一件）。'),
       tl('阶级越高越难：T8 传说约 0.06%（约 1700 件），神话约 0.006%（约 1.7 万件）。副本宝箱里开出的装备也按同样的概率。'),
@@ -70,6 +77,7 @@ export const NEWS: Note[] = [
   },
   {
     id: '2026-11-02-w', date: tl('11 月 2 日'), title: tl('新坐骑预告：晨曦独角兽'),
+    icons: ['mount_unicorn'],
     lines: [
       tl('樱粉色的独角兽，金色螺旋角、粉紫蓝渐变的长鬃长尾、金蹄、紫水晶色的眼睛，骑乘时移动速度 +210%；跑起来蹄下贴地拖出一条彩虹光带，溅彩虹星火，角尖冒光尘，眼睛泛紫光。'),
       tl('先在「更多 → 衣橱」底部的坐骑栏展示动态效果，获取方式暂未开放。'),
@@ -115,6 +123,7 @@ export const NEWS: Note[] = [
   },
   {
     id: '2026-11-02-q', date: tl('11 月 2 日'), title: tl('新材料：精炼石'),
+    icons: ['finecraft_8', 'frostcraft_8'],
     lines: [
       tl('制作装备时可以勾选「加精炼石」：每做一件用掉一颗同阶精炼石，优秀、史诗品质的概率变成 2.5 倍，传说、神话概率不变。'),
       tl('精炼石 T1-T8 只能从副本宝箱开出，宝箱几阶就出几阶，宝箱品质越好越容易出（绿 12%、蓝 18%、紫 28%、金 40%，蓝洞更高）。幽魂链刃、提灯也用它。'),
@@ -131,6 +140,7 @@ export const NEWS: Note[] = [
   },
   {
     id: '2026-11-02-e', date: tl('11 月 2 日'), title: tl('新特殊武器：永霜之弓、永霜盾'),
+    icons: ['adamant_frostbow', 'adamant_frostshield', 'frostheart_8'],
     lines: [
       tl('两件新的双手特殊武器，只有 T7、T8 版本。材料「永霜之心」（T7、T8 两种）只在永冬冰原出：打永霜巨人、雪堡男爵每次每种 15%，开限时宝箱每种绿 4%、蓝 10%、金 25%。'),
       tl('永霜之弓（远程）：打中时 12% 概率冻住敌人 1 秒，这一下造成 150% 伤害。比十字弩略强，和幽魂链刃差不多。'),
@@ -159,6 +169,7 @@ export const NEWS: Note[] = [
   },
   {
     id: '2026-11-02-a', date: tl('11 月 2 日'), title: tl('新地图：永冬冰原'),
+    icons: ['frostheart_8', 'frostcraft_8'],
     lines: [
       tl('「永冬之裔」限时活动正式开启：主界面的活动按钮点「寻路」直接去最近的永冬传送门。'),
       tl('主大陆东边隔着深海多了一片 3680×3680 的永冬冰原，苍岭城、落霞城城外各有一座「永冬传送门」（世界地图上有雪花标记），进门有入场动画。冰原南边的永冬营地有仓库、石碑和回程门。'),
@@ -214,6 +225,7 @@ export const NEWS: Note[] = [
   },
   {
     id: '2026-11-01-a', date: tl('11 月 1 日'), title: tl("新功能：装备对比"),
+    icons: ['adamant_sword', 'adamant_handaxe'],
     lines: [
       tl("看装备详情时会和身上同一栏的装备逐项对比，变好的绿色 ▲、变差的红色 ▼。"),
       tl("武器、副手、护甲、饰品直接算出换上以后的打怪效率和掉血变化（正在打怪就对着那只怪算）。"),
@@ -222,6 +234,7 @@ export const NEWS: Note[] = [
   },
   {
     id: '2026-10-31-s', date: tl('10 月 31 日'), title: tl("特殊装备：幽魂链刃和提灯"),
+    icons: ['adamant_chainblade', 'adamant_soullamp', 'wraith_8', 'wick_8'],
     lines: [
       tl("新单手武器「幽魂链刃」：打中后有概率再砍一刀，造成两段伤害。连斩概率随品质提高：普通 17%、良好 19%、优秀 21%、史诗 24%、传说 28%、神话 34%。这个版本最强的近战武器，配提灯更强。"),
       tl("新副手「提灯」：攻击力和灯笼一样，没有吸血，改成暴击率 +5%、武器特殊效果触发概率 +5%（链刃连斩概率再 +5%）。"),
@@ -245,6 +258,7 @@ export const NEWS: Note[] = [
   },
   {
     id: '2026-10-31-x', date: tl('10 月 31 日'), title: tl("新近战武器：战镰"),
+    icons: ['adamant_warscythe'],
     lines: [
       tl("铁匠铺新增双手长柄「战镰」，T1 到 T8 每阶造型不同。和长枪一样隔半格出手，出招是把镰刃从头顶往前下方横扫过去。"),
       tl("每秒伤害比阔剑略低，换来更远的攻击距离；双手持握，不能装副手。采集用的「镰刀」还是工具，不受影响。"),
@@ -252,6 +266,7 @@ export const NEWS: Note[] = [
   },
   {
     id: '2026-10-31-w', date: tl('10 月 31 日'), title: tl("新近战武器：短剑、阔剑、巨斧、大锤"),
+    icons: ['adamant_shortsword', 'adamant_broadsword', 'adamant_greataxe', 'adamant_warhammer'],
     lines: [
       tl("铁匠铺新增四种近战武器，T1 到 T8 每阶都有，每阶造型都不一样，打怪时也有各自的出招动作："),
       tl("短剑：单手，出手快、命中高，能配副手。阔剑：双手大剑，举过头顶一记重劈。巨斧：双手长柄大斧，抡圆了砸下去。大锤：双手战锤，单下伤害最高、出手最慢，跳起来砸地。"),
@@ -302,6 +317,7 @@ export const NEWS: Note[] = [
   },
   {
     id: '2026-10-30-e', date: tl('10 月 30 日'), title: tl("南瓜坐骑开放兑换"),
+    icons: ['mount_pumpkin', 'pumpkin_pt'],
     lines: [
       tl("万圣节限定坐骑「南瓜灵驹」开放兑换：用 1000 南瓜积分在活动祭坛面板里换，移动速度 +200%，每个存档一只。没有腿，靠底下的鬼火飘着飞，眼睛会发光。"),
       tl("南瓜灵驹就摆在苍岭城东门外的活动祭坛旁边，点它也能打开兑换。活动 11 月 1 日结束，结束后手里的积分还能换。"),
@@ -1045,13 +1061,13 @@ export const NEWS: Note[] = [
  * 做完上线的从这里删掉，写进上面的 NEWS。
  */
 type PlanState = 'doing' | 'next' | 'later';
-interface Plan { state: PlanState; title: string; text: string }
+interface Plan { state: PlanState; title: string; text: string; icons?: string[] }
 export const ROADMAP: Plan[] = [
   { state: 'next', title: tl('公测'), text: tl('内测结束后开始公测，存档怎么处理到时候单独公告。') },
   { state: 'next', title: tl('Steam 版'), text: tl('游戏会上架 Steam。') },
-  { state: 'later', title: tl('异域之路'), text: tl('野外随机亮起异域传送门，通往随机拼接的古道，里面有 T6-T8 资源、守卫和宝箱，公会可以在古道扎营。') },
-  { state: 'later', title: tl('南瓜积分商店'), text: tl('万圣节攒下的南瓜积分可以换东西。') },
-  { state: 'later', title: tl('晶石、树脂、羽毛新用途'), text: tl('给这几种材料加更多用处。') },
+  { state: 'later', icons: ['dkey_g8', 'dkey_b8', 'crystal_8'], title: tl('异域之路'), text: tl('野外随机亮起异域传送门，通往随机拼接的古道，里面有 T6-T8 资源、守卫和宝箱，公会可以在古道扎营。') },
+  { state: 'later', icons: ['pumpkin_pt', 'pumpkin_box'], title: tl('南瓜积分商店'), text: tl('万圣节攒下的南瓜积分可以换东西。') },
+  { state: 'later', icons: ['crystal_8', 'resin_8', 'feather_8'], title: tl('晶石、树脂、羽毛新用途'), text: tl('给这几种材料加更多用处。') },
 ];
 const PLAN_LABEL: Record<PlanState, [string, string]> = { doing: [tl('正在做'), 'gold'], next: [tl('接下来'), 'gold'], later: [tl('以后'), 'muted'] };
 
@@ -1068,6 +1084,13 @@ export function onNewsClosed(f: () => void) {
 }
 export function newsPending() {
   try { return !!localStorage.getItem('canglin-guide-seen') && localStorage.getItem(KEY) !== NEWS[0].id; } catch { return false; }
+}
+
+/** 公告配图：一排物品图标，点一下看详情 */
+function Art({ ids }: { ids?: string[] }) {
+  const ok = (ids ?? []).filter((id) => ITEMS[id]);
+  if (!ok.length) return null;
+  return <div className="news-art">{ok.map((id) => <Icon key={id} item={id} size={36} />)}</div>;
 }
 
 export function News() {
@@ -1108,15 +1131,16 @@ export function News() {
             {(['doing', 'next', 'later'] as PlanState[]).filter((st) => ROADMAP.some((p) => p.state === st)).map((st) => (
               <section key={st}>
                 <h3 className={PLAN_LABEL[st][1]}>{PLAN_LABEL[st][0]}</h3>
-                <ul>{ROADMAP.filter((p) => p.state === st).map((p) => <li key={p.title}><b>{p.title}</b>{tl`：${p.text}`}</li>)}</ul>
+                <ul>{ROADMAP.filter((p) => p.state === st).map((p) => <li key={p.title}><b>{p.title}</b>{tl`：${p.text}`}<Art ids={p.icons} /></li>)}</ul>
               </section>
             ))}
           </div>
         ) : (
           <div className="news-body">
-            {shown.map((n) => (
-              <section key={n.id}>
+            {shown.map((n, i) => (
+              <section key={`${n.id}-${i}`}>
                 <h3>{n.title} <small className="muted">{n.date}</small></h3>
+                <Art ids={n.icons} />
                 <ul>{n.lines.map((l) => <li key={l}>{l}</li>)}</ul>
               </section>
             ))}

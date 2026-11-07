@@ -1261,3 +1261,8 @@ button.chat-who { cursor: pointer; text-decoration: underline dotted; text-under
 .dps-row .dps-bar { position: absolute; left: 0; top: 0; bottom: 0; opacity: 0.18; border-radius: 2px; pointer-events: none; }
 .dps-row .dps-name { position: relative; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: bold; }
 .dps-row b, .dps-row small { position: relative; }
+
+/* 公告配图（11-07）：一排物品图标 */
+.news-art { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 6px; }
+.news-art > * { padding: 3px; background: #1b120c; border: 1px solid var(--edge); border-radius: 3px; }
+.news-body li .news-art { margin: 4px 0 2px; }
