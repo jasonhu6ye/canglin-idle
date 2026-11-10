@@ -192,6 +192,12 @@ item('apple', tl('苹果'), 'resource', 6, { desc: tl('家园苹果树结的果�
 item('fried_egg', tl('煎蛋'), 'food', 16, { heals: 60, desc: tl('两个家园鸡蛋煎的，简单顶饿。') });
 item('apple_pie', tl('苹果派'), 'food', 40, { heals: 150, desc: tl('家园苹果和小麦烤的派。') });
 item('honey_cake', tl('蜂蜜蛋糕'), 'food', 80, { heals: 230, desc: tl('用蜂蜜、鸡蛋和小麦做的蛋糕，回血很多。') });
+// 家园加工坊（用户 11-10）：酿酒桶、熏制架、果酱锅慢慢加工出来的东西，吃了有增益（在背包里点「吃」）
+item('mead', tl('蜂蜜酒'), 'food', 60, { heals: 40, buff: { kind: 'xp', pct: 0.08, ms: 60 * 60000 }, desc: tl('家园酿酒桶里用蜂蜜酿的酒。喝下后获得经验 +8%，持续 60 分钟。') });
+item('cider', tl('苹果酒'), 'food', 50, { heals: 40, buff: { kind: 'speed', pct: 0.06, ms: 60 * 60000 }, desc: tl('家园酿酒桶里用苹果酿的酒。喝下后干活速度 +6%，持续 60 分钟。') });
+item('smoked_fish', tl('熏鱼'), 'food', 45, { heals: 160, buff: { kind: 'def', pct: 0.08, ms: 45 * 60000 }, desc: tl('家园熏制架上慢慢熏好的银鱼。吃下后防御 +8%，持续 45 分钟。') });
+item('jerky', tl('风干肉'), 'food', 55, { heals: 200, buff: { kind: 'str', pct: 0.06, ms: 45 * 60000 }, desc: tl('家园熏制架上风干的兽肉。吃下后最高伤害 +6%，持续 45 分钟。') });
+item('apple_jam', tl('苹果蜂蜜酱'), 'food', 40, { heals: 80, buff: { kind: 'atk', pct: 0.06, ms: 45 * 60000 }, desc: tl('家园果酱锅里熬的苹果蜂蜜酱。吃下后命中 +6%，持续 45 分钟。') });
 /**
  * 作物（用户 10-23 要求：种植和采集分开，种子几十种）。每阶 4 种，共 32 种。
  * [id, 名字, 种植等级, 颜色, 料理名, 形状]

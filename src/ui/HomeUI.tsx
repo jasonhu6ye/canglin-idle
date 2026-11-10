@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react';
 import { ITEMS, type MapNode } from '../core/data';
 import {
   affordable, atPortal, BUILD_CATS, BUILDS, buildDef, comfortLevel, comfortOf, COMFORT_SPEED, COMFORT_STEPS, COMFORT_XP, HOME_PLOT_MAX, HOME_SIZES,
-  HOME_UPGRADES, homeComfort, homeFieldId, homeProduce, homeLevel, homePlots, homeSize, isTrophy, canPet, deliverOrder, homeHasBoard, LOVE_STEPS, loveHearts, repUnclaimed, REP_REWARDS, homeOrders, homePets, ORDER_ALL_BONUS, PET_REP, PETS, REP_COIN_BONUS, REP_STEPS, repLevel, VISITORS,
+  HOME_UPGRADES, homeComfort, homeFieldId, homeProduce, homeLevel, homePlots, homeSize, isTrophy, canPet, deliverOrder, homeHasBoard, LOVE_STEPS, loveHearts, repUnclaimed, REP_REWARDS, homeOrders, homePets, ORDER_ALL_BONUS, PET_REP, PETS, REP_COIN_BONUS, REP_STEPS, repLevel, VISITORS, processMax, processReady, PROCESS_MAX,
   type BuildCat, type BuildDef,
 } from '../core/home';
 import type { GameState } from '../core/types';
-import { HOME_CLICK, HOME_MSG, HOME_ORDERS, HOME_TOOL, homeIcons, type HomeTool } from '../game/IslandScene';
+import { HOME_CLICK, HOME_MSG, HOME_ORDERS, HOME_PROCESS, HOME_TOOL, homeIcons, type HomeTool } from '../game/IslandScene';
 import { fieldCounts } from '../core/farm';
 import { paintFloor, paintThing, paintWall } from '../game/homeArt';
 import { store } from '../store';
@@ -82,6 +82,9 @@ export function HomeHud({ s }: { s: GameState }) {
   useEffect(() => onGameEvent(HOME_MSG, (m: string) => { setMsg(m); setTimeout(() => setMsg(''), 1600); }), []);
   // 点了岛上的告示板：打开订单
   useEffect(() => onGameEvent(HOME_ORDERS, () => { setInfo('rep'); setOpen(false); setTool(null); }), []);
+  // 点了岛上的加工坊：打开配方
+  const [proc, setProc] = useState<{ x: number; y: number } | null>(null);
+  useEffect(() => onGameEvent(HOME_PROCESS, (at: { x: number; y: number }) => { setProc(at); setInfo(null); setOpen(false); setTool(null); }), []);
   if (!s.home?.inside) return null;
   const lv = homeLevel(s);
   const up = HOME_UPGRADES[lv];
@@ -100,7 +103,7 @@ export function HomeHud({ s }: { s: GameState }) {
     const text = Object.entries(got).map(([id, n]) => tl`${ITEMS[id]?.name ?? id} ×${n}`).join(tl('、'));
     if (text) { setMsg(tl`收进仓库：${text}`); setTimeout(() => setMsg(''), 2000); }
   };
-  const toggle = (k: 'comfort' | 'farm' | 'rep') => { setInfo(info === k ? null : k); close(); };
+  const toggle = (k: 'comfort' | 'farm' | 'rep') => { setInfo(info === k ? null : k); setProc(null); close(); };
   const rlv = repLevel(s.home.rep ?? 0);
   const todo = (homeHasBoard(s) ? homeOrders(s, Date.now()).filter((o) => !o.done).length : 0) + repUnclaimed(s);
   return (
@@ -116,6 +119,7 @@ export function HomeHud({ s }: { s: GameState }) {
       </div>
       {msg && <div className="home-msg">{msg}</div>}
       {info === 'comfort' && <ComfortCard s={s} score={score} lv={clv} onClose={() => setInfo(null)} />}
+      {proc && !info && !open && <ProcessCard s={s} at={proc} onClose={() => setProc(null)} onMsg={(m) => { setMsg(m); setTimeout(() => setMsg(''), 2000); }} />}
       {info === 'rep' && <RepCard s={s} onClose={() => setInfo(null)} onMsg={(m) => { setMsg(m); setTimeout(() => setMsg(''), 2000); }} />}
       {info === 'farm' && (
         <div className="home-build frame">
@@ -224,6 +228,67 @@ function ComfortCard({ s, score, lv, onClose }: { s: GameState; score: number; l
 }
 
 /** 岛屿声望和访客订单（10-29）：声望进度、下一级解锁什么、今天的 3 张订单、宠物摸了没 */
+/** 加工坊面板（11-10）：选配方和份数，看进度 */
+function ProcessCard({ s, at, onClose, onMsg }: { s: GameState; at: { x: number; y: number }; onClose: () => void; onMsg: (m: string) => void }) {
+  const [, tick] = useState(0);
+  useEffect(() => { const h = setInterval(() => tick((n) => n + 1), 1000); return () => clearInterval(h); }, []);
+  const t = s.home?.things.find((x) => x.x === at.x && x.y === at.y);
+  const d = t && buildDef(t.id);
+  if (!t || !d?.process) return null;
+  const now = Date.now();
+  const job = t.job;
+  const cur = job && d.process[job.r];
+  const done = processReady(t, now);
+  const busy = !!job && done < job.n;
+  const fmtMin = (ms: number) => { const m = Math.max(0, Math.ceil(ms / 60000)); return m >= 60 ? tl`${Math.floor(m / 60)} 小时 ${m % 60} 分` : tl`${m} 分`; };
+  const start = (r: number, n: number) => {
+    const rec = d.process![r];
+    store.run('homeProcess', at, r, n);
+    const j = store.state.home?.things.find((x) => x.x === at.x && x.y === at.y)?.job;
+    if (!j || j.at < Date.now() - 5000) return;
+    onMsg(tl`开始制作 ${ITEMS[rec.out]?.name ?? rec.out} ×${n * rec.qty}`);
+  };
+  return (
+    <div className="home-build frame comfort-card rep-card">
+      <b>{d.name}</b> <small className="muted">{tl`一次最多 ${PROCESS_MAX} 份，离线也接着做，做好的点一下收进仓库`}</small>
+      {job && cur && (
+        <div className="home-up">
+          <Icon item={cur.out} size={24} />
+          <span className="small">
+            <b>{ITEMS[cur.out]?.name}</b>{' '}{tl`做好 ${done * cur.qty}/${job.n * cur.qty}`}
+            {busy && <span className="muted">{tl` · 下一份还要 ${fmtMin(job.at + (done + 1) * cur.min * 60000 - now)}，全部做完还要 ${fmtMin(job.at + job.n * cur.min * 60000 - now)}`}</span>}
+          </span>
+          {done > 0 && <button className="pill on" onClick={() => {
+            const got = ((store.run('collectHome', at) as { got?: Record<string, number> } | undefined)?.got) ?? {};
+            onMsg(Object.entries(got).map(([id, n]) => tl`收取 ${ITEMS[id]?.name ?? id} ×${n}`).join(tl('、')));
+          }}>{tl('收取')}</button>}
+        </div>
+      )}
+      <ul className="home-orders">
+        {d.process.map((r, i) => {
+          const max = processMax(s, r);
+          const it = ITEMS[r.out];
+          return (
+            <li key={i}>
+              <Icon item={r.out} size={24} />
+              <span className="ho-body">
+                <b>{it?.name} ×{r.qty}</b> <small className="muted">{tl`每份 ${r.min} 分钟`}</small>
+                {it?.desc && <small className="muted">{it.desc}</small>}
+                <span className="bl-cost">{r.in.map((c) => <span key={c.item} className={have(s, c.item) >= c.qty ? '' : 'warn'}><Icon item={c.item} size={14} info={false} />{c.qty}<small>/{fmtNum(have(s, c.item))}</small></span>)}</span>
+              </span>
+              <span className="proc-btns">
+                {[1, 5, 10].filter((n) => n <= PROCESS_MAX).map((n) => <button key={n} className="pill" disabled={busy || max < n} onClick={() => start(i, n)}>×{n}</button>)}
+                <button className="pill on" disabled={busy || max < 1} onClick={() => start(i, max)}>{tl('最多')}</button>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      {busy && <p className="muted small">{tl('这一批做完、收取后才能换下一批。')}</p>}
+      <div className="go"><button onClick={onClose}>{tl('关闭')}</button></div>
+    </div>
+  );
+}
 function RepCard({ s, onClose, onMsg }: { s: GameState; onClose: () => void; onMsg: (m: string) => void }) {
   const now = Date.now();
   const rep = s.home?.rep ?? 0;

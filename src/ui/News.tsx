@@ -11,6 +11,16 @@ import { Icon } from './icons';
 interface Note { id: string; date: string; title: string; lines: string[]; icons?: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-11-10-a', date: tl('11 月 10 日'), title: tl('家园加工坊'),
+    icons: ['mead', 'cider', 'smoked_fish', 'jerky', 'apple_jam', 'wool'],
+    lines: [
+      tl('家园「制作台」里新增 4 种加工建筑：果酱锅、纺车（声望 1 级）、熏制架（声望 1 级）、酿酒桶（声望 2 级）。'),
+      tl('点一下建筑选配方，一次最多放 10 份原料，人不在岛上、离线也接着做。做好了头上冒图标，点一下或顶栏「收取」收进仓库。'),
+      tl('新吃喝：蜂蜜酒（经验 +8%）、苹果酒（干活速度 +6%）、熏鱼（防御 +8%）、风干肉（最高伤害 +6%）、苹果蜂蜜酱（命中 +6%）。在背包里点「吃」就生效。'),
+      tl('纺车能把羊毛纺成 T2、T3 布料。'),
+    ],
+  },
+  {
     id: '2026-11-07-a', date: tl('11 月 7 日'), title: tl('新增「更新计划」'),
     lines: [
       tl('公告窗口下面多了「更新计划」按钮，可以看到正在做和接下来准备做的内容。'),

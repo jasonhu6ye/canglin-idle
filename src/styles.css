@@ -650,6 +650,8 @@ html[lang=en] .wm-region { letter-spacing: 0.5px; font-size: 11px; }
 .home-orders { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 4px; }
 .home-orders li { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; background: rgba(255, 255, 255, 0.06); }
 .home-orders li.done { opacity: 0.55; }
+.proc-btns { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; max-width: 130px; }
+.proc-btns .pill { padding: 2px 8px; }
 .home-pets { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 4px; }
 .home-pets li { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; padding: 6px 8px; border-radius: 6px; background: rgba(255, 255, 255, 0.06); }
 .home-pets small { flex-basis: 100%; }

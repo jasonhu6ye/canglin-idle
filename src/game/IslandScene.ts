@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { NODES, WALK_TILES_PER_SEC } from '../core/data';
 import {
-  buildDef, canPlace, homeCan, homePlotCells, produceReady, homePlots, HOME_PORTAL, HOME_SPAWN, homeSize, ISLAND, islandGround, thingGrid,
+  buildDef, canPlace, homeCan, homePlotCells, produceReady, processReady, homePlots, HOME_PORTAL, HOME_SPAWN, homeSize, ISLAND, islandGround, thingGrid,
   canPet, homeOrders, homePets, petGift, PET_REP, PETS,
 } from '../core/home';
 import { dayKey } from '../core/mail';
@@ -30,6 +30,8 @@ export const HOME_CLICK = 'home-click';
 export const HOME_MSG = 'home-msg';
 /** 场景 → 界面：点了订单告示板 */
 export const HOME_ORDERS = 'home-orders';
+/** 场景 → 界面：点了加工坊（酿酒桶等，11-10），带格子坐标 */
+export const HOME_PROCESS = 'home-process';
 
 /** 岛上溜达的宠物 */
 interface Pet { kind: string; spr: Phaser.GameObjects.Sprite; zone: Phaser.GameObjects.Zone; pts: { x: number; y: number }[]; wait: number; step: number }
@@ -349,7 +351,7 @@ export class IslandScene extends Phaser.Scene {
   private growCells() {
     const now = Date.now();
     const home = store.state.home;
-    for (const b of this.bubbles) b.img.setVisible(produceReady(home, b.t, now) > 0);
+    for (const b of this.bubbles) b.img.setVisible(produceReady(home, b.t, now) > 0 || processReady(b.t, now) > 0);
     const pending = this.bangs.length > 0 && homeOrders(store.state, now).some((o) => !o.done);
     for (const b of this.bangs) b.setVisible(pending);
     const farm = store.state.farm ?? {};
@@ -427,6 +429,20 @@ export class IslandScene extends Phaser.Scene {
       }
       const zone = this.add.zone(bx + (d.w * T) / 2, by - (d.h * T) / 2 - (UP[t.id] ?? 0) / 2, d.w * T, d.h * T + (UP[t.id] ?? 0))
         .setInteractive({ useHandCursor: true }).setData('collect', { x: t.x, y: t.y });
+      this.objs.push(zone);
+    }
+    if (d.process) {
+      const item = t.job && d.process[t.job.r]?.out;
+      const key = item && this.trophyTex(item, homeIcons.url(item), () => this.rebuild());
+      if (key && this.textures.exists(key)) {
+        const top = by - d.h * T - (UP[t.id] ?? 0);
+        const img = this.add.image(bx + (d.w * T) / 2, top - 2, key).setOrigin(0.5, 1).setDisplaySize(12, 12).setDepth(9e5).setVisible(false);
+        this.tweens.add({ targets: img, y: top - 5, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        this.objs.push(img);
+        this.bubbles.push({ t, img });
+      }
+      const zone = this.add.zone(bx + (d.w * T) / 2, by - (d.h * T) / 2 - (UP[t.id] ?? 0) / 2, d.w * T, d.h * T + (UP[t.id] ?? 0))
+        .setInteractive({ useHandCursor: true }).setData('process', { x: t.x, y: t.y });
       this.objs.push(zone);
     }
     if (t.id === 'order_board') {
@@ -599,6 +615,17 @@ export class IslandScene extends Phaser.Scene {
           this.game.events.emit(HOME_MSG, Object.entries(got).map(([id, n]) => tl`收取 ${ITEMS[id]?.name ?? id} ×${n}`).join(tl('、')));
           this.growCells();
         } else this.game.events.emit(HOME_MSG, tl('还没有东西可以收'));
+        return;
+      }
+      // 加工坊：做好了就收，没做好就打开配方面板
+      const proc = !this.tool && over.map((o) => o.getData('process') as { x: number; y: number } | undefined).find(Boolean);
+      if (proc) {
+        const t = store.state.home?.things.find((x) => x.x === proc.x && x.y === proc.y);
+        if (t && processReady(t, Date.now()) > 0) {
+          const got = ((store.run('collectHome', proc) as { got?: Record<string, number> } | undefined)?.got) ?? {};
+          this.game.events.emit(HOME_MSG, Object.entries(got).map(([id, n]) => tl`收取 ${ITEMS[id]?.name ?? id} ×${n}`).join(tl('、')));
+          this.growCells();
+        } else this.game.events.emit(HOME_PROCESS, proc);
         return;
       }
       const pet = !this.tool && over.map((o) => o.getData('pet') as string | undefined).find(Boolean);

@@ -26,6 +26,7 @@ export const UP: Record<string, number> = {
   cupboard: 16, wine_rack: 12, coffee_table: 2, canopy_bed: 18, bar_counter: 6, bar_stool: 2, bookshelf_low: 6, grand_piano: 6, harp: 14, sewing_table: 8,
   folding_screen: 16, potted_tree: 16, wash_basin: 6, rocking_chair: 8, chess_table: 2, bird_cage: 12, coat_rack: 14,
   order_board: 18, fish_pond: 2, sheep_pen: 8, lighthouse: 40, hot_balloon: 40, gold_statue: 26,
+  jam_pot: 10, spinning_wheel: 14, smoker: 16, brew_keg: 10,
   apple_tree: 26, gazebo: 26, swing: 16, maple_tree: 26, palm_tree: 30, boat: 0, coop: 12, telescope: 10, totem: 22, flower_cart: 6,
 };
 
@@ -535,6 +536,71 @@ function paintHD(id: string, p: Pix, W: number, H: number): boolean {
   };
   const mug = (x: number, y: number) => { p.rect(x, y, 3, 4, '#d8d0c0'); p.set(x, y, '#ffffff'); p.set(x + 1, y, '#6a3a1a'); p.set(x + 3, y + 1, '#d8d0c0'); p.set(x + 3, y + 2, '#b8b0a0'); };
   switch (id) {
+    // ───── 11-10 家园加工坊 ─────
+    case 'jam_pot': {
+      // 果酱锅：石砌小灶，灶口一团火，上面一口铜锅，锅里琥珀色的果酱冒热气
+      top(1, H - 12, 14, 3, STONE, false); front(1, H - 9, 14, 9, STONE);
+      for (let y = H - 8; y < H; y += 3) for (let x = 2; x < 14; x++) if ((x + (y >> 1)) % 4 === 0) p.set(x, y, STONE[0]);
+      p.rect(5, H - 6, 6, 5, '#140a08');
+      for (let x = 6; x < 10; x++) { p.set(x, H - 2, '#ff8a2a'); if (x % 2) p.set(x, H - 3, '#ffd04a'); }
+      p.set(7, H - 4, '#ff6a1a');
+      cyl(8, H - 17, H - 11, 6, COPPER, 2, '#c87a1e');
+      for (let x = 4; x < 13; x++) if (phash(x, 3, 51) < 0.35) p.set(x, H - 17, '#f0b040');
+      p.set(5, H - 18, '#d06a2a'); p.set(6, H - 18, '#e8a050');
+      p.rect(12, H - 23, 1, 6, WOOD[3]); p.set(12, H - 24, WOOD[4]);
+      return true;
+    }
+    case 'spinning_wheel': {
+      // 纺车：斜放的木凳，一只带辐条的大轮子，旁边一团白羊毛和一卷纺好的线
+      const wy = 10, r = 8;
+      for (let y = wy - r; y <= wy + r; y++) for (let x = cx - r; x <= cx + r; x++) {
+        const d = Math.hypot(x - cx + 0.5, y - wy);
+        if (d > r - 0.5 && d <= r + 0.4) p.set(x, y, x < cx ? WOOD[3] : WOOD[1]);
+      }
+      for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI; for (let t = -r + 1; t < r; t++) p.set(Math.round(cx - 0.5 + Math.cos(a) * t), Math.round(wy + Math.sin(a) * t), WOOD[2]); }
+      p.rect(cx - 1, wy - 1, 2, 2, GOLD[2]);
+      leg(cx - 1, wy + 2, H - 6, WOOD);
+      top(1, H - 8, 14, 3, WOOD); front(1, H - 5, 14, 2, WOOD);
+      leg(2, H - 3, H, WOOD); leg(12, H - 3, H, WOOD);
+      for (let y = H - 13; y < H - 8; y++) for (let x = 1; x < 6; x++) if (Math.hypot(x - 3, y - (H - 10.5)) < 2.6) p.set(x, y, phash(x, y, 61) < 0.3 ? '#d8d4c8' : '#f4f0e6');
+      p.rect(11, H - 11, 3, 3, '#e8d8b0'); p.set(11, H - 11, '#fff4d8'); p.set(13, H - 9, '#c0a878');
+      return true;
+    }
+    case 'smoker': {
+      // 熏制架：两根立柱架一根横杆，杆上挂着熏鱼和肉条，下面一盆炭火冒烟，顶上一块小雨棚
+      for (const px of [2, W - 4]) for (let y = 4; y <= B; y++) { p.set(px, y, WOOD[3]); p.set(px + 1, y, WOOD[1]); }
+      for (let y = 0; y < 4; y++) for (let x = 0; x < W; x++) p.set(x, y, y === 0 ? WOOD[4] : y === 3 ? WOOD[0] : (x + y * 2) % 5 === 0 ? WOOD[1] : WOOD[2]);
+      for (let x = 2; x < W - 2; x++) { p.set(x, 7, DARKWOOD[3]); p.set(x, 8, DARKWOOD[1]); }
+      for (let k = 0; k < 6; k++) {
+        const x = 6 + k * 4, fish = k % 2 === 0;
+        p.set(x, 9, '#c8b890');
+        if (fish) { for (let y = 10; y < 17; y++) { p.set(x, y, y < 12 ? '#8a6a3a' : '#c09050'); if (y > 11 && y < 15) p.set(x + 1, y, '#9a7038'); } p.set(x - 1, 17, '#8a6a3a'); p.set(x + 1, 17, '#8a6a3a'); }
+        else for (let y = 10; y < 18; y++) { p.set(x, y, y % 3 === 0 ? '#e8c0a0' : '#8a2a1a'); p.set(x + 1, y, '#5a1a10'); }
+      }
+      cyl(cx, H - 6, H, 7, IRON, 2, '#2a1a14');
+      for (let x = cx - 5; x < cx + 5; x++) if (phash(x, 7, 52) < 0.5) p.set(x, H - 6, phash(x, 8, 53) < 0.5 ? '#ff7a2a' : '#c03a1a');
+      return true;
+    }
+    case 'brew_keg': {
+      // 酿酒桶：木架上横躺一只大橡木桶，铁箍、桶口塞子，前面一个铜龙头，地上一只接酒的木杯
+      leg(4, H - 6, H, DARKWOOD); leg(W - 6, H - 6, H, DARKWOOD);
+      top(2, H - 8, W - 4, 2, DARKWOOD, false);
+      const cy0 = H - 17, ry = 9;
+      for (let y = cy0 - ry; y <= cy0 + ry; y++) for (let x = 3; x < W - 3; x++) {
+        const t = (y - (cy0 - ry)) / (2 * ry);
+        const bulge = Math.round(Math.sin(t * Math.PI) * 2);
+        if (x < 5 - bulge || x > W - 6 + bulge) continue;
+        let c = t < 0.15 ? WOOD[4] : t < 0.45 ? WOOD[3] : t < 0.8 ? WOOD[2] : WOOD[1];
+        if ((x - 3) % 4 === 0) c = mix(c, WOOD[0], 0.35);
+        if (x === 9 || x === W - 10) c = t < 0.3 ? IRON[4] : IRON[2];
+        p.set(x, y, c);
+      }
+      for (let y = cy0 - ry; y <= cy0 + ry; y++) for (let x = W - 6; x < W - 3; x++) if (Math.abs(y - cy0) <= ry * Math.sqrt(Math.max(0, 1 - ((x - (W - 6)) / 3) ** 2))) p.set(x, y, x === W - 4 ? WOOD[0] : WOOD[2]);
+      p.rect(cx - 1, cy0 - ry - 1, 3, 2, '#c8a070'); p.set(cx - 1, cy0 - ry - 1, '#f0d0a0');
+      p.rect(cx - 1, cy0 + 2, 3, 2, COPPER[3]); p.set(cx, cy0 + 4, COPPER[2]); p.set(cx, cy0 + 5, '#e8b040');
+      p.rect(cx - 2, H - 5, 5, 4, WOOD[2]); p.rect(cx - 2, H - 5, 5, 1, '#e8b040'); p.set(cx - 2, H - 4, WOOD[3]); p.set(cx + 2, H - 3, WOOD[0]);
+      return true;
+    }
     // ───── 10-29 访客订单、岛屿声望解锁的建筑 ─────
     case 'order_board': {
       // 告示板：两根木桩撑一块木板，顶上一道红瓦小雨棚，板上钉着三张订单
@@ -2106,7 +2172,7 @@ export function paintPortalSwirl(): HTMLCanvasElement {
 /** 家园产出和点心的物品图标（16×16）：鸡蛋、蜂蜜、苹果、煎蛋、苹果派、蜂蜜蛋糕 */
 const homeIconCache = new Map<string, string>();
 export function homeItemIconUrl(id: string): string | null {
-  if (!['egg', 'honey', 'apple', 'fried_egg', 'apple_pie', 'honey_cake', 'wool'].includes(id) || typeof document === 'undefined') return null;
+  if (!['egg', 'honey', 'apple', 'fried_egg', 'apple_pie', 'honey_cake', 'wool', 'mead', 'cider', 'smoked_fish', 'jerky', 'apple_jam'].includes(id) || typeof document === 'undefined') return null;
   const hit = homeIconCache.get(id);
   if (hit) return hit;
   const p = new Pix(16, 16);
@@ -2159,6 +2225,45 @@ export function homeItemIconUrl(id: string): string | null {
       }
       for (const [x, y] of [[6, 5], [9, 8], [5, 10], [10, 11], [8, 12]]) p.set(x, y, '#d8d2c6');
       p.set(12, 3, '#ece8de'); p.set(13, 2, '#ece8de'); p.set(13, 1, '#ffffff');
+      break;
+    // ───── 11-10 家园加工坊的成品 ─────
+    case 'mead':
+    case 'cider': {
+      // 蜂蜜酒：陶瓶装、金黄；苹果酒：木杯里一杯淡金色、冒白沫
+      if (id === 'mead') {
+        oval(7.5, 10, 5, 5, (x) => (x < 6 ? '#e8b860' : x > 10 ? '#8a5a20' : '#c8903a'));
+        p.rect(6, 2, 4, 4, '#c8903a'); p.rect(6, 2, 1, 4, '#e8b860'); p.rect(6, 1, 4, 1, '#7a4a1a');
+        p.rect(4, 9, 8, 3, '#f0d070'); p.rect(5, 10, 6, 1, '#e8a030'); p.set(7, 10, '#ffffff');
+        p.set(5, 7, '#fff0c0');
+      } else {
+        p.rect(3, 4, 9, 11, '#9a6a3a'); p.rect(3, 4, 1, 11, '#c48a56'); p.rect(11, 4, 1, 11, '#6a4020');
+        p.rect(3, 7, 9, 1, '#5a5a62'); p.rect(3, 12, 9, 1, '#5a5a62');
+        p.rect(12, 6, 2, 1, '#7e5232'); p.rect(13, 6, 1, 6, '#7e5232'); p.rect(12, 11, 2, 1, '#7e5232');
+        p.rect(3, 2, 9, 2, '#fffaf0'); p.set(4, 1, '#ffffff'); p.set(7, 1, '#f4ecd8'); p.set(10, 1, '#ffffff'); p.rect(4, 4, 7, 1, '#f0d070');
+      }
+      break;
+    }
+    case 'smoked_fish':
+      // 熏鱼：一条侧躺的鱼，皮熏成金棕色，背上深、肚子亮，几道烤痕，尾巴分叉
+      oval(7, 8, 5.5, 3.2, (x, y) => (y < 7 ? '#8a5a24' : y > 9 ? '#e8b060' : x % 3 === 0 ? '#6a3a14' : '#c08038'));
+      for (let j = -3; j <= 3; j++) { p.set(13, 8 + j, '#8a5a24'); if (Math.abs(j) > 1) p.set(14, 8 + j, '#6a3a14'); }
+      p.set(12, 8, '#a06a2a');
+      p.set(3, 7, '#1a1a1a'); p.set(4, 9, '#5a3010'); p.set(5, 9, '#5a3010');
+      p.set(7, 4, '#6a3a14'); p.set(8, 4, '#6a3a14'); p.set(9, 5, '#6a3a14');
+      break;
+    case 'jerky':
+      // 风干肉：两条暗红肉干，边上一点白筋
+      for (const [x0, y0] of [[3, 3], [8, 5]] as [number, number][]) for (let j = 0; j < 9; j++) for (let i = 0; i < 4; i++) {
+        const x = x0 + i + Math.round(j * 0.2), y = y0 + j;
+        p.set(x, y, i === 0 ? '#b04a30' : i === 3 ? '#4a140c' : (i + j) % 4 === 0 ? '#e8c0a0' : '#7a2418');
+      }
+      break;
+    case 'apple_jam':
+      // 苹果蜂蜜酱：玻璃罐装红金色果酱，盖上一块格子布扎绳
+      p.rect(4, 5, 8, 10, '#c03a20'); p.rect(4, 5, 1, 10, '#ff8a5a'); p.rect(11, 5, 1, 10, '#7a1a10');
+      p.rect(5, 8, 5, 2, '#e8a030'); p.set(6, 7, '#ffd0a0');
+      p.rect(3, 2, 10, 3, '#f4f0e6'); for (let x = 3; x < 13; x += 2) { p.set(x, 2, '#d83a2a'); p.set(x + 1, 3, '#d83a2a'); }
+      p.rect(4, 4, 8, 1, '#a07040');
       break;
   }
   const url = p.outline().canvas().toDataURL();

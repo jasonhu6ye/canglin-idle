@@ -360,7 +360,8 @@ export interface Plot {
 /** 家园访客订单：要交的东西、给的金币和声望 */
 export interface HomeOrder { item: string; qty: number; coins: number; rep: number; who: number; done?: boolean }
 
-export interface HomeThing { id: string; x: number; y: number; n?: number; at?: number }
+/** job：家园加工坊（11-10）正在做的一批，r 第几个配方、n 一共几份、at 开始时间 */
+export interface HomeThing { id: string; x: number; y: number; n?: number; at?: number; job?: { r: number; n: number; at: number } }
 
 export interface GameState {
   version: 3;

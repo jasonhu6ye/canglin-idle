@@ -59,6 +59,8 @@ describe('数据闭环', () => {
     }
     // 家园产出（10-27）：鸡舍、蜂箱、苹果树、堆肥箱
     for (const d of BUILDS) if (d.produce) made.add(d.produce.item);
+    // 家园加工坊（11-10）：原料放进去、出成品
+    for (const d of BUILDS) for (const r of d.process ?? []) { made.add(r.out); r.in.forEach((i) => used.add(i.item)); }
     // 肥料种地时用、洒水器装在田里
     for (const id of ['fert_basic', 'fert_rich', 'sprinkler']) used.add(id);
     // 精炼石（11-02）制作装备时加；副本宝箱、冰原首领和宝箱给

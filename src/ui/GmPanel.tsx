@@ -1038,7 +1038,7 @@ function PlayersTab() {
  */
 const CMD_SRC: Record<string, string> = {
   buyGoods: tl('商人购买'), buyKey: tl('商人购买'), buySeed: tl('商人购买'), claimMail: tl('领邮件'), openContainer: tl('开箱子 / 福袋'),
-  realmChestDone: tl('冰原宝箱'), realmChest: tl('冰原宝箱'), harvestAll: tl('收菜'), tendPlot: tl('收菜'), collectHome: tl('家园收取'),
+  realmChestDone: tl('冰原宝箱'), realmChest: tl('冰原宝箱'), harvestAll: tl('收菜'), tendPlot: tl('收菜'), collectHome: tl('家园收取'), homeProcess: tl('家园加工'),
   deliverOrder: tl('家园订单'), repReward: tl('家园声望奖励'), salvage: tl('分解'), redeem: tl('兑换码'), combineShards: tl('合成碎片'),
   collectHorse: tl('畜牧'), unequip: tl('卸下装备'), hwSummon: tl('万圣节'), hwSkin: tl('万圣节'), hwMount: tl('万圣节'),
 };

@@ -74,6 +74,10 @@ export const BUILD_CATS: { id: BuildCat; name: string }[] = [
   { id: 'outdoor', name: tl('户外') }, { id: 'trophy', name: tl('战利品') },
 ];
 
+/** 加工配方：每份用 in 的原料，min 分钟出 qty 个 out */
+export interface ProcessRecipe { out: string; qty: number; in: ItemStack[]; min: number }
+export const PROCESS_MAX = 10;
+
 export interface BuildDef {
   id: string;
   name: string;
@@ -101,6 +105,8 @@ export interface BuildDef {
   produce?: { item: string; min: number; cap: number };
   /** 岛屿声望到几级才能盖（10-29） */
   rep?: number;
+  /** 加工坊（11-10）：放进原料，过一段时间出成品，一次最多 PROCESS_MAX 份 */
+  process?: ProcessRecipe[];
   desc?: string;
 }
 
@@ -265,6 +271,19 @@ export const BUILDS: BuildDef[] = [
   // ───── 10-29 访客订单和岛屿声望 ─────
   b('order_board', tl('订单告示板'), 'outdoor', 2, 1, [c('plank_1', 6), c('cloth_1', 2)], { desc: tl('每天有 3 位访客在告示板上贴订单，交上家园产出的东西换金币和岛屿声望。声望升级能解锁新建筑。') }),
   b('fish_pond', tl('鱼塘'), 'outdoor', 3, 3, [c('stone', 40), c('plank_2', 10), c('raw_minnow', 5)], { rep: 1, comfort: 6, produce: { item: 'raw_minnow', min: 25, cap: 10 }, desc: tl('每 25 分钟养出 1 条生银鱼，最多攒 10 条。') }),
+  // 家园加工坊（用户 11-10）：把鸡蛋、蜂蜜、苹果、羊毛、银鱼、兽肉慢慢加工成带增益的吃喝和高阶布料，离线也接着做
+  b('jam_pot', tl('果酱锅'), 'station', 1, 1, [c('copper_bar', 4), c('stone', 10)], { light: true, comfort: 3,
+    process: [{ out: 'apple_jam', qty: 2, in: [c('apple', 2), c('honey', 1)], min: 40 }],
+    desc: tl('放进苹果和蜂蜜，慢慢熬成苹果蜂蜜酱（命中 +6%）。一次最多放 10 份，离线也接着熬。') }),
+  b('spinning_wheel', tl('纺车'), 'station', 1, 1, [c('plank_3', 8), c('iron_bar', 2)], { rep: 1, comfort: 3,
+    process: [{ out: 'cloth_2', qty: 1, in: [c('wool', 3)], min: 40 }, { out: 'cloth_3', qty: 1, in: [c('wool', 5)], min: 60 }],
+    desc: tl('把羊毛纺成高一阶的布料。一次最多放 10 份，离线也接着纺。') }),
+  b('smoker', tl('熏制架'), 'station', 2, 1, [c('plank_3', 10), c('stone', 20)], { rep: 1, comfort: 2,
+    process: [{ out: 'smoked_fish', qty: 1, in: [c('raw_minnow', 3)], min: 30 }, { out: 'jerky', qty: 1, in: [c('meat_3', 2)], min: 45 }],
+    desc: tl('把银鱼熏成熏鱼（防御 +8%），把兽肉风干成风干肉（最高伤害 +6%）。一次最多放 10 份。') }),
+  b('brew_keg', tl('酿酒桶'), 'station', 2, 1, [c('plank_4', 12), c('iron_bar', 4)], { rep: 2, comfort: 4,
+    process: [{ out: 'mead', qty: 1, in: [c('honey', 2)], min: 60 }, { out: 'cider', qty: 1, in: [c('apple', 3)], min: 45 }],
+    desc: tl('用蜂蜜酿蜂蜜酒（经验 +8%，1 小时），用苹果酿苹果酒（干活速度 +6%，1 小时）。一次最多放 10 份。') }),
   b('sheep_pen', tl('羊圈'), 'outdoor', 3, 2, [c('plank_2', 20), c('wheat', 20)], { rep: 2, comfort: 6, produce: { item: 'wool', min: 45, cap: 8 }, desc: tl('每 45 分钟剪下 1 份羊毛，最多攒 8 份。羊毛能在工坊纺成粗布。') }),
   b('lighthouse', tl('灯塔'), 'outdoor', 2, 2, [c('stone', 60), c('copper_bar', 6), c('crystal_1', 2)], { rep: 3, light: true, comfort: 12 }),
   b('hot_balloon', tl('热气球'), 'outdoor', 3, 3, [c('cloth_3', 14), c('plank_3', 10), c('iron_bar', 4)], { rep: 4, comfort: 14 }),
@@ -401,6 +420,15 @@ export function removeAt(prev: GameState, x: number, y: number): GameState {
     const p = buildDef(t.id)?.produce;
     const ready = p ? produceReady(prev.home, t, Date.now()) : 0;
     if (p && ready) s.bank[p.item] = (s.bank[p.item] ?? 0) + ready;
+    // 加工坊：做好的收进仓库，没做的原料退回仓库
+    if (t.job) {
+      const r = buildDef(t.id)?.process?.[t.job.r];
+      const done = processReady(t, Date.now());
+      if (r) {
+        if (done) s.bank[r.out] = (s.bank[r.out] ?? 0) + done * r.qty;
+        refund(s, r.in.map((i) => ({ item: i.item, qty: i.qty * (t.job!.n - done) })));
+      }
+    }
     if (t.n) clearPlot(s, t.n);
   } else {
     delete home.floors[key(x, y)];
@@ -573,7 +601,7 @@ export function migrateHome(h: GameState['home']): GameState['home'] {
     lv,
     floors: Object.fromEntries(Object.entries(h.floors ?? {}).filter(([, id]) => BUILD_BY_ID[id]?.cat === 'floor')),
     things: (h.things ?? []).filter((t: HomeThing) => t && buildDef(t.id) && Number.isFinite(t.x) && Number.isFinite(t.y))
-      .map((t: HomeThing) => ({ id: t.id, x: t.x, y: t.y, ...(buildDef(t.id)?.plot ? { n: t.n } : {}), ...(buildDef(t.id)?.produce ? { at: Number.isFinite(t.at) ? t.at : Date.now() } : {}) }))
+      .map((t: HomeThing) => ({ id: t.id, x: t.x, y: t.y, ...(buildDef(t.id)?.plot ? { n: t.n } : {}), ...(buildDef(t.id)?.produce ? { at: Number.isFinite(t.at) ? t.at : Date.now() } : {}), ...(okJob(t) ? { job: { r: t.job!.r, n: t.job!.n, at: t.job!.at } } : {}) }))
       .filter(plotNumbers()),
     inside: !!h.inside,
     ...(h.from && PORTAL_IDS.includes(h.from) ? { from: h.from } : {}),
@@ -627,6 +655,8 @@ export function homeProduce(home: GameState['home'], now: number): Record<string
   for (const t of home?.things ?? []) {
     const n = produceReady(home, t, now);
     if (n) out[buildDef(t.id)!.produce!.item] = (out[buildDef(t.id)!.produce!.item] ?? 0) + n;
+    const m = processReady(t, now);
+    if (m) { const r = buildDef(t.id)!.process![t.job!.r]; out[r.out] = (out[r.out] ?? 0) + m * r.qty; }
   }
   return out;
 }
@@ -649,9 +679,58 @@ export function collectHome(prev: GameState, now: number, at?: { x: number; y: n
     got[p.item] = (got[p.item] ?? 0) + n;
     return { ...t, at: n >= p.cap ? now : t.at! + n * produceMs(prev.home, t.id) };
   });
+  // 加工坊（11-10）：做好几份收几份，剩下的接着做
+  home.things = home.things.map((t, i) => {
+    if (only !== undefined && i !== only) return t;
+    const done = processReady(t, now);
+    if (!done) return t;
+    const r = buildDef(t.id)!.process![t.job!.r];
+    got[r.out] = (got[r.out] ?? 0) + done * r.qty;
+    const left = t.job!.n - done;
+    const { job: _job, ...rest } = t;
+    return left > 0 ? { ...rest, job: { r: t.job!.r, n: left, at: t.job!.at + done * r.min * 60000 } } : rest;
+  });
   if (!Object.keys(got).length) return { state: prev, got };
   for (const [item, n] of Object.entries(got)) s.bank[item] = (s.bank[item] ?? 0) + n;
   return { state: s, got };
+}
+
+/** 存档里的加工任务是不是合法（读档时校验） */
+function okJob(t: HomeThing) {
+  const j = t.job;
+  const p = buildDef(t.id)?.process;
+  return !!(j && p && Number.isInteger(j.r) && j.r >= 0 && j.r < p.length && Number.isInteger(j.n) && j.n >= 1 && j.n <= PROCESS_MAX && Number.isFinite(j.at));
+}
+/** 加工坊做好了几份（还没收的） */
+export function processReady(t: HomeThing, now: number): number {
+  const r = t.job && buildDef(t.id)?.process?.[t.job.r];
+  if (!r) return 0;
+  return Math.max(0, Math.min(t.job!.n, Math.floor((now - t.job!.at) / (r.min * 60000))));
+}
+/** 加工坊现在最多能放几份（原料按仓库 + 背包算） */
+export function processMax(s: GameState, r: ProcessRecipe) {
+  return Math.min(PROCESS_MAX, ...r.in.map((i) => Math.floor(have(s, i.item) / i.qty)));
+}
+/**
+ * 在 at 那一格的加工坊里放 n 份第 r 个配方。正在做的还没做完就不能换；
+ * 上一批全做好了先自动收进仓库再开始。原料先扣仓库再扣背包。
+ */
+export function startProcess(prev: GameState, now: number, at: { x: number; y: number }, r: number, n: number): GameState {
+  if (!prev.home?.inside) return prev;
+  const i = thingGrid(prev.home, 'top').get(key(at.x, at.y));
+  if (i === undefined) return prev;
+  const t = prev.home.things[i];
+  const rec = buildDef(t.id)?.process?.[r];
+  if (!rec || !Number.isInteger(n) || n < 1 || n > PROCESS_MAX) return prev;
+  if (t.job && processReady(t, now) < t.job.n) return prev;
+  if (processMax(prev, rec) < n) return prev;
+  let s = prev;
+  if (t.job) s = collectHome(prev, now, at).state;
+  s = clone(s);
+  spend(s, rec.in.map((x) => ({ item: x.item, qty: x.qty * n })));
+  const th = s.home!.things.find((x) => x.x === t.x && x.y === t.y && x.id === t.id)!;
+  th.job = { r, n, at: now };
+  return s;
 }
 /** 岛上有雨水桶：家园农田新种的自动浇水 */
 export const homeBarrel = (s: GameState) => !!s.home?.things.some((t) => t.id === 'water_barrel');
