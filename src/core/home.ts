@@ -1,5 +1,5 @@
-import { ITEMS, NODES, type MapNode } from './data';
-import type { GameState, HomeOrder, HomeThing, ItemStack } from './types';
+import { ACTIONS, CROP_DEFS, ITEMS, NODES, type MapNode } from './data';
+import type { GameState, HomeOrder, HomeThing, ItemStack, SkillId } from './types';
 import { tl } from '../i18n';
 import { dayKey } from './mail';
 
@@ -105,6 +105,8 @@ export interface BuildDef {
   produce?: { item: string; min: number; cap: number };
   /** 岛屿声望到几级才能盖（10-29） */
   rep?: number;
+  /** 岛上资源点（11-13）：能在岛上做这个技能的采集，速度是野外的 HOME_GATHER_SPEED */
+  gather?: SkillId;
   /** 加工坊（11-10）：放进原料，过一段时间出成品，一次最多 PROCESS_MAX 份 */
   process?: ProcessRecipe[];
   desc?: string;
@@ -269,6 +271,15 @@ export const BUILDS: BuildDef[] = [
   b('totem', tl('图腾柱'), 'outdoor', 1, 1, [c('oak_log', 6), c('ruby', 1)], { comfort: 7 }),
   b('flower_cart', tl('花车'), 'outdoor', 2, 1, [c('plank_2', 8), c('green_herb', 6)]),
   // ───── 10-29 访客订单和岛屿声望 ─────
+  // 岛上资源点（用户 11-13）：岛上直接采集，不用跑野外，速度是野外的 70%
+  b('home_herbs', tl('草药圃'), 'outdoor', 2, 2, [c('green_herb', 10), c('plank_1', 6)], { gather: 'gathering', comfort: 3,
+    desc: tl('岛上的草药圃。能在岛上采集所有草药和棉花，速度是野外的 70%，不用跑路。') }),
+  b('home_grove', tl('小树林'), 'outdoor', 3, 2, [c('plain_log', 20), c('fert_basic', 2)], { gather: 'woodcutting', comfort: 4,
+    desc: tl('岛上的一片小树林。能在岛上砍所有树，速度是野外的 70%，不用跑路。') }),
+  b('home_vein', tl('小矿脉'), 'outdoor', 2, 2, [c('stone', 60), c('copper_bar', 5)], { gather: 'mining', rep: 1, comfort: 2,
+    desc: tl('岛上露出来的一条矿脉。能在岛上挖所有矿石，速度是野外的 70%，不用跑路。') }),
+  b('home_dock', tl('钓鱼码头'), 'outdoor', 3, 2, [c('plank_2', 30), c('stone', 20)], { gather: 'fishing', rep: 2, comfort: 4,
+    desc: tl('岛边的小木码头。能在岛上钓所有鱼，速度是野外的 70%，不用跑路。') }),
   b('order_board', tl('订单告示板'), 'outdoor', 2, 1, [c('plank_1', 6), c('cloth_1', 2)], { desc: tl('每天有 3 位访客在告示板上贴订单，交上家园产出的东西换金币和岛屿声望。声望升级能解锁新建筑。') }),
   b('fish_pond', tl('鱼塘'), 'outdoor', 3, 3, [c('stone', 40), c('plank_2', 10), c('raw_minnow', 5)], { rep: 1, comfort: 6, produce: { item: 'raw_minnow', min: 25, cap: 10 }, desc: tl('每 25 分钟养出 1 条生银鱼，最多攒 10 条。') }),
   // 家园加工坊（用户 11-10）：把鸡蛋、蜂蜜、苹果、羊毛、银鱼、兽肉慢慢加工成带增益的吃喝和高阶布料，离线也接着做
@@ -298,7 +309,7 @@ export function buildDef(id: string): BuildDef | undefined {
   if (!id.startsWith('deco:')) return undefined;
   const it = ITEMS[id.slice(5)];
   if (!it) return undefined;
-  return { id, name: it.name, cat: 'trophy', w: 1, h: 1, cost: [c(it.id, 1)], desc: tl('首领的专属战利品，摆在家里显摆。') };
+  return { id, name: it.name, cat: 'trophy', w: 1, h: 1, cost: [c(it.id, 1)], desc: TREASURE_DECO.includes(it.id) ? it.desc : tl('首领的专属战利品，摆在家里显摆。') };
 }
 /** 能当战利品摆出来的物品 */
 export const isTrophy = (itemId: string) => ITEMS[itemId]?.category === 'deco' || ITEMS[itemId]?.category === 'loot' && !ITEMS[itemId]?.opens;
@@ -456,7 +467,43 @@ export const homeHas = (s: GameState, pred: (d: BuildDef) => boolean) =>
 /** 岛上的制作台能不能做这个动作（人得在岛上） */
 export function homeCan(s: GameState, action: string): boolean {
   if (!s.home?.inside) return false;
-  return homeHas(s, (d) => !!d.station && !!NODES.find((n) => n.id === d.station)?.actions.includes(action));
+  return homeHas(s, (d) => !!d.station && !!NODES.find((n) => n.id === d.station)?.actions.includes(action)) || homeGathers(s, action);
+}
+/** 岛上资源点的速度（野外是 1） */
+export const HOME_GATHER_SPEED = 0.7;
+/**
+ * 岛上资源点能做的采集：大地图上常驻点位（不算限时、活动、海上、关闭的点）的同技能采集动作，不消耗材料。
+ * 种田、狩猎、偷窃、畜牧都不在岛上做
+ */
+export const HOME_GATHER: Partial<Record<SkillId, string[]>> = (() => {
+  const out: Partial<Record<SkillId, string[]>> = {};
+  for (const sk of ['gathering', 'woodcutting', 'mining', 'fishing'] as SkillId[]) {
+    const ids = new Set<string>();
+    for (const n of NODES) {
+      if (n.timed || n.event || n.sea || n.closed || n.town || n.farm) continue;
+      for (const a of n.actions) { const d = ACTIONS[a]; if (d?.kind === 'skill' && d.skill === sk && !d.inputs?.length) ids.add(a); }
+    }
+    out[sk] = [...ids].sort((a, b) => (ACTIONS[a] as { level: number }).level - (ACTIONS[b] as { level: number }).level);
+  }
+  return out;
+})();
+/** 资源点面板里列的：同名同产出的变体只留一个（id 最短的那个） */
+const HOME_GATHER_LIST: Partial<Record<SkillId, string[]>> = Object.fromEntries(Object.entries(HOME_GATHER).map(([k, ids]) => {
+  const best = new Map<string, string>();
+  for (const id of ids!) {
+    const a = ACTIONS[id] as { name: string; outputs: { item: string }[] };
+    const key = `${a.name}|${a.outputs.map((o) => o.item).join(',')}`;
+    const cur = best.get(key);
+    if (!cur || id.length < cur.length) best.set(key, id);
+  }
+  return [k, ids!.filter((id) => [...best.values()].includes(id))];
+}));
+/** 这个采集现在是不是靠岛上的资源点在做（人在岛上、有对应资源点、制作台做不了） */
+export function homeGathers(s: GameState, action: string): boolean {
+  if (!s.home?.inside) return false;
+  const a = ACTIONS[action];
+  if (a?.kind !== 'skill') return false;
+  return !!HOME_GATHER[a.skill]?.includes(action) && homeHas(s, (d) => d.gather === a.skill);
 }
 export const homeChest = (s: GameState) => !!s.home?.inside && homeHas(s, (d) => !!d.chest);
 
@@ -611,6 +658,7 @@ export function migrateHome(h: GameState['home']): GameState['home'] {
     ...(h.petted && typeof h.petted === 'object' ? { petted: Object.fromEntries(Object.entries(h.petted).filter(([k, v]) => PETS[k] && typeof v === 'string')) } : {}),
     ...(h.love && typeof h.love === 'object' ? { love: Object.fromEntries(Object.entries(h.love).filter(([k, v]) => PETS[k] && Number.isFinite(v) && v > 0).map(([k, v]) => [k, Math.floor(v)])) } : {}),
     ...(Number.isFinite(h.repGot) && h.repGot! > 0 ? { repGot: Math.min(REP_STEPS.length, Math.floor(h.repGot!)) } : {}),
+    ...(h.dig && typeof h.dig.day === 'string' && Array.isArray(h.dig.got) ? { dig: { day: h.dig.day, got: [...new Set(h.dig.got.filter((x) => Number.isInteger(x) && x >= 0 && x < 8))] } } : {}),
   };
 }
 
@@ -618,11 +666,12 @@ export function migrateHome(h: GameState['home']): GameState['home'] {
  * 岛上制作台、储物箱对应的「地点」：打开制作页、仓库用，不画在大地图上。
  * 动作列表和城里同名建筑一样
  */
-export const HOME_NODES: MapNode[] = BUILDS.filter((d) => d.station || d.chest).map((d) => {
+export const HOME_NODES: MapNode[] = BUILDS.filter((d) => d.station || d.chest || d.gather).map((d) => {
   const town = NODES.find((n) => n.id === d.station);
   return {
     id: `home_${d.id}`, name: tl`家园·${d.name}`, x: -1, y: -1, region: 'town', lv: [1, 1],
-    sprite: town?.sprite ?? 'bank', actions: town?.actions ?? [], town: true,
+    sprite: town?.sprite ?? (d.gather ? (NODES.find((n) => !n.town && n.actions.includes(HOME_GATHER[d.gather!]![0]))?.sprite ?? 'bank') : 'bank'),
+    actions: town?.actions ?? (d.gather ? HOME_GATHER_LIST[d.gather] ?? [] : []), town: true,
     ...(d.chest ? { opens: 'bank' as const } : {}),
   };
 });
@@ -896,4 +945,76 @@ export function claimRepReward(prev: GameState): GameState {
   s.bank.coins = (s.bank.coins ?? 0) + r.coins;
   for (const i of r.items) s.bank[i.item] = (s.bank[i.item] ?? 0) + i.qty;
   return s;
+}
+
+// ───────── 每日寻宝（用户 11-13）：岛上每天冒出几处闪光土堆，挖开得金币、种子、肥料、宝石，偶尔挖到只有这里有的摆件 ─────────
+/** 挖宝才有的摆件（分类 deco，能摆在岛上加舒适度） */
+export const TREASURE_DECO = ['antique_vase', 'old_compass', 'conch', 'gold_idol'];
+/** 今天有几处：3 处，有宠物亲密度到 1 颗心再多 1 处（宠物帮你闻出来） */
+export function treasureCount(s: GameState) {
+  return 3 + (homePets(s.home).some((k) => loveHearts(s.home?.love?.[k] ?? 0) >= 1) ? 1 : 0);
+}
+/**
+ * 今天的土堆位置：按日期哈希，在传送门周围 6-26 格内找草地、上面没东西的格子。
+ * 盖了东西把土堆压住，就挪到下一个空地
+ */
+export function treasureSpots(s: GameState, now: number): { x: number; y: number }[] {
+  const home = s.home;
+  if (!home) return [];
+  const day = dayKey(now);
+  const size = homeSize(s);
+  const grid = thingGrid(home);
+  const out: { x: number; y: number }[] = [];
+  const n = treasureCount(s);
+  for (let i = 0; i < n; i++) {
+    for (let k = 0; k < 60; k++) {
+      const h = strHash(`dig~${day}~${i}~${k}`);
+      const ang = ((h % 3600) / 3600) * Math.PI * 2;
+      const r = 6 + ((h >>> 12) % 21);
+      const x = Math.round(HOME_SPAWN.x + Math.cos(ang) * r);
+      const y = Math.round(HOME_SPAWN.y + Math.sin(ang) * r);
+      const inPortal = x >= HOME_PORTAL.x && x < HOME_PORTAL.x + HOME_PORTAL.w && y >= HOME_PORTAL.y && y < HOME_PORTAL.y + HOME_PORTAL.h;
+      if (inPortal || islandGround(x, y, size) !== 'grass' || grid.has(key(x, y)) || home.floors[key(x, y)] || out.some((o) => Math.abs(o.x - x) + Math.abs(o.y - y) < 3)) continue;
+      out.push({ x, y });
+      break;
+    }
+  }
+  return out;
+}
+/** 今天第 i 处挖过没有 */
+export const treasureDug = (s: GameState, now: number, i: number) => s.home?.dig?.day === dayKey(now) && s.home.dig.got.includes(i);
+/** 今天还剩几处没挖 */
+export const treasureLeft = (s: GameState, now: number) => (s.home ? treasureSpots(s, now).filter((_, i) => !treasureDug(s, now, i)).length : 0);
+/** 第 i 处挖出来什么（同一天、同一处、同一声望等级永远一样） */
+export function treasureLoot(day: string, i: number, rep: number): ItemStack[] {
+  const lv = repLevel(rep);
+  let h = strHash(`loot~${day}~${i}`);
+  const rnd = () => ((h = Math.imul(h ^ (h >>> 15), 2246822507) + 0x9e3779b9 >>> 0) % 10000) / 10000;
+  const out: ItemStack[] = [{ item: 'coins', qty: Math.round((150 + rnd() * 250) * (1 + lv * 0.4)) }];
+  const r = rnd();
+  if (r < 0.4) {
+    const crops = Object.values(CROP_DEFS).filter((c) => c.tier <= Math.min(7, lv + 1));
+    const c = crops[Math.floor(rnd() * crops.length)];
+    out.push({ item: `seed_${c.id}`, qty: 2 + Math.floor(rnd() * 3) });
+  } else if (r < 0.65) {
+    out.push(lv >= 3 && rnd() < 0.4 ? { item: 'fert_rich', qty: 1 + Math.floor(rnd() * 2) } : { item: 'fert_basic', qty: 2 + Math.floor(rnd() * 3) });
+  } else if (r < 0.87) {
+    const g = rnd();
+    out.push({ item: g < 0.7 ? 'sapphire' : g < 0.95 ? 'ruby' : 'diamond', qty: 1 });
+  } else {
+    const g = rnd();
+    out.push({ item: g < 0.35 ? 'antique_vase' : g < 0.65 ? 'old_compass' : g < 0.92 ? 'conch' : 'gold_idol', qty: 1 });
+  }
+  return out;
+}
+/** 挖第 i 处：人在岛上、今天还没挖过。东西进仓库，返回挖到的 */
+export function digTreasure(prev: GameState, now: number, i: number): { state: GameState; got: ItemStack[] } {
+  if (!prev.home?.inside || !Number.isInteger(i) || i < 0 || i >= treasureSpots(prev, now).length || treasureDug(prev, now, i)) return { state: prev, got: [] };
+  const s = clone(prev);
+  const day = dayKey(now);
+  const home = s.home!;
+  home.dig = { day, got: [...(home.dig?.day === day ? home.dig.got : []), i] };
+  const got = treasureLoot(day, i, home.rep ?? 0);
+  for (const g of got) s.bank[g.item] = (s.bank[g.item] ?? 0) + g.qty;
+  return { state: s, got };
 }

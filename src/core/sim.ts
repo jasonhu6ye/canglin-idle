@@ -14,7 +14,7 @@ import { stepQuests } from './quests';
 import { isGear, migrateMarks, migrateProv, provCraft, provDrop, provMat } from './prov';
 import { migrateMail, sendMail } from './mail';
 import { stepAutoFarm, stepRain } from './farm';
-import { homeCan, homeCellIds, homeChest, homePct, migrateHome } from './home';
+import { HOME_GATHER_SPEED, homeCan, homeCellIds, homeChest, homeGathers, homePct, migrateHome } from './home';
 import { isRaining, RAIN_FISH } from './weather';
 import { BONUS_PER_LEVEL, levelForXp, speedForLevel, XP_TABLE } from './xp';
 import type {
@@ -590,11 +590,13 @@ export function eat(prev: GameState, id: string): GameState {
 }
 
 export const actionDuration = (s: GameState, a: SkillAction, t = Date.now()) =>
-  Math.round(a.durationMs / (1 + toolSpeed(s, a.skill, a.tool) + levelSpeed(s, a.skill) + boostPct(s, 'speed') + gearSum(s, 'work') + rainBonus(s, a, t)));
+  Math.round(a.durationMs / (1 + toolSpeed(s, a.skill, a.tool) + levelSpeed(s, a.skill) + boostPct(s, 'speed') + gearSum(s, 'work') + rainBonus(s, a, t))
+    // 岛上资源点（11-13）：比野外慢
+    / (homeGathers(s, a.id) ? HOME_GATHER_SPEED : 1));
 
 /** 雨天钓鱼增益：钓点所在区域正在下雨时，钓鱼更快（用户 10-23） */
 export function rainBonus(s: GameState, a: SkillAction, t = Date.now()) {
-  if (a.skill !== 'fishing') return 0;
+  if (a.skill !== 'fishing' || homeGathers(s, a.id)) return 0;
   const n = nodeOfAction(a.id, s.loc, s.waystones, moveSpeed(s));
   return n && isRaining(n.region, t) ? RAIN_FISH : 0;
 }

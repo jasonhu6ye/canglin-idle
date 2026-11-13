@@ -1,6 +1,6 @@
 import { ACTIONS, CROP_DEFS, ITEMS, MONSTERS, NODES, nodeOfAction } from './data';
 import { SPECIES, TRAITS } from './bestiary';
-import { BUILDS } from './home';
+import { BUILDS, TREASURE_DECO } from './home';
 
 describe('数据闭环', () => {
   it('动作和掉落引用的物品都存在', () => {
@@ -59,6 +59,8 @@ describe('数据闭环', () => {
     }
     // 家园产出（10-27）：鸡舍、蜂箱、苹果树、堆肥箱
     for (const d of BUILDS) if (d.produce) made.add(d.produce.item);
+    // 每日寻宝（11-13）挖出来的摆件
+    for (const id of TREASURE_DECO) made.add(id);
     // 家园加工坊（11-10）：原料放进去、出成品
     for (const d of BUILDS) for (const r of d.process ?? []) { made.add(r.out); r.in.forEach((i) => used.add(i.item)); }
     // 肥料种地时用、洒水器装在田里

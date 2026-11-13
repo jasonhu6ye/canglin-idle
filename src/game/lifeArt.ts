@@ -69,3 +69,37 @@ export function paintBeam(): HTMLCanvasElement {
   }
   return c;
 }
+
+/** 每日寻宝的闪光土堆（11-13）：14×9 的一小堆翻过的土，上面露出一点金光；第二帧是挖开后的小坑 */
+export function paintDigMound(): HTMLCanvasElement[] {
+  const pal = { a: '#3a2414', b: '#5e3a20', c: '#86562e', d: '#a87040', g: '#f8d050', w: '#fff8d0', k: '#24160c' };
+  const mound = [
+    '.....dd.......',
+    '....dccdw.....',
+    '...dcccgcd....',
+    '..dccbcccdd...',
+    '.dcbccgcbccd..',
+    'dcbbcccbbcccd.',
+    'cbbabbbbabbbc.',
+    '.abaaabaaaba..',
+    '..aa....aa....',
+  ];
+  const hole = [
+    '..............',
+    '..............',
+    '...b......b...',
+    '..bcb....bcb..',
+    '.bcbkkkkkkbcb.',
+    'bcbkkaaaakkbc.',
+    'cbakaaaaaakbc.',
+    '.abbkkkkkkba..',
+    '..aa....aa....',
+  ];
+  return [mound, hole].map((rows) => { const p = new Pix(14, 9); draw(p, rows, pal); return p.canvas(); });
+}
+/** 土堆上一闪一闪的星光 */
+export function paintTwinkle(): HTMLCanvasElement {
+  const p = new Pix(5, 5);
+  draw(p, ['..w..', '..g..', 'wgwgw', '..g..', '..w..'], { w: '#ffffff', g: '#ffe070' });
+  return p.canvas();
+}

@@ -27,6 +27,7 @@ export const UP: Record<string, number> = {
   folding_screen: 16, potted_tree: 16, wash_basin: 6, rocking_chair: 8, chess_table: 2, bird_cage: 12, coat_rack: 14,
   order_board: 18, fish_pond: 2, sheep_pen: 8, lighthouse: 40, hot_balloon: 40, gold_statue: 26,
   jam_pot: 10, spinning_wheel: 14, smoker: 16, brew_keg: 10,
+  home_herbs: 4, home_grove: 26, home_vein: 14, home_dock: 4,
   apple_tree: 26, gazebo: 26, swing: 16, maple_tree: 26, palm_tree: 30, boat: 0, coop: 12, telescope: 10, totem: 22, flower_cart: 6,
 };
 
@@ -536,6 +537,82 @@ function paintHD(id: string, p: Pix, W: number, H: number): boolean {
   };
   const mug = (x: number, y: number) => { p.rect(x, y, 3, 4, '#d8d0c0'); p.set(x, y, '#ffffff'); p.set(x + 1, y, '#6a3a1a'); p.set(x + 3, y + 1, '#d8d0c0'); p.set(x + 3, y + 2, '#b8b0a0'); };
   switch (id) {
+    // ───── 11-13 岛上资源点 ─────
+    case 'home_herbs': {
+      // 草药圃：木框围着的一块黑土，里面一行行草药、两丛白棉花、几朵小花
+      top(0, H - 28, W, 3, WOOD, false);
+      for (let y = H - 25; y < H - 3; y++) for (let x = 0; x < W; x++) {
+        const edge = x < 2 || x >= W - 2;
+        p.set(x, y, edge ? (x === 0 ? WOOD[3] : WOOD[1]) : (x + y * 3) % 7 === 0 ? '#3a2616' : '#4e321c');
+      }
+      front(0, H - 3, W, 3, WOOD);
+      for (let row = 0; row < 3; row++) for (let k = 0; k < 4; k++) {
+        const x = 4 + k * 7, y = H - 22 + row * 7;
+        const cotton = row === 1 && (k === 1 || k === 2);
+        if (cotton) {
+          p.set(x + 1, y + 4, LEAF[1]); p.set(x + 1, y + 3, LEAF[2]);
+          for (const [dx, dy] of [[0, 1], [2, 1], [1, 0], [1, 2], [0, 2], [2, 2]]) p.set(x + dx, y + dy, dy === 0 ? '#ffffff' : '#ece8de');
+        } else {
+          for (const [dx, dy, c] of [[1, 4, LEAF[1]], [1, 3, LEAF[2]], [0, 2, LEAF[3]], [2, 2, LEAF[3]], [1, 1, LEAF[4]], [0, 1, LEAF[2]], [2, 3, LEAF[2]]] as [number, number, string][]) p.set(x + dx, y + dy, c);
+          if ((row + k) % 3 === 0) p.set(x + 1, y, (row + k) % 2 ? '#e86a9a' : '#f0d050');
+        }
+      }
+      return true;
+    }
+    case 'home_grove': {
+      // 小树林：三棵挨着的小树，前面一个树桩插着斧头，脚下几根原木
+      const tree = (tx: number, base: number, r: number, pal: string[]) => {
+        for (let y = base - 8; y <= base; y++) { p.set(tx, y, WOOD[2]); p.set(tx + 1, y, WOOD[0]); }
+        const cy0 = base - 8 - r;
+        for (let y = cy0 - r; y <= cy0 + r; y++) for (let x = tx - r; x <= tx + r + 1; x++) {
+          const d = Math.hypot(x - tx - 0.5, (y - cy0) * 1.1);
+          if (d > r + 0.3) continue;
+          const lit = x - tx < 0 && y < cy0;
+          p.set(x, y, d > r - 1 ? pal[1] : lit ? pal[4] : (x + y) % 5 === 0 ? pal[2] : pal[3]);
+        }
+      };
+      tree(10, H - 10, 8, LEAF); tree(38, H - 9, 8, PINE); tree(24, H - 5, 10, LEAF);
+      cyl(8, H - 5, H - 1, 4, WOOD, 1.5, '#d8b080');
+      p.rect(9, H - 11, 1, 6, WOOD[4]); p.rect(10, H - 11, 3, 2, IRON[3]); p.set(12, H - 10, IRON[4]);
+      for (let x = 34; x < 45; x++) { p.set(x, H - 3, WOOD[3]); p.set(x, H - 2, WOOD[1]); }
+      p.set(34, H - 3, '#d8b080'); p.set(44, H - 3, '#d8b080');
+      return true;
+    }
+    case 'home_vein': {
+      // 小矿脉：一块灰色大岩石，裂缝里露出铜、银、金色的矿点，旁边靠着一把镐
+      const cy0 = H - 14, rx = 14, ry = 12;
+      for (let y = cy0 - ry; y < H; y++) for (let x = 1; x < W - 1; x++) {
+        const d = Math.hypot((x - cx) / rx, (y - cy0) / ry);
+        if (d > 1 && y < cy0) continue;
+        if (y >= cy0 && Math.abs(x - cx) > rx) continue;
+        const lit = x < cx - 2 && y < cy0 - 2;
+        let c = y >= H - 2 ? STONE[0] : lit ? STONE[4] : x > cx + 6 ? STONE[1] : (x * 3 + y) % 9 === 0 ? STONE[1] : STONE[2];
+        if (d > 0.9 && y < cy0) c = STONE[1];
+        p.set(x, y, c);
+      }
+      for (let y = cy0 - 6; y < H - 3; y++) p.set(cx - 2 + Math.round(Math.sin(y / 2) * 1.5), y, STONE[0]);
+      const ore: [number, number, string][] = [[cx - 7, cy0 - 3, COPPER[3]], [cx + 4, cy0 - 7, '#d8e0ea'], [cx + 2, cy0 + 2, GOLD[3]], [cx - 4, cy0 + 5, COPPER[3]], [cx + 8, cy0 + 1, '#d8e0ea'], [cx - 9, cy0 + 3, GOLD[3]]];
+      for (const [x, y, c] of ore) { p.set(x, y, c); p.set(x + 1, y, mix(c, '#000000', 0.3)); p.set(x, y + 1, mix(c, '#000000', 0.4)); p.set(x - 1, y - 1, '#ffffff'); }
+      for (let i = 0; i < 9; i++) p.set(W - 4 - Math.round(i * 0.3), H - 2 - i, WOOD[3]);
+      for (let i = -3; i <= 3; i++) p.set(W - 7 + i, H - 11 + Math.abs(i) * 0.4, IRON[i < 0 ? 4 : 2]);
+      return true;
+    }
+    case 'home_dock': {
+      // 钓鱼码头：一汪海水，伸进去一截木栈桥，桥头插着鱼竿、放着鱼桶
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const d = Math.hypot((x - cx) / (cx - 1), (y - H / 2) / (H / 2 - 1));
+        if (d > 1) continue;
+        p.set(x, y, d > 0.86 ? '#c8b080' : d > 0.78 ? WATER[3] : (x + y * 2) % 11 === 0 ? WATER[3] : y < H / 2 ? WATER[2] : WATER[1]);
+      }
+      for (let y = 6; y < H - 2; y++) for (let x = 6; x < 22; x++) p.set(x, y, y === 6 ? WOOD[4] : (y - 6) % 4 === 3 ? WOOD[1] : x === 6 ? WOOD[4] : WOOD[3]);
+      for (const [x, y] of [[6, H - 2], [20, H - 2], [6, 10], [20, 10]]) { p.set(x, y, WOOD[0]); p.set(x + 1, y, WOOD[1]); }
+      for (let i = 0; i < 14; i++) p.set(18 + i, 6 - Math.round(i * 0.35), WOOD[2]);
+      for (let y = 2; y < 18; y++) p.set(32, y, '#e8e8e8');
+      p.set(32, 18, '#e03a2a'); p.set(32, 19, '#ffffff');
+      cyl(11, H - 11, H - 6, 3, WOOD, 1.2, WATER[2]);
+      p.set(10, H - 12, '#d0d8e0');
+      return true;
+    }
     // ───── 11-10 家园加工坊 ─────
     case 'jam_pot': {
       // 果酱锅：石砌小灶，灶口一团火，上面一口铜锅，锅里琥珀色的果酱冒热气
@@ -2172,7 +2249,7 @@ export function paintPortalSwirl(): HTMLCanvasElement {
 /** 家园产出和点心的物品图标（16×16）：鸡蛋、蜂蜜、苹果、煎蛋、苹果派、蜂蜜蛋糕 */
 const homeIconCache = new Map<string, string>();
 export function homeItemIconUrl(id: string): string | null {
-  if (!['egg', 'honey', 'apple', 'fried_egg', 'apple_pie', 'honey_cake', 'wool', 'mead', 'cider', 'smoked_fish', 'jerky', 'apple_jam'].includes(id) || typeof document === 'undefined') return null;
+  if (!['egg', 'honey', 'apple', 'fried_egg', 'apple_pie', 'honey_cake', 'wool', 'mead', 'cider', 'smoked_fish', 'jerky', 'apple_jam', 'antique_vase', 'old_compass', 'conch', 'gold_idol'].includes(id) || typeof document === 'undefined') return null;
   const hit = homeIconCache.get(id);
   if (hit) return hit;
   const p = new Pix(16, 16);
@@ -2225,6 +2302,35 @@ export function homeItemIconUrl(id: string): string | null {
       }
       for (const [x, y] of [[6, 5], [9, 8], [5, 10], [10, 11], [8, 12]]) p.set(x, y, '#d8d2c6');
       p.set(12, 3, '#ece8de'); p.set(13, 2, '#ece8de'); p.set(13, 1, '#ffffff');
+      break;
+    // ───── 11-13 每日寻宝挖到的摆件 ─────
+    case 'antique_vase':
+      // 青花古瓶：细颈、圆肚，白底蓝花
+      oval(7.5, 10, 5, 4.5, (x, y) => (x < 5 ? '#ffffff' : x > 10 ? '#c8ccd8' : (x + y) % 4 === 0 ? '#2a5ab0' : '#ece8e0'));
+      p.rect(6, 2, 4, 5, '#ece8e0'); p.rect(6, 2, 1, 5, '#ffffff'); p.rect(5, 1, 6, 1, '#2a5ab0');
+      p.rect(4, 9, 8, 1, '#2a5ab0'); p.set(7, 11, '#2a5ab0'); p.set(9, 12, '#2a5ab0');
+      p.rect(5, 14, 6, 1, '#8a8ca0');
+      break;
+    case 'old_compass':
+      // 黄铜罗盘：圆壳、白盘、红针
+      oval(7.5, 8.5, 6, 6, (x, y, d) => (d > 0.8 ? (x + y < 14 ? '#f0c860' : '#a07020') : '#f4ecd8'));
+      p.set(7, 8, '#3a2a1a'); p.set(8, 8, '#3a2a1a');
+      for (let k = 1; k < 5; k++) { p.set(7 + Math.round(k * 0.4), 8 - k, '#d83a2a'); p.set(8 - Math.round(k * 0.4), 8 + k, '#3a3a4a'); }
+      p.rect(7, 1, 2, 2, '#c09030');
+      break;
+    case 'conch':
+      // 大海螺：螺旋的粉白壳，开口朝右
+      oval(6.5, 8.5, 5.5, 4.5, (x, y) => ((x + Math.floor(y / 2)) % 3 === 0 ? '#e0a890' : x < 5 ? '#fff0e4' : '#f4d0c0'));
+      for (let k = 0; k < 4; k++) p.set(1 + k, 6 - k, k % 2 ? '#e0a890' : '#f4d0c0');
+      oval(11, 9.5, 3, 3.5, (x, y, d) => (d > 0.6 ? '#f8c0b0' : '#e87a8a'));
+      break;
+    case 'gold_idol':
+      // 小金像：底座上一个小人像，金光闪闪
+      p.rect(3, 13, 10, 2, '#8a6014'); p.rect(3, 13, 10, 1, '#c0901e');
+      oval(8, 4, 2.5, 2.5, (x, y) => (x < 8 && y < 4 ? '#fff0a0' : '#e8b84a'));
+      p.rect(6, 6, 4, 6, '#e8b84a'); p.rect(6, 6, 1, 6, '#fff0a0'); p.rect(9, 6, 1, 6, '#8a6014');
+      p.rect(4, 7, 2, 1, '#c0901e'); p.rect(10, 7, 2, 1, '#c0901e'); p.set(3, 6, '#e8b84a'); p.set(12, 6, '#e8b84a');
+      p.set(7, 4, '#5a3a0a'); p.set(9, 4, '#5a3a0a'); p.set(13, 2, '#ffffff'); p.set(2, 9, '#fff0a0');
       break;
     // ───── 11-10 家园加工坊的成品 ─────
     case 'mead':

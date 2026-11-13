@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ITEMS, type MapNode } from '../core/data';
 import {
   affordable, atPortal, BUILD_CATS, BUILDS, buildDef, comfortLevel, comfortOf, COMFORT_SPEED, COMFORT_STEPS, COMFORT_XP, HOME_PLOT_MAX, HOME_SIZES,
-  HOME_UPGRADES, homeComfort, homeFieldId, homeProduce, homeLevel, homePlots, homeSize, isTrophy, canPet, deliverOrder, homeHasBoard, LOVE_STEPS, loveHearts, repUnclaimed, REP_REWARDS, homeOrders, homePets, ORDER_ALL_BONUS, PET_REP, PETS, REP_COIN_BONUS, REP_STEPS, repLevel, VISITORS, processMax, processReady, PROCESS_MAX,
+  HOME_UPGRADES, homeComfort, homeFieldId, homeProduce, homeLevel, homePlots, homeSize, isTrophy, canPet, deliverOrder, homeHasBoard, LOVE_STEPS, loveHearts, repUnclaimed, REP_REWARDS, homeOrders, homePets, ORDER_ALL_BONUS, PET_REP, PETS, REP_COIN_BONUS, REP_STEPS, repLevel, VISITORS, treasureLeft, treasureCount, processMax, processReady, PROCESS_MAX,
   type BuildCat, type BuildDef,
 } from '../core/home';
 import type { GameState } from '../core/types';
@@ -113,6 +113,7 @@ export function HomeHud({ s }: { s: GameState }) {
         <button className={`pill ${info === 'comfort' ? 'on' : ''}`} onClick={() => toggle('comfort')} title={tl('舒适度')}>{tl`舒适 ${clv} 级`}</button>
         <button className={`pill ${info === 'rep' ? 'on' : ''}`} onClick={() => toggle('rep')} title={tl('岛屿声望和访客订单')}>{tl`声望 ${rlv} 级`}{todo > 0 && <i className="dot-badge">{todo}</i>}</button>
         {readyN > 0 && <button className="pill on" onClick={collectAll} title={Object.entries(ready).map(([id, n]) => `${ITEMS[id]?.name} ×${n}`).join(tl('、'))}>{tl`收取 ${readyN}`}</button>}
+        {treasureLeft(s, Date.now()) > 0 && <button className="pill" onClick={() => { setMsg(tl`今天岛上还有 ${treasureLeft(s, Date.now())}/${treasureCount(s)} 处闪光的土堆，点一下走过去挖`); setTimeout(() => setMsg(''), 2600); }}>{tl`寻宝 ${treasureLeft(s, Date.now())}`}</button>}
         {plots.length > 0 && <button className={`pill ${info === 'farm' ? 'on' : ''}`} onClick={() => toggle('farm')}>{tl`农田 ${plots.length}/${HOME_PLOT_MAX}`}</button>}
         <button className={`pill ${open ? 'on' : ''}`} onClick={() => { setInfo(null); if (open) close(); else setOpen(true); }}>{open ? tl('收起建造') : tl('建造')}</button>
         <button className="pill" onClick={() => { close(); store.run('leaveHome'); }}>{tl('回城')}</button>

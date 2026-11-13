@@ -11,6 +11,14 @@ import { Icon } from './icons';
 interface Note { id: string; date: string; title: string; lines: string[]; icons?: string[] }
 export const NEWS: Note[] = [
   {
+    id: '2026-11-13-a', date: tl('11 月 13 日'), title: tl('家园资源点和每日寻宝'),
+    icons: ['green_herb', 'plain_log', 'copper_ore', 'raw_minnow', 'old_compass', 'gold_idol'],
+    lines: [
+      tl('家园「户外」里新增 4 种资源点：草药圃、小树林、小矿脉（声望 1 级）、钓鱼码头（声望 2 级）。盖好后在岛上就能采集对应的所有东西，不用跑野外，速度是野外的 70%。点资源点打开采集列表。'),
+      tl('每日寻宝：岛上传送门附近每天冒出 3 处闪光的土堆，点一下走过去挖，能挖到金币、种子、肥料、宝石，偶尔还有只在这里出的摆件（古董花瓶、旧罗盘、大海螺、小金像）。宠物有 1 颗心后每天多 1 处。'),
+    ],
+  },
+  {
     id: '2026-11-10-a', date: tl('11 月 10 日'), title: tl('家园加工坊'),
     icons: ['mead', 'cider', 'smoked_fish', 'jerky', 'apple_jam', 'wool'],
     lines: [

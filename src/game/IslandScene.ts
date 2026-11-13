@@ -1,12 +1,12 @@
 import Phaser from 'phaser';
-import { NODES, WALK_TILES_PER_SEC } from '../core/data';
+import { ACTIONS, NODES, WALK_TILES_PER_SEC } from '../core/data';
 import {
-  buildDef, canPlace, homeCan, homePlotCells, produceReady, processReady, homePlots, HOME_PORTAL, HOME_SPAWN, homeSize, ISLAND, islandGround, thingGrid,
+  buildDef, canPlace, homeCan, homePlotCells, produceReady, processReady, treasureSpots, treasureDug, homeGathers, homePlots, HOME_PORTAL, HOME_SPAWN, homeSize, ISLAND, islandGround, thingGrid,
   canPet, homeOrders, homePets, petGift, PET_REP, PETS,
 } from '../core/home';
 import { dayKey } from '../core/mail';
 import { paintBang, paintHeart, paintPetSheet, PET_FRAMES, PET_SIZE } from './petArt';
-import { paintBeam, paintBee, paintButterfly, paintChicken, paintJumpFish, paintRipple, paintSmoke } from './lifeArt';
+import { paintBeam, paintBee, paintButterfly, paintChicken, paintDigMound, paintJumpFish, paintRipple, paintSmoke, paintTwinkle } from './lifeArt';
 import { CROP_DEFS, CROPS, ITEMS } from '../core/data';
 import { fieldOfPlot, pickSeed, plotGrowth, plotPhase } from '../core/farm';
 import { cropTex, glintTex, soilTex } from './farmArt';
@@ -78,6 +78,10 @@ export class IslandScene extends Phaser.Scene {
   private bubbles: { t: HomeThing; img: Phaser.GameObjects.Image }[] = [];
   /** 告示板头上的「!」 */
   private bangs: Phaser.GameObjects.Image[] = [];
+  /** 每日寻宝的土堆（11-13） */
+  private digObjs: Phaser.GameObjects.GameObject[] = [];
+  private digSig = '';
+  private pendingDig?: number;
   private pets: Pet[] = [];
   private gridCache?: Uint8Array;
   /** 岛上的小动静（鸡、蝴蝶、风车、灯塔……）：每帧调一次，重画时清掉 */
@@ -160,6 +164,8 @@ export class IslandScene extends Phaser.Scene {
     if (!this.textures.exists('home-pedestal')) this.textures.addCanvas('home-pedestal', paintPedestal());
     if (!this.textures.exists('home-heart')) this.textures.addCanvas('home-heart', paintHeart());
     if (!this.textures.exists('home-bang')) this.textures.addCanvas('home-bang', paintBang());
+    if (!this.textures.exists('home-dig')) { const [m, h] = paintDigMound(); this.textures.addCanvas('home-dig', m); this.textures.addCanvas('home-dig-hole', h); }
+    if (!this.textures.exists('home-twinkle')) this.textures.addCanvas('home-twinkle', paintTwinkle());
     const sheet = (key: string, frames: HTMLCanvasElement[]) => {
       if (this.textures.exists(key)) return;
       const w = frames[0].width;
@@ -331,6 +337,41 @@ export class IslandScene extends Phaser.Scene {
     this.buildCells();
     this.buildLife();
     this.syncPets();
+    this.digSig = '';
+    this.syncDigs();
+  }
+
+  // ───────── 每日寻宝（11-13）：今天的闪光土堆，点一下走过去挖 ─────────
+  private syncDigs() {
+    const st = store.state;
+    const now = Date.now();
+    const spots = st.home ? treasureSpots(st, now) : [];
+    const sig = `${dayKey(now)}|${spots.map((p, i) => `${p.x},${p.y},${treasureDug(st, now, i) ? 1 : 0}`).join(';')}`;
+    if (sig === this.digSig) return;
+    this.digSig = sig;
+    this.tweens.killTweensOf(this.digObjs);
+    this.digObjs.forEach((o) => o.destroy());
+    this.digObjs = [];
+    spots.forEach((p, i) => {
+      const dug = treasureDug(st, now, i);
+      const cx = p.x * T + T / 2;
+      const by = p.y * T + T - 2;
+      this.digObjs.push(this.add.image(cx, by, dug ? 'home-dig-hole' : 'home-dig').setOrigin(0.5, 1).setDepth(dug ? -3 : by + 1000));
+      if (dug) return;
+      const tw = this.add.image(cx + 2, by - 8, 'home-twinkle').setDepth(9e5);
+      this.tweens.add({ targets: tw, alpha: 0.15, scale: 0.6, duration: 650, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: i * 230 });
+      const zone = this.add.zone(cx, by - 5, T + 4, T).setInteractive({ useHandCursor: true }).setData('dig', i);
+      this.digObjs.push(tw, zone);
+    });
+  }
+  private digAt(i: number) {
+    const got = ((store.run('homeDig', i) as { got?: { item: string; qty: number }[] } | undefined)?.got) ?? [];
+    this.pendingDig = undefined;
+    if (!got.length) return;
+    this.body.play('work-gather', true);
+    this.time.delayedCall(700, () => { if (!this.walker) this.anim('idle'); });
+    this.game.events.emit(HOME_MSG, tl`挖到了：${got.map((g) => tl`${ITEMS[g.item]?.name ?? g.item} ×${g.qty}`).join(tl('、'))}`);
+    this.syncDigs();
   }
 
   // ───────── 家园农田（10-27）：每块 4×4 格，和城里的田一样点地块种 / 浇水 / 收获 ─────────
@@ -349,6 +390,7 @@ export class IslandScene extends Phaser.Scene {
     this.growCells();
   }
   private growCells() {
+    this.syncDigs();
     const now = Date.now();
     const home = store.state.home;
     for (const b of this.bubbles) b.img.setVisible(produceReady(home, b.t, now) > 0 || processReady(b.t, now) > 0);
@@ -455,7 +497,7 @@ export class IslandScene extends Phaser.Scene {
         .setInteractive({ useHandCursor: true }).setData('orders', true);
       this.objs.push(zone);
     }
-    if (d.station || d.chest) {
+    if (d.station || d.chest || d.gather) {
       const zone = this.add.zone(bx + (d.w * T) / 2, by - (d.h * T) / 2 - (UP[t.id] ?? 0) / 2, d.w * T, d.h * T + (UP[t.id] ?? 0))
         .setInteractive({ useHandCursor: true }).setData('home', `home_${t.id}`);
       this.objs.push(zone);
@@ -605,6 +647,21 @@ export class IslandScene extends Phaser.Scene {
       }
       if (over.some((o) => o.getData('portal'))) {
         store.run('leaveHome');
+        return;
+      }
+      const dig = !this.tool ? over.map((o) => o.getData('dig') as number | undefined).find((v) => v !== undefined) : undefined;
+      if (dig !== undefined) {
+        const p0 = treasureSpots(store.state, Date.now())[dig];
+        if (!p0) return;
+        const near = Math.abs(Math.floor(this.player.x / T) - p0.x) <= 1 && Math.abs(Math.floor(this.player.y / T) - p0.y) <= 1;
+        if (near) this.digAt(dig);
+        else {
+          // 走到土堆旁边再挖
+          this.workManual = true;
+          const g = this.blockedGrid();
+          const around = [[0, 1], [1, 0], [-1, 0], [0, -1], [1, 1], [-1, 1]].map(([dx, dy]) => ({ x: p0.x + dx, y: p0.y + dy })).filter((c) => !g[c.y * ISLAND + c.x]);
+          if (around.some((c) => this.walkTo(c))) this.pendingDig = dig;
+        }
         return;
       }
       const spot = !this.tool && over.map((o) => o.getData('collect') as { x: number; y: number } | undefined).find(Boolean);
@@ -764,7 +821,9 @@ export class IslandScene extends Phaser.Scene {
     let bestD = Infinity;
     for (const t of store.state.home?.things ?? []) {
       const d = buildDef(t.id);
-      if (!d?.station || !NODES.find((n) => n.id === d.station)?.actions.includes(action)) continue;
+      const sk = ACTIONS[action]?.kind === 'skill' ? (ACTIONS[action] as { skill: string }).skill : undefined;
+      const ok = d?.station ? !!NODES.find((n) => n.id === d.station)?.actions.includes(action) : !!d?.gather && d.gather === sk && homeGathers(store.state, action);
+      if (!d || !ok) continue;
       const row = t.y + d.h - 1;
       const cands = [
         { x: t.x - 1, y: row, faceLeft: false }, { x: t.x + d.w, y: row, faceLeft: true },
@@ -800,7 +859,11 @@ export class IslandScene extends Phaser.Scene {
     }
     this.facing = 'side';
     this.body.setFlipX(spot.faceLeft);
-    this.body.play('work-craft', true);
+    // 岛上资源点（11-13）：挖矿、砍树、钓鱼、采草药各播各的动作
+    const a = ACTIONS[action];
+    const bySkill: Record<string, string> = { mining: 'work-mine', woodcutting: 'work-chop', fishing: 'work-fish', gathering: 'work-gather' };
+    const anim = a?.kind === 'skill' && homeGathers(st, action) ? bySkill[a.skill] ?? 'work-craft' : 'work-craft';
+    this.body.play(this.anims.exists(anim) ? anim : 'work-craft', true);
   }
 
   // ───────── 岛上的小动静（10-30）：鸡啄食、蝴蝶、蜜蜂、鱼跳水、篝火冒烟、风车转、灯塔扫光 ─────────
@@ -1036,7 +1099,11 @@ export class IslandScene extends Phaser.Scene {
         if (this.facing === 'side') this.body.setFlipX(dx < 0);
         this.anim('walk');
       }
-      if (w.i >= w.pts.length) { this.walker = undefined; this.anim('idle'); }
+      if (w.i >= w.pts.length) {
+        this.walker = undefined;
+        this.anim('idle');
+        if (this.pendingDig !== undefined) this.digAt(this.pendingDig);
+      }
     }
     this.autoWork();
     this.stepPets(delta);

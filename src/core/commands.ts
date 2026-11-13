@@ -9,7 +9,7 @@ import {
 } from './sim';
 import { dungeonFloor } from './dungeon';
 import { flag, guard, maxSpeed } from './guard';
-import { claimRepReward, collectHome, deliverOrder, enterHome, leaveHome, petPet, placeBuild, removeAt, startProcess, upgradeHome } from './home';
+import { claimRepReward, collectHome, deliverOrder, enterHome, leaveHome, petPet, placeBuild, removeAt, startProcess, digTreasure, upgradeHome } from './home';
 import { harvestAll, installSprinkler, plantAll, tendPlot, waterAll } from './farm';
 import { claimMail, clearMail, readMail } from './mail';
 import type { TeamMember } from './dungeon';
@@ -378,6 +378,7 @@ export const COMMANDS = {
   leaveHome: (s) => leaveHome(s),
   collectHome: (s, t, at?: unknown) => collectHome(s, t, at === undefined ? undefined : xy(at)),
   homeProcess: (s, t, at, r, n) => startProcess(s, t, xy(at), int(r, 0, 10), int(n, 1, 10)),
+  homeDig: (s, t, i) => digTreasure(s, t, int(i, 0, 8)),
   upgradeHome: (s) => upgradeHome(s),
   repReward: (s) => claimRepReward(s),
   deliverOrder: (s, t, i) => deliverOrder(s, int(i, 0, 100), t),

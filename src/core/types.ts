@@ -460,6 +460,8 @@ export interface GameState {
     love?: Record<string, number>;
     /** 声望升级奖励领到第几级了 */
     repGot?: number;
+    /** 每日寻宝（11-13）：今天（北京时间日期）挖过第几处 */
+    dig?: { day: string; got: number[] };
   };
   /** 装了洒水器的田 */
   sprinklers?: string[];
