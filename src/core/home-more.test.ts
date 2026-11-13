@@ -92,3 +92,28 @@ describe('每日寻宝', () => {
     expect(treasureDug(r.state, NOW, 0)).toBe(true);
   });
 });
+
+import { OUTFITS } from '../game/hero';
+import { SKIN_LOCKS, SKIN_CODE } from './sim';
+describe('漏洞检查（11-13）', () => {
+  it('constructor 这类名字排不进队列，存档不会坏', () => {
+    const s = newGame(1);
+    for (const a of ['constructor', 'hasOwnProperty', '__proto__', 'toString']) {
+      const r = applyCmd(s, 'enqueue', [a, { type: 'infinite' }], 1000);
+      expect(r.state.queue).toHaveLength(0);
+    }
+  });
+  it('没解锁的外观发设置指令也穿不上', () => {
+    const s = newGame(1);
+    expect(applyCmd(s, 'settings', [{ skin: 'pumpkin' }], 1000).state.settings.skin).toBeUndefined();
+    expect(applyCmd(s, 'settings', [{ skin: 'frostfire' }], 1000).state.settings.skin).toBeUndefined();
+    const ok = OUTFITS.find((o) => !SKIN_LOCKS[o.id])!.id;
+    expect(applyCmd(s, 'settings', [{ skin: ok }], 1000).state.settings.skin).toBe(ok);
+  });
+  it('外观锁表和衣橱一致', () => {
+    for (const o of OUTFITS) {
+      const want = o.sealed ? 'sealed' : o.code === SKIN_CODE ? 'code' : o.event === 'halloween' ? 'halloween' : undefined;
+      expect(SKIN_LOCKS[o.id], o.id).toBe(want);
+    }
+  });
+});

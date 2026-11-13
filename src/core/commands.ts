@@ -3,7 +3,7 @@ import { ACTIONS, fineMatOf, ITEMS, MONSTERS, NODES, jumpNode, keyOf, nodesOfAct
 import {
   bagRoomFor, bagSlots, beltSlotOf, buyGoods, buyHwSkin, buyKey, buyPumpkinMount, buySeed, cancelRealmChest, collectHorse, combineShards,
   depositLoot, dismissStop, markContrib, syncDungeon, eat, enqueue, enterDungeon, equip, finishRealmChest, fromBelt, leaveDungeon, leaveWork, openContainer,
-  openDungeonChest, openGate, placeFoal, redeemCode, removeTask, resumeWork, salvage, sell, setLoc, setSettings, sortBank, startAt,
+  openDungeonChest, openGate, placeFoal, redeemCode, removeTask, resumeWork, salvage, sell, setLoc, setSettings, skinAllowed, sortBank, startAt,
   newGame, startNow, startRealmChest, startWalk, summonPumpkin, teleport, toBag, toBank, toBelt, toggleMount, unequip, unlockWaystone, useGate,
   useTownScroll, useWaystone, walkPos, moveSpeed, combatStats, playerAttackMs, fieldMob,
 } from './sim';
@@ -159,7 +159,9 @@ export interface Cmd { n: CmdName; a: unknown[]; t: number; /** 这台设备上�
 /** 指令执行结果：新存档，加上给界面看的东西（开箱拿到什么等） */
 export interface CmdResult { state: GameState; out?: unknown; summary?: Summary }
 
-const str = (x: unknown, max = 64) => (typeof x === 'string' ? x.slice(0, max) : '');
+/** constructor、toString 这类名字在普通对象上都「有」（原型上的），当物品/动作 id 用会骗过 ITEMS[id] 这种判断，一律当空（11-13 检查：排进队列后存档每次结算都出错） */
+const PROTO = new Set(Object.getOwnPropertyNames(Object.prototype));
+const str = (x: unknown, max = 64) => (typeof x === 'string' && !PROTO.has(x) ? x.slice(0, max) : '');
 const int = (x: unknown, lo = 0, hi = 1e9) => {
   const n = Math.floor(Number(x));
   return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : lo;
@@ -184,14 +186,14 @@ const items = (x: unknown) => {
   const out: Record<string, number> = {};
   for (const [k, v] of Object.entries((x ?? {}) as Record<string, unknown>).slice(0, 500)) {
     const n = int(v, 0, 1e9);
-    if (ITEMS[k] && n > 0) out[k] = n;
+    if (own(ITEMS, k) && n > 0) out[k] = n;
   }
   return out;
 };
-/** 设置：只能改这些（外观另外检查有没有解锁，在 setSettings 里） */
+/** 设置：只能改这些（外观另外检查有没有解锁，在 settings 指令里） */
 const SETTING_KEYS = ['eatThreshold', 'carryFood', 'carryPotion', 'farmSeed', 'farmFert', 'autoFarm', 'skin', 'fineCraft'] as const;
 const settings = (x: unknown) => {
-  const p = (x ?? {}) as Record<string, unknown>;
+  const p = (x && typeof x === 'object' ? x : {}) as Record<string, unknown>;
   const out: Record<string, unknown> = {};
   for (const k of SETTING_KEYS) if (k in p) out[k] = p[k];
   // 11-02 复查：数值和开关洗一遍，免得乱传 NaN、超大数、对象把存档弄坏
@@ -303,7 +305,11 @@ export const COMMANDS = {
   salvage: (s, _t, list) => salvage(s, items(list)),
   quickUse: (s, _t, id) => quickUse(s, str(id)),
   redeem: (s, _t, code) => redeemCode(s, str(code, 32)),
-  settings: (s, _t, patch) => setSettings(s, settings(patch)),
+  settings: (s, _t, patch) => {
+    const p = settings(patch);
+    if (typeof p.skin === 'string' && !skinAllowed(s, p.skin)) delete p.skin;
+    return setSettings(s, p);
+  },
   /** 删除进度从头开始 */
   reset: (s, t) => newGame(t, s.rng),
   // 干活和任务

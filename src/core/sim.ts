@@ -144,7 +144,7 @@ export function migrate(raw: unknown): GameState | null {
   // 采草药的动作 id 从 farm_ 改成 gather_（10-23 采集和种植彻底分开），旧队列照着改名
   const renamed = (id: string) => (!ACTIONS[id] && id.startsWith('farm_') && ACTIONS[`gather_${id.slice(5)}`] ? `gather_${id.slice(5)}` : id);
   const oldQueue = arr<GameState['queue'][number]>(s.queue).filter((t) => obj(t) && typeof t.action === 'string');
-  const queue = oldQueue.map((t) => ({ ...t, action: renamed(t.action) })).filter((t) => ACTIONS[t.action] && nodesOfAction(t.action).length && okMode(t.mode));
+  const queue = oldQueue.map((t) => ({ ...t, action: renamed(t.action) })).filter((t) => Object.prototype.hasOwnProperty.call(ACTIONS, t.action) && nodesOfAction(t.action).length && okMode(t.mode));
   const sameTask = !!queue[0] && queue[0].action === oldQueue[0]?.action;
   const xpIn = obj<Record<string, number>>(s.xp) ?? {};
   const xp = { ...fresh.xp };
@@ -480,6 +480,21 @@ const CODES: Record<string, { item: string; qty: number }[]> = {
 };
 /** 解锁衣橱外观的码（外观本身在 game/hero.ts 的 OUTFITS，用 code 字段对上） */
 export const SKIN_CODE = 'hk55f6ii1h3';
+/**
+ * 要解锁才能穿的外观（11-13 检查：以前只在衣橱界面上锁，直接发设置指令就能穿上没解锁的）。
+ * 要和 game/hero.ts 的 OUTFITS 对上（outfit.test 查）
+ */
+export const SKIN_LOCKS: Record<string, 'sealed' | 'code' | 'halloween'> = {
+  frostfire: 'sealed', frostlord: 'sealed', reaper: 'halloween', coffin: 'halloween',
+  pumpkin: 'code', voidpumpkin: 'code', paleknight: 'code', jester: 'code', bone: 'code',
+};
+export function skinAllowed(s: GameState, id: string): boolean {
+  const lock = Object.prototype.hasOwnProperty.call(SKIN_LOCKS, id) ? SKIN_LOCKS[id] : undefined;
+  if (!lock) return true;
+  if (lock === 'sealed') return false;
+  if (lock === 'code') return hasCode(s, SKIN_CODE);
+  return hwHasSkin(s.halloween, id);
+}
 const SKIN_CODES: Record<string, string> = {
   [SKIN_CODE]: tl('衣橱新外观：南瓜提灯人、幽蓝南瓜、白发魔骑、红黑小丑、骸骨术士'),
 };
@@ -1878,7 +1893,7 @@ export function setLoc(prev: GameState, x: number, y: number): GameState {
 }
 
 export function enqueue(prev: GameState, action: string, mode: TaskMode): GameState {
-  if (prev.queue.length >= MAX_QUEUE || !ACTIONS[action]) return prev;
+  if (prev.queue.length >= MAX_QUEUE || !Object.prototype.hasOwnProperty.call(ACTIONS, action)) return prev;
   // 只在海岛上（还没开放）的动作：哪儿都做不了，不让排进队列
   if (!nodesOfAction(action).length) return prev;
   if (mode.type === 'count' && !(cleanQty(mode.count) >= 1)) return prev;
